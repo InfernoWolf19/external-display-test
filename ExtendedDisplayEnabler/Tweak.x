@@ -27,6 +27,7 @@
 //   [sb->_displayManager registerDisplayControllerProvider:provider];
 //   sb->_extendedDisplayControllerProvider = provider;
 //
+// Also restores setDisplayMirroringEnabled:forDisplay: (see bottom of file).
 // Log: /var/mobile/Library/Logs/ExtendedDisplayEnabler.log
 // Kill switch: create /var/mobile/Library/Preferences/ExtendedDisplayEnabler.off
 
@@ -154,10 +155,54 @@ static void EDEAttempt(id sb, int n) {
 @interface SpringBoard : UIApplication
 @end
 
+@interface SBExternalDisplayService : NSObject
+- (id)_extendedModeDisplayIdentityForHardwareIdentifier:(id)hwid error:(NSError **)err;
+- (void)_notifyOfPropertyChangesForDisplayIdentity:(id)identity requestingProcess:(id)process;
+@end
+
+@interface BSServiceConnection : NSObject
++ (id)currentContext;
+@end
+
 %hook SpringBoard
 - (void)_completeStartupAfterMainSceneConnect:(id)scene {
     %orig;
     // Let the rest of startup (service / pointer manager wiring) settle first.
     dispatch_async(dispatch_get_main_queue(), ^{ EDEAttempt(self, 0); });
+}
+%end
+
+// 20A8372's -[SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:] ignores the requested
+// value: its block only runs `if (!defaults.isMirroringEnabled) defaults.mirroringEnabled = YES`.
+// Beta 5 compared the requested NSNumber with the current value and applied it. Restore that, so the
+// Settings "Mirror Display" switch can actually turn mirroring off.
+%hook SBExternalDisplayService
+- (void)setDisplayMirroringEnabled:(id)enabled forDisplay:(id)hardwareIdentifier {
+    if (![enabled isKindOfClass:[NSNumber class]] || !hardwareIdentifier) { %orig; return; }
+    BOOL want = [enabled boolValue];
+    id process = nil;
+    @try { process = [[BSServiceConnection currentContext] valueForKey:@"remoteProcess"]; } @catch (__unused id e) {}
+    void (^apply)(void) = ^{
+        @try {
+            id identity = [self _extendedModeDisplayIdentityForHardwareIdentifier:hardwareIdentifier error:NULL];
+            id defaults = EDEIvar(self, "_defaults");
+            if (!identity || !defaults) { EDELog(@"mirroring request: no extended identity/defaults for %@", hardwareIdentifier); return; }
+            BOOL cur = ((BOOL (*)(id, SEL))objc_msgSend)(defaults, NSSelectorFromString(@"isMirroringEnabled"));
+            EDELog(@"mirroring request: want=%d current=%d display=%@", want, cur, hardwareIdentifier);
+            if (cur == want) return;
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, NSSelectorFromString(@"setMirroringEnabled:"), want);
+            if (!want) {
+                // The education observer re-forces mirroring on every connect until one of these is set.
+                SEL ever = NSSelectorFromString(@"setExtendedDisplayEverEnabledWithHardwareReqsSatisfied:");
+                if ([defaults respondsToSelector:ever]) {
+                    ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, ever, YES);
+                    EDELog(@"marked extendedDisplayEverEnabledWithHardwareReqsSatisfied");
+                }
+            }
+            [self _notifyOfPropertyChangesForDisplayIdentity:identity requestingProcess:process];
+        } @catch (NSException *e) { EDELog(@"exception applying mirroring change: %@", e); }
+    };
+    dispatch_queue_t q = (dispatch_queue_t)EDEIvar(self, "_serviceQueue");
+    if (q) dispatch_async(q, apply); else apply();
 }
 %end
