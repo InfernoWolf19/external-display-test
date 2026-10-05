@@ -160,10 +160,6 @@ static void EDEAttempt(id sb, int n) {
 - (void)_notifyOfPropertyChangesForDisplayIdentity:(id)identity requestingProcess:(id)process;
 @end
 
-@interface BSServiceConnection : NSObject
-+ (id)currentContext;
-@end
-
 // 20A8372's -[SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:] ignores the requested
 // value: its block only runs `if (!defaults.isMirroringEnabled) defaults.mirroringEnabled = YES`.
 // Beta 5 compared the requested NSNumber with the current value and applied it. Restore that, so the
@@ -174,7 +170,10 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
     BOOL want = [enabled boolValue];
     id process = nil;
     @try {
-        process = [[BSServiceConnection currentContext] valueForKey:@"remoteProcess"];
+        // Looked up by name: a direct class reference would need a link against BoardServices.
+        Class connClass = NSClassFromString(@"BSServiceConnection");
+        id ctx = connClass ? MSG(id, connClass, @"currentContext") : nil;
+        process = [ctx valueForKey:@"remoteProcess"];
     } @catch (NSException *ex) {
         process = nil;
     }
