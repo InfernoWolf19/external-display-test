@@ -237,9 +237,10 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
             EDELog(@"exception applying mirroring change: %@", ex);
         }
     };
-    id queue = EDEIvar(service, "_serviceQueue");
-    if (queue) dispatch_async((dispatch_queue_t)queue, apply);
-    else apply();
+    // SBDisplayManager (connectedIdentities / windowingModeForDisplay:) asserts main thread, and this
+    // hook is called on the service's XPC queue, so hop to the main queue.
+    if ([NSThread isMainThread]) apply();
+    else dispatch_async(dispatch_get_main_queue(), apply);
     return YES;
 }
 
