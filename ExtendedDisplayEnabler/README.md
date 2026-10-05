@@ -29,5 +29,13 @@ This tweak re-creates that registration after startup. See the header of `Tweak.
 4. Kill switch: `touch /var/mobile/Library/Preferences/ExtendedDisplayEnabler.off`, then respring.
    If SpringBoard crash-loops, boot Dopamine safe mode and remove the package.
 
+## Mirroring on this build
+20A8372 hardcodes `mirroringEnabled = YES` in two places: the Extended policy's connect and the
+education observer's connect handler (beta 5 used `!_areRuntimeAvailabilityRequirementsMet` there).
+Its service method `setDisplayMirroringEnabled:forDisplay:` also ignores the requested value, so
+Settings' "Mirror Display" switch could only ever turn mirroring on. The tweak restores the service
+method, remembers when you switch mirroring off (`/var/mobile/Library/Preferences/ExtendedDisplayEnabler.extended`)
+and puts that choice back after either connect handler runs.
+
 ## Status
 Not compiled or run: written from static analysis only. Expect to iterate from the log / crash report.

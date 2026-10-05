@@ -64,6 +64,33 @@ static id EDEIvar(id obj, const char *name) {
     return iv ? object_getIvar(obj, iv) : nil;
 }
 
+static NSString *const kChoicePath = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.extended";
+static BOOL gUserChoseExtended;               // set when the user turns "Mirror Display" off in Settings
+
+static BOOL EDEIsMirroring(id defaults) {
+    return ((BOOL (*)(id, SEL))objc_msgSend)(defaults, NSSelectorFromString(@"isMirroringEnabled"));
+}
+static void EDESetMirroring(id defaults, BOOL v) {
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, NSSelectorFromString(@"setMirroringEnabled:"), v);
+}
+// 20A8372 forces mirroringEnabled = YES in the Extended policy's connect and in the education
+// observer's connect handler (beta 5 derived it from the runtime requirements instead).
+// If the user already chose extended mode, put that choice back after those handlers ran.
+static void EDEEnforceChoice(id defaults, const char *why) {
+    if (!gUserChoseExtended || !defaults) return;
+    if (EDEIsMirroring(defaults)) {
+        EDELog(@"%s forced mirroring on; restoring the user's choice (extended)", why);
+        EDESetMirroring(defaults, NO);
+    } else {
+        EDELog(@"%s left mirroring off", why);
+    }
+}
+static id EDELocalExternalDisplayDefaults(void) {
+    Class d = NSClassFromString(@"SBDefaults");
+    id local = d ? ((id (*)(id, SEL))objc_msgSend)(d, NSSelectorFromString(@"localDefaults")) : nil;
+    return local ? ((id (*)(id, SEL))objc_msgSend)(local, NSSelectorFromString(@"externalDisplayDefaults")) : nil;
+}
+
 #define MSG(ret, obj, sel, ...) ((ret (*)(id, SEL, ##__VA_ARGS__))objc_msgSend)((obj), NSSelectorFromString(sel), ##__VA_ARGS__)
 
 // Returns YES when finished (installed, already installed, or impossible),
@@ -166,8 +193,12 @@ static void EDEAttempt(id sb, int n) {
 // Settings "Mirror Display" switch can actually turn mirroring off.
 // Returns NO if the arguments are not what we expect (caller then runs the original).
 static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
+    EDELog(@"setDisplayMirroringEnabled hook hit: enabled=%@ display=%@", enabled, hardwareIdentifier);
     if (![enabled isKindOfClass:[NSNumber class]] || !hardwareIdentifier) return NO;
     BOOL want = [enabled boolValue];
+    gUserChoseExtended = !want;
+    if (gUserChoseExtended) [[NSFileManager defaultManager] createFileAtPath:kChoicePath contents:nil attributes:nil];
+    else [[NSFileManager defaultManager] removeItemAtPath:kChoicePath error:NULL];
     id process = nil;
     @try {
         // Looked up by name: a direct class reference would need a link against BoardServices.
@@ -185,10 +216,14 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
                 EDELog(@"mirroring request: no extended identity/defaults for %@", hardwareIdentifier);
                 return;
             }
-            BOOL cur = ((BOOL (*)(id, SEL))objc_msgSend)(defaults, NSSelectorFromString(@"isMirroringEnabled"));
+            BOOL cur = EDEIsMirroring(defaults);
             EDELog(@"mirroring request: want=%d current=%d display=%@", want, cur, hardwareIdentifier);
             if (cur == want) return;
-            ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, NSSelectorFromString(@"setMirroringEnabled:"), want);
+            EDESetMirroring(defaults, want);
+            // Trace whether anything flips it back.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                EDELog(@"1s after the change: isMirroringEnabled=%d (wanted %d)", EDEIsMirroring(defaults), want);
+            });
             if (!want) {
                 // The education observer re-forces mirroring on every connect until one of these is set.
                 SEL ever = NSSelectorFromString(@"setExtendedDisplayEverEnabledWithHardwareReqsSatisfied:");
@@ -222,3 +257,21 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
     %orig;
 }
 %end
+
+%hook SBSystemShellExtendedDisplayControllerPolicy
+- (void)connectToDisplayController:(id)controller displayConfiguration:(id)configuration {
+    %orig;
+    EDEEnforceChoice(EDEIvar(self, "_externalDisplayDefaults"), "Extended policy connect");
+}
+%end
+
+%hook SBExternalDisplayEducationObserver
+- (void)displayManager:(id)manager didConnectToRootDisplay:(id)display {
+    %orig;
+    EDEEnforceChoice(EDELocalExternalDisplayDefaults(), "education observer connect");
+}
+%end
+
+%ctor {
+    gUserChoseExtended = [[NSFileManager defaultManager] fileExistsAtPath:kChoicePath];
+}
