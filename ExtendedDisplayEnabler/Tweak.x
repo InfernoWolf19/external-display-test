@@ -2,56 +2,78 @@
 //
 // iPadOS 16.0 build 20A8372 still contains the whole Extended-display stack
 // (SBSystemShellExtended* resolver/policy/controller classes, the
-// SpringBoard._extendedDisplayControllerProvider ivar, Settings UI), but
-// -[SpringBoard _completeStartupAfterMainSceneConnect:] no longer builds and
-// registers the Extended provider. Betas 2 and 5 did, behind
-// SBChamoisExternalDisplayControllerIsEnabled(). Without it nothing ever
-// reports windowing mode 1 for an external display, so SpringBoard falls back
-// to mirroring and Settings hides Arrangement / Resolution / Scaling.
+// SpringBoard._extendedDisplayControllerProvider ivar, Settings UI), but three
+// pieces of glue were removed or neutered compared with betas 2-5:
 //
-// This tweak re-creates the beta-5 registration after startup finishes:
+//  1. -[SpringBoard _completeStartupAfterMainSceneConnect:] no longer builds and
+//     registers the Extended provider (it did, behind
+//     SBChamoisExternalDisplayControllerIsEnabled()). Without it nothing reports
+//     windowing mode 1 for an external display, so the display only mirrors and
+//     Settings hides Arrangement / Display Zoom.
+//        -> we recreate the beta-5 registration (see EDEInstall).
+//  2. -[SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:] ignores the
+//     requested value and can only turn mirroring ON.
+//        -> we restore the beta-5 behaviour (see EDEApplyMirroring).
+//  3. The Extended policy's connect and the education observer's connect handler
+//     hardcode mirroringEnabled = YES. Beta 5 used !_areRuntimeAvailabilityRequirementsMet
+//     in the policy and had a full education presenter instead of the observer stub.
+//        -> after those handlers run we put back the user's saved choice, or, if there
+//           is none, beta 5's default.
 //
-//   resolverFactory = [SBSystemShellExtendedDisplayResolverFactory new];
-//   policyFactory   = [[SBSystemShellExtendedDisplayControllerPolicyFactory alloc]
-//                        initWithExternalDisplayService:   sb->_externalDisplayService
-//                                externalDisplayDefaults:  [[SBDefaults localDefaults] externalDisplayDefaults]
-//                                    mousePointerManager:  sb->_mousePointerManager
-//                            runtimeAvailabilitySettings:  [[SBExternalDisplaySettingsDomain rootSettings] availabilitySettings]
-//                                           sceneManager:  [FBSceneManager sharedInstance]];
-//   provider        = [[SBSceneHostingDisplayControllerProvider alloc]
-//                        initWithTransformerRegistry:  [SBDisplayTransformerRegistry sharedInstance]
-//                                     displayManager:  sb->_displayManager
-//                                workspaceEventQueue:  [FBWorkspaceEventQueue sharedInstance]
-//                         displayModeResolverFactory:  resolverFactory
-//                                      policyFactory:  policyFactory];
-//   [sb->_displayManager registerDisplayControllerProvider:provider];
-//   sb->_extendedDisplayControllerProvider = provider;
-//
-// Also restores setDisplayMirroringEnabled:forDisplay: (see bottom of file).
-// Log: /var/mobile/Library/Logs/ExtendedDisplayEnabler.log
-// Kill switch: create /var/mobile/Library/Preferences/ExtendedDisplayEnabler.off
+// Files (all under /var/mobile/Library, not /var/jb):
+//   Logs/ExtendedDisplayEnabler.log                  log (rotated at 256 KiB)
+//   Preferences/ExtendedDisplayEnabler.off           kill switch: disables every hook
+//   Preferences/ExtendedDisplayEnabler.choice        saved "extended" / "mirror" choice
+//   Preferences/ExtendedDisplayEnabler.boot          crash-loop strike counter
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <pthread.h>
 
-static NSString *const kLogPath  = @"/var/mobile/Library/Logs/ExtendedDisplayEnabler.log";
-static NSString *const kOffPath  = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.off";
-static const int kMaxAttempts = 40;           // x 0.5s
-static id gProvider;                          // keep the provider alive
+static NSString *const kLogPath    = @"/var/mobile/Library/Logs/ExtendedDisplayEnabler.log";
+static NSString *const kLogOldPath = @"/var/mobile/Library/Logs/ExtendedDisplayEnabler.log.1";
+static NSString *const kOffPath    = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.off";
+static NSString *const kChoicePath = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.choice";
+static NSString *const kLegacyPath = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.extended";
+static NSString *const kBootPath   = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.boot";
+
+static const unsigned long long kMaxLogBytes = 256 * 1024;
+static const int kMaxAttempts = 40;           // late-install retries, x 0.5 s
+static const int kMaxBootStrikes = 5;         // launches that died inside the stability window
+static const double kStableAfterSeconds = 25.0;
+
+enum { EDEChoiceNone = 0, EDEChoiceExtended = 1, EDEChoiceMirror = 2 };
+
+static id gProvider;                          // keeps the provider alive
 static id gResolverFactory, gPolicyFactory;
+static BOOL gInstalling;                      // re-entrancy guard for the early-install hook
+static BOOL gGuardTripped;                    // crash-loop guard disabled the tweak
+static int gChoice;                           // EDEChoice*, main thread only after %ctor
+static int gAutoDecision = -1;                // beta-5 default: -1 unknown, 0 mirror, 1 extended
 
-static void EDELog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
-static void EDELog(NSString *fmt, ...) {
-    va_list ap; va_start(ap, fmt);
-    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
-    va_end(ap);
-    NSLog(@"[ExtendedDisplayEnabler] %@", msg);
-    NSString *line = [NSString stringWithFormat:@"%@ %@\n", [NSDate date], msg];
+// ---------------------------------------------------------------- logging
+
+static pthread_mutex_t gLogMutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void EDELogLocked(NSString *msg) {
+    static NSDateFormatter *fmt;
+    if (!fmt) {
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
+        fmt.dateFormat = @"yyyy-MM-dd HH:mm:ss.SSS";
+    }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSDictionary *attrs = [fm attributesOfItemAtPath:kLogPath error:NULL];
+    if (attrs && [attrs fileSize] > kMaxLogBytes) {
+        [fm removeItemAtPath:kLogOldPath error:NULL];
+        [fm moveItemAtPath:kLogPath toPath:kLogOldPath error:NULL];
+    }
+    NSString *line = [NSString stringWithFormat:@"%@ %@\n", [fmt stringFromDate:[NSDate date]], msg];
     NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:kLogPath];
     if (!fh) {
-        [[NSFileManager defaultManager] createFileAtPath:kLogPath contents:nil attributes:nil];
+        [fm createFileAtPath:kLogPath contents:nil attributes:nil];
         fh = [NSFileHandle fileHandleForWritingAtPath:kLogPath];
     }
     [fh seekToEndOfFile];
@@ -59,43 +81,104 @@ static void EDELog(NSString *fmt, ...) {
     [fh closeFile];
 }
 
+static void EDELog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
+static void EDELog(NSString *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    NSLog(@"[ExtendedDisplayEnabler] %@", msg);
+    pthread_mutex_lock(&gLogMutex);
+    @try {
+        EDELogLocked(msg);
+    } @catch (NSException *e) {
+        // logging must never take SpringBoard down
+    }
+    pthread_mutex_unlock(&gLogMutex);
+}
+
+// ---------------------------------------------------------------- helpers
+
+#define MSG(ret, obj, sel, ...) ((ret (*)(id, SEL, ##__VA_ARGS__))objc_msgSend)((obj), NSSelectorFromString(sel), ##__VA_ARGS__)
+
+static BOOL EDEDisabled(void) {
+    return gGuardTripped || [[NSFileManager defaultManager] fileExistsAtPath:kOffPath];
+}
+
 static id EDEIvar(id obj, const char *name) {
+    if (!obj) return nil;
     Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
     return iv ? object_getIvar(obj, iv) : nil;
 }
 
-static NSString *const kChoicePath = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.extended";
-static BOOL gUserChoseExtended;               // set when the user turns "Mirror Display" off in Settings
-
 static BOOL EDEIsMirroring(id defaults) {
-    return ((BOOL (*)(id, SEL))objc_msgSend)(defaults, NSSelectorFromString(@"isMirroringEnabled"));
+    SEL s = NSSelectorFromString(@"isMirroringEnabled");
+    if (![defaults respondsToSelector:s]) return YES;   // unknown: assume the stock behaviour
+    return ((BOOL (*)(id, SEL))objc_msgSend)(defaults, s);
 }
+
 static void EDESetMirroring(id defaults, BOOL v) {
-    ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, NSSelectorFromString(@"setMirroringEnabled:"), v);
+    SEL s = NSSelectorFromString(@"setMirroringEnabled:");
+    if ([defaults respondsToSelector:s]) ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, s, v);
 }
-// 20A8372 forces mirroringEnabled = YES in the Extended policy's connect and in the education
-// observer's connect handler (beta 5 derived it from the runtime requirements instead).
-// If the user already chose extended mode, put that choice back after those handlers ran.
-static void EDEEnforceChoice(id defaults, const char *why) {
-    if (!gUserChoseExtended || !defaults) return;
-    if (EDEIsMirroring(defaults)) {
-        EDELog(@"%s forced mirroring on; restoring the user's choice (extended)", why);
-        EDESetMirroring(defaults, NO);
-    } else {
-        EDELog(@"%s left mirroring off", why);
-    }
-}
+
 static id EDELocalExternalDisplayDefaults(void) {
     Class d = NSClassFromString(@"SBDefaults");
-    id local = d ? ((id (*)(id, SEL))objc_msgSend)(d, NSSelectorFromString(@"localDefaults")) : nil;
-    return local ? ((id (*)(id, SEL))objc_msgSend)(local, NSSelectorFromString(@"externalDisplayDefaults")) : nil;
+    id local = d ? MSG(id, d, @"localDefaults") : nil;
+    return local ? MSG(id, local, @"externalDisplayDefaults") : nil;
 }
 
-#define MSG(ret, obj, sel, ...) ((ret (*)(id, SEL, ##__VA_ARGS__))objc_msgSend)((obj), NSSelectorFromString(sel), ##__VA_ARGS__)
+// ---------------------------------------------------------------- saved choice
+
+static int EDELoadChoice(void) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *text = [NSString stringWithContentsOfFile:kChoicePath encoding:NSUTF8StringEncoding error:NULL];
+    if ([text hasPrefix:@"extended"]) return EDEChoiceExtended;
+    if ([text hasPrefix:@"mirror"]) return EDEChoiceMirror;
+    if ([fm fileExistsAtPath:kLegacyPath]) return EDEChoiceExtended;   // written by 0.1.x
+    return EDEChoiceNone;
+}
+
+static void EDESaveChoice(int choice) {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm removeItemAtPath:kLegacyPath error:NULL];
+    NSString *text = choice == EDEChoiceExtended ? @"extended" : (choice == EDEChoiceMirror ? @"mirror" : nil);
+    if (text) [text writeToFile:kChoicePath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    else [fm removeItemAtPath:kChoicePath error:NULL];
+}
+
+// -1 = no opinion, 0 = mirror, 1 = extended
+static int EDEDesired(void) {
+    if (gChoice == EDEChoiceExtended) return 1;
+    if (gChoice == EDEChoiceMirror) return 0;
+    return gAutoDecision;
+}
+
+// 20A8372 forces mirroringEnabled = YES in the Extended policy's connect and in the education
+// observer's connect handler. Put back the user's choice (or beta 5's default) after they ran.
+static void EDEApplyDesired(id defaults, const char *why) {
+    @try {
+        int want = EDEDesired();
+        if (want < 0 || !defaults) return;
+        BOOL wantMirror = (want == 0);
+        if (EDEIsMirroring(defaults) != wantMirror) {
+            EDELog(@"%s: mirroring was %d, setting %d (%s)", why, !wantMirror, wantMirror,
+                   gChoice != EDEChoiceNone ? "saved choice" : "beta-5 default");
+            EDESetMirroring(defaults, wantMirror);
+        } else {
+            EDELog(@"%s: mirroring already %d", why, wantMirror);
+        }
+    } @catch (NSException *e) {
+        EDELog(@"%s: exception %@", why, e);
+    }
+}
+
+// ---------------------------------------------------------------- provider install
 
 // Returns YES when finished (installed, already installed, or impossible),
 // NO when a dependency is not ready yet and the caller should retry.
-static BOOL EDEInstall(id sb) {
+// `quiet` suppresses the "not ready" logging for the early attempts.
+static BOOL EDEInstall(id sb, BOOL early, BOOL quiet) {
     @try {
         Class Provider = NSClassFromString(@"SBSceneHostingDisplayControllerProvider");
         Class ResFact  = NSClassFromString(@"SBSystemShellExtendedDisplayResolverFactory");
@@ -111,7 +194,7 @@ static BOOL EDEInstall(id sb) {
             return YES;
         }
         if (EDEIvar(sb, "_extendedDisplayControllerProvider") || gProvider) {
-            EDELog(@"Extended provider already present; nothing to do");
+            if (!quiet) EDELog(@"Extended provider already present; nothing to do");
             return YES;
         }
 
@@ -119,8 +202,10 @@ static BOOL EDEInstall(id sb) {
         id service        = EDEIvar(sb, "_externalDisplayService");
         id pointerMgr     = EDEIvar(sb, "_mousePointerManager");
         if (!displayManager || !service || !pointerMgr) {
-            EDELog(@"dependencies not ready (displayManager=%@ service=%@ pointerManager=%@)",
-                   displayManager ? @"ok" : @"nil", service ? @"ok" : @"nil", pointerMgr ? @"ok" : @"nil");
+            if (!quiet) {
+                EDELog(@"dependencies not ready (displayManager=%@ service=%@ pointerManager=%@)",
+                       displayManager ? @"ok" : @"nil", service ? @"ok" : @"nil", pointerMgr ? @"ok" : @"nil");
+            }
             return NO;
         }
 
@@ -128,19 +213,20 @@ static BOOL EDEInstall(id sb) {
         id queue     = MSG(id, Queue, @"sharedInstance");
         id sceneMgr  = MSG(id, SceneMgr, @"sharedInstance");
         id localDefs = MSG(id, Defaults, @"localDefaults");
-        id extDefs   = MSG(id, localDefs, @"externalDisplayDefaults");
+        id extDefs   = localDefs ? MSG(id, localDefs, @"externalDisplayDefaults") : nil;
         id rootSet   = MSG(id, Domain, @"rootSettings");
-        id availSet  = MSG(id, rootSet, @"availabilitySettings");
+        id availSet  = rootSet ? MSG(id, rootSet, @"availabilitySettings") : nil;
         if (!registry || !queue || !sceneMgr || !extDefs || !availSet) {
-            EDELog(@"collaborators not ready (registry=%@ queue=%@ sceneMgr=%@ extDefaults=%@ availability=%@)",
-                   registry ? @"ok" : @"nil", queue ? @"ok" : @"nil", sceneMgr ? @"ok" : @"nil",
-                   extDefs ? @"ok" : @"nil", availSet ? @"ok" : @"nil");
+            if (!quiet) {
+                EDELog(@"collaborators not ready (registry=%@ queue=%@ sceneMgr=%@ extDefaults=%@ availability=%@)",
+                       registry ? @"ok" : @"nil", queue ? @"ok" : @"nil", sceneMgr ? @"ok" : @"nil",
+                       extDefs ? @"ok" : @"nil", availSet ? @"ok" : @"nil");
+            }
             return NO;
         }
 
         id resFact = [[ResFact alloc] init];
-        id polFact;
-        polFact = ((id (*)(id, SEL, id, id, id, id, id))objc_msgSend)(
+        id polFact = ((id (*)(id, SEL, id, id, id, id, id))objc_msgSend)(
             [PolFact alloc],
             NSSelectorFromString(@"initWithExternalDisplayService:externalDisplayDefaults:mousePointerManager:runtimeAvailabilitySettings:sceneManager:"),
             service, extDefs, pointerMgr, availSet, sceneMgr);
@@ -154,10 +240,14 @@ static BOOL EDEInstall(id sb) {
 
         gResolverFactory = resFact; gPolicyFactory = polFact; gProvider = provider;
         Ivar iv = class_getInstanceVariable(object_getClass(sb), "_extendedDisplayControllerProvider");
-        if (iv) object_setIvar(sb, iv, provider);
+        if (iv) {
+            object_setIvar(sb, iv, provider);
+            // object_setIvar does not retain under ARC; balance the strong ivar we just filled.
+            CFRetain((__bridge CFTypeRef)provider);
+        }
 
         ((void (*)(id, SEL, id))objc_msgSend)(displayManager, NSSelectorFromString(@"registerDisplayControllerProvider:"), provider);
-        EDELog(@"registered Extended display provider %@", provider);
+        EDELog(@"registered Extended display provider %@ (%@)", provider, early ? @"early, before the other providers" : @"after startup");
 
         NSSet *ids = MSG(id, displayManager, @"connectedIdentities");
         for (id ident in ids) {
@@ -170,14 +260,37 @@ static BOOL EDEInstall(id sb) {
     return YES;
 }
 
+// Late path: after startup finished, retry until the dependencies exist.
 static void EDEAttempt(id sb, int n) {
-    if ([[NSFileManager defaultManager] fileExistsAtPath:kOffPath]) { EDELog(@"kill switch present; not installing"); return; }
-    if (EDEInstall(sb)) return;
+    if (EDEDisabled()) { EDELog(@"disabled (kill switch or crash guard); not installing"); return; }
+    if (EDEInstall(sb, NO, NO)) return;
     if (n >= kMaxAttempts) { EDELog(@"gave up after %d attempts", n); return; }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         EDEAttempt(sb, n + 1);
     });
 }
+
+// Early path: beta 5 registered the Extended provider before the others, so a display that is
+// already plugged in when SpringBoard starts gets claimed by it. Called from the hook on
+// -[SBDisplayManager registerDisplayControllerProvider:]; it silently does nothing until the
+// external-display service and pointer manager exist, then installs once.
+static void EDEEarlyInstall(id manager) {
+    if (gInstalling || gProvider || EDEDisabled() || ![NSThread isMainThread]) return;
+    @try {
+        id sb = [UIApplication sharedApplication];
+        Class SB = NSClassFromString(@"SpringBoard");
+        if (!sb || !SB || ![sb isKindOfClass:SB]) return;
+        if (EDEIvar(sb, "_displayManager") != manager) return;
+        gInstalling = YES;
+        EDEInstall(sb, YES, YES);
+        gInstalling = NO;
+    } @catch (NSException *e) {
+        gInstalling = NO;
+        EDELog(@"exception in early install: %@", e);
+    }
+}
+
+// ---------------------------------------------------------------- mirroring toggle
 
 @interface SpringBoard : UIApplication
 @end
@@ -187,18 +300,13 @@ static void EDEAttempt(id sb, int n) {
 - (void)_notifyOfPropertyChangesForDisplayIdentity:(id)identity requestingProcess:(id)process;
 @end
 
-// 20A8372's -[SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:] ignores the requested
-// value: its block only runs `if (!defaults.isMirroringEnabled) defaults.mirroringEnabled = YES`.
-// Beta 5 compared the requested NSNumber with the current value and applied it. Restore that, so the
-// Settings "Mirror Display" switch can actually turn mirroring off.
+// Restores beta 5's -[SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:]:
+// compare the requested NSNumber with the current default and apply it.
 // Returns NO if the arguments are not what we expect (caller then runs the original).
 static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
     EDELog(@"setDisplayMirroringEnabled hook hit: enabled=%@ display=%@", enabled, hardwareIdentifier);
     if (![enabled isKindOfClass:[NSNumber class]] || !hardwareIdentifier) return NO;
     BOOL want = [enabled boolValue];
-    gUserChoseExtended = !want;
-    if (gUserChoseExtended) [[NSFileManager defaultManager] createFileAtPath:kChoicePath contents:nil attributes:nil];
-    else [[NSFileManager defaultManager] removeItemAtPath:kChoicePath error:NULL];
     id process = nil;
     @try {
         // Looked up by name: a direct class reference would need a link against BoardServices.
@@ -216,20 +324,22 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
                 EDELog(@"mirroring request: no extended identity/defaults for %@", hardwareIdentifier);
                 return;
             }
+            // The request is valid: remember it so the connect handlers can't undo it later.
+            gChoice = want ? EDEChoiceMirror : EDEChoiceExtended;
+            EDESaveChoice(gChoice);
+
             BOOL cur = EDEIsMirroring(defaults);
             EDELog(@"mirroring request: want=%d current=%d display=%@", want, cur, hardwareIdentifier);
             if (cur == want) return;
             EDESetMirroring(defaults, want);
-            // Trace whether anything flips it back.
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 EDELog(@"1s after the change: isMirroringEnabled=%d (wanted %d)", EDEIsMirroring(defaults), want);
             });
             if (!want) {
-                // The education observer re-forces mirroring on every connect until one of these is set.
+                // The education observer only forces mirroring while neither "ever enabled" flag is set.
                 SEL ever = NSSelectorFromString(@"setExtendedDisplayEverEnabledWithHardwareReqsSatisfied:");
                 if ([defaults respondsToSelector:ever]) {
                     ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, ever, YES);
-                    EDELog(@"marked extendedDisplayEverEnabledWithHardwareReqsSatisfied");
                 }
             }
             [service _notifyOfPropertyChangesForDisplayIdentity:identity requestingProcess:process];
@@ -244,17 +354,46 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
     return YES;
 }
 
+// ---------------------------------------------------------------- connect handlers
+
+static void EDEAfterPolicyConnect(id policy) {
+    @try {
+        id defaults = EDEIvar(policy, "_externalDisplayDefaults");
+        if (gChoice == EDEChoiceNone) {
+            // No saved choice: beta 5's rule was mirroringEnabled = !_areRuntimeAvailabilityRequirementsMet.
+            SEL met = NSSelectorFromString(@"_areRuntimeAvailabilityRequirementsMet");
+            if ([policy respondsToSelector:met]) {
+                BOOL ok = ((BOOL (*)(id, SEL))objc_msgSend)(policy, met);
+                gAutoDecision = ok ? 1 : 0;
+                EDELog(@"no saved choice; runtime requirements met=%d -> default %@", ok, ok ? @"extended" : @"mirror");
+            }
+        }
+        EDEApplyDesired(defaults, "Extended policy connect");
+    } @catch (NSException *e) {
+        EDELog(@"exception after policy connect: %@", e);
+    }
+}
+
+// ---------------------------------------------------------------- hooks
+
+%hook SBDisplayManager
+- (void)registerDisplayControllerProvider:(id)provider {
+    EDEEarlyInstall(self);
+    %orig;
+}
+%end
+
 %hook SpringBoard
 - (void)_completeStartupAfterMainSceneConnect:(id)scene {
     %orig;
-    // Let the rest of startup (service / pointer manager wiring) settle first.
+    // Fallback if the early install could not run: let the rest of startup settle, then retry.
     dispatch_async(dispatch_get_main_queue(), ^{ EDEAttempt(self, 0); });
 }
 %end
 
 %hook SBExternalDisplayService
 - (void)setDisplayMirroringEnabled:(id)enabled forDisplay:(id)hardwareIdentifier {
-    if (EDEApplyMirroring(self, enabled, hardwareIdentifier)) return;
+    if (!EDEDisabled() && EDEApplyMirroring(self, enabled, hardwareIdentifier)) return;
     %orig;
 }
 %end
@@ -262,17 +401,36 @@ static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
 %hook SBSystemShellExtendedDisplayControllerPolicy
 - (void)connectToDisplayController:(id)controller displayConfiguration:(id)configuration {
     %orig;
-    EDEEnforceChoice(EDEIvar(self, "_externalDisplayDefaults"), "Extended policy connect");
+    if (!EDEDisabled()) EDEAfterPolicyConnect(self);
 }
 %end
 
 %hook SBExternalDisplayEducationObserver
 - (void)displayManager:(id)manager didConnectToRootDisplay:(id)display {
     %orig;
-    EDEEnforceChoice(EDELocalExternalDisplayDefaults(), "education observer connect");
+    if (!EDEDisabled()) EDEApplyDesired(EDELocalExternalDisplayDefaults(), "education observer connect");
 }
 %end
 
+// ---------------------------------------------------------------- crash-loop guard
+
 %ctor {
-    gUserChoseExtended = [[NSFileManager defaultManager] fileExistsAtPath:kChoicePath];
+    @autoreleasepool {
+        gChoice = EDELoadChoice();
+
+        // Count launches that did not stay up for kStableAfterSeconds. If SpringBoard keeps dying
+        // shortly after start (e.g. a crash when the monitor connects), stop touching it.
+        NSString *raw = [NSString stringWithContentsOfFile:kBootPath encoding:NSUTF8StringEncoding error:NULL];
+        int strikes = raw ? [raw intValue] : 0;
+        if (strikes >= kMaxBootStrikes) {
+            gGuardTripped = YES;
+            EDELog(@"crash guard: %d consecutive short-lived launches; tweak disabled. Delete %@ to re-enable.", strikes, kBootPath);
+            return;
+        }
+        [[NSString stringWithFormat:@"%d", strikes + 1] writeToFile:kBootPath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStableAfterSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [[NSFileManager defaultManager] removeItemAtPath:kBootPath error:NULL];
+        });
+        EDELog(@"loaded; saved choice=%d strikes=%d", gChoice, strikes);
+    }
 }
