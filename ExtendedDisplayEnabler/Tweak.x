@@ -164,29 +164,28 @@ static void EDEAttempt(id sb, int n) {
 + (id)currentContext;
 @end
 
-%hook SpringBoard
-- (void)_completeStartupAfterMainSceneConnect:(id)scene {
-    %orig;
-    // Let the rest of startup (service / pointer manager wiring) settle first.
-    dispatch_async(dispatch_get_main_queue(), ^{ EDEAttempt(self, 0); });
-}
-%end
-
 // 20A8372's -[SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:] ignores the requested
 // value: its block only runs `if (!defaults.isMirroringEnabled) defaults.mirroringEnabled = YES`.
 // Beta 5 compared the requested NSNumber with the current value and applied it. Restore that, so the
 // Settings "Mirror Display" switch can actually turn mirroring off.
-%hook SBExternalDisplayService
-- (void)setDisplayMirroringEnabled:(id)enabled forDisplay:(id)hardwareIdentifier {
-    if (![enabled isKindOfClass:[NSNumber class]] || !hardwareIdentifier) { %orig; return; }
+// Returns NO if the arguments are not what we expect (caller then runs the original).
+static BOOL EDEApplyMirroring(id service, id enabled, id hardwareIdentifier) {
+    if (![enabled isKindOfClass:[NSNumber class]] || !hardwareIdentifier) return NO;
     BOOL want = [enabled boolValue];
     id process = nil;
-    @try { process = [[BSServiceConnection currentContext] valueForKey:@"remoteProcess"]; } @catch (__unused id e) {}
+    @try {
+        process = [[BSServiceConnection currentContext] valueForKey:@"remoteProcess"];
+    } @catch (NSException *ex) {
+        process = nil;
+    }
     void (^apply)(void) = ^{
         @try {
-            id identity = [self _extendedModeDisplayIdentityForHardwareIdentifier:hardwareIdentifier error:NULL];
-            id defaults = EDEIvar(self, "_defaults");
-            if (!identity || !defaults) { EDELog(@"mirroring request: no extended identity/defaults for %@", hardwareIdentifier); return; }
+            id identity = [service _extendedModeDisplayIdentityForHardwareIdentifier:hardwareIdentifier error:NULL];
+            id defaults = EDEIvar(service, "_defaults");
+            if (!identity || !defaults) {
+                EDELog(@"mirroring request: no extended identity/defaults for %@", hardwareIdentifier);
+                return;
+            }
             BOOL cur = ((BOOL (*)(id, SEL))objc_msgSend)(defaults, NSSelectorFromString(@"isMirroringEnabled"));
             EDELog(@"mirroring request: want=%d current=%d display=%@", want, cur, hardwareIdentifier);
             if (cur == want) return;
@@ -199,10 +198,28 @@ static void EDEAttempt(id sb, int n) {
                     EDELog(@"marked extendedDisplayEverEnabledWithHardwareReqsSatisfied");
                 }
             }
-            [self _notifyOfPropertyChangesForDisplayIdentity:identity requestingProcess:process];
-        } @catch (NSException *e) { EDELog(@"exception applying mirroring change: %@", e); }
+            [service _notifyOfPropertyChangesForDisplayIdentity:identity requestingProcess:process];
+        } @catch (NSException *ex) {
+            EDELog(@"exception applying mirroring change: %@", ex);
+        }
     };
-    dispatch_queue_t q = (dispatch_queue_t)EDEIvar(self, "_serviceQueue");
-    if (q) dispatch_async(q, apply); else apply();
+    id queue = EDEIvar(service, "_serviceQueue");
+    if (queue) dispatch_async((dispatch_queue_t)queue, apply);
+    else apply();
+    return YES;
+}
+
+%hook SpringBoard
+- (void)_completeStartupAfterMainSceneConnect:(id)scene {
+    %orig;
+    // Let the rest of startup (service / pointer manager wiring) settle first.
+    dispatch_async(dispatch_get_main_queue(), ^{ EDEAttempt(self, 0); });
+}
+%end
+
+%hook SBExternalDisplayService
+- (void)setDisplayMirroringEnabled:(id)enabled forDisplay:(id)hardwareIdentifier {
+    if (EDEApplyMirroring(self, enabled, hardwareIdentifier)) return;
+    %orig;
 }
 %end
