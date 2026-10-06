@@ -1,6 +1,6 @@
 Package: com.infernowolf19.audiorouteprobe
 Name: AudioRouteProbe
-Version: 0.3.0
+Version: 0.3.1
 Architecture: iphoneos-arm64
 Description: Diagnostics for the audio daemon on iPadOS 16.0 (20A8372): logs why the iPad speaker is missing from the audio picker when a wired output is connected, plus an opt-in experiment that lists the speaker anyway.
 Maintainer: infernowolf19

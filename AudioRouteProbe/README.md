@@ -1,4 +1,4 @@
-# AudioRouteProbe 0.3.0 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.3.1 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
 Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
 every hook calls the original function first and forwards all argument registers unchanged.
@@ -31,7 +31,13 @@ active route. The daemon's cached list is never modified: the hook returns a cop
 by `FigRoutingManagerPickRouteDescriptorForContext` and the audio device, not by the list. The `tap` log lines show
 the descriptor that was chosen and the function's result.
 
-If nothing in the list changes, or tapping the row does nothing, the log says why (`append: skipped ...`, `tap ...`).
+Result of the first device test (0.3.0): the row appeared, tapping it showed a spinner and the picker went back to
+the display; no route changed. The appended entry had `RouteType = Override`, whereas the daemon's own speaker entry
+says `Default`. 0.3.1 therefore adds a variant: `touch /private/var/tmp/AudioRouteProbe.append.default` (in addition
+to `.append`) sets the row's `RouteType` to `Default`. 0.3.1 also logs the rest of the pick path (`tap2` the
+descriptors the client sent, `tap3` whether an endpoint was found for each descriptor, `tap4` the final pick) to show
+where a tap is rejected. Also fixed in 0.3.1: arm64 tagged-pointer strings (the mode `Default` as sent by clients) were
+rejected by the object check, so requests from SpringBoard never got the extra row.
 
 ## What gets logged
 | tag | function | meaning |
@@ -40,7 +46,7 @@ If nothing in the list changes, or tapping the row does nothing, the log says wh
 | `incl` | `vaemShouldIncludePortTypeForRouteConfiguration` | whether a port type is included |
 | `pick` | `cmsmCopyPickableRoutesForRouteConfiguration` | the route descriptions the picker will show (after the experiment, if on) |
 | `rchg` | `vaemVADRouteChangeListener` | route-change events (raw register values only) |
-| `tap` | `FigRoutingManagerPickRouteDescriptorForContext` | a route was chosen: descriptor + result |
+| `tap` `tap2` `tap3` `tap4` | `FigRoutingManagerPickRouteDescriptorForContext`, `...DescriptorsForContext`, `FigEndpointDescriptorUtility_CopyEndpointFromDescriptor`, `FigRoutingManagerPickEndpointsForContext` | a route was chosen: descriptors, whether an endpoint exists, result |
 | `append` | experiment | added / skipped and why |
 
 Each question is logged only when its answer changes.
@@ -68,7 +74,7 @@ Each question is logged only when its answer changes.
    cat /private/var/tmp/AudioRouteProbe.log          # daemon: conn / incl / pick / rchg / tap / append (and .log.1 after rotation)
    ```
    Beacons in the picker log: `loaded` = daemon pid, `info` 1 ok / 2 kill switch / 3 wrong build / 4 crash guard,
-   `hooks` = bitmask of installed hooks (31 = all five), `ev.*` = how often each hook fired.
+   `hooks` = bitmask of installed hooks (255 = all eight), `ev.*` = how often each hook fired.
 3. To try the experiment: `touch /private/var/tmp/AudioRouteProbe.append`, plug in the monitor or wired AirPods Max,
    open the picker, look for the Speaker row, tap it, and note whether audio moves. Then send both logs.
 

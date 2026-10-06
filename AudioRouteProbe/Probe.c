@@ -1,4 +1,4 @@
-// AudioRouteProbe 0.3.0
+// AudioRouteProbe 0.3.1
 //
 // Diagnostics for the audio daemon (audiomxd / mediaserverd) on iPadOS 16.0, build 20A8372, plus ONE opt-in
 // experiment. Every hook calls the original first and forwards all argument registers unchanged. Without the
@@ -122,7 +122,7 @@ static void resolve_paths(void) {
 }
 
 #define MAX_LOG_BYTES    (2 * 1024 * 1024)
-#define PROBE_VERSION "0.3.0"
+#define PROBE_VERSION "0.3.1"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -140,6 +140,9 @@ static const Target T_RCHG  = { "vaemVADRouteChangeListener",                   
 static const Target T_MKDESC = { "cmsmCreateRouteDescriptionFromPortIDOrRouteConfiguration", 0x196401b78, { 0xd503237f, 0xd10183ff, 0xa9025ff8 } };
 static const Target T_VADPK  = { "cmsmCopyVADPickedRouteDescriptionForRouteConfiguration",     0x196403bcc, { 0xd503237f, 0xd10243ff, 0xa9036ffc } };
 static const Target T_SPKID  = { "vaemGetCachedSpeakerPortID",                     0x19646bae0, { 0xb02215c8, 0xb947dd00, 0xd65f03c0 } };
+static const Target T_PICKS  = { "FigRoutingManagerPickRouteDescriptorsForContext", 0x1964b45fc, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
+static const Target T_CEP    = { "FigEndpointDescriptorUtility_CopyEndpointFromDescriptor", 0x1964e9528, { 0xd503237f, 0xd102c3ff, 0xa9056ffc } };
+static const Target T_PEC    = { "FigRoutingManagerPickEndpointsForContext", 0x1964b3038, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
 static const Target T_TAP    = { "FigRoutingManagerPickRouteDescriptorForContext", 0x1964b2b54, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
 static const Target T_PTYPE = { "vaeGetPortTypeFromPortID",                        0x19640545c, { 0xd503237f, 0xd100c3ff, 0xa9027bfd } };
 static const Target T_ISHP  = { "vaeIsHeadphonesPort",                             0x19641a580, { 0xd503237f, 0xa9bd57f6, 0xa9014ff4 } };
@@ -278,7 +281,7 @@ static const char *fourcc(uint32_t v, char out[8]) {
 // the SpringBoard side of this tweak (SpringBoardProbe.m) logs. Each beacon is a name plus a 64-bit state:
 //   loaded   state = pid                      the probe's constructor ran inside this daemon
 //   info     state = 1 ok, 2 kill switch, 3 wrong OS build, 4 crash guard tripped
-//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg, bit4 tap)
+//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg, bit4 tap, bits5-7 tap2/tap3/tap4)
 //   ev.*     state = number of times that hook has fired
 enum { B_LOADED, B_INFO, B_HOOKS, B_EV_CONN, B_EV_INCL, B_EV_PICK, B_EV_RCHG, B_COUNT };
 static const char *const kBeaconNames[B_COUNT] = {
@@ -372,7 +375,11 @@ static bool answer_changed(uint64_t key, uint64_t hash) {
 // CFString -> UTF-8 without the pointer that CFCopyDescription prints (it differs on every call).
 static void cfstr_c(CFTypeRef t, char *buf, size_t n) {
     buf[0] = 0;
-    if (t && plausible_obj(t) && CFGetTypeID(t) == CFStringGetTypeID() && CFStringGetCString((CFStringRef)t, buf, (CFIndex)n, kCFStringEncodingUTF8)) return;
+    // arm64 tagged pointers (short NSStrings such as the mode "Default" sent by clients) have the HIGH bit set and a
+    // low bit of 0, which plausible_obj() rejects; the two string arguments of the pickable-routes function are always
+    // strings or NULL, so a tagged value is safe to hand to CoreFoundation here.
+    bool tagged = ((uintptr_t)t >> 63) != 0;
+    if (t && (tagged || plausible_obj(t)) && CFGetTypeID(t) == CFStringGetTypeID() && CFStringGetCString((CFStringRef)t, buf, (CFIndex)n, kCFStringEncodingUTF8)) return;
     cfdesc(t, buf, n);
 }
 
@@ -496,6 +503,9 @@ static CFArrayRef speaker_appended(CFTypeRef a0, CFTypeRef a1, uintptr_t a2, uin
         CFTypeRef picked = NULL;                                  // is the speaker the route the audio device is actually using?
         if (fn_vadPicked) fn_vadPicked(a0, a1, NULL, NULL, &picked);
         if (dict_port_is(picked, spk)) CFDictionarySetValue(md, CFSTR("RouteCurrentlyPicked"), kCFBooleanTrue);
+        // Built from a bare port ID the daemon labels the speaker RouteType "Override"; its own speaker entry says
+        // "Default". The second flag file makes the row look exactly like the daemon's own.
+        if (access(APPEND_FLAG ".default", F_OK) == 0) CFDictionarySetValue(md, CFSTR("RouteType"), CFSTR("Default"));
         if (picked) CFRelease(picked);
         CFArrayAppendValue(m, md);
         out = m;
@@ -579,6 +589,39 @@ static uintptr_t hook_tap(ARGS8) {
     return rv;
 }
 
+// --- the rest of the pick path, logged only. Each target has no stack arguments (checked in the disassembly); every
+// register is forwarded unchanged and only objects that pass cf_is() are described.
+static Fn8 orig_picks, orig_cep, orig_pec;
+
+// FigRoutingManagerPickRouteDescriptorsForContext(a0, a1 = array of wrappers holding route descriptors, a2, a3)
+static uintptr_t hook_picks(ARGS8) {
+    char d[1800];
+    d[0] = 0;
+    if (cf_is((CFTypeRef)a1, CFArrayGetTypeID())) cfdesc((CFTypeRef)a1, d, sizeof d);
+    plog("tap2  pick-route-descriptors a0=0x%lx a2=0x%lx a3=0x%lx descriptors=%s", (unsigned long)a0, (unsigned long)a2, (unsigned long)a3, d[0] ? d : "<not an array>");
+    uintptr_t rv = orig_picks(PASS8);
+    plog("tap2  pick-route-descriptors -> %d", (int)(int32_t)rv);
+    return rv;
+}
+
+// FigEndpointDescriptorUtility_CopyEndpointFromDescriptor(a0 = descriptor dictionary, a1) -> endpoint or NULL
+static uintptr_t hook_cep(ARGS8) {
+    char d[900];
+    d[0] = 0;
+    if (cf_is((CFTypeRef)a0, CFDictionaryGetTypeID())) cfdesc((CFTypeRef)a0, d, sizeof d);
+    uintptr_t rv = orig_cep(PASS8);
+    plog("tap3  endpoint-from-descriptor %s <- %s", rv ? "found an endpoint" : "NO ENDPOINT (NULL)", d[0] ? d : "<not a dictionary>");
+    return rv;
+}
+
+// FigRoutingManagerPickEndpointsForContext(a0, a1, a2, a3)
+static uintptr_t hook_pec(ARGS8) {
+    plog("tap4  pick-endpoints a0=0x%lx a1=0x%lx a2=0x%lx a3=0x%lx", (unsigned long)a0, (unsigned long)a1, (unsigned long)a2, (unsigned long)a3);
+    uintptr_t rv = orig_pec(PASS8);
+    plog("tap4  pick-endpoints -> %d", (int)(int32_t)rv);
+    return rv;
+}
+
 // ------------------------------------------------------------------ install
 
 static bool probe_disabled(void) {
@@ -619,7 +662,11 @@ static void install(intptr_t slide) {
     hook_one(&T_PICK, (void *)hook_pick, (void **)&orig_pick);
     hook_one(&T_RCHG, (void *)hook_rchg, (void **)&orig_rchg);
     hook_one(&T_TAP,  (void *)hook_tap,  (void **)&orig_tap);
-    uint64_t mask = (orig_conn ? 1u : 0u) | (orig_incl ? 2u : 0u) | (orig_pick ? 4u : 0u) | (orig_rchg ? 8u : 0u) | (orig_tap ? 16u : 0u);
+    hook_one(&T_PICKS, (void *)hook_picks, (void **)&orig_picks);
+    hook_one(&T_CEP,  (void *)hook_cep,  (void **)&orig_cep);
+    hook_one(&T_PEC,  (void *)hook_pec,  (void **)&orig_pec);
+    uint64_t mask = (orig_conn ? 1u : 0u) | (orig_incl ? 2u : 0u) | (orig_pick ? 4u : 0u) | (orig_rchg ? 8u : 0u) | (orig_tap ? 16u : 0u) |
+                    (orig_picks ? 32u : 0u) | (orig_cep ? 64u : 0u) | (orig_pec ? 128u : 0u);
     beacon(B_HOOKS, mask);
     plog("probe active (hook mask 0x%llx): open the audio picker, plug/unplug outputs, then read this log", (unsigned long long)mask);
 }
