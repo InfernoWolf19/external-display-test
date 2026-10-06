@@ -51,8 +51,23 @@ before `pick`**? Each case points at a different fix.
    ls -la /var/jb/tmp/AudioRouteProbe.log /var/jb/var/mobile/Library/Logs/AudioRouteProbe.log \
           /var/jb/var/log/AudioRouteProbe.log 2>/dev/null
    ```
-   and send whichever exist (the first lines say which files were opened). If none exist, either the daemon was not
-   injected or its sandbox blocks all three: say so and the next version will use a different channel.
+   and send whichever exist (the first lines say which files were opened).
+
+   **If none of those exist** (0.1.0 behaviour), the daemon's sandbox blocks writes under the jailbreak root. From
+   0.1.1 the probe then falls back to the daemon's own temp/cache directory, which every sandbox allows, and says so
+   at the top of the log. Find it as root:
+   ```
+   sudo find /private/var/folders -name 'AudioRouteProbe.log' 2>/dev/null
+   ```
+   (that fallback is used only when no jbroot location can be opened; the OS cleans those directories itself).
+
+   **If still nothing exists**, the tweak is not being loaded into the daemon. Check, in this order:
+   ```
+   ls -la /var/jb/Library/MobileSubstrate/DynamicLibraries/ | grep -i AudioRoute      # installed?
+   ps aux | grep -E 'audiomxd|mediaserverd' | grep -v grep                           # which daemon runs, since when
+   ls -lt /var/mobile/Library/Logs/CrashReporter | head -5                           # did the daemon crash?
+   ```
+   The daemon must be restarted *after* installing the package (reboot, or userspace reboot) for the tweak to load.
 
 ## Build
 `.github/workflows/build-audio-probe.yml` builds a rootless `.deb`, or locally: `cd AudioRouteProbe && make package FINALPACKAGE=1`.

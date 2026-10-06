@@ -44,6 +44,7 @@
 #include <os/log.h>
 #include <substrate.h>
 #include <limits.h>
+#include <errno.h>
 #include <rootless.h>        // ROOT_PATH(): jailbreak-root prefix resolved at runtime via libroot
 #if __has_feature(ptrauth_calls)
 #include <ptrauth.h>
@@ -77,6 +78,17 @@ static const char *const kOffRel[NLOCATIONS] = {
 static char kLogPaths[NLOCATIONS][PATH_MAX];
 static char kOffPaths[NLOCATIONS][PATH_MAX];
 
+// Fallback, used ONLY if none of the jbroot locations above can be opened (e.g. the daemon's sandbox blocks
+// writes under the jbroot): the daemon's own per-process temp and cache directories. Every sandbox profile
+// allows those, the OS cleans them up, and they are not jailbreak paths. Find them with:
+//   sudo find /private/var/folders -name 'AudioRouteProbe.log' 2>/dev/null
+#define NFALLBACK 2
+static char kFallbackPaths[NFALLBACK][PATH_MAX];
+
+static const char *log_path_for(int idx) {            // idx < NLOCATIONS: jbroot location; else fallback
+    return idx < NLOCATIONS ? kLogPaths[idx] : kFallbackPaths[idx - NLOCATIONS];
+}
+
 static void resolve_one(char *dst, const char *jbrootRelative) {
     // ROOT_PATH() returns a pointer to a per-call-site static buffer, so copy it out immediately.
     const char *p = ROOT_PATH(jbrootRelative);
@@ -88,6 +100,13 @@ static void resolve_paths(void) {
     for (int i = 0; i < NLOCATIONS; i++) {
         resolve_one(kLogPaths[i], kLogRel[i]);
         resolve_one(kOffPaths[i], kOffRel[i]);
+    }
+    static const int dirs[NFALLBACK] = { _CS_DARWIN_USER_TEMP_DIR, _CS_DARWIN_USER_CACHE_DIR };
+    for (int i = 0; i < NFALLBACK; i++) {
+        char dir[PATH_MAX];
+        size_t n = confstr(dirs[i], dir, sizeof dir);   // ends with '/'
+        kFallbackPaths[i][0] = 0;
+        if (n > 0 && n <= sizeof dir) snprintf(kFallbackPaths[i], PATH_MAX, "%sAudioRouteProbe.log", dir);
     }
 }
 
@@ -116,13 +135,38 @@ static int  gFds[8];
 static int  gFdPath[8];                              // index into kLogPaths for each open fd
 static int  gNFds = -1;                              // -1: not opened yet
 
+static char gOpenReport[2048];                       // why each location failed; written into the log once
+
+static void plog_try_open_locked(int idx) {
+    const char *path = log_path_for(idx);
+    if (!path[0]) return;
+    int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+    if (fd >= 0) {
+        if (gNFds < 8) { gFds[gNFds] = fd; gFdPath[gNFds] = idx; gNFds++; }
+        else close(fd);
+    } else {
+        size_t used = strlen(gOpenReport);
+        snprintf(gOpenReport + used, sizeof gOpenReport - used, "  %s: %s\n", path, strerror(errno));
+    }
+}
+
 static void plog_open_locked(void) {
     gNFds = 0;
-    for (int i = 0; i < NLOCATIONS && gNFds < 8; i++) {
-        if (!kLogPaths[i][0]) continue;
-        int fd = open(kLogPaths[i], O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-        if (fd >= 0) { gFds[gNFds] = fd; gFdPath[gNFds] = (int)i; gNFds++; }
+    gOpenReport[0] = 0;
+    for (int i = 0; i < NLOCATIONS; i++) plog_try_open_locked(i);
+    bool usedFallback = false;
+    if (gNFds == 0) {                                // jbroot locations all failed: use the daemon's temp dirs
+        usedFallback = true;
+        for (int i = 0; i < NFALLBACK; i++) plog_try_open_locked(NLOCATIONS + i);
     }
+    if (gNFds > 0) {                                 // make the log explain itself
+        char head[2600];
+        snprintf(head, sizeof head, "[probe] uid=%d euid=%d pid=%d%s%s%s\n", (int)getuid(), (int)geteuid(), (int)getpid(),
+                 usedFallback ? " (jbroot log locations not writable; using the daemon's temp dir)" : "",
+                 gOpenReport[0] ? "; failed to open:\n" : "", gOpenReport);
+        for (int i = 0; i < gNFds; i++) (void)!write(gFds[i], head, strlen(head));
+    }
+    if (gOpenReport[0]) os_log(OS_LOG_DEFAULT, "[AudioRouteProbe] log open failures:\n%{public}s", gOpenReport);
 }
 
 static void plog_locked(const char *msg) {
@@ -371,7 +415,7 @@ static void boot_guard(bool *tripped) {
     pthread_mutex_unlock(&gMu);
     if (idx < 0) return;                             // no writable location: no guard, rely on safe mode
     char path[512];
-    snprintf(path, sizeof path, "%s.boot", kLogPaths[idx]);
+    snprintf(path, sizeof path, "%s.boot", log_path_for(idx));
     int strikes = 0;
     FILE *f = fopen(path, "r");
     if (f) { if (fscanf(f, "%d", &strikes) != 1) strikes = 0; fclose(f); }
@@ -390,13 +434,13 @@ static void probe_init(void) {
     if (!name || (strcmp(name, "audiomxd") != 0 && strcmp(name, "mediaserverd") != 0)) return;
     resolve_paths();                                 // jbroot-prefixed log / kill-switch locations
     if (probe_disabled()) { plog("kill switch present; probe inactive"); return; }
-    plog("---- AudioRouteProbe 0.1.0 loaded");
+    plog("---- AudioRouteProbe 0.1.1 loaded");
     pthread_mutex_lock(&gMu);
     if (gNFds < 0) plog_open_locked();
     int nopen = gNFds;
     pthread_mutex_unlock(&gMu);
-    if (nopen == 0) os_log(OS_LOG_DEFAULT, "[AudioRouteProbe] no log file could be opened (sandbox?)");
-    for (int i = 0; i < nopen; i++) plog("log file: %s", kLogPaths[gFdPath[i]]);
+    if (nopen == 0) os_log(OS_LOG_DEFAULT, "[AudioRouteProbe] no log file could be opened anywhere (sandbox?)");
+    for (int i = 0; i < nopen; i++) plog("log file: %s", log_path_for(gFdPath[i]));
     if (!os_build_ok()) return;
     bool tripped;
     boot_guard(&tripped);
