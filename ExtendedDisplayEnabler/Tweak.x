@@ -20,24 +20,50 @@
 //        -> after those handlers run we put back the user's saved choice, or, if there
 //           is none, beta 5's default.
 //
-// Files (all under /var/mobile/Library, not /var/jb):
-//   Logs/ExtendedDisplayEnabler.log                  log (rotated at 256 KiB)
-//   Preferences/ExtendedDisplayEnabler.off           kill switch: disables every hook
-//   Preferences/ExtendedDisplayEnabler.choice        saved "extended" / "mirror" choice
-//   Preferences/ExtendedDisplayEnabler.boot          crash-loop strike counter
+// Files (all under the jailbreak root; paths are resolved at runtime with libroot, see EDEInitPaths):
+//   <jbroot>/var/mobile/Library/Logs/ExtendedDisplayEnabler.log          log (rotated at 256 KiB)
+//   <jbroot>/var/mobile/Library/Preferences/ExtendedDisplayEnabler.off   kill switch: disables every hook
+//   <jbroot>/tmp/ExtendedDisplayEnabler.off                              kill switch (alternative location)
+//   <jbroot>/var/mobile/Library/Preferences/ExtendedDisplayEnabler.choice  saved "extended" / "mirror" choice
+//   <jbroot>/var/mobile/Library/Preferences/ExtendedDisplayEnabler.boot    crash-loop strike counter
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <pthread.h>
+#import <rootless.h>        // ROOT_PATH_NS(): jailbreak-root prefix resolved at runtime via libroot
 
-static NSString *const kLogPath    = @"/var/mobile/Library/Logs/ExtendedDisplayEnabler.log";
-static NSString *const kLogOldPath = @"/var/mobile/Library/Logs/ExtendedDisplayEnabler.log.1";
-static NSString *const kOffPath    = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.off";
-static NSString *const kChoicePath = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.choice";
-static NSString *const kLegacyPath = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.extended";
-static NSString *const kBootPath   = @"/var/mobile/Library/Preferences/ExtendedDisplayEnabler.boot";
+// Rootless convention: every file this tweak creates lives under the jailbreak root, never at a rootful
+// path (a leftover rootful file can be used to detect the jailbreak). The prefix is resolved at runtime by
+// libroot via ROOT_PATH_NS, so relocated jbroots keep working. Resolved once in EDEInitPaths().
+//   state / kill switch / crash counter : <jbroot>/var/mobile/Library/Preferences
+//   log                                 : <jbroot>/var/mobile/Library/Logs
+// If one of those directories does not exist under this jbroot, <jbroot>/tmp is used instead.
+static NSString *kLogPath;
+static NSString *kLogOldPath;
+static NSString *kOffPath;
+static NSString *kOffPathAlt;     // the kill switch is honoured in either location
+static NSString *kChoicePath;
+static NSString *kLegacyPath;     // written by 0.1.x
+static NSString *kBootPath;
+
+static NSString *EDEJbDirFile(NSString *jbrootRelativeDir, NSString *file) {
+    NSString *dir = ROOT_PATH_NS(jbrootRelativeDir);
+    BOOL isDir = NO;
+    if (!dir || ![[NSFileManager defaultManager] fileExistsAtPath:dir isDirectory:&isDir] || !isDir) dir = ROOT_PATH_NS(@"/tmp");
+    return [dir stringByAppendingPathComponent:file];
+}
+
+static void EDEInitPaths(void) {
+    kLogPath    = EDEJbDirFile(@"/var/mobile/Library/Logs", @"ExtendedDisplayEnabler.log");
+    kLogOldPath = [kLogPath stringByAppendingString:@".1"];
+    kOffPath    = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.off");
+    kOffPathAlt = [ROOT_PATH_NS(@"/tmp") stringByAppendingPathComponent:@"ExtendedDisplayEnabler.off"];
+    kChoicePath = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.choice");
+    kLegacyPath = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.extended");
+    kBootPath   = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.boot");
+}
 
 static const unsigned long long kMaxLogBytes = 256 * 1024;
 static const int kMaxAttempts = 40;           // late-install retries, x 0.5 s
@@ -58,6 +84,7 @@ static int gAutoDecision = -1;                // beta-5 default: -1 unknown, 0 m
 static pthread_mutex_t gLogMutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void EDELogLocked(NSString *msg) {
+    if (!kLogPath) return;                           // paths not resolved yet
     static NSDateFormatter *fmt;
     if (!fmt) {
         fmt = [[NSDateFormatter alloc] init];
@@ -102,7 +129,8 @@ static void EDELog(NSString *fmt, ...) {
 #define MSG(ret, obj, sel, ...) ((ret (*)(id, SEL, ##__VA_ARGS__))objc_msgSend)((obj), NSSelectorFromString(sel), ##__VA_ARGS__)
 
 static BOOL EDEDisabled(void) {
-    return gGuardTripped || [[NSFileManager defaultManager] fileExistsAtPath:kOffPath];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    return gGuardTripped || (kOffPath && [fm fileExistsAtPath:kOffPath]) || (kOffPathAlt && [fm fileExistsAtPath:kOffPathAlt]);
 }
 
 static id EDEIvar(id obj, const char *name) {
@@ -416,6 +444,7 @@ static void EDEAfterPolicyConnect(id policy) {
 
 %ctor {
     @autoreleasepool {
+        EDEInitPaths();
         gChoice = EDELoadChoice();
 
         // Count launches that did not stay up for kStableAfterSeconds. If SpringBoard keeps dying
