@@ -1,4 +1,4 @@
-// AudioRouteProbe 0.4.0
+// AudioRouteProbe 0.4.1
 //
 // Diagnostics for the audio daemon (audiomxd / mediaserverd) on iPadOS 16.0, build 20A8372, plus ONE opt-in
 // experiment. Every hook calls the original first and forwards all argument registers unchanged. Without the
@@ -123,7 +123,7 @@ static void resolve_paths(void) {
 }
 
 #define MAX_LOG_BYTES    (2 * 1024 * 1024)
-#define PROBE_VERSION "0.4.0"
+#define PROBE_VERSION "0.4.1"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -469,11 +469,20 @@ static uintptr_t hook_incl(ARGS8) {
 
 static bool cf_is(CFTypeRef t, CFTypeID id) { return t && plausible_obj(t) && CFGetTypeID(t) == id; }
 
+// Small CFNumbers are arm64 tagged pointers (high bit set), which plausible_obj() rejects; 0.4.0 used cf_is() on the
+// connected-port list's CFNumbers and therefore found no ports at all. Only for values that come out of a CF container
+// (array element / dictionary value), which are CF objects by construction.
+static bool is_cf_number(CFTypeRef t) {
+    if (!t) return false;
+    if (((uintptr_t)t >> 63) == 0 && !plausible_obj(t)) return false;
+    return CFGetTypeID(t) == CFNumberGetTypeID();
+}
+
 static bool dict_port_is(CFTypeRef d, uint32_t port) {
     if (!cf_is(d, CFDictionaryGetTypeID())) return false;
     CFTypeRef n = CFDictionaryGetValue((CFDictionaryRef)d, CFSTR("PortNumber"));
     int32_t v = 0;
-    return cf_is(n, CFNumberGetTypeID()) && CFNumberGetValue((CFNumberRef)n, kCFNumberSInt32Type, &v) && (uint32_t)v == port;
+    return is_cf_number(n) && CFNumberGetValue((CFNumberRef)n, kCFNumberSInt32Type, &v) && (uint32_t)v == port;
 }
 
 #define VAD_CAT_AV       0x63736176u   /* 'csav' : Audio/Video */
@@ -491,7 +500,7 @@ static int wanted_ports(uint32_t out[4]) {
     for (CFIndex i = 0; i < cnt && i < 32 && n < 4; i++) {
         CFTypeRef e = CFArrayGetValueAtIndex(c, i);
         int32_t id = 0;
-        if (cf_is(e, CFNumberGetTypeID()) && CFNumberGetValue((CFNumberRef)e, kCFNumberSInt32Type, &id)) {
+        if (is_cf_number(e) && CFNumberGetValue((CFNumberRef)e, kCFNumberSInt32Type, &id)) {
             uint32_t t = fn_portType((uint32_t)id);
             if (t == FOURCC('p', 's', 'p', 'k') || t == FOURCC('p', 'd', 's', 'p')) out[n++] = (uint32_t)id;
         }

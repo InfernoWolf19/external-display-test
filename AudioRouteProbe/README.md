@@ -1,4 +1,4 @@
-# AudioRouteProbe 0.4.0 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.4.1 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
 Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
 every hook calls the original function first and forwards all argument registers unchanged.
@@ -38,6 +38,9 @@ it does **nothing at all** unless a controlling audio session exists, and with o
 `OverrideRoute` property. **So the experiment must be run while audio is playing** (Music, a video, anything that
 holds an audio session); with silence there is nothing to override. 0.3.2 logs `rts` (is there a session?) and
 `prop` (the OverrideRoute request and the result) to show what the audio stack answers.
+
+0.4.1: 0.4.0 listed no extra rows at all (`append: skipped ... no speaker/display in the connected-port list`) because the
+connected-port list's CFNumbers are arm64 tagged pointers, which my object check rejected. Fixed; nothing else changed.
 
 ### 0.3.2 device result and what 0.4.0 does about it
 With audio playing, tapping the row makes the daemon call `MXCoreSessionSetProperty(session, OverrideRoute, "Speaker")`,
