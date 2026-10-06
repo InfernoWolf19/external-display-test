@@ -16,7 +16,22 @@ jobs:
       - name: Build rootless .deb
         working-directory: AudioRouteProbe
         run: make package FINALPACKAGE=1
+      - name: Identify the build
+        id: info
+        working-directory: AudioRouteProbe
+        run: |
+          DEB=$(ls packages/*.deb)
+          SHORT="${GITHUB_SHA::7}"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          {
+            echo "### AudioRouteProbe"
+            echo "- branch: \`$GITHUB_REF_NAME\`"
+            echo "- commit: \`$GITHUB_SHA\`"
+            dpkg-deb -f "$DEB" Package Version Architecture | sed 's/^/- /'
+            echo "- file: \`$(basename "$DEB")\`"
+            echo "- sha256: \`$(shasum -a 256 "$DEB" | cut -d' ' -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: AudioRouteProbe-deb
+          name: AudioRouteProbe-${{ steps.info.outputs.short }}
           path: AudioRouteProbe/packages/*.deb
