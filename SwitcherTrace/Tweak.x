@@ -140,6 +140,8 @@ static NSString *ST_Event(id e) {
 @end
 @interface SBFluidSwitcherAnimationSettings : NSObject
 @end
+@interface SBTransitionSwitcherModifier : NSObject
+@end
 
 %hook SBFluidSwitcherRootSwitcherModifier
 - (id)handleTransitionEvent:(id)event {
@@ -204,8 +206,8 @@ static NSString *ST_Event(id e) {
 %hook SBMainSwitcherControllerCoordinator
 - (id)animationControllerForTransitionRequest:(id)request ancillaryTransitionRequests:(id)requests {
     id r = %orig;
-    if (ST_On()) ST_Log(@"coordinator.animationControllerForTransitionRequest source=%lld animationDisabled=%lld -> %@",
-                        ST_Int(request, "source"), ST_Int(request, "animationDisabled"), ST_Cls(r));
+    if (ST_On()) ST_Log(@"coordinator.animationControllerForTransitionRequest %@ source=%lld ancillary=%lu -> %@",
+                        ST_Cls(request), ST_Int(request, "source"), (unsigned long)[requests count], ST_Cls(r));
     return r;
 }
 - (BOOL)dismissMainSwitcherNoninteractivelyAnimated:(BOOL)animated {
@@ -222,6 +224,25 @@ static NSString *ST_Event(id e) {
 - (void)performTransitionWithContext:(id)context animated:(BOOL)animated completion:(id)completion {
     if (ST_On()) ST_Log(@"switcherController.performTransition animated=%d context=%@", animated, ST_Desc(context));
     %orig;
+}
+%end
+
+// Which transition modifier does the work for each transition id, and when it believes the transition is over.
+%hook SBTransitionSwitcherModifier
+- (id)initWithTransitionID:(id)transitionID {
+    id r = %orig;
+    if (ST_On()) ST_Log(@"transitionModifier.init %@ id=%@", ST_Cls(r), ST_Desc(transitionID));
+    return r;
+}
+- (id)transitionWillBegin {
+    id r = %orig;
+    if (ST_On()) ST_Log(@"transitionModifier.willBegin %@ id=%@ -> %@", ST_Cls(self), ST_Desc(ST_Obj(self, "transitionID")), ST_Cls(r));
+    return r;
+}
+- (id)transitionDidEnd {
+    id r = %orig;
+    if (ST_On()) ST_Log(@"transitionModifier.didEnd %@ id=%@ phase=%lld", ST_Cls(self), ST_Desc(ST_Obj(self, "transitionID")), ST_Int(self, "transitionPhase"));
+    return r;
 }
 %end
 

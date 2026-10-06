@@ -1,6 +1,6 @@
 Package: com.infernowolf19.switchertrace
 Name: SwitcherTrace
-Version: 0.1.0
+Version: 0.2.0
 Architecture: iphoneos-arm64
 Description: Diagnostic only. Records how SpringBoard's app switcher opens and closes (iPadOS 16.0, build 20A8372) so a missing close animation can be traced. Does nothing unless a debug file exists.
 Maintainer: infernowolf19

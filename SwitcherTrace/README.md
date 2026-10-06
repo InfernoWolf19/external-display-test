@@ -1,4 +1,4 @@
-# SwitcherTrace 0.1.0 (diagnostic)
+# SwitcherTrace 0.2.0 (diagnostic)
 
 iPadOS 16.0, build 20A8372, rootless. Traces how SpringBoard's app switcher opens and closes, to find out why leaving the
 switcher is a one-frame cut (no animation) both after "swipe up and hold with nothing running" and after "tap empty
@@ -23,3 +23,6 @@ space". It changes nothing: every hook calls the original method and only record
 * `coordinator.animationControllerForTransitionRequest`: which animation controller was chosen.
 * `homeGestureToSwitcher.handleTimerEvent`, `settings.emptySwitcherDismissDelay`: the empty-switcher dismiss timer.
 * `switcherController.performTransition`, `coordinator.dismiss...`: the `animated` flag on the way down.
+
+* `transitionModifier.init / willBegin / didEnd`: (0.2.0) which transition modifier class handles each transition id, and
+  when it considers the transition over.
