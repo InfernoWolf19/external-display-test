@@ -24,6 +24,7 @@
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import <mach-o/dyld.h>
+#include <dlfcn.h>
 #import <os/log.h>
 #include <string.h>
 
@@ -32,9 +33,15 @@ static NSString *const kSettingsChangedNotification = @"DBSMultitaskingContinuou
 
 static os_log_t gLog;
 
-@interface NSObject (StageManagerToggleDeclarations)
+// The hooked classes are not in any public header; declare just what the hooks use.
+@interface SBContinuousExposeModuleController : NSObject
 - (NSUserDefaults *)_defaults;
+- (void)setContinuousExposeEnabled:(BOOL)enabled;
+@end
+
+@interface DBSMultitaskingContinuousExposeController : NSObject
 - (void)setPreferenceValue:(id)value specifier:(id)specifier;
+- (void)setContinuousExposeEnabled:(id)value specifier:(id)specifier;
 @end
 
 %group ControlCenterModule
