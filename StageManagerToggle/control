@@ -1,0 +1,9 @@
+Package: com.infernowolf19.stagemanagertoggle
+Name: StageManagerToggle
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Makes the Control Centre Stage Manager button and the Settings toggle switch Stage Manager on and off directly, without the first-run "ever enabled" education step (iPadOS 16.0, build 20A8372).
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
