@@ -30,9 +30,12 @@ before `pick`**? Each case points at a different fix.
   target match what was disassembled from that build. Anything else is left alone and logged.
 * Runs only inside `audiomxd` / `mediaserverd`.
 * Kill switch: create any of these files and restart the daemon (or reboot):
-  `/var/mobile/Library/Preferences/AudioRouteProbe.off`, `/var/tmp/AudioRouteProbe.off`, `/tmp/AudioRouteProbe.off`.
+  `/var/jb/tmp/AudioRouteProbe.off`, `/var/jb/var/mobile/Library/Preferences/AudioRouteProbe.off`, `/var/jb/var/log/AudioRouteProbe.off`.
+* Rootless: every file the probe creates lives under the jailbreak root. The prefix is resolved at runtime with
+  libroot (`ROOT_PATH()` from Theos' `rootless.h`), not hard-coded, so relocated jbroots work; nothing is written to
+  a rootful path.
 * Crash guard: after 5 consecutive launches that did not stay up 25 s the probe disables itself (counter file
-  `<logfile>.boot`; delete it to re-arm).
+  `<logfile>.boot` next to the first log; delete it to re-arm).
 * Worst case if a hook is wrong: the audio daemon crashes and launchd restarts it. If it crash-loops, use
   Dopamine safe mode and remove the package.
 
@@ -43,14 +46,13 @@ before `pick`**? Each case points at a different fix.
    1. Nothing connected: open Control Centre, play audio, open the audio picker (tap the icon), close it.
    2. Plug in the USB-C monitor. Wait 5 s. Open the picker, close it.
    3. Unplug the monitor, plug in the wired AirPods Max. Wait 5 s. Open the picker, close it.
-3. Collect the log. The daemon is sandboxed and every location is tried, so check all of them:
+3. Collect the log. The daemon may be sandboxed, so every location is tried; check all of them:
    ```
-   ls -la /var/mobile/Library/Logs/AudioRouteProbe.log /var/tmp/AudioRouteProbe.log /tmp/AudioRouteProbe.log \
-          /var/jb/tmp/AudioRouteProbe.log /var/jb/var/mobile/Library/Logs/AudioRouteProbe.log \
-          /var/mobile/Library/Caches/AudioRouteProbe.log 2>/dev/null
+   ls -la /var/jb/tmp/AudioRouteProbe.log /var/jb/var/mobile/Library/Logs/AudioRouteProbe.log \
+          /var/jb/var/log/AudioRouteProbe.log 2>/dev/null
    ```
-   and send whichever exist (the first lines say which files were opened). If none exist, the daemon's sandbox
-   blocks all of them: say so and the next version will use a different channel.
+   and send whichever exist (the first lines say which files were opened). If none exist, either the daemon was not
+   injected or its sandbox blocks all three: say so and the next version will use a different channel.
 
 ## Build
 `.github/workflows/build-audio-probe.yml` builds a rootless `.deb`, or locally: `cd AudioRouteProbe && make package FINALPACKAGE=1`.

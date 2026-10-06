@@ -20,8 +20,8 @@
 //   3. the first three instructions of each target match what was disassembled from 20A8372
 // Anything that does not match is left alone and the log says so.
 //
-// Output (first path that opens): see kLogPaths. Kill switch: create any file in kOffPaths and restart
-// the daemon. Crash guard: 5 consecutive launches that did not stay up 25 s disable the probe.
+// Output: every location in kLogRel that opens (all under the jailbreak root, resolved with libroot).
+// Kill switch: create any file listed in kOffRel (jbroot-relative) and restart the daemon. Crash guard: 5 consecutive launches that did not stay up 25 s disable the probe.
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach-o/dyld.h>
@@ -43,6 +43,8 @@
 #include <time.h>
 #include <os/log.h>
 #include <substrate.h>
+#include <limits.h>
+#include <rootless.h>        // ROOT_PATH(): jailbreak-root prefix resolved at runtime via libroot
 #if __has_feature(ptrauth_calls)
 #include <ptrauth.h>
 #endif
@@ -52,24 +54,42 @@
 #define PROBE_OS_BUILD   "20A8372"
 #define MEDIAEXP_IMAGE   "/System/Library/PrivateFrameworks/MediaExperience.framework/MediaExperience"
 
-// The daemon may be sandboxed, so several locations are tried and every one that opens gets the log.
-static const char *const kLogPaths[] = {
-    "/var/mobile/Library/Logs/AudioRouteProbe.log",
-    "/var/tmp/AudioRouteProbe.log",
+// Rootless convention: every file this tweak creates lives under the jailbreak root, never at a rootful
+// path. The prefix is resolved at runtime by libroot (ROOT_PATH), so relocated jbroots keep working, and
+// nothing is left behind on the rootful filesystem. The paths below are *jbroot-relative*.
+// The daemon may be sandboxed and runs as a different user than mobile, so several locations are tried
+// and every one that opens gets the log:
+//   /tmp                          world-writable, physically inside the jbroot
+//   /var/mobile/Library/Logs      mobile-owned (jbroot's var/mobile)
+//   /var/log                      root-owned, physically inside the jbroot
+#define NLOCATIONS 3
+static const char *const kLogRel[NLOCATIONS] = {
     "/tmp/AudioRouteProbe.log",
-    "/var/jb/tmp/AudioRouteProbe.log",
-    "/var/jb/var/mobile/Library/Logs/AudioRouteProbe.log",
-    "/var/mobile/Library/Caches/AudioRouteProbe.log",
+    "/var/mobile/Library/Logs/AudioRouteProbe.log",
+    "/var/log/AudioRouteProbe.log",
 };
-static const char *const kOffPaths[] = {
-    "/var/mobile/Library/Preferences/AudioRouteProbe.off",
-    "/var/tmp/AudioRouteProbe.off",
+static const char *const kOffRel[NLOCATIONS] = {
     "/tmp/AudioRouteProbe.off",
-    "/var/jb/tmp/AudioRouteProbe.off",
-    "/var/jb/var/mobile/Library/Preferences/AudioRouteProbe.off",
-    "/var/mobile/Library/Caches/AudioRouteProbe.off",
+    "/var/mobile/Library/Preferences/AudioRouteProbe.off",
+    "/var/log/AudioRouteProbe.off",
 };
-#define NPATHS(a) (sizeof(a) / sizeof((a)[0]))
+// Resolved (absolute) paths, filled in once by resolve_paths() before anything else runs.
+static char kLogPaths[NLOCATIONS][PATH_MAX];
+static char kOffPaths[NLOCATIONS][PATH_MAX];
+
+static void resolve_one(char *dst, const char *jbrootRelative) {
+    // ROOT_PATH() returns a pointer to a per-call-site static buffer, so copy it out immediately.
+    const char *p = ROOT_PATH(jbrootRelative);
+    if (p) strlcpy(dst, p, PATH_MAX);
+    else dst[0] = 0;
+}
+
+static void resolve_paths(void) {
+    for (int i = 0; i < NLOCATIONS; i++) {
+        resolve_one(kLogPaths[i], kLogRel[i]);
+        resolve_one(kOffPaths[i], kOffRel[i]);
+    }
+}
 
 #define MAX_LOG_BYTES    (4 * 1024 * 1024)
 #define MAX_BOOT_STRIKES 5
@@ -98,7 +118,8 @@ static int  gNFds = -1;                              // -1: not opened yet
 
 static void plog_open_locked(void) {
     gNFds = 0;
-    for (size_t i = 0; i < NPATHS(kLogPaths) && gNFds < 8; i++) {
+    for (int i = 0; i < NLOCATIONS && gNFds < 8; i++) {
+        if (!kLogPaths[i][0]) continue;
         int fd = open(kLogPaths[i], O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
         if (fd >= 0) { gFds[gNFds] = fd; gFdPath[gNFds] = (int)i; gNFds++; }
     }
@@ -298,7 +319,7 @@ static int32_t hook_rchg(uint32_t objectID, uint32_t n, const AOAddr *addrs, voi
 // ------------------------------------------------------------------ install
 
 static bool probe_disabled(void) {
-    for (size_t i = 0; i < NPATHS(kOffPaths); i++) if (access(kOffPaths[i], F_OK) == 0) return true;
+    for (int i = 0; i < NLOCATIONS; i++) if (kOffPaths[i][0] && access(kOffPaths[i], F_OK) == 0) return true;
     return false;
 }
 
@@ -367,6 +388,7 @@ __attribute__((constructor))
 static void probe_init(void) {
     const char *name = getprogname();
     if (!name || (strcmp(name, "audiomxd") != 0 && strcmp(name, "mediaserverd") != 0)) return;
+    resolve_paths();                                 // jbroot-prefixed log / kill-switch locations
     if (probe_disabled()) { plog("kill switch present; probe inactive"); return; }
     plog("---- AudioRouteProbe 0.1.0 loaded");
     pthread_mutex_lock(&gMu);
