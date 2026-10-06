@@ -67,6 +67,7 @@ static NSString *sbp_squash(NSString *s, NSUInteger max) {
 static NSArray<NSArray<NSString *> *> *sbp_combos(void) {
     return @[
         @[@"Audio/Video", @"Default"],
+        @[@"MediaPlayback", @"Default"],
         @[@"MediaPlaybackNoSpeaker", @"Default"],
         @[@"PlayAndRecord", @"Default"],
         @[@"PlayAndRecord", @"VideoChat"],
@@ -144,7 +145,7 @@ static void sbp_init(void) {
         gTokens = [NSMutableArray array];
 
         dispatch_async(gQueue, ^{
-            sbp_log(@"---- AudioRouteProbe 0.2.2 SpringBoard side started");
+            sbp_log(@"---- AudioRouteProbe 0.3.0 SpringBoard side started");
             static const char *const names[] = {
                 "com.infernowolf19.audiorouteprobe.loaded", "com.infernowolf19.audiorouteprobe.info",
                 "com.infernowolf19.audiorouteprobe.hooks",

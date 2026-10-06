@@ -1,120 +1,78 @@
-# AudioRouteProbe 0.2.2 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.3.0 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
-**Passive diagnostics only.** Every hook calls the original function first and then writes a log line;
-nothing about audio routing is changed. Its purpose is to find out why the iPad's built-in speaker disappears
-from Control Centre's audio picker as soon as a wired output (USB-C monitor, wired AirPods Max) is connected.
+Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
+every hook calls the original function first and forwards all argument registers unchanged.
 
-## Background (from static analysis of 20A8372)
-* The picker list is built in `MediaExperience.framework`, hosted by `audiomxd`, not in SpringBoard.
-* `_cmsmCopyPickableRoutesForRouteConfiguration` assembles it from the *connected ports* of the current route
-  configuration (category + mode), which `_vaemCopyConnectedPortsListForRouteConfiguration` reads from the
-  `VirtualAudio.plugin` HAL plug-in (VAD property `'cprc'`), plus wireless endpoints.
-* `_vaemShouldIncludePortTypeForRouteConfiguration` asks the plug-in (property `'prsp'`) whether a port type
-  belongs to a route configuration.
-* Overriding to a port is a separate mechanism (`MXCoreSession.overridePortsList`, "output overridability").
+The question: why does the iPad's built-in speaker disappear from Control Centre's audio picker as soon as a wired
+output (USB-C monitor, wired AirPods Max) is connected?
+
+## What the logs showed (0.2.2, device-verified)
+* The daemon hosting audio is `mediaserverd` (user `mobile`); it can only write under `/private/var/tmp`, not the jbroot.
+* The connected-port list (`conn`) **still contains the speaker** (`pspk`, id 115) next to the display (`pdsp`) or
+  the wired AirPods Max. The `incl` filter is only ever asked about Bluetooth/AirPlay port types.
+* The picker list from `cmsmCopyPickableRoutesForRouteConfiguration` has no speaker. Static reading of the
+  function: it concatenates Bluetooth ports, AirPlay endpoints and **one** slot for the active non-wireless route.
+  A wired route therefore displaces the speaker; the speaker is not filtered out of the port list.
+* `Audio/Video`, `MediaPlayback` and `PlayAndRecord(_WithBluetooth)/Default` show this. `PlayAndRecord/VideoChat`
+  keeps the speaker (and drops the display).
+
+## The experiment: append the speaker row (off by default)
+```
+touch /private/var/tmp/AudioRouteProbe.append     # on  (takes effect on the next picker query, no reboot)
+rm    /private/var/tmp/AudioRouteProbe.append     # off
+```
+When the file exists and the category is `Audio/Video` or `MediaPlayback` with mode `Default`, and the speaker is
+missing from the list, the pick hook appends the speaker's route description. The description is built by the
+daemon's own `cmsmCreateRouteDescriptionFromPortIDOrRouteConfiguration(speakerPortID, 0, 0, 0, 0)`, the same call the
+daemon makes for port IDs, and marked `RouteCurrentlyPicked` only if the audio device reports the speaker as the
+active route. The daemon's cached list is never modified: the hook returns a copy.
+
+**Unknown, and what the experiment is for:** whether choosing that row moves audio to the speaker. That is decided
+by `FigRoutingManagerPickRouteDescriptorForContext` and the audio device, not by the list. The `tap` log lines show
+the descriptor that was chosen and the function's result.
+
+If nothing in the list changes, or tapping the row does nothing, the log says why (`append: skipped ...`, `tap ...`).
 
 ## What gets logged
 | tag | function | meaning |
 |---|---|---|
-| `conn` | `vaemCopyConnectedPortsListForRouteConfiguration(cat, mode, arr, isInput)` | port IDs + 4CC port type + "is headphones" for every connected port |
-| `incl` | `vaemShouldIncludePortTypeForRouteConfiguration(cat, mode, arr, portType)` | whether a port type is included, yes/no |
-| `pick` | `cmsmCopyPickableRoutesForRouteConfiguration(category, mode, …)` | the route descriptions the picker will show |
-| `rchg` | `vaemVADRouteChangeListener` | which VAD properties changed (selector/scope/element) |
+| `conn` | `vaemCopyConnectedPortsListForRouteConfiguration` | port IDs + 4CC type + "is headphones" |
+| `incl` | `vaemShouldIncludePortTypeForRouteConfiguration` | whether a port type is included |
+| `pick` | `cmsmCopyPickableRoutesForRouteConfiguration` | the route descriptions the picker will show (after the experiment, if on) |
+| `rchg` | `vaemVADRouteChangeListener` | route-change events (raw register values only) |
+| `tap` | `FigRoutingManagerPickRouteDescriptorForContext` | a route was chosen: descriptor + result |
+| `append` | experiment | added / skipped and why |
 
-The question it answers: with a wired output connected, is the built-in speaker **absent from `conn`**
-(the plug-in does not report it), **present in `conn` but `incl` says no**, or **present in both but removed
-before `pick`**? Each case points at a different fix.
+Each question is logged only when its answer changes.
 
 ## Safety
 * Hooks are installed only if `kern.osversion` is exactly `20A8372` **and** the first three instructions of each
   target match what was disassembled from that build. Anything else is left alone and logged.
-* Runs only inside `audiomxd` / `mediaserverd`.
-* Kill switch: create any of these files and restart the daemon (or reboot):
-  `/var/jb/tmp/AudioRouteProbe.off`, `/var/jb/var/mobile/Library/Preferences/AudioRouteProbe.off`, `/var/jb/var/log/AudioRouteProbe.off`.
-* Rootless: every file the probe creates lives under the jailbreak root. The prefix is resolved at runtime with
-  libroot (`ROOT_PATH()` from Theos' `rootless.h`), not hard-coded, so relocated jbroots work; nothing is written to
-  a rootful path.
-* Crash guard: after 5 consecutive launches that did not stay up 25 s the probe disables itself (counter file
-  `<logfile>.boot` next to the first log; delete it to re-arm).
-* Worst case if a hook is wrong: the audio daemon crashes and launchd restarts it. If it crash-loops, use
-  Dopamine safe mode and remove the package.
+* Every hook forwards all eight argument registers to the original, so the real arity of the hooked function does not
+  matter (0.2.0 assumed four arguments for a five-argument function and crashed `mediaserverd`).
+* Runs only inside `audiomxd` / `mediaserverd` (daemon part) and `SpringBoard` (logging part).
+* Crash guard: five daemon launches in a row that die within 25 s disable the daemon part for that version. The
+  counter is `/private/var/tmp/AudioRouteProbe.log.<version>.boot`; a new version starts at zero; deleting the file re-arms.
+* Kill switches: `touch /private/var/tmp/AudioRouteProbe.off` (daemon, takes effect on its next launch, so reboot) and
+  `touch /var/jb/tmp/AudioRouteProbe.off` (SpringBoard part, respring).
+* Rootless: files under the jailbreak root are resolved with libroot (`ROOT_PATH`), never hard-coded. The daemon's own
+  sandbox cannot see the jbroot, so its log, flag and counter live in `/private/var/tmp`.
+* Worst case if something is wrong: the audio daemon crashes and launchd restarts it. If it crash-loops, use Dopamine
+  safe mode and remove the package.
 
-## Use (0.2.0)
-0.2.0 has two parts in one dylib. The SpringBoard part is the reliable one: SpringBoard is not sandboxed like the
-media daemon, so it can always write its log.
+## Use
+1. Install the `.deb` and **reboot**.
+2. Logs:
+   ```
+   cat /var/jb/tmp/AudioRouteProbe.picker.log        # SpringBoard: what the picker is offered, plus daemon beacons
+   cat /private/var/tmp/AudioRouteProbe.log          # daemon: conn / incl / pick / rchg / tap / append (and .log.1 after rotation)
+   ```
+   Beacons in the picker log: `loaded` = daemon pid, `info` 1 ok / 2 kill switch / 3 wrong build / 4 crash guard,
+   `hooks` = bitmask of installed hooks (31 = all five), `ev.*` = how often each hook fired.
+3. To try the experiment: `touch /private/var/tmp/AudioRouteProbe.append`, plug in the monitor or wired AirPods Max,
+   open the picker, look for the Speaker row, tap it, and note whether audio moves. Then send both logs.
 
-1. Install the `.deb` and **reboot** (the daemon only loads the tweak when it restarts).
-2. Reproduce, noting the time of each step: nothing connected, then plug in the monitor, then unplug it and plug
-   in the wired AirPods Max. Open the audio picker in Control Centre at each step (optional: the log updates on
-   its own whenever the picker's data changes).
-3. Read the **primary log** (written by SpringBoard):
-   ```
-   cat /var/jb/tmp/AudioRouteProbe.picker.log
-   ```
-   It contains:
-   * `picker <category>/<mode> (...)`: the exact list the picker is offered, logged whenever it changes. This is the
-     answer to "is the iPad speaker offered while the monitor / AirPods are connected?".
-   * `daemon beacon ...`: Darwin notifications from the daemon side. `loaded` proves the probe is running inside
-     mediaserverd/audiomxd (state = pid); `info` is 1 ok / 2 kill switch / 3 wrong OS build / 4 crash guard;
-     `hooks` is the bitmask of installed hooks (15 = all four); `ev.*` count how often each hook fired.
-   If there is **no** `loaded` beacon the probe is not loaded in the daemon (or the daemon may not post
-   notifications); the picker lines still work.
-4. Daemon-side log (`conn` / `incl` / `pick` / `rchg` lines). The daemon sandbox denies writes under the jbroot, so
-   it writes to its own temp dir (confirmed on 20A8372):
-   ```
-   cat /private/var/tmp/AudioRouteProbe.log
-   ```
-   The first lines of each launch list every location tried and why it failed (uid, errno).
-5. Crash guard: five daemon launches in a row that die within 25 s disable the probe for that version. The counter is
-   `/private/var/tmp/AudioRouteProbe.log.<version>.boot` (a new version starts at zero; deleting the file re-arms).
-
-0.2.2: the daemon log records a question only when its answer changes (0.2.1 filled 4 MB in 80 s and truncated away the
-plug-in events) and rotates to `AudioRouteProbe.log.1` instead of truncating; send both files if `.1` exists.
-
-0.2.0 note: `vaemVADRouteChangeListener` takes five register arguments, not the four I assumed, so the 0.2.0 hook
-clobbered the fifth and crashed `mediaserverd` on the first route change. Since 0.2.1 every hook forwards x0..x7
-unchanged.
-
-Kill switch: create any of these files and restart the daemon (or reboot):
-  `/var/jb/tmp/AudioRouteProbe.off`, `/var/jb/var/mobile/Library/Preferences/AudioRouteProbe.off`, `/var/jb/var/log/AudioRouteProbe.off`.
-* Rootless: every file the probe creates lives under the jailbreak root. The prefix is resolved at runtime with
-  libroot (`ROOT_PATH()` from Theos' `rootless.h`), not hard-coded, so relocated jbroots work; nothing is written to
-  a rootful path.
-* Crash guard: after 5 consecutive launches that did not stay up 25 s the probe disables itself (counter file
-  `<logfile>.boot` next to the first log; delete it to re-arm).
-* Worst case if a hook is wrong: the audio daemon crashes and launchd restarts it. If it crash-loops, use
-  Dopamine safe mode and remove the package.
-
-## Use (0.2.0)
-0.2.0 has two parts in one dylib. The SpringBoard part is the reliable one: SpringBoard is not sandboxed like the
-media daemon, so it can always write its log.
-
-1. Install the `.deb` and **reboot** (the daemon only loads the tweak when it restarts).
-2. Reproduce, noting the time of each step: nothing connected, then plug in the monitor, then unplug it and plug
-   in the wired AirPods Max. Open the audio picker in Control Centre at each step (optional: the log updates on
-   its own whenever the picker's data changes).
-3. Read the **primary log** (written by SpringBoard):
-   ```
-   cat /var/jb/tmp/AudioRouteProbe.picker.log
-   ```
-   It contains:
-   * `picker <category>/<mode> (...)`: the exact list the picker is offered, logged whenever it changes. This is the
-     answer to "is the iPad speaker offered while the monitor / AirPods are connected?".
-   * `daemon beacon ...`: Darwin notifications from the daemon side. `loaded` proves the probe is running inside
-     mediaserverd/audiomxd (state = pid); `info` is 1 ok / 2 kill switch / 3 wrong OS build / 4 crash guard;
-     `hooks` is the bitmask of installed hooks (15 = all four); `ev.*` count how often each hook fired.
-   If there is **no** `loaded` beacon the probe is not loaded in the daemon (or the daemon may not post
-   notifications); the picker lines still work.
-4. Optional, richer daemon-side log (`conn` / `incl` / `pick` / `rchg` lines). The daemon may be sandboxed, so every
-   location is tried:
-   ```
-   ls -la /var/jb/tmp/AudioRouteProbe.log /var/jb/var/log/AudioRouteProbe.log 2>/dev/null
-   find /private/var/folders -name 'AudioRouteProbe.log' 2>/dev/null     # daemon temp-dir fallback (no sudo: it runs as mobile)
-   ```
-   The first lines say which locations were opened and why others failed (uid, errno).
-
-Kill switch: `touch /var/jb/tmp/AudioRouteProbe.off` (SpringBoard side; respring). The daemon cannot see the jbroot, so for it use
-`touch /private/var/tmp/AudioRouteProbe.off`, then reboot.
+Log housekeeping: a question is logged only when its answer changes; the daemon log rotates to `.log.1` at 2 MB.
 
 ## Build
 `.github/workflows/build-audio-probe.yml` builds a rootless `.deb`, or locally: `cd AudioRouteProbe && make package FINALPACKAGE=1`.

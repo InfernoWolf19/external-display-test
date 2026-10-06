@@ -1,17 +1,27 @@
-// AudioRouteProbe
+// AudioRouteProbe 0.3.0
 //
-// PASSIVE diagnostics for the audio daemon (audiomxd / mediaserverd) on iPadOS 16.0, build 20A8372.
-// It changes no behaviour: every hook calls the original first and only then logs.
+// Diagnostics for the audio daemon (audiomxd / mediaserverd) on iPadOS 16.0, build 20A8372, plus ONE opt-in
+// experiment. Every hook calls the original first and forwards all argument registers unchanged. Without the
+// opt-in file the probe changes no behaviour.
 //
 // Question it answers: when a wired output (USB-C monitor, wired AirPods Max) is connected, why is the
-// built-in iPad speaker missing from Control Centre's audio picker? The picker list is built in
-// MediaExperience.framework (hosted by audiomxd) from the VirtualAudio HAL plug-in's "connected ports"
-// for the current route configuration. We log, around that pipeline:
+// built-in iPad speaker missing from Control Centre's audio picker? Findings so far (0.2.2 logs): the daemon's
+// connected-port list (conn) still contains the speaker port, but cmsmCopyPickableRoutesForRouteConfiguration
+// builds its list from Bluetooth ports + AirPlay endpoints + ONE slot for the active non-wireless route, so
+// the wired route displaces the speaker.
 //
 //   conn   _vaemCopyConnectedPortsListForRouteConfiguration  (VAD property 'cprc')  -> port IDs + types
 //   incl   _vaemShouldIncludePortTypeForRouteConfiguration   (VAD property 'prsp')  -> include? yes/no
 //   pick   _cmsmCopyPickableRoutesForRouteConfiguration                              -> route descriptions
 //   rchg   _vaemVADRouteChangeListener                                               -> property change events
+//   tap    _FigRoutingManagerPickRouteDescriptorForContext                           -> a route was chosen (logged only)
+//
+// EXPERIMENT (off by default): if the file /var/tmp/AudioRouteProbe.append exists, the pick hook appends the
+// built-in Speaker route to the list for category "Audio/Video" or "MediaPlayback", mode "Default", when it is
+// missing. The route description is made by the daemon's own cmsmCreateRouteDescriptionFromPortIDOrRouteConfiguration
+// for the speaker port, exactly as the daemon builds Bluetooth entries. The daemon's cached list is never touched
+// (a copy is returned). Whether choosing that row actually moves audio is decided by the audio device and is
+// exactly what the experiment is meant to find out. Delete the file to switch it off immediately (no reboot).
 //
 // The target functions are private symbols, so they are located by their address in the 20A8372 shared
 // cache plus the cache slide. Before hooking anything the probe verifies, in this order:
@@ -112,7 +122,7 @@ static void resolve_paths(void) {
 }
 
 #define MAX_LOG_BYTES    (2 * 1024 * 1024)
-#define PROBE_VERSION "0.2.2"
+#define PROBE_VERSION "0.3.0"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -127,6 +137,10 @@ static const Target T_CONN  = { "vaemCopyConnectedPortsListForRouteConfiguration
 static const Target T_PICK  = { "cmsmCopyPickableRoutesForRouteConfiguration",     0x19641d98c, { 0xd503237f, 0xd10443ff, 0xa90b6ffc } };
 static const Target T_INCL  = { "vaemShouldIncludePortTypeForRouteConfiguration",  0x196401f34, { 0xd503237f, 0xd10103ff, 0xa9024ff4 } };
 static const Target T_RCHG  = { "vaemVADRouteChangeListener",                      0x19640a224, { 0xd503237f, 0x6db923e9, 0xa9016ffc } };
+static const Target T_MKDESC = { "cmsmCreateRouteDescriptionFromPortIDOrRouteConfiguration", 0x196401b78, { 0xd503237f, 0xd10183ff, 0xa9025ff8 } };
+static const Target T_VADPK  = { "cmsmCopyVADPickedRouteDescriptionForRouteConfiguration",     0x196403bcc, { 0xd503237f, 0xd10243ff, 0xa9036ffc } };
+static const Target T_SPKID  = { "vaemGetCachedSpeakerPortID",                     0x19646bae0, { 0xb02215c8, 0xb947dd00, 0xd65f03c0 } };
+static const Target T_TAP    = { "FigRoutingManagerPickRouteDescriptorForContext", 0x1964b2b54, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
 static const Target T_PTYPE = { "vaeGetPortTypeFromPortID",                        0x19640545c, { 0xd503237f, 0xd100c3ff, 0xa9027bfd } };
 static const Target T_ISHP  = { "vaeIsHeadphonesPort",                             0x19641a580, { 0xd503237f, 0xa9bd57f6, 0xa9014ff4 } };
 
@@ -264,7 +278,7 @@ static const char *fourcc(uint32_t v, char out[8]) {
 // the SpringBoard side of this tweak (SpringBoardProbe.m) logs. Each beacon is a name plus a 64-bit state:
 //   loaded   state = pid                      the probe's constructor ran inside this daemon
 //   info     state = 1 ok, 2 kill switch, 3 wrong OS build, 4 crash guard tripped
-//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg)
+//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg, bit4 tap)
 //   ev.*     state = number of times that hook has fired
 enum { B_LOADED, B_INFO, B_HOOKS, B_EV_CONN, B_EV_INCL, B_EV_PICK, B_EV_RCHG, B_COUNT };
 static const char *const kBeaconNames[B_COUNT] = {
@@ -321,6 +335,10 @@ static bool verify(const Target *t) {
 
 static uint32_t (*fn_portType)(uint32_t);
 static uint32_t (*fn_isHeadphones)(uint32_t);
+static CFTypeRef (*fn_mkDesc)(uint32_t portID, uintptr_t, uintptr_t, uintptr_t, uintptr_t);   // +1 dictionary
+static void (*fn_vadPicked)(CFTypeRef cat, CFTypeRef mode, CFTypeRef a2, CFTypeRef a3, CFTypeRef *out);   // *out +1
+static uint32_t (*fn_cachedSpeaker)(void);
+static volatile uint32_t gSpeakerId;                 // last port ID seen with type 'pspk' in a connected-port list
 
 // ------------------------------------------------------------------ change detection
 
@@ -392,8 +410,23 @@ typedef uintptr_t (*Fn8)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, 
 
 // --- conn: connected ports for a route configuration  (uint32 cat, uint32 mode, CFTypeRef arr, int isInput)
 static Fn8 orig_conn;
+#define FOURCC(a, b, c, d) (((uint32_t)(a) << 24) | ((uint32_t)(b) << 16) | ((uint32_t)(c) << 8) | (uint32_t)(d))
+
+static void note_speaker(CFArrayRef a) {
+    if (!fn_portType || !a || !plausible_obj(a) || CFGetTypeID(a) != CFArrayGetTypeID()) return;
+    CFIndex cnt = CFArrayGetCount(a);
+    for (CFIndex i = 0; i < cnt && i < 32; i++) {
+        CFTypeRef e = CFArrayGetValueAtIndex(a, i);
+        int32_t id = 0;
+        if (e && CFGetTypeID(e) == CFNumberGetTypeID() && CFNumberGetValue((CFNumberRef)e, kCFNumberSInt32Type, &id) &&
+            fn_portType((uint32_t)id) == FOURCC('p', 's', 'p', 'k'))
+            gSpeakerId = (uint32_t)id;
+    }
+}
+
 static uintptr_t hook_conn(ARGS8) {
     uintptr_t rv = orig_conn(PASS8);
+    note_speaker((CFArrayRef)rv);
     uint32_t cat = (uint32_t)a0, mode = (uint32_t)a1;
     int isInput = (int)a3;
     char desc[400], ports[1400];
@@ -420,14 +453,84 @@ static uintptr_t hook_incl(ARGS8) {
     return rv;
 }
 
+// --- experiment: append the built-in Speaker route (see header). Never returns a shorter or different list unless
+// every precondition holds; any doubt returns the daemon's own array untouched.
+#define APPEND_FLAG "/var/tmp/AudioRouteProbe.append"
+
+static bool cf_is(CFTypeRef t, CFTypeID id) { return t && plausible_obj(t) && CFGetTypeID(t) == id; }
+
+static bool dict_port_is(CFTypeRef d, uint32_t port) {
+    if (!cf_is(d, CFDictionaryGetTypeID())) return false;
+    CFTypeRef n = CFDictionaryGetValue((CFDictionaryRef)d, CFSTR("PortNumber"));
+    int32_t v = 0;
+    return cf_is(n, CFNumberGetTypeID()) && CFNumberGetValue((CFNumberRef)n, kCFNumberSInt32Type, &v) && (uint32_t)v == port;
+}
+
+// Returns a new +1 array (the caller then releases `r`), or NULL meaning "leave r alone". `why` explains a refusal.
+static CFArrayRef speaker_appended(CFTypeRef a0, CFTypeRef a1, uintptr_t a2, uintptr_t a3, CFArrayRef r, const char *cat, const char *mode, const char **why) {
+    *why = "";
+    if (access(APPEND_FLAG, F_OK) != 0) return NULL;             // opt-in
+    if (strcmp(mode, "Default") != 0 || (strcmp(cat, "Audio/Video") != 0 && strcmp(cat, "MediaPlayback") != 0)) return NULL;
+    if (a2 != 0) { *why = "a2 set"; return NULL; }
+    if (a3 != 0) {
+        if (!cf_is((CFTypeRef)a3, CFArrayGetTypeID()) || CFArrayGetCount((CFArrayRef)a3) != 0) { *why = "a3 not an empty array"; return NULL; }
+    }
+    if (!fn_mkDesc) { *why = "no description builder"; return NULL; }
+    if (!cf_is(r, CFArrayGetTypeID())) { *why = "result not an array"; return NULL; }
+    CFIndex cnt = CFArrayGetCount(r);
+    if (cnt < 1) { *why = "empty list"; return NULL; }
+    uint32_t spk = gSpeakerId;
+    if (!spk && fn_cachedSpeaker) spk = fn_cachedSpeaker();
+    if (!spk) { *why = "speaker port id unknown"; return NULL; }
+    for (CFIndex i = 0; i < cnt; i++)
+        if (dict_port_is(CFArrayGetValueAtIndex(r, i), spk)) return NULL;     // already listed, nothing to do
+
+    CFTypeRef d = fn_mkDesc(spk, 0, 0, 0, 0);                    // same call form the daemon uses for port IDs
+    if (!d) { *why = "builder returned NULL"; return NULL; }
+    CFArrayRef out = NULL;
+    if (!dict_port_is(d, spk)) { *why = "built description is not the speaker's"; CFRelease(d); return NULL; }
+
+    CFMutableDictionaryRef md = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, (CFDictionaryRef)d);
+    CFMutableArrayRef m = CFArrayCreateMutableCopy(kCFAllocatorDefault, 0, r);
+    if (md && m) {
+        CFTypeRef picked = NULL;                                  // is the speaker the route the audio device is actually using?
+        if (fn_vadPicked) fn_vadPicked(a0, a1, NULL, NULL, &picked);
+        if (dict_port_is(picked, spk)) CFDictionarySetValue(md, CFSTR("RouteCurrentlyPicked"), kCFBooleanTrue);
+        if (picked) CFRelease(picked);
+        CFArrayAppendValue(m, md);
+        out = m;
+        m = NULL;
+    } else {
+        *why = "allocation failed";
+    }
+    if (m) CFRelease(m);
+    if (md) CFRelease(md);
+    CFRelease(d);
+    return out;
+}
+
 // --- pick: the pickable route descriptions the picker will show  (CFString cat, CFString mode, a2, a3)
 static Fn8 orig_pick;
 static uintptr_t hook_pick(ARGS8) {
     uintptr_t rv = orig_pick(PASS8);
-    CFTypeRef r = (CFTypeRef)rv;
     char c[120], m[120], x2[300], x3[300];
     cfstr_c((CFTypeRef)a0, c, sizeof c);
     cfstr_c((CFTypeRef)a1, m, sizeof m);
+    {
+        const char *why = "";
+        CFArrayRef added = speaker_appended((CFTypeRef)a0, (CFTypeRef)a1, a2, a3, (CFArrayRef)rv, c, m, &why);
+        if (added) {
+            CFIndex before = CFArrayGetCount((CFArrayRef)rv);
+            CFRelease((CFTypeRef)rv);                            // the daemon's cached array keeps its own reference
+            rv = (uintptr_t)added;
+            if (answer_changed(fnv(fnv(0xADD5ull, c), m), (uint64_t)before + 1000))
+                plog("append: added the built-in Speaker to %s/%s (%ld -> %ld routes)", c, m, (long)before, (long)CFArrayGetCount(added));
+        } else if (why[0]) {
+            if (answer_changed(fnv(fnv(0xADD6ull, c), m), fnv(1469598103934665603ull, why)))
+                plog("append: skipped for %s/%s: %s", c, m, why);
+        }
+    }
+    CFTypeRef r = (CFTypeRef)rv;
     cfdesc((CFTypeRef)a2, x2, sizeof x2);
     cfdesc((CFTypeRef)a3, x3, sizeof x3);
     bool isArray = r && plausible_obj(r) && CFGetTypeID(r) == CFArrayGetTypeID();
@@ -462,6 +565,20 @@ static uintptr_t hook_rchg(ARGS8) {
     return orig_rchg(PASS8);
 }
 
+// --- tap: FigRoutingManagerPickRouteDescriptorForContext(a0, a1 = the route descriptor dictionary, a2, a3). Four
+// register arguments and no stack arguments (checked in the disassembly). a1 is only read if it passes the same
+// CF-object checks the other hooks use, and only after the callee has been given every register unchanged.
+static Fn8 orig_tap;
+static uintptr_t hook_tap(ARGS8) {
+    char d[900];
+    d[0] = 0;
+    if (cf_is((CFTypeRef)a1, CFDictionaryGetTypeID())) cfdesc((CFTypeRef)a1, d, sizeof d);
+    plog("tap   pick-route-descriptor a0=0x%lx a2=0x%lx a3=0x%lx descriptor=%s", (unsigned long)a0, (unsigned long)a2, (unsigned long)a3, d[0] ? d : "<not a dictionary>");
+    uintptr_t rv = orig_tap(PASS8);
+    plog("tap   pick-route-descriptor -> %d", (int)(int32_t)rv);
+    return rv;
+}
+
 // ------------------------------------------------------------------ install
 
 static bool probe_disabled(void) {
@@ -493,12 +610,16 @@ static void install(intptr_t slide) {
 
     if (verify(&T_PTYPE)) fn_portType     = (uint32_t (*)(uint32_t))sign_fn(T_PTYPE.addr + (uintptr_t)slide);
     if (verify(&T_ISHP))  fn_isHeadphones = (uint32_t (*)(uint32_t))sign_fn(T_ISHP.addr + (uintptr_t)slide);
+    if (verify(&T_MKDESC)) fn_mkDesc       = (CFTypeRef (*)(uint32_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t))sign_fn(T_MKDESC.addr + (uintptr_t)slide);
+    if (verify(&T_VADPK))  fn_vadPicked    = (void (*)(CFTypeRef, CFTypeRef, CFTypeRef, CFTypeRef, CFTypeRef *))sign_fn(T_VADPK.addr + (uintptr_t)slide);
+    if (verify(&T_SPKID))  fn_cachedSpeaker = (uint32_t (*)(void))sign_fn(T_SPKID.addr + (uintptr_t)slide);
 
     hook_one(&T_CONN, (void *)hook_conn, (void **)&orig_conn);
     hook_one(&T_INCL, (void *)hook_incl, (void **)&orig_incl);
     hook_one(&T_PICK, (void *)hook_pick, (void **)&orig_pick);
     hook_one(&T_RCHG, (void *)hook_rchg, (void **)&orig_rchg);
-    uint64_t mask = (orig_conn ? 1u : 0u) | (orig_incl ? 2u : 0u) | (orig_pick ? 4u : 0u) | (orig_rchg ? 8u : 0u);
+    hook_one(&T_TAP,  (void *)hook_tap,  (void **)&orig_tap);
+    uint64_t mask = (orig_conn ? 1u : 0u) | (orig_incl ? 2u : 0u) | (orig_pick ? 4u : 0u) | (orig_rchg ? 8u : 0u) | (orig_tap ? 16u : 0u);
     beacon(B_HOOKS, mask);
     plog("probe active (hook mask 0x%llx): open the audio picker, plug/unplug outputs, then read this log", (unsigned long long)mask);
 }
