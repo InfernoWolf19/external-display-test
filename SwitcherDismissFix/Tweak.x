@@ -1,21 +1,23 @@
 // SwitcherDismissFix
 //
-// iPadOS 16.0 (build 20A8372), iPad grid app switcher: leaving the switcher for the Home Screen (tap on empty space,
-// or the automatic dismissal of an empty switcher) is a one-frame cut. SwitcherTrace showed why: for every
-// switcher -> home transition SpringBoard creates no transition modifier, and the transition modifier is what animates.
+// iPadOS 16.0 (build 20A8372), app switcher: leaving the switcher for the Home Screen (tap on empty space, or the
+// automatic dismissal of an empty switcher) is a one-frame cut. SwitcherTrace showed why: for every switcher -> home
+// transition SpringBoard creates no transition modifier, and the transition modifier is what animates.
 //
-//   -[SBFullScreenFluidSwitcherRootSwitcherModifier transitionModifierForMainTransitionEvent:]
-//   builds the modifier from the event's from/to environment modes (1 = home, 2 = app switcher, 3 = app).
-//   For 2 -> 1 it only has a case for effectiveSwitcherStyle == 1 (the iPhone "deck"):
-//       SBHomeToDeckSwitcherModifier initWithTransitionID:direction:1 multitaskingModifier:[self _newMultitaskingModifier]
-//   The iPad's style is 2 (grid), for which there is no case, so the method returns nil. The opposite direction does
-//   exist for the grid (SBHomeToGridSwitcherModifier, direction 0, used when opening the switcher).
+//   -[SBMainSwitcherRootSwitcherModifier transitionModifierForMainTransitionEvent:] (also reached through
+//   SBContinuousExposeRootSwitcherModifier, which defers to it) and the FullScreenFluid variant build the modifier
+//   from the event's environment modes (1 = home, 2 = app switcher, 3 = app). For switcher -> home they return nil
+//   unless a peek is valid (SBHomeToGridSwitcherModifier) or the style is the iPhone deck (SBHomeToDeckSwitcherModifier).
+//   Both of those are built as  initWithTransitionID:direction:0 multitaskingModifier:...  (direction 0 = toward home,
+//   1 = toward the switcher).
 //
-// This tweak adds the missing case: when the original returns nil for an animated, non-gesture 2 -> 1 transition on
-// the grid style, it returns SBHomeToGridSwitcherModifier with direction 1, built exactly like the deck case.
-// Nothing else is touched; every other transition keeps whatever SpringBoard returned.
+// 16.2 fixes the Stage Manager case with a new class, SBContinuousExposeToHomeSwitcherModifier, which wraps
+//   SBHomeToGridSwitcherModifier initWithTransitionID:direction:0 multitaskingModifier:[[root multitaskingModifier] copy]
+// (plus anchor-point / perspective / shadow adjustments). This tweak builds that inner modifier directly: when the
+// original returns nil for an animated, non-gesture 2 -> 1 transition, it returns SBHomeToGridSwitcherModifier with
+// direction 0. Everything else keeps whatever SpringBoard returned.
 //
-// Unverified until run on a device: whether the grid modifier looks right in reverse.
+// 0.1.0 passed direction 1 (the wrong way round; windows flew off to the right). 0.2.0 uses 0.
 //
 // Files (resolved under the jailbreak root with libroot):
 //   <jbroot>/tmp/SwitcherDismissFix.off    kill switch: create it and the tweak returns the original result (checked
@@ -90,16 +92,12 @@ static void SDF_Log(NSString *fmt, ...) {
 - (id)transitionID;
 @end
 
-@interface SBAppSwitcherSettings : NSObject
-- (long long)effectiveSwitcherStyle;
-@end
-
 @interface SBHomeToSwitcherSwitcherModifier : NSObject
 - (id)initWithTransitionID:(id)transitionID direction:(long long)direction multitaskingModifier:(id)multitaskingModifier;
 @end
 
 @interface SBFluidSwitcherRootSwitcherModifier : NSObject
-- (id)switcherSettings;
+- (id)multitaskingModifier;
 - (id)_newMultitaskingModifier;
 @end
 @interface SBFullScreenFluidSwitcherRootSwitcherModifier : SBFluidSwitcherRootSwitcherModifier
@@ -108,8 +106,7 @@ static void SDF_Log(NSString *fmt, ...) {
 @end
 
 enum { kEnvHome = 1, kEnvSwitcher = 2 };
-enum { kStyleGrid = 2 };
-enum { kDirectionToHome = 1 };      // the deck case passes 1 for switcher -> home
+enum { kDirectionToHome = 0 };      // Apple builds every switcher -> home modifier with direction 0
 
 // Returns the modifier to use when `original` is nil for a switcher -> home transition on the grid style, else nil.
 static id SDF_SwitcherToHomeModifier(SBFluidSwitcherRootSwitcherModifier *root, id event) {
@@ -122,18 +119,23 @@ static id SDF_SwitcherToHomeModifier(SBFluidSwitcherRootSwitcherModifier *root, 
         if (e.fromEnvironmentMode != kEnvSwitcher || e.toEnvironmentMode != kEnvHome) return nil;
         if (!e.isAnimated || e.isGestureInitiated) return nil;
 
-        if (![root respondsToSelector:@selector(switcherSettings)] || ![root respondsToSelector:@selector(_newMultitaskingModifier)]) return nil;
-        SBAppSwitcherSettings *settings = [root switcherSettings];
-        if (![settings respondsToSelector:@selector(effectiveSwitcherStyle)] || settings.effectiveSwitcherStyle != kStyleGrid) return nil;
+        if (![root respondsToSelector:@selector(_newMultitaskingModifier)]) return nil;
 
         Class cls = NSClassFromString(@"SBHomeToGridSwitcherModifier");
         SEL initSel = @selector(initWithTransitionID:direction:multitaskingModifier:);
         if (!cls || ![cls instancesRespondToSelector:initSel]) return nil;
-        id multitasking = [root _newMultitaskingModifier];
+        // Stage Manager root: 16.2 passes a copy of the root's multitasking modifier; other roots use the usual factory call.
+        id multitasking = nil;
+        Class ceRoot = NSClassFromString(@"SBContinuousExposeRootSwitcherModifier");
+        if (ceRoot && [root isKindOfClass:ceRoot] && [root respondsToSelector:@selector(multitaskingModifier)]) {
+            multitasking = [[root multitaskingModifier] copy];
+        } else {
+            multitasking = [root _newMultitaskingModifier];
+        }
         if (!multitasking) return nil;
         SBHomeToSwitcherSwitcherModifier *m = [cls alloc];
         id result = [m initWithTransitionID:e.transitionID direction:kDirectionToHome multitaskingModifier:multitasking];
-        SDF_Log(@"added switcher->home modifier %@ for transition %@ (root %@)", NSStringFromClass([result class]), e.transitionID, NSStringFromClass([root class]));
+        SDF_Log(@"added switcher->home modifier %@ (direction %d, multitasking %@) for transition %@ (root %@)", NSStringFromClass([result class]), (int)kDirectionToHome, NSStringFromClass([multitasking class]), e.transitionID, NSStringFromClass([root class]));
         return result;
     } @catch (NSException *ex) {
         SDF_Log(@"exception: %@", ex);
