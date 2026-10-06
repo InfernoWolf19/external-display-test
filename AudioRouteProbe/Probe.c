@@ -112,6 +112,7 @@ static void resolve_paths(void) {
 }
 
 #define MAX_LOG_BYTES    (4 * 1024 * 1024)
+#define PROBE_VERSION "0.2.1"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -334,73 +335,72 @@ static void format_ports(CFArrayRef a, char *buf, size_t n) {
     }
 }
 
-// --- conn: connected ports for a route configuration
-typedef CFArrayRef (*ConnFn)(uint32_t cat, uint32_t mode, CFTypeRef arr, int isInput);
-static ConnFn orig_conn;
-static CFArrayRef hook_conn(uint32_t cat, uint32_t mode, CFTypeRef arr, int isInput) {
-    CFArrayRef r = orig_conn(cat, mode, arr, isInput);
-    char a2[400], ports[1400];
-    cfdesc(arr, a2, sizeof a2);
+// All four hooks forward x0..x7 untouched. The first version declared the hooked functions with the argument
+// lists I guessed; vaemVADRouteChangeListener actually takes five (x4 is read), so the hook clobbered x4 and the
+// real function crashed mediaserverd in CFEqual. Forwarding every argument register makes the hooks transparent
+// whatever the true arity (up to 8 register arguments), and nothing here dereferences an argument unless it is
+// verified (plausible_obj / CF type checks).
+typedef uintptr_t (*Fn8)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
+#define ARGS8 uintptr_t a0, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, uintptr_t a5, uintptr_t a6, uintptr_t a7
+#define PASS8 a0, a1, a2, a3, a4, a5, a6, a7
+
+// --- conn: connected ports for a route configuration  (uint32 cat, uint32 mode, CFTypeRef arr, int isInput)
+static Fn8 orig_conn;
+static uintptr_t hook_conn(ARGS8) {
+    uintptr_t rv = orig_conn(PASS8);
+    uint32_t cat = (uint32_t)a0, mode = (uint32_t)a1;
+    int isInput = (int)a3;
+    CFArrayRef r = (CFArrayRef)rv;
+    char desc[400], ports[1400];
+    cfdesc((CFTypeRef)a2, desc, sizeof desc);
     format_ports(r, ports, sizeof ports);
-    plog("conn  cat=%u mode=%u in=%d arg=%s -> %s", cat, mode, isInput, a2, ports);
+    plog("conn  cat=%u mode=%u in=%d arg=%s -> %s", cat, mode, isInput, desc, ports);
     event_beacon(B_EV_CONN);
-    return r;
+    return rv;
 }
 
-// --- incl: does this route configuration include a port type?
-typedef bool (*InclFn)(uint32_t cat, uint32_t mode, CFTypeRef arr, uint32_t portType);
-static InclFn orig_incl;
-static bool hook_incl(uint32_t cat, uint32_t mode, CFTypeRef arr, uint32_t portType) {
-    bool r = orig_incl(cat, mode, arr, portType);
-    char tc[8], a2[300];
-    cfdesc(arr, a2, sizeof a2);
-    plog("incl  cat=%u mode=%u type=%s arg=%s -> %d", cat, mode, fourcc(portType, tc), a2, (int)r);
+// --- incl: does this route configuration include a port type?  (uint32 cat, uint32 mode, CFTypeRef arr, uint32 portType)
+static Fn8 orig_incl;
+static uintptr_t hook_incl(ARGS8) {
+    uintptr_t rv = orig_incl(PASS8);
+    char tc[8], desc[300];
+    cfdesc((CFTypeRef)a2, desc, sizeof desc);
+    plog("incl  cat=%u mode=%u type=%s arg=%s -> %d", (uint32_t)a0, (uint32_t)a1, fourcc((uint32_t)a3, tc), desc, (int)(rv & 0xff));
     event_beacon(B_EV_INCL);
-    return r;
+    return rv;
 }
 
-// --- pick: the pickable route descriptions the picker will show
-typedef CFArrayRef (*PickFn)(CFTypeRef cat, CFTypeRef mode, CFTypeRef a2, CFTypeRef a3);
-static PickFn orig_pick;
-static CFArrayRef hook_pick(CFTypeRef cat, CFTypeRef mode, CFTypeRef a2, CFTypeRef a3) {
-    CFArrayRef r = orig_pick(cat, mode, a2, a3);
+// --- pick: the pickable route descriptions the picker will show  (CFString cat, CFString mode, a2, a3)
+static Fn8 orig_pick;
+static uintptr_t hook_pick(ARGS8) {
+    uintptr_t rv = orig_pick(PASS8);
+    CFTypeRef r = (CFTypeRef)rv;
     char c[200], m[200], x2[400], x3[400];
-    cfdesc(cat, c, sizeof c);
-    cfdesc(mode, m, sizeof m);
-    cfdesc(a2, x2, sizeof x2);
-    cfdesc(a3, x3, sizeof x3);
+    cfdesc((CFTypeRef)a0, c, sizeof c);
+    cfdesc((CFTypeRef)a1, m, sizeof m);
+    cfdesc((CFTypeRef)a2, x2, sizeof x2);
+    cfdesc((CFTypeRef)a3, x3, sizeof x3);
     if (r && plausible_obj(r) && CFGetTypeID(r) == CFArrayGetTypeID()) {
-        CFIndex cnt = CFArrayGetCount(r);
+        CFIndex cnt = CFArrayGetCount((CFArrayRef)r);
         plog("pick  cat=%s mode=%s a2=%s a3=%s -> %ld route(s)", c, m, x2, x3, (long)cnt);
         for (CFIndex i = 0; i < cnt && i < 24; i++) {
             char d[1100];
-            cfdesc(CFArrayGetValueAtIndex(r, i), d, sizeof d);
+            cfdesc(CFArrayGetValueAtIndex((CFArrayRef)r, i), d, sizeof d);
             plog("pick    #%ld %s", (long)i, d);
         }
     } else {
         plog("pick  cat=%s mode=%s a2=%s a3=%s -> %s", c, m, x2, x3, r ? "<not an array>" : "NULL");
     }
     event_beacon(B_EV_PICK);
-    return r;
+    return rv;
 }
 
-// --- rchg: AudioObjectPropertyListenerProc registered on the VAD
-typedef struct { uint32_t selector, scope, element; } AOAddr;
-typedef int32_t (*RchgFn)(uint32_t objectID, uint32_t n, const AOAddr *addrs, void *client);
-static RchgFn orig_rchg;
-static int32_t hook_rchg(uint32_t objectID, uint32_t n, const AOAddr *addrs, void *client) {
-    if (addrs && n > 0 && n < 64) {
-        char line[900];
-        size_t off = (size_t)snprintf(line, sizeof line, "rchg  obj=%u n=%u", objectID, n);
-        for (uint32_t i = 0; i < n && i < 12 && off + 40 < sizeof line; i++) {
-            char s[8], sc[8];
-            off += (size_t)snprintf(line + off, sizeof line - off, " {%s/%s/%u}",
-                                    fourcc(addrs[i].selector, s), fourcc(addrs[i].scope, sc), addrs[i].element);
-        }
-        plog("%s", line);
-    }
+// --- rchg: vaemVADRouteChangeListener. Five register arguments; none is dereferenced here, only logged as numbers.
+static Fn8 orig_rchg;
+static uintptr_t hook_rchg(ARGS8) {
+    plog("rchg  a0=0x%lx a1=0x%lx a2=0x%lx a3=0x%lx a4=0x%lx", (unsigned long)a0, (unsigned long)a1, (unsigned long)a2, (unsigned long)a3, (unsigned long)a4);
     event_beacon(B_EV_RCHG);
-    return orig_rchg(objectID, n, addrs, client);
+    return orig_rchg(PASS8);
 }
 
 // ------------------------------------------------------------------ install
@@ -460,7 +460,7 @@ static void boot_guard(bool *tripped) {
     pthread_mutex_unlock(&gMu);
     if (idx < 0) return;                             // no writable location: no guard, rely on safe mode
     char path[512];
-    snprintf(path, sizeof path, "%s.boot", log_path_for(idx));
+    snprintf(path, sizeof path, "%s." PROBE_VERSION ".boot", log_path_for(idx));   // per-version: a new build re-arms itself
     int strikes = 0;
     FILE *f = fopen(path, "r");
     if (f) { if (fscanf(f, "%d", &strikes) != 1) strikes = 0; fclose(f); }
@@ -480,7 +480,7 @@ static void probe_init(void) {
     beacon(B_LOADED, (uint64_t)getpid());            // visible in the SpringBoard log even if no file can be written here
     resolve_paths();                                 // jbroot-prefixed log / kill-switch locations
     if (probe_disabled()) { beacon(B_INFO, 2); plog("kill switch present; probe inactive"); return; }
-    plog("---- AudioRouteProbe 0.2.0 loaded");
+    plog("---- AudioRouteProbe " PROBE_VERSION " loaded");
     pthread_mutex_lock(&gMu);
     if (gNFds < 0) plog_open_locked();
     int nopen = gNFds;
