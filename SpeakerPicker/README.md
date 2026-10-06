@@ -13,7 +13,7 @@ marks playback categories `CannotOverride` for the speaker override the picker r
 
 Inside `mediaserverd` / `audiomxd` only:
 1. **One hook**, on `cmsmCopyPickableRoutesForRouteConfiguration`. For the plain Audio/Video or MediaPlayback list in
-   Default mode it returns a copy of the daemon's list with the route of any connected speaker (`pspk`), display
+   any mode (Default, MoviePlayback, ...) it returns a copy of the daemon's list with the route of any connected speaker (`pspk`), display
    (`pdsp`) or wired-headphone (`phpw`) port that is missing from it appended. The daemon builds that route
    description itself, the same way it builds Bluetooth entries; its cached list is never modified.
 2. **One table swap**, once: the daemon's category -> overridability table (a 35-entry CFDictionary global) is replaced
@@ -21,7 +21,8 @@ Inside `mediaserverd` / `audiomxd` only:
    override is accepted. The original is kept and restored by the kill switch.
 
 Using it: start any audio, open the picker, tap **iPad** (sound moves to the speaker), tap the monitor / headphones
-row to move back. Speaker selection applies to a playing audio session; with nothing playing there is nothing to move.
+row to move back. Speaker selection applies to a playing audio session; with nothing playing there is nothing to move (the daemon
+logs "no controlling audio session: nothing will be done", and the same is true for tapping the monitor row).
 
 ## Resource use and logging
 * One hook, no timers, no threads, no polling, no file writes while running.
@@ -54,3 +55,9 @@ The audio daemon is sandboxed and cannot see the jailbreak root, so its few file
 ## Build
 `.github/workflows/build-speaker-picker.yml` builds a rootless `.deb` (artifact `SpeakerPicker-<short sha>`), or locally:
 `cd SpeakerPicker && make package FINALPACKAGE=1`.
+
+## Changelog
+* **1.0.1** - the speaker row disappeared in apps whose audio session mode is not `Default` (Netflix uses
+  `MoviePlayback`); the list is now completed for every mode of the Audio/Video and MediaPlayback categories. With the
+  debug file present the log notes each category/mode pair seen once.
+* **1.0.0** - first release.

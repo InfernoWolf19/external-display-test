@@ -9,7 +9,7 @@
 //
 // What this tweak does, inside mediaserverd / audiomxd only:
 //   1. Hooks cmsmCopyPickableRoutesForRouteConfiguration (the single hook). When the caller asks for the plain
-//      Audio/Video or MediaPlayback list in Default mode, a copy of the result is returned with the route of any
+//      Audio/Video or MediaPlayback list (any mode: video apps such as Netflix use MoviePlayback), a copy of the result is returned with the route of any
 //      connected speaker / display / wired-headphone port that is missing from it appended. The daemon's own cached
 //      list is never modified. Route descriptions are built by the daemon's own function, exactly as it builds Bluetooth
 //      entries.
@@ -53,7 +53,7 @@
 #include <ptrauth.h>
 #endif
 
-#define TWEAK_VERSION     "1.0.0"
+#define TWEAK_VERSION     "1.0.1"
 #define REQUIRED_OS_BUILD "20A8372"
 #define MEDIAEXP_IMAGE    "/System/Library/PrivateFrameworks/MediaExperience.framework/MediaExperience"
 
@@ -340,17 +340,46 @@ static CFArrayRef ports_appended(CFTypeRef cat, CFTypeRef mode, CFArrayRef r, in
     return m;
 }
 
+// Debug aid (only while DEBUG_FILE exists, checked at most once a second): log each distinct category/mode pair the
+// first time it is seen, so a missing speaker row can be traced to the query that skipped it.
+static bool debug_on(void) {
+    static uint64_t next;
+    static bool last;
+    uint64_t t = now_ns();
+    if (t < next) return last;
+    next = t + 1000000000ull;
+    last = access(DEBUG_FILE, F_OK) == 0;
+    return last;
+}
+
+static void note_query(uintptr_t cat, uintptr_t mode, const char *what) {
+    if (!debug_on()) return;
+    char c[64] = "?", m[64] = "?";
+    if (cf_is((CFTypeRef)cat, CFStringGetTypeID())) CFStringGetCString((CFStringRef)cat, c, sizeof c, kCFStringEncodingUTF8);
+    if (cf_is((CFTypeRef)mode, CFStringGetTypeID())) CFStringGetCString((CFStringRef)mode, m, sizeof m, kCFStringEncodingUTF8);
+    static char seen[16][130];
+    static int nseen;
+    char key[130];
+    snprintf(key, sizeof key, "%s|%s|%s", c, m, what);
+    for (int i = 0; i < nseen; i++) if (strcmp(seen[i], key) == 0) return;
+    if (nseen < 16) strlcpy(seen[nseen++], key, sizeof seen[0]);
+    dlog("query cat=%s mode=%s: %s", c, m, what);
+}
+
 // ------------------------------------------------------------------ the hook
 
 // cmsmCopyPickableRoutesForRouteConfiguration(category, mode, a2, a3) -> +1 CFArray of route descriptions.
 static uintptr_t hook_pick(ARGS8) {
     uintptr_t rv = orig_pick(PASS8);
-    // Only the plain list for the picker: category Audio/Video or MediaPlayback, mode Default, no filters.
+    // Only the plain list for the picker: playback category (Audio/Video or MediaPlayback), any mode, no filters.
+    // The mode is whatever the playing app's session uses: Default (YouTube), MoviePlayback (Netflix, most video
+    // apps), SpokenAudio, ... Recording categories (PlayAndRecord_*) are not touched.
     if (a2 != 0) return rv;
-    if (!(string_is((CFTypeRef)a0, CFSTR("Audio/Video")) || string_is((CFTypeRef)a0, CFSTR("MediaPlayback")))) return rv;
-    if (!string_is((CFTypeRef)a1, CFSTR("Default"))) return rv;
+    if (!(string_is((CFTypeRef)a0, CFSTR("Audio/Video")) || string_is((CFTypeRef)a0, CFSTR("MediaPlayback")))) { note_query(a0, a1, "other category"); return rv; }
+    if (!cf_is((CFTypeRef)a1, CFStringGetTypeID())) return rv;
     if (a3 != 0 && !(cf_is((CFTypeRef)a3, CFArrayGetTypeID()) && CFArrayGetCount((CFArrayRef)a3) == 0)) return rv;
     if (!cf_is((CFTypeRef)rv, CFArrayGetTypeID())) return rv;
+    note_query(a0, a1, "handled");
 
     if (killed()) { policy_set(false); return rv; }
     if (!policy_set(true)) { /* keep going: listing the rows is harmless without the policy change */ }
