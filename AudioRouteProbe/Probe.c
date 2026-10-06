@@ -1,4 +1,4 @@
-// AudioRouteProbe 0.3.1
+// AudioRouteProbe 0.3.2
 //
 // Diagnostics for the audio daemon (audiomxd / mediaserverd) on iPadOS 16.0, build 20A8372, plus ONE opt-in
 // experiment. Every hook calls the original first and forwards all argument registers unchanged. Without the
@@ -122,7 +122,7 @@ static void resolve_paths(void) {
 }
 
 #define MAX_LOG_BYTES    (2 * 1024 * 1024)
-#define PROBE_VERSION "0.3.1"
+#define PROBE_VERSION "0.3.2"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -143,6 +143,8 @@ static const Target T_SPKID  = { "vaemGetCachedSpeakerPortID",                  
 static const Target T_PICKS  = { "FigRoutingManagerPickRouteDescriptorsForContext", 0x1964b45fc, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
 static const Target T_CEP    = { "FigEndpointDescriptorUtility_CopyEndpointFromDescriptor", 0x1964e9528, { 0xd503237f, 0xd102c3ff, 0xa9056ffc } };
 static const Target T_PEC    = { "FigRoutingManagerPickEndpointsForContext", 0x1964b3038, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
+static const Target T_RTS    = { "vaeRouteToSelectedPort",                         0x1964c0f50, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
+static const Target T_SPROP  = { "MXCoreSessionSetProperty",                       0x1963ef728, { 0xd503237f, 0x6db923e9, 0xa9016ffc } };
 static const Target T_TAP    = { "FigRoutingManagerPickRouteDescriptorForContext", 0x1964b2b54, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
 static const Target T_PTYPE = { "vaeGetPortTypeFromPortID",                        0x19640545c, { 0xd503237f, 0xd100c3ff, 0xa9027bfd } };
 static const Target T_ISHP  = { "vaeIsHeadphonesPort",                             0x19641a580, { 0xd503237f, 0xa9bd57f6, 0xa9014ff4 } };
@@ -281,7 +283,7 @@ static const char *fourcc(uint32_t v, char out[8]) {
 // the SpringBoard side of this tweak (SpringBoardProbe.m) logs. Each beacon is a name plus a 64-bit state:
 //   loaded   state = pid                      the probe's constructor ran inside this daemon
 //   info     state = 1 ok, 2 kill switch, 3 wrong OS build, 4 crash guard tripped
-//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg, bit4 tap, bits5-7 tap2/tap3/tap4)
+//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg, bit4 tap, bits5-7 tap2/tap3/tap4, bit8 rts, bit9 prop)
 //   ev.*     state = number of times that hook has fired
 enum { B_LOADED, B_INFO, B_HOOKS, B_EV_CONN, B_EV_INCL, B_EV_PICK, B_EV_RCHG, B_COUNT };
 static const char *const kBeaconNames[B_COUNT] = {
@@ -622,6 +624,37 @@ static uintptr_t hook_pec(ARGS8) {
     return rv;
 }
 
+// --- where the speaker pick is applied. vaeRouteToSelectedPort(port, session, ...) is what activating a local port
+// endpoint calls; for a built-in port that is not the active one it does nothing when `session` (the controlling
+// audio session) is NULL, and otherwise sets that session's OverrideRoute property through MXCoreSessionSetProperty.
+// Both are logged only; MXCoreSessionSetProperty is hot, so it logs only when the key contains "Override".
+static Fn8 orig_rts, orig_sprop;
+
+static uintptr_t hook_rts(ARGS8) {
+    plog("rts   vaeRouteToSelectedPort port=%u session=%s a2=0x%lx", (uint32_t)a0, a1 ? "present" : "NULL (no controlling audio session: nothing will be done)", (unsigned long)a2);
+    uintptr_t rv = orig_rts(PASS8);
+    plog("rts   vaeRouteToSelectedPort -> %d", (int)(int32_t)rv);
+    return rv;
+}
+
+static uintptr_t hook_sprop(ARGS8) {
+    char key[96];
+    key[0] = 0;
+    bool log_it = false;
+    if (cf_is((CFTypeRef)a1, CFStringGetTypeID()) && CFStringGetCString((CFStringRef)a1, key, sizeof key, kCFStringEncodingUTF8) && strstr(key, "Override")) log_it = true;
+    char val[300];
+    val[0] = 0;
+    if (log_it && a2) {
+        if (cf_is((CFTypeRef)a2, CFStringGetTypeID()) || cf_is((CFTypeRef)a2, CFNumberGetTypeID()) || cf_is((CFTypeRef)a2, CFArrayGetTypeID()) || cf_is((CFTypeRef)a2, CFDictionaryGetTypeID()))
+            cfdesc((CFTypeRef)a2, val, sizeof val);
+        else
+            snprintf(val, sizeof val, "<object 0x%lx>", (unsigned long)a2);
+    }
+    uintptr_t rv = orig_sprop(PASS8);
+    if (log_it) plog("prop  MXCoreSessionSetProperty(session=0x%lx, %s, %s) -> %d", (unsigned long)a0, key, val[0] ? val : "NULL", (int)(int32_t)rv);
+    return rv;
+}
+
 // ------------------------------------------------------------------ install
 
 static bool probe_disabled(void) {
@@ -665,8 +698,10 @@ static void install(intptr_t slide) {
     hook_one(&T_PICKS, (void *)hook_picks, (void **)&orig_picks);
     hook_one(&T_CEP,  (void *)hook_cep,  (void **)&orig_cep);
     hook_one(&T_PEC,  (void *)hook_pec,  (void **)&orig_pec);
+    hook_one(&T_RTS,  (void *)hook_rts,  (void **)&orig_rts);
+    hook_one(&T_SPROP, (void *)hook_sprop, (void **)&orig_sprop);
     uint64_t mask = (orig_conn ? 1u : 0u) | (orig_incl ? 2u : 0u) | (orig_pick ? 4u : 0u) | (orig_rchg ? 8u : 0u) | (orig_tap ? 16u : 0u) |
-                    (orig_picks ? 32u : 0u) | (orig_cep ? 64u : 0u) | (orig_pec ? 128u : 0u);
+                    (orig_picks ? 32u : 0u) | (orig_cep ? 64u : 0u) | (orig_pec ? 128u : 0u) | (orig_rts ? 256u : 0u) | (orig_sprop ? 512u : 0u);
     beacon(B_HOOKS, mask);
     plog("probe active (hook mask 0x%llx): open the audio picker, plug/unplug outputs, then read this log", (unsigned long long)mask);
 }

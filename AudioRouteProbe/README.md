@@ -1,4 +1,4 @@
-# AudioRouteProbe 0.3.1 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.3.2 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
 Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
 every hook calls the original function first and forwards all argument registers unchanged.
@@ -30,6 +30,14 @@ active route. The daemon's cached list is never modified: the hook returns a cop
 **Unknown, and what the experiment is for:** whether choosing that row moves audio to the speaker. That is decided
 by `FigRoutingManagerPickRouteDescriptorForContext` and the audio device, not by the list. The `tap` log lines show
 the descriptor that was chosen and the function's result.
+
+Result of the 0.3.1 test: the daemon receives the tap (`tap2`), finds an endpoint for the speaker (`tap3`) and the pick
+returns success (`tap4 -> 0`), yet nothing changes and no route-change event follows. Static reading of
+`vaeRouteToSelectedPort` (what activating a local port endpoint calls): for a built-in port that is not the active one
+it does **nothing at all** unless a controlling audio session exists, and with one it only sets that session's
+`OverrideRoute` property. **So the experiment must be run while audio is playing** (Music, a video, anything that
+holds an audio session); with silence there is nothing to override. 0.3.2 logs `rts` (is there a session?) and
+`prop` (the OverrideRoute request and the result) to show what the audio stack answers.
 
 Result of the first device test (0.3.0): the row appeared, tapping it showed a spinner and the picker went back to
 the display; no route changed. The appended entry had `RouteType = Override`, whereas the daemon's own speaker entry
@@ -74,7 +82,7 @@ Each question is logged only when its answer changes.
    cat /private/var/tmp/AudioRouteProbe.log          # daemon: conn / incl / pick / rchg / tap / append (and .log.1 after rotation)
    ```
    Beacons in the picker log: `loaded` = daemon pid, `info` 1 ok / 2 kill switch / 3 wrong build / 4 crash guard,
-   `hooks` = bitmask of installed hooks (255 = all eight), `ev.*` = how often each hook fired.
+   `hooks` = bitmask of installed hooks (1023 = all ten), `ev.*` = how often each hook fired.
 3. To try the experiment: `touch /private/var/tmp/AudioRouteProbe.append`, plug in the monitor or wired AirPods Max,
    open the picker, look for the Speaker row, tap it, and note whether audio moves. Then send both logs.
 
