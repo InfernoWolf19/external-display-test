@@ -21,7 +21,8 @@
 //           is none, beta 5's default.
 //
 // Files (all under the jailbreak root; paths are resolved at runtime with libroot, see EDEInitPaths):
-//   <jbroot>/var/mobile/Library/Logs/ExtendedDisplayEnabler.log          log (rotated at 256 KiB)
+//   <jbroot>/tmp/ExtendedDisplayEnabler.debug                            logging is off unless this file exists
+//   <jbroot>/tmp/ExtendedDisplayEnabler.log                              the log while logging is on (rotated at 256 KiB)
 //   <jbroot>/var/mobile/Library/Preferences/ExtendedDisplayEnabler.off   kill switch: disables every hook
 //   <jbroot>/tmp/ExtendedDisplayEnabler.off                              kill switch (alternative location)
 //   <jbroot>/var/mobile/Library/Preferences/ExtendedDisplayEnabler.choice  saved "extended" / "mirror" choice
@@ -32,6 +33,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <pthread.h>
+#import <unistd.h>
 #import <rootless.h>        // ROOT_PATH_NS(): jailbreak-root prefix resolved at runtime via libroot
 
 // Rootless convention: every file this tweak creates lives under the jailbreak root, never at a rootful
@@ -43,12 +45,14 @@ static NSString *const kPrefsDomain = @"com.infernowolf19.extendeddisplayenabler
 static NSString *kLogPath;
 static NSString *kLogOldPath;
 static NSString *kOffPath;
+static NSString *kDebugPath;                 // logging is on only while this file exists
 
 static void EDEInitPaths(void) {
     NSString *tmp = ROOT_PATH_NS(@"/tmp");
     kLogPath    = [tmp stringByAppendingPathComponent:@"ExtendedDisplayEnabler.log"];
     kLogOldPath = [kLogPath stringByAppendingString:@".1"];
     kOffPath    = [tmp stringByAppendingPathComponent:@"ExtendedDisplayEnabler.off"];
+    kDebugPath  = [tmp stringByAppendingPathComponent:@"ExtendedDisplayEnabler.debug"];
 }
 
 static id EDEPrefGet(NSString *key) {
@@ -105,12 +109,24 @@ static void EDELogLocked(NSString *msg) {
 }
 
 static void EDELog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
+// Logging is opt-in: nothing is formatted, written or sent to the system log unless <jbroot>/tmp/ExtendedDisplayEnabler.debug
+// exists (checked at most once a second). Create it, reproduce, read ExtendedDisplayEnabler.log, delete it.
+static BOOL EDELoggingOn(void) {
+    static uint64_t next;
+    static BOOL last;
+    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (now < next) return last;
+    next = now + 1000000000ull;
+    last = kDebugPath && access(kDebugPath.fileSystemRepresentation, F_OK) == 0;
+    return last;
+}
+
 static void EDELog(NSString *fmt, ...) {
+    if (!EDELoggingOn()) return;
     va_list ap;
     va_start(ap, fmt);
     NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
     va_end(ap);
-    NSLog(@"[ExtendedDisplayEnabler] %@", msg);
     pthread_mutex_lock(&gLogMutex);
     @try {
         EDELogLocked(msg);

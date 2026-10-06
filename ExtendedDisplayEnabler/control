@@ -1,6 +1,6 @@
 Package: com.infernowolf19.extendeddisplayenabler
 Name: ExtendedDisplayEnabler
-Version: 0.2.1
+Version: 0.2.2
 Architecture: iphoneos-arm64
 Description: Re-registers the Extended display provider that iPadOS 16.0 (20A8372) SpringBoard no longer creates.
 Maintainer: infernowolf19

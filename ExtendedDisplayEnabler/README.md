@@ -29,7 +29,8 @@ beta 5, so it is left alone. This build has no separate "Resolution" screen; sca
 ## Files and state
 | Where | Purpose |
 |---|---|
-| `/var/jb/tmp/ExtendedDisplayEnabler.log` (+ `.log.1`) | log, rotated at 256 KiB (`<jbroot>/tmp` resolved at runtime with libroot) |
+| `/var/jb/tmp/ExtendedDisplayEnabler.debug` | create it to switch logging on; delete it to switch it off (no file = no logging, no formatting, no system-log output) |
+| `/var/jb/tmp/ExtendedDisplayEnabler.log` (+ `.log.1`) | the log while logging is on, rotated at 256 KiB (`<jbroot>/tmp` resolved at runtime with libroot) |
 | `/var/jb/tmp/ExtendedDisplayEnabler.off` | **kill switch**: `touch` it and respring; every hook becomes a pass-through |
 | CFPreferences domain `com.infernowolf19.extendeddisplayenabler`, key `choice` | saved choice (`extended` / `mirror`); stored by cfprefsd, survives reboots |
 | same domain, key `bootStrikes` | crash-loop strike counter |
