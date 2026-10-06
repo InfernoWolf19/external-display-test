@@ -1,4 +1,4 @@
-// AudioRouteProbe 0.3.2
+// AudioRouteProbe 0.4.0
 //
 // Diagnostics for the audio daemon (audiomxd / mediaserverd) on iPadOS 16.0, build 20A8372, plus ONE opt-in
 // experiment. Every hook calls the original first and forwards all argument registers unchanged. Without the
@@ -35,6 +35,7 @@
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <mach-o/dyld.h>
+#include <mach/mach.h>
 #include <sys/sysctl.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -122,7 +123,7 @@ static void resolve_paths(void) {
 }
 
 #define MAX_LOG_BYTES    (2 * 1024 * 1024)
-#define PROBE_VERSION "0.3.2"
+#define PROBE_VERSION "0.4.0"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -475,9 +476,35 @@ static bool dict_port_is(CFTypeRef d, uint32_t port) {
     return cf_is(n, CFNumberGetTypeID()) && CFNumberGetValue((CFNumberRef)n, kCFNumberSInt32Type, &v) && (uint32_t)v == port;
 }
 
-// Returns a new +1 array (the caller then releases `r`), or NULL meaning "leave r alone". `why` explains a refusal.
-static CFArrayRef speaker_appended(CFTypeRef a0, CFTypeRef a1, uintptr_t a2, uintptr_t a3, CFArrayRef r, const char *cat, const char *mode, const char **why) {
+#define VAD_CAT_AV       0x63736176u   /* 'csav' : Audio/Video */
+#define VAD_MODE_DEFAULT 0x696d6466u   /* 'imdf' : Default     */
+
+// Ports that should be selectable but may be missing from the daemon's list: the built-in speaker ('pspk') and a
+// connected display ('pdsp'). Read from the daemon's own connected-port list for Audio/Video/Default, so it reflects
+// what is plugged in right now.
+static int wanted_ports(uint32_t out[4]) {
+    int n = 0;
+    if (!orig_conn || !fn_portType) return 0;
+    CFArrayRef c = (CFArrayRef)orig_conn(VAD_CAT_AV, VAD_MODE_DEFAULT, 0, 0, 0, 0, 0, 0);   // the trampoline: not logged
+    if (!cf_is(c, CFArrayGetTypeID())) return 0;
+    CFIndex cnt = CFArrayGetCount(c);
+    for (CFIndex i = 0; i < cnt && i < 32 && n < 4; i++) {
+        CFTypeRef e = CFArrayGetValueAtIndex(c, i);
+        int32_t id = 0;
+        if (cf_is(e, CFNumberGetTypeID()) && CFNumberGetValue((CFNumberRef)e, kCFNumberSInt32Type, &id)) {
+            uint32_t t = fn_portType((uint32_t)id);
+            if (t == FOURCC('p', 's', 'p', 'k') || t == FOURCC('p', 'd', 's', 'p')) out[n++] = (uint32_t)id;
+        }
+    }
+    CFRelease(c);
+    return n;
+}
+
+// Returns a new +1 array (the caller then releases `r`), or NULL meaning "leave r alone". `why` explains a refusal;
+// `names` receives what was added.
+static CFArrayRef ports_appended(CFTypeRef a0, CFTypeRef a1, uintptr_t a2, uintptr_t a3, CFArrayRef r, const char *cat, const char *mode, const char **why, char *names, size_t nlen) {
     *why = "";
+    names[0] = 0;
     if (access(APPEND_FLAG, F_OK) != 0) return NULL;             // opt-in
     if (strcmp(mode, "Default") != 0 || (strcmp(cat, "Audio/Video") != 0 && strcmp(cat, "MediaPlayback") != 0)) return NULL;
     if (a2 != 0) { *why = "a2 set"; return NULL; }
@@ -488,37 +515,42 @@ static CFArrayRef speaker_appended(CFTypeRef a0, CFTypeRef a1, uintptr_t a2, uin
     if (!cf_is(r, CFArrayGetTypeID())) { *why = "result not an array"; return NULL; }
     CFIndex cnt = CFArrayGetCount(r);
     if (cnt < 1) { *why = "empty list"; return NULL; }
-    uint32_t spk = gSpeakerId;
-    if (!spk && fn_cachedSpeaker) spk = fn_cachedSpeaker();
-    if (!spk) { *why = "speaker port id unknown"; return NULL; }
-    for (CFIndex i = 0; i < cnt; i++)
-        if (dict_port_is(CFArrayGetValueAtIndex(r, i), spk)) return NULL;     // already listed, nothing to do
 
-    CFTypeRef d = fn_mkDesc(spk, 0, 0, 0, 0);                    // same call form the daemon uses for port IDs
-    if (!d) { *why = "builder returned NULL"; return NULL; }
-    CFArrayRef out = NULL;
-    if (!dict_port_is(d, spk)) { *why = "built description is not the speaker's"; CFRelease(d); return NULL; }
+    uint32_t want[4];
+    int nwant = wanted_ports(want);
+    if (nwant == 0) { *why = "no speaker/display in the connected-port list"; return NULL; }
 
-    CFMutableDictionaryRef md = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, (CFDictionaryRef)d);
-    CFMutableArrayRef m = CFArrayCreateMutableCopy(kCFAllocatorDefault, 0, r);
-    if (md && m) {
-        CFTypeRef picked = NULL;                                  // is the speaker the route the audio device is actually using?
-        if (fn_vadPicked) fn_vadPicked(a0, a1, NULL, NULL, &picked);
-        if (dict_port_is(picked, spk)) CFDictionarySetValue(md, CFSTR("RouteCurrentlyPicked"), kCFBooleanTrue);
-        // Built from a bare port ID the daemon labels the speaker RouteType "Override"; its own speaker entry says
-        // "Default". The second flag file makes the row look exactly like the daemon's own.
-        if (access(APPEND_FLAG ".default", F_OK) == 0) CFDictionarySetValue(md, CFSTR("RouteType"), CFSTR("Default"));
-        if (picked) CFRelease(picked);
-        CFArrayAppendValue(m, md);
-        out = m;
-        m = NULL;
-    } else {
-        *why = "allocation failed";
+    CFMutableArrayRef m = NULL;
+    CFTypeRef picked = NULL;
+    bool pickedLoaded = false;
+    size_t off = 0;
+    for (int w = 0; w < nwant; w++) {
+        bool present = false;
+        for (CFIndex i = 0; i < cnt && !present; i++) present = dict_port_is(CFArrayGetValueAtIndex(r, i), want[w]);
+        if (present) continue;                                    // already listed, nothing to do
+
+        CFTypeRef d = fn_mkDesc(want[w], 0, 0, 0, 0);             // same call form the daemon uses for port IDs
+        if (!d) { *why = "builder returned NULL"; continue; }
+        if (!dict_port_is(d, want[w])) { *why = "built description does not match its port"; CFRelease(d); continue; }
+        CFMutableDictionaryRef md = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, (CFDictionaryRef)d);
+        if (!m) m = CFArrayCreateMutableCopy(kCFAllocatorDefault, 0, r);
+        if (md && m) {
+            if (!pickedLoaded) {                                  // which route is the audio device actually using?
+                pickedLoaded = true;
+                if (fn_vadPicked) fn_vadPicked(a0, a1, NULL, NULL, &picked);
+            }
+            if (dict_port_is(picked, want[w])) CFDictionarySetValue(md, CFSTR("RouteCurrentlyPicked"), kCFBooleanTrue);
+            CFArrayAppendValue(m, md);
+            if (off + 24 < nlen) off += (size_t)snprintf(names + off, nlen - off, "%sport %u", off ? ", " : "", want[w]);
+        } else {
+            *why = "allocation failed";
+        }
+        if (md) CFRelease(md);
+        CFRelease(d);
     }
-    if (m) CFRelease(m);
-    if (md) CFRelease(md);
-    CFRelease(d);
-    return out;
+    if (picked) CFRelease(picked);
+    if (m && off == 0) { CFRelease(m); m = NULL; }                // nothing was actually added
+    return m;
 }
 
 // --- pick: the pickable route descriptions the picker will show  (CFString cat, CFString mode, a2, a3)
@@ -530,13 +562,14 @@ static uintptr_t hook_pick(ARGS8) {
     cfstr_c((CFTypeRef)a1, m, sizeof m);
     {
         const char *why = "";
-        CFArrayRef added = speaker_appended((CFTypeRef)a0, (CFTypeRef)a1, a2, a3, (CFArrayRef)rv, c, m, &why);
+        char names[96];
+        CFArrayRef added = ports_appended((CFTypeRef)a0, (CFTypeRef)a1, a2, a3, (CFArrayRef)rv, c, m, &why, names, sizeof names);
         if (added) {
             CFIndex before = CFArrayGetCount((CFArrayRef)rv);
             CFRelease((CFTypeRef)rv);                            // the daemon's cached array keeps its own reference
             rv = (uintptr_t)added;
-            if (answer_changed(fnv(fnv(0xADD5ull, c), m), (uint64_t)before + 1000))
-                plog("append: added the built-in Speaker to %s/%s (%ld -> %ld routes)", c, m, (long)before, (long)CFArrayGetCount(added));
+            if (answer_changed(fnv(fnv(0xADD5ull, c), m), fnv(1469598103934665603ull, names) ^ (uint64_t)before))
+                plog("append: added %s to %s/%s (%ld -> %ld routes)", names, c, m, (long)before, (long)CFArrayGetCount(added));
         } else if (why[0]) {
             if (answer_changed(fnv(fnv(0xADD6ull, c), m), fnv(1469598103934665603ull, why)))
                 plog("append: skipped for %s/%s: %s", c, m, why);
@@ -637,11 +670,81 @@ static uintptr_t hook_rts(ARGS8) {
     return rv;
 }
 
+// --- EXPERIMENT 2 (off by default): allow the speaker override for playback sessions.
+//
+// 0.3.2 device log: with audio playing, tapping the Speaker row makes the daemon call
+//   MXCoreSessionSetProperty(session, OverrideRoute, "Speaker")  -> -12981
+// Reading the OverrideRoute case (MXCoreSessionSetProperty+0x3b0c): for the speaker value it looks the session's
+// audio category up in a table (a CFDictionary global, 35 entries, built in cmsmInitializeCMSessionManager) and returns
+// -12981 when the entry is kCMSessionOutputOverridability_CannotOverride. With
+//   touch /var/tmp/AudioRouteProbe.override
+// the table is replaced by a copy in which every CannotOverride entry says CanOverride, for as long as the file exists
+// (removing it and requesting another override restores the original table). Nothing else is touched. The audio device
+// may still refuse the override; the log shows what happens next.
+#define OVR_FLAG          "/var/tmp/AudioRouteProbe.override"
+#define G_OVRMAP          0x1da725d58ull   /* CFDictionary: category -> overridability (__DATA)               */
+#define G_CAN_OVERRIDE    0x1d5e803d8ull   /* kCMSessionOutputOverridability_CanOverride    (CFString)        */
+#define G_CANNOT_OVERRIDE 0x1d5e803e0ull   /* kCMSessionOutputOverridability_CannotOverride (CFString)        */
+
+static CFDictionaryRef gOvrOrig, gOvrPatched;
+static pthread_mutex_t gOvrMu = PTHREAD_MUTEX_INITIALIZER;
+
+static bool writable_page(uintptr_t addr) {
+    vm_address_t a = (vm_address_t)addr;
+    vm_size_t size = 0;
+    vm_region_basic_info_data_64_t info;
+    mach_msg_type_number_t cnt = VM_REGION_BASIC_INFO_COUNT_64;
+    mach_port_t obj = MACH_PORT_NULL;
+    if (vm_region_64(mach_task_self(), &a, &size, VM_REGION_BASIC_INFO_64, (vm_region_info_t)&info, &cnt, &obj) != KERN_SUCCESS) return false;
+    return a <= addr && addr < a + size && (info.protection & VM_PROT_WRITE);
+}
+
+static void override_policy(bool unlock, char *note, size_t nlen) {
+    note[0] = 0;
+    pthread_mutex_lock(&gOvrMu);
+    CFDictionaryRef *slot = (CFDictionaryRef *)(G_OVRMAP + (uintptr_t)gSlide);
+    CFDictionaryRef cur = *slot;
+    if (!unlock) {
+        if (gOvrPatched && cur == gOvrPatched && gOvrOrig) { *slot = gOvrOrig; snprintf(note, nlen, "restored the original overridability table"); }
+        goto done;
+    }
+    if (gOvrPatched && cur == gOvrPatched) goto done;           // already patched
+    {
+        CFTypeRef can = *(CFTypeRef *)(G_CAN_OVERRIDE + (uintptr_t)gSlide);
+        CFTypeRef cannot = *(CFTypeRef *)(G_CANNOT_OVERRIDE + (uintptr_t)gSlide);
+        if (!cf_is(cur, CFDictionaryGetTypeID()) || !cf_is(can, CFStringGetTypeID()) || !cf_is(cannot, CFStringGetTypeID())) {
+            snprintf(note, nlen, "overridability table not recognised; left alone");
+            goto done;
+        }
+        if (!writable_page((uintptr_t)slot)) { snprintf(note, nlen, "table pointer is not in writable memory; left alone"); goto done; }
+        CFIndex cnt = CFDictionaryGetCount(cur);
+        if (cnt != 35) { snprintf(note, nlen, "unexpected table size %ld (expected 35); left alone", (long)cnt); goto done; }
+        const void *keys[128], *vals[128];
+        CFDictionaryGetKeysAndValues(cur, keys, vals);
+        int changed = 0;
+        for (CFIndex i = 0; i < cnt; i++) if (vals[i] && CFEqual(vals[i], cannot)) { vals[i] = can; changed++; }
+        if (!changed) { snprintf(note, nlen, "no CannotOverride entries; nothing to change"); goto done; }
+        CFDictionaryRef nd = CFDictionaryCreate(kCFAllocatorDefault, keys, vals, cnt, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+        if (!nd) { snprintf(note, nlen, "could not build the patched table"); goto done; }
+        gOvrOrig = (CFDictionaryRef)CFRetain(cur);
+        gOvrPatched = nd;
+        *slot = nd;
+        snprintf(note, nlen, "%d of %ld categories now CanOverride", changed, (long)cnt);
+    }
+done:
+    pthread_mutex_unlock(&gOvrMu);
+}
+
 static uintptr_t hook_sprop(ARGS8) {
     char key[96];
     key[0] = 0;
     bool log_it = false;
     if (cf_is((CFTypeRef)a1, CFStringGetTypeID()) && CFStringGetCString((CFStringRef)a1, key, sizeof key, kCFStringEncodingUTF8) && strstr(key, "Override")) log_it = true;
+    if (log_it && strcmp(key, "OverrideRoute") == 0) {
+        char note[120];
+        override_policy(access(OVR_FLAG, F_OK) == 0, note, sizeof note);
+        if (note[0]) plog("override-policy: %s", note);
+    }
     char val[300];
     val[0] = 0;
     if (log_it && a2) {

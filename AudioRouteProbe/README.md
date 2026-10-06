@@ -1,4 +1,4 @@
-# AudioRouteProbe 0.3.2 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.4.0 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
 Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
 every hook calls the original function first and forwards all argument registers unchanged.
@@ -39,13 +39,28 @@ it does **nothing at all** unless a controlling audio session exists, and with o
 holds an audio session); with silence there is nothing to override. 0.3.2 logs `rts` (is there a session?) and
 `prop` (the OverrideRoute request and the result) to show what the audio stack answers.
 
-Result of the first device test (0.3.0): the row appeared, tapping it showed a spinner and the picker went back to
-the display; no route changed. The appended entry had `RouteType = Override`, whereas the daemon's own speaker entry
-says `Default`. 0.3.1 therefore adds a variant: `touch /private/var/tmp/AudioRouteProbe.append.default` (in addition
-to `.append`) sets the row's `RouteType` to `Default`. 0.3.1 also logs the rest of the pick path (`tap2` the
-descriptors the client sent, `tap3` whether an endpoint was found for each descriptor, `tap4` the final pick) to show
-where a tap is rejected. Also fixed in 0.3.1: arm64 tagged-pointer strings (the mode `Default` as sent by clients) were
-rejected by the object check, so requests from SpringBoard never got the extra row.
+### 0.3.2 device result and what 0.4.0 does about it
+With audio playing, tapping the row makes the daemon call `MXCoreSessionSetProperty(session, OverrideRoute, "Speaker")`,
+which returns **-12981**. In the disassembly that case looks the session's audio category up in a 35-entry table
+(a CFDictionary global) and returns -12981 when the entry is `kCMSessionOutputOverridability_CannotOverride`.
+Playback categories are `CannotOverride`; that is the policy that stops the speaker being chosen.
+
+**Experiment 2 (second opt-in file):**
+```
+touch /private/var/tmp/AudioRouteProbe.override     # on: a patched copy of that table says CanOverride everywhere
+rm    /private/var/tmp/AudioRouteProbe.override     # off: the original table is restored on the next override request
+```
+It only swaps the table pointer (after checking it is a 35-entry CFDictionary in writable memory) and only when the
+daemon is about to evaluate an `OverrideRoute` request. Whether the audio device then actually moves the audio is the
+open question; the log shows `override-policy`, `prop` (result) and the route/pick changes that follow.
+
+Because choosing the speaker makes the daemon's own list show the speaker instead of the display, 0.4.0's append also
+adds the display row ("Dock Connector") when the speaker is the active route, so you can switch back.
+
+Earlier results: 0.3.0 showed the row but the picker reverted; the appended entry said `RouteType = Override` (the
+daemon's own says `Default`) but the picker rebuilds descriptors itself, so that is not the cause (the `.default`
+flag was removed in 0.4.0). 0.3.1 showed the pick reaches the daemon and succeeds on paper; with no audio playing
+there is no session and `vaeRouteToSelectedPort` does nothing.
 
 ## What gets logged
 | tag | function | meaning |
@@ -83,8 +98,9 @@ Each question is logged only when its answer changes.
    ```
    Beacons in the picker log: `loaded` = daemon pid, `info` 1 ok / 2 kill switch / 3 wrong build / 4 crash guard,
    `hooks` = bitmask of installed hooks (1023 = all ten), `ev.*` = how often each hook fired.
-3. To try the experiment: `touch /private/var/tmp/AudioRouteProbe.append`, plug in the monitor or wired AirPods Max,
-   open the picker, look for the Speaker row, tap it, and note whether audio moves. Then send both logs.
+3. To try the experiments: plug in the monitor, `touch /private/var/tmp/AudioRouteProbe.append` and
+   `touch /private/var/tmp/AudioRouteProbe.override`, **start audio playing**, open the picker, tap the Speaker row and
+   note whether the sound moves to the iPad speaker. Then tap "Dock Connector" and note whether it moves back. Send both logs.
 
 Log housekeeping: a question is logged only when its answer changes; the daemon log rotates to `.log.1` at 2 MB.
 

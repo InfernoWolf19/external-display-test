@@ -145,7 +145,7 @@ static void sbp_init(void) {
         gTokens = [NSMutableArray array];
 
         dispatch_async(gQueue, ^{
-            sbp_log(@"---- AudioRouteProbe 0.3.2 SpringBoard side started");
+            sbp_log(@"---- AudioRouteProbe 0.4.0 SpringBoard side started");
             static const char *const names[] = {
                 "com.infernowolf19.audiorouteprobe.loaded", "com.infernowolf19.audiorouteprobe.info",
                 "com.infernowolf19.audiorouteprobe.hooks",
