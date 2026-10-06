@@ -37,32 +37,28 @@
 // Rootless convention: every file this tweak creates lives under the jailbreak root, never at a rootful
 // path (a leftover rootful file can be used to detect the jailbreak). The prefix is resolved at runtime by
 // libroot via ROOT_PATH_NS, so relocated jbroots keep working. Resolved once in EDEInitPaths().
-//   state / kill switch / crash counter : <jbroot>/var/mobile/Library/Preferences
-//   log                                 : <jbroot>/var/mobile/Library/Logs
-// If one of those directories does not exist under this jbroot, <jbroot>/tmp is used instead.
+//   saved choice / crash counter : CFPreferences domain kPrefsDomain (stored by cfprefsd, not a jailbreak file)
+//   log and kill switch          : <jbroot>/tmp (<jbroot>/var/mobile/Library/Logs does not exist on every setup)
+static NSString *const kPrefsDomain = @"com.infernowolf19.extendeddisplayenabler";
 static NSString *kLogPath;
 static NSString *kLogOldPath;
 static NSString *kOffPath;
-static NSString *kOffPathAlt;     // the kill switch is honoured in either location
-static NSString *kChoicePath;
-static NSString *kLegacyPath;     // written by 0.1.x
-static NSString *kBootPath;
-
-static NSString *EDEJbDirFile(NSString *jbrootRelativeDir, NSString *file) {
-    NSString *dir = ROOT_PATH_NS(jbrootRelativeDir);
-    BOOL isDir = NO;
-    if (!dir || ![[NSFileManager defaultManager] fileExistsAtPath:dir isDirectory:&isDir] || !isDir) dir = ROOT_PATH_NS(@"/tmp");
-    return [dir stringByAppendingPathComponent:file];
-}
 
 static void EDEInitPaths(void) {
-    kLogPath    = EDEJbDirFile(@"/var/mobile/Library/Logs", @"ExtendedDisplayEnabler.log");
+    NSString *tmp = ROOT_PATH_NS(@"/tmp");
+    kLogPath    = [tmp stringByAppendingPathComponent:@"ExtendedDisplayEnabler.log"];
     kLogOldPath = [kLogPath stringByAppendingString:@".1"];
-    kOffPath    = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.off");
-    kOffPathAlt = [ROOT_PATH_NS(@"/tmp") stringByAppendingPathComponent:@"ExtendedDisplayEnabler.off"];
-    kChoicePath = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.choice");
-    kLegacyPath = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.extended");
-    kBootPath   = EDEJbDirFile(@"/var/mobile/Library/Preferences", @"ExtendedDisplayEnabler.boot");
+    kOffPath    = [tmp stringByAppendingPathComponent:@"ExtendedDisplayEnabler.off"];
+}
+
+static id EDEPrefGet(NSString *key) {
+    id v = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key, (__bridge CFStringRef)kPrefsDomain));
+    return v;
+}
+
+static void EDEPrefSet(NSString *key, id value) {
+    CFPreferencesSetAppValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)value, (__bridge CFStringRef)kPrefsDomain);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)kPrefsDomain);
 }
 
 static const unsigned long long kMaxLogBytes = 256 * 1024;
@@ -130,7 +126,7 @@ static void EDELog(NSString *fmt, ...) {
 
 static BOOL EDEDisabled(void) {
     NSFileManager *fm = [NSFileManager defaultManager];
-    return gGuardTripped || (kOffPath && [fm fileExistsAtPath:kOffPath]) || (kOffPathAlt && [fm fileExistsAtPath:kOffPathAlt]);
+    return gGuardTripped || (kOffPath && [fm fileExistsAtPath:kOffPath]);
 }
 
 static id EDEIvar(id obj, const char *name) {
@@ -159,20 +155,17 @@ static id EDELocalExternalDisplayDefaults(void) {
 // ---------------------------------------------------------------- saved choice
 
 static int EDELoadChoice(void) {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *text = [NSString stringWithContentsOfFile:kChoicePath encoding:NSUTF8StringEncoding error:NULL];
-    if ([text hasPrefix:@"extended"]) return EDEChoiceExtended;
-    if ([text hasPrefix:@"mirror"]) return EDEChoiceMirror;
-    if ([fm fileExistsAtPath:kLegacyPath]) return EDEChoiceExtended;   // written by 0.1.x
+    id v = EDEPrefGet(@"choice");
+    if ([v isKindOfClass:[NSString class]]) {
+        if ([v isEqualToString:@"extended"]) return EDEChoiceExtended;
+        if ([v isEqualToString:@"mirror"]) return EDEChoiceMirror;
+    }
     return EDEChoiceNone;
 }
 
 static void EDESaveChoice(int choice) {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    [fm removeItemAtPath:kLegacyPath error:NULL];
     NSString *text = choice == EDEChoiceExtended ? @"extended" : (choice == EDEChoiceMirror ? @"mirror" : nil);
-    if (text) [text writeToFile:kChoicePath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
-    else [fm removeItemAtPath:kChoicePath error:NULL];
+    EDEPrefSet(@"choice", text);
 }
 
 // -1 = no opinion, 0 = mirror, 1 = extended
@@ -449,16 +442,16 @@ static void EDEAfterPolicyConnect(id policy) {
 
         // Count launches that did not stay up for kStableAfterSeconds. If SpringBoard keeps dying
         // shortly after start (e.g. a crash when the monitor connects), stop touching it.
-        NSString *raw = [NSString stringWithContentsOfFile:kBootPath encoding:NSUTF8StringEncoding error:NULL];
-        int strikes = raw ? [raw intValue] : 0;
+        id raw = EDEPrefGet(@"bootStrikes");
+        int strikes = [raw respondsToSelector:@selector(intValue)] ? [raw intValue] : 0;
         if (strikes >= kMaxBootStrikes) {
             gGuardTripped = YES;
-            EDELog(@"crash guard: %d consecutive short-lived launches; tweak disabled. Delete %@ to re-enable.", strikes, kBootPath);
+            EDELog(@"crash guard: %d consecutive short-lived launches; tweak disabled. Reset with: defaults delete %@ bootStrikes", strikes, kPrefsDomain);
             return;
         }
-        [[NSString stringWithFormat:@"%d", strikes + 1] writeToFile:kBootPath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+        EDEPrefSet(@"bootStrikes", @(strikes + 1));
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStableAfterSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [[NSFileManager defaultManager] removeItemAtPath:kBootPath error:NULL];
+            EDEPrefSet(@"bootStrikes", nil);
         });
         EDELog(@"loaded; saved choice=%d strikes=%d", gChoice, strikes);
     }

@@ -26,21 +26,22 @@ beta 5, so it is left alone. This build has no separate "Resolution" screen; sca
    That choice is saved and re-applied after every connect. Turn it back on to go back to mirroring.
 3. With no saved choice the tweak follows beta 5: mirror unless the runtime requirements are met.
 
-## Files (all under the jailbreak root, `/var/jb` on Dopamine; resolved at runtime with libroot)
-| File | Purpose |
+## Files and state
+| Where | Purpose |
 |---|---|
-| `/var/jb/var/mobile/Library/Logs/ExtendedDisplayEnabler.log` (+ `.log.1`) | log, rotated at 256 KiB |
-| `/var/jb/var/mobile/Library/Preferences/ExtendedDisplayEnabler.off` (or `/var/jb/tmp/ExtendedDisplayEnabler.off`) | **kill switch**: `touch` it and respring; every hook becomes a pass-through |
-| `/var/jb/var/mobile/Library/Preferences/ExtendedDisplayEnabler.choice` | saved choice (`extended` / `mirror`); delete it to forget |
-| `/var/jb/var/mobile/Library/Preferences/ExtendedDisplayEnabler.boot` | crash-loop strike counter |
+| `/var/jb/tmp/ExtendedDisplayEnabler.log` (+ `.log.1`) | log, rotated at 256 KiB (`<jbroot>/tmp` resolved at runtime with libroot) |
+| `/var/jb/tmp/ExtendedDisplayEnabler.off` | **kill switch**: `touch` it and respring; every hook becomes a pass-through |
+| CFPreferences domain `com.infernowolf19.extendeddisplayenabler`, key `choice` | saved choice (`extended` / `mirror`); stored by cfprefsd, survives reboots |
+| same domain, key `bootStrikes` | crash-loop strike counter |
 
-Rootless conventions: nothing is written to a rootful path and no jbroot prefix is hard-coded; paths go through
-`ROOT_PATH_NS` from Theos' `rootless.h` (libroot). If a jbroot has no `var/mobile/Library/{Logs,Preferences}`, the
-files fall back to `<jbroot>/tmp`.
+Rootless conventions: no rootful path is written and no jbroot prefix is hard-coded; file paths go through
+`ROOT_PATH_NS` from Theos' `rootless.h` (libroot). Logs and the kill switch live in `<jbroot>/tmp` because
+`<jbroot>/var/mobile/Library/{Logs,Preferences}` do not exist on every setup (they do not on the author's device).
+`/tmp` is cleared on reboot, so the log only covers the current boot.
 
 ## Safety
 * Crash-loop guard: a launch that does not stay up for 25 s counts as a strike; after 5 in a row the
-  tweak disables itself (log line `crash guard: …`). Delete `ExtendedDisplayEnabler.boot` to re-arm it.
+  tweak disables itself (log line `crash guard: …`). Reset it with `defaults delete com.infernowolf19.extendeddisplayenabler bootStrikes` (as mobile), or via a package reinstall.
 * If SpringBoard crash-loops anyway: boot Dopamine safe mode, or create the kill-switch file from Filza, then
   remove the package.
 
