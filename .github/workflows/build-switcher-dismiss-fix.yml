@@ -1,0 +1,37 @@
+name: Build SwitcherDismissFix
+on:
+  push:
+    paths: ["SwitcherDismissFix/**", ".github/workflows/build-switcher-dismiss-fix.yml"]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Theos and ldid
+        run: |
+          brew install ldid dpkg
+          git clone --recursive https://github.com/theos/theos.git "$HOME/theos"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+      - name: Build rootless .deb
+        working-directory: SwitcherDismissFix
+        run: make package FINALPACKAGE=1
+      - name: Identify the build
+        id: info
+        working-directory: SwitcherDismissFix
+        run: |
+          DEB=$(ls packages/*.deb)
+          SHORT="${GITHUB_SHA::7}"
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          {
+            echo "### SwitcherDismissFix"
+            echo "- branch: \`$GITHUB_REF_NAME\`"
+            echo "- commit: \`$GITHUB_SHA\`"
+            dpkg-deb -f "$DEB" Package Version Architecture | sed 's/^/- /'
+            echo "- file: \`$(basename "$DEB")\`"
+            echo "- sha256: \`$(shasum -a 256 "$DEB" | cut -d' ' -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SwitcherDismissFix-${{ steps.info.outputs.short }}
+          path: SwitcherDismissFix/packages/*.deb
