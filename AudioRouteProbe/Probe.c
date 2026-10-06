@@ -407,7 +407,7 @@ static uintptr_t hook_rchg(ARGS8) {
 
 static bool probe_disabled(void) {
     for (int i = 0; i < NLOCATIONS; i++) if (kOffPaths[i][0] && access(kOffPaths[i], F_OK) == 0) return true;
-    return false;
+    return access("/var/tmp/AudioRouteProbe.off", F_OK) == 0;   // the only place the sandboxed daemon can see
 }
 
 static bool os_build_ok(void) {
