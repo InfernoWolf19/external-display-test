@@ -9,6 +9,6 @@ TWEAK_NAME = SwitcherDismissFix
 
 SwitcherDismissFix_FILES = Tweak.x
 SwitcherDismissFix_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
-SwitcherDismissFix_FRAMEWORKS = Foundation
+SwitcherDismissFix_FRAMEWORKS = Foundation CoreGraphics
 
 include $(THEOS_MAKE_PATH)/tweak.mk

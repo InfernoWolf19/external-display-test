@@ -1,6 +1,6 @@
 Package: com.infernowolf19.switcherdismissfix
 Name: SwitcherDismissFix
-Version: 0.2.0
+Version: 0.3.0
 Architecture: iphoneos-arm64
 Description: Gives the app switcher a closing animation (tap empty space, empty-switcher dismissal) on iPadOS 16.0, build 20A8372, where SpringBoard has none.
 Maintainer: infernowolf19
