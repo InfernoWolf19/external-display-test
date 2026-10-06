@@ -1,6 +1,6 @@
 # AudioRouteProbe 0.4.1 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
-Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
+**Superseded by `SpeakerPicker` (same branch); do not install both.** Diagnostics for the audio daemon plus **one opt-in experiment**. Without the opt-in file the tweak changes nothing:
 every hook calls the original function first and forwards all argument registers unchanged.
 
 The question: why does the iPad's built-in speaker disappear from Control Centre's audio picker as soon as a wired

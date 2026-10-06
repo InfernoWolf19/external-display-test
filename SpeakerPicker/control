@@ -1,0 +1,9 @@
+Package: com.infernowolf19.speakerpicker
+Name: SpeakerPicker
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Keeps the iPad speaker selectable in the audio picker while a USB-C monitor or wired headphones are connected (iPadOS 16.0, build 20A8372).
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
