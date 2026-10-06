@@ -22,6 +22,7 @@ static NSString *gLogPath;
 static dispatch_queue_t gQueue;
 static NSMutableDictionary<NSString *, NSString *> *gLast;       // last logged signature per category/mode
 static NSMutableArray<NSNumber *> *gTokens;
+static dispatch_source_t gTimer;                                 // keeps the poll timer alive
 static BOOL gSnapshotPending;                                    // touched only on gQueue
 
 static void sbp_log(NSString *msg) {
@@ -170,8 +171,7 @@ static void sbp_init(void) {
             dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), 3 * NSEC_PER_SEC, 500 * NSEC_PER_MSEC);
             dispatch_source_set_event_handler(timer, ^{ sbp_snapshot(@"poll"); });
             dispatch_resume(timer);
-            static dispatch_source_t keep;
-            keep = timer;
+            gTimer = timer;
         });
     }
 }
