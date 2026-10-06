@@ -6,8 +6,9 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = AudioRouteProbe
 
-AudioRouteProbe_FILES = Probe.c
-AudioRouteProbe_CFLAGS = -fno-objc-arc -Wno-deprecated-declarations
-AudioRouteProbe_FRAMEWORKS = CoreFoundation CydiaSubstrate
+AudioRouteProbe_FILES = Probe.c SpringBoardProbe.m
+AudioRouteProbe_CFLAGS = -Wno-deprecated-declarations
+AudioRouteProbe_OBJCFLAGS = -fobjc-arc
+AudioRouteProbe_FRAMEWORKS = CoreFoundation Foundation CydiaSubstrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk

@@ -45,6 +45,7 @@
 #include <substrate.h>
 #include <limits.h>
 #include <errno.h>
+#include <notify.h>
 #include <rootless.h>        // ROOT_PATH(): jailbreak-root prefix resolved at runtime via libroot
 #if __has_feature(ptrauth_calls)
 #include <ptrauth.h>
@@ -246,6 +247,44 @@ static const char *fourcc(uint32_t v, char out[8]) {
     return out;
 }
 
+// ------------------------------------------------------------------ beacons
+
+// The daemon may be unable to write any file, so progress is also reported with Darwin notifications, which
+// the SpringBoard side of this tweak (SpringBoardProbe.m) logs. Each beacon is a name plus a 64-bit state:
+//   loaded   state = pid                      the probe's constructor ran inside this daemon
+//   info     state = 1 ok, 2 kill switch, 3 wrong OS build, 4 crash guard tripped
+//   hooks    state = bitmask of installed hooks (bit0 conn, bit1 incl, bit2 pick, bit3 rchg)
+//   ev.*     state = number of times that hook has fired
+enum { B_LOADED, B_INFO, B_HOOKS, B_EV_CONN, B_EV_INCL, B_EV_PICK, B_EV_RCHG, B_COUNT };
+static const char *const kBeaconNames[B_COUNT] = {
+    "com.infernowolf19.audiorouteprobe.loaded", "com.infernowolf19.audiorouteprobe.info",
+    "com.infernowolf19.audiorouteprobe.hooks",  "com.infernowolf19.audiorouteprobe.ev.conn",
+    "com.infernowolf19.audiorouteprobe.ev.incl", "com.infernowolf19.audiorouteprobe.ev.pick",
+    "com.infernowolf19.audiorouteprobe.ev.rchg",
+};
+static pthread_mutex_t gBeaconMu = PTHREAD_MUTEX_INITIALIZER;
+static int      gBeaconTok[B_COUNT];
+static bool     gBeaconReady[B_COUNT];
+static uint64_t gEventCount[B_COUNT];
+
+static void beacon(int idx, uint64_t state) {
+    pthread_mutex_lock(&gBeaconMu);
+    if (!gBeaconReady[idx]) {
+        gBeaconReady[idx] = true;
+        if (notify_register_check(kBeaconNames[idx], &gBeaconTok[idx]) != NOTIFY_STATUS_OK) gBeaconTok[idx] = -1;
+    }
+    if (gBeaconTok[idx] != -1) notify_set_state(gBeaconTok[idx], state);   // token stays registered so the state persists
+    pthread_mutex_unlock(&gBeaconMu);
+    notify_post(kBeaconNames[idx]);
+}
+
+static void event_beacon(int idx) {
+    pthread_mutex_lock(&gBeaconMu);
+    uint64_t n = ++gEventCount[idx];
+    pthread_mutex_unlock(&gBeaconMu);
+    beacon(idx, n);
+}
+
 // ------------------------------------------------------------------ function plumbing
 
 static void *sign_fn(uintptr_t a) {
@@ -304,6 +343,7 @@ static CFArrayRef hook_conn(uint32_t cat, uint32_t mode, CFTypeRef arr, int isIn
     cfdesc(arr, a2, sizeof a2);
     format_ports(r, ports, sizeof ports);
     plog("conn  cat=%u mode=%u in=%d arg=%s -> %s", cat, mode, isInput, a2, ports);
+    event_beacon(B_EV_CONN);
     return r;
 }
 
@@ -315,6 +355,7 @@ static bool hook_incl(uint32_t cat, uint32_t mode, CFTypeRef arr, uint32_t portT
     char tc[8], a2[300];
     cfdesc(arr, a2, sizeof a2);
     plog("incl  cat=%u mode=%u type=%s arg=%s -> %d", cat, mode, fourcc(portType, tc), a2, (int)r);
+    event_beacon(B_EV_INCL);
     return r;
 }
 
@@ -339,6 +380,7 @@ static CFArrayRef hook_pick(CFTypeRef cat, CFTypeRef mode, CFTypeRef a2, CFTypeR
     } else {
         plog("pick  cat=%s mode=%s a2=%s a3=%s -> %s", c, m, x2, x3, r ? "<not an array>" : "NULL");
     }
+    event_beacon(B_EV_PICK);
     return r;
 }
 
@@ -357,6 +399,7 @@ static int32_t hook_rchg(uint32_t objectID, uint32_t n, const AOAddr *addrs, voi
         }
         plog("%s", line);
     }
+    event_beacon(B_EV_RCHG);
     return orig_rchg(objectID, n, addrs, client);
 }
 
@@ -396,7 +439,9 @@ static void install(intptr_t slide) {
     hook_one(&T_INCL, (void *)hook_incl, (void **)&orig_incl);
     hook_one(&T_PICK, (void *)hook_pick, (void **)&orig_pick);
     hook_one(&T_RCHG, (void *)hook_rchg, (void **)&orig_rchg);
-    plog("probe active: open the audio picker, plug/unplug outputs, then read this log");
+    uint64_t mask = (orig_conn ? 1u : 0u) | (orig_incl ? 2u : 0u) | (orig_pick ? 4u : 0u) | (orig_rchg ? 8u : 0u);
+    beacon(B_HOOKS, mask);
+    plog("probe active (hook mask 0x%llx): open the audio picker, plug/unplug outputs, then read this log", (unsigned long long)mask);
 }
 
 static void image_added(const struct mach_header *mh, intptr_t slide) {
@@ -432,18 +477,20 @@ __attribute__((constructor))
 static void probe_init(void) {
     const char *name = getprogname();
     if (!name || (strcmp(name, "audiomxd") != 0 && strcmp(name, "mediaserverd") != 0)) return;
+    beacon(B_LOADED, (uint64_t)getpid());            // visible in the SpringBoard log even if no file can be written here
     resolve_paths();                                 // jbroot-prefixed log / kill-switch locations
-    if (probe_disabled()) { plog("kill switch present; probe inactive"); return; }
-    plog("---- AudioRouteProbe 0.1.1 loaded");
+    if (probe_disabled()) { beacon(B_INFO, 2); plog("kill switch present; probe inactive"); return; }
+    plog("---- AudioRouteProbe 0.2.0 loaded");
     pthread_mutex_lock(&gMu);
     if (gNFds < 0) plog_open_locked();
     int nopen = gNFds;
     pthread_mutex_unlock(&gMu);
     if (nopen == 0) os_log(OS_LOG_DEFAULT, "[AudioRouteProbe] no log file could be opened anywhere (sandbox?)");
     for (int i = 0; i < nopen; i++) plog("log file: %s", log_path_for(gFdPath[i]));
-    if (!os_build_ok()) return;
+    if (!os_build_ok()) { beacon(B_INFO, 3); return; }
     bool tripped;
     boot_guard(&tripped);
-    if (tripped) return;
+    if (tripped) { beacon(B_INFO, 4); return; }
+    beacon(B_INFO, 1);
     _dyld_register_func_for_add_image(image_added);   // also fires for images that are already mapped
 }

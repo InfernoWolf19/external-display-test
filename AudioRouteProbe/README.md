@@ -1,4 +1,4 @@
-# AudioRouteProbe (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.2.0 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
 **Passive diagnostics only.** Every hook calls the original function first and then writes a log line;
 nothing about audio routing is changed. Its purpose is to find out why the iPad's built-in speaker disappears
@@ -39,35 +39,35 @@ before `pick`**? Each case points at a different fix.
 * Worst case if a hook is wrong: the audio daemon crashes and launchd restarts it. If it crash-loops, use
   Dopamine safe mode and remove the package.
 
-## Use
-1. Install the `.deb` (rootless), then reboot or respring and wait ~20 s. The daemon is restarted by launchd; if
-   unsure, reboot.
-2. Reproduce, in this order, noting the time of each step:
-   1. Nothing connected: open Control Centre, play audio, open the audio picker (tap the icon), close it.
-   2. Plug in the USB-C monitor. Wait 5 s. Open the picker, close it.
-   3. Unplug the monitor, plug in the wired AirPods Max. Wait 5 s. Open the picker, close it.
-3. Collect the log. The daemon may be sandboxed, so every location is tried; check all of them:
-   ```
-   ls -la /var/jb/tmp/AudioRouteProbe.log /var/jb/var/mobile/Library/Logs/AudioRouteProbe.log \
-          /var/jb/var/log/AudioRouteProbe.log 2>/dev/null
-   ```
-   and send whichever exist (the first lines say which files were opened).
+## Use (0.2.0)
+0.2.0 has two parts in one dylib. The SpringBoard part is the reliable one: SpringBoard is not sandboxed like the
+media daemon, so it can always write its log.
 
-   **If none of those exist** (0.1.0 behaviour), the daemon's sandbox blocks writes under the jailbreak root. From
-   0.1.1 the probe then falls back to the daemon's own temp/cache directory, which every sandbox allows, and says so
-   at the top of the log. Find it as root:
+1. Install the `.deb` and **reboot** (the daemon only loads the tweak when it restarts).
+2. Reproduce, noting the time of each step: nothing connected, then plug in the monitor, then unplug it and plug
+   in the wired AirPods Max. Open the audio picker in Control Centre at each step (optional: the log updates on
+   its own whenever the picker's data changes).
+3. Read the **primary log** (written by SpringBoard):
    ```
-   sudo find /private/var/folders -name 'AudioRouteProbe.log' 2>/dev/null
+   cat /var/jb/tmp/AudioRouteProbe.picker.log
    ```
-   (that fallback is used only when no jbroot location can be opened; the OS cleans those directories itself).
+   It contains:
+   * `picker <category>/<mode> (...)`: the exact list the picker is offered, logged whenever it changes. This is the
+     answer to "is the iPad speaker offered while the monitor / AirPods are connected?".
+   * `daemon beacon ...`: Darwin notifications from the daemon side. `loaded` proves the probe is running inside
+     mediaserverd/audiomxd (state = pid); `info` is 1 ok / 2 kill switch / 3 wrong OS build / 4 crash guard;
+     `hooks` is the bitmask of installed hooks (15 = all four); `ev.*` count how often each hook fired.
+   If there is **no** `loaded` beacon the probe is not loaded in the daemon (or the daemon may not post
+   notifications); the picker lines still work.
+4. Optional, richer daemon-side log (`conn` / `incl` / `pick` / `rchg` lines). The daemon may be sandboxed, so every
+   location is tried:
+   ```
+   ls -la /var/jb/tmp/AudioRouteProbe.log /var/jb/var/log/AudioRouteProbe.log 2>/dev/null
+   find /private/var/folders -name 'AudioRouteProbe.log' 2>/dev/null     # daemon temp-dir fallback (no sudo: it runs as mobile)
+   ```
+   The first lines say which locations were opened and why others failed (uid, errno).
 
-   **If still nothing exists**, the tweak is not being loaded into the daemon. Check, in this order:
-   ```
-   ls -la /var/jb/Library/MobileSubstrate/DynamicLibraries/ | grep -i AudioRoute      # installed?
-   ps aux | grep -E 'audiomxd|mediaserverd' | grep -v grep                           # which daemon runs, since when
-   ls -lt /var/mobile/Library/Logs/CrashReporter | head -5                           # did the daemon crash?
-   ```
-   The daemon must be restarted *after* installing the package (reboot, or userspace reboot) for the tweak to load.
+Kill switch: `touch /var/jb/tmp/AudioRouteProbe.off`, then respring and restart the daemon (reboot).
 
 ## Build
 `.github/workflows/build-audio-probe.yml` builds a rootless `.deb`, or locally: `cd AudioRouteProbe && make package FINALPACKAGE=1`.
