@@ -8,6 +8,7 @@ TWEAK_NAME = SpeakerPicker
 
 SpeakerPicker_FILES = SpeakerPicker.c
 SpeakerPicker_CFLAGS = -Wno-deprecated-declarations
+SpeakerPicker_LDFLAGS = -lobjc
 SpeakerPicker_FRAMEWORKS = CoreFoundation CydiaSubstrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk

@@ -48,12 +48,14 @@
 #include <string.h>
 #include <time.h>
 #include <os/log.h>
+#include <objc/message.h>
+#include <objc/runtime.h>
 #include <substrate.h>
 #if __has_feature(ptrauth_calls)
 #include <ptrauth.h>
 #endif
 
-#define TWEAK_VERSION     "1.0.1"
+#define TWEAK_VERSION     "1.1.0~idle1"
 #define REQUIRED_OS_BUILD "20A8372"
 #define MEDIAEXP_IMAGE    "/System/Library/PrivateFrameworks/MediaExperience.framework/MediaExperience"
 
@@ -117,10 +119,17 @@ static const Target T_PTYPE  = { "vaeGetPortTypeFromPortID",                    
 static const Target T_MKDESC = { "cmsmCreateRouteDescriptionFromPortIDOrRouteConfiguration", 0x196401b78, { 0xd503237f, 0xd10183ff, 0xa9025ff8 } };
 static const Target T_VADPK  = { "cmsmCopyVADPickedRouteDescriptionForRouteConfiguration",   0x196403bcc, { 0xd503237f, 0xd10243ff, 0xa9036ffc } };
 
+static const Target T_ROUTE   = { "vaeRouteToSelectedPort",                                   0x1964c0f50, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
+static const Target T_ALLOW   = { "CMSUtility_IsAllowedToStartPlaying",                       0x196432cc8, { 0xd503237f, 0xa9ba6ffc, 0xa90167fa } };
+static const Target T_SETPROP = { "MXCoreSessionSetProperty",                                 0x1963ef728, { 0xd503237f, 0x6db923e9, 0xa9016ffc } };
+static const Target T_DEVNAME = { "CMSMVAUtility_CopyFigOutputDeviceNameFromVADPortType",     0x1963fbe48, { 0xd503237f, 0xa9be4ff4, 0xa9017bfd } };
+
 // Data: category -> overridability CFDictionary (35 entries), and the two CFString constants it holds.
 #define G_OVRMAP          0x1da725d58ull
 #define G_CAN_OVERRIDE    0x1d5e803d8ull           /* kCMSessionOutputOverridability_CanOverride    */
 #define G_CANNOT_OVERRIDE 0x1d5e803e0ull           /* kCMSessionOutputOverridability_CannotOverride */
+
+#define G_KEY_OVERRIDE    0x1d5e7ef30ull           /* kMXSessionProperty_OverrideRoute (a CFStringRef variable) */
 
 #define VAD_CAT_AV        0x63736176u              /* 'csav' */
 #define VAD_MODE_DEFAULT  0x696d6466u              /* 'imdf' */
@@ -154,10 +163,13 @@ static CFArrayRef (*fn_conn)(uint32_t cat, uint32_t mode, CFTypeRef arr, int isI
 static CFTypeRef (*fn_mkDesc)(uint32_t portID, uintptr_t, uintptr_t, uintptr_t, uintptr_t);                    // +1 dictionary
 static void (*fn_vadPicked)(CFTypeRef cat, CFTypeRef mode, CFTypeRef a2, CFTypeRef a3, CFTypeRef *out);          // *out is +1
 
+static int (*fn_setProp)(void *session, CFStringRef key, CFTypeRef value);
+static CFStringRef (*fn_devName)(uint32_t portType);                                                          // +1 string
+
 typedef uintptr_t (*Fn8)(uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t);
 #define ARGS8 uintptr_t a0, uintptr_t a1, uintptr_t a2, uintptr_t a3, uintptr_t a4, uintptr_t a5, uintptr_t a6, uintptr_t a7
 #define PASS8 a0, a1, a2, a3, a4, a5, a6, a7
-static Fn8 orig_pick;
+static Fn8 orig_pick, orig_route, orig_allow;
 
 // ------------------------------------------------------------------ safe CoreFoundation helpers
 
@@ -258,6 +270,14 @@ done:
     return ok;
 }
 
+// ------------------------------------------------------------------ idle selection state
+
+// The speaker port the user picked while nothing was playing (0 = none). Memory only.
+static volatile uint32_t gIdlePort;
+static void *volatile gIdleDoneSession;                     // session the preference was last applied to
+
+#define PT_SPEAKER FOURCC('p', 's', 'p', 'k')
+
 // ------------------------------------------------------------------ the ports that should be selectable
 
 // Connected speaker ('pspk'), display ('pdsp') and wired headphone ('phpw') ports, read from the daemon's own
@@ -301,6 +321,20 @@ static int wanted_ports(uint32_t out[6]) {
     return n;
 }
 
+// True when a wired route (display / wired headphones) is connected next to the speaker.
+static bool wired_displaces_speaker(const uint32_t *ids, int n) {
+    for (int i = 0; i < n; i++) if (fn_portType(ids[i]) != PT_SPEAKER) return true;
+    return false;
+}
+
+// Forget the remembered speaker preference once nothing displaces the speaker any more (the monitor was unplugged).
+static void idle_check_wired(const uint32_t *ids, int n) {
+    if (gIdlePort && n > 0 && !wired_displaces_speaker(ids, n)) {
+        gIdlePort = 0;
+        info("no wired output connected any more; idle speaker preference cleared");
+    }
+}
+
 // Returns a new +1 array to use instead of `r` (the caller then releases `r`), or NULL meaning "leave r alone".
 static CFArrayRef ports_appended(CFTypeRef cat, CFTypeRef mode, CFArrayRef r, int *nadded) {
     *nadded = 0;
@@ -309,6 +343,7 @@ static CFArrayRef ports_appended(CFTypeRef cat, CFTypeRef mode, CFArrayRef r, in
     uint32_t want[6];
     int nwant = wanted_ports(want);
     if (nwant == 0) return NULL;
+    idle_check_wired(want, nwant);
 
     CFMutableArrayRef m = NULL;
     CFTypeRef picked = NULL;
@@ -399,6 +434,74 @@ static uintptr_t hook_pick(ARGS8) {
     return rv;
 }
 
+// ------------------------------------------------------------------ idle selection hooks
+
+static void *objc_send0(void *obj, const char *sel) { return ((void *(*)(void *, SEL))objc_msgSend)(obj, sel_registerName(sel)); }
+extern void *objc_retain(void *);
+extern void objc_release(void *);
+
+// vaeRouteToSelectedPort(port, session, scope, ...). Observed only: forwarded unchanged, the daemon still does what it
+// does (nothing, for a pick without a session).
+static uintptr_t hook_route(ARGS8) {
+    if (!killed()) {
+        uint32_t port = (uint32_t)a0;
+        bool speaker = fn_portType(port) == PT_SPEAKER;
+        if (a1 == 0) {                                              // no controlling audio session: nothing is playing
+            if (speaker) {
+                if (gIdlePort != port) { gIdlePort = port; info("idle pick of the speaker (port %u) remembered", port); }
+            } else if (gIdlePort) {
+                gIdlePort = 0;
+                info("idle pick of another output; speaker preference cleared");
+            }
+        } else if (!speaker && gIdlePort) {                         // the user chose a different output during playback
+            gIdlePort = 0;
+            info("pick of another output; speaker preference cleared");
+        }
+    }
+    return orig_route(PASS8);
+}
+
+// Runs on a global queue, ~200 ms after a media session was allowed to start. Owns one retain on `session`.
+static void idle_apply(void *session) {
+    uint32_t port = gIdlePort;
+    if (!port || killed() || session == gIdleDoneSession) goto out;
+    if ((uintptr_t)objc_send0(session, "isActive") & 0xff) {
+        CFTypeRef cat = objc_send0(session, "audioCategory");
+        if (!(string_is(cat, CFSTR("Audio/Video")) || string_is(cat, CFSTR("MediaPlayback")))) goto out;
+    } else goto out;
+
+    uint32_t ids[6];
+    int n = wanted_ports(ids);
+    if (n == 0) goto out;
+    if (!wired_displaces_speaker(ids, n)) { gIdlePort = 0; info("no wired output connected any more; idle speaker preference cleared"); goto out; }
+
+    CFTypeRef picked = NULL;
+    if (fn_vadPicked) fn_vadPicked(CFSTR("Audio/Video"), CFSTR("Default"), NULL, NULL, &picked);
+    bool already = dict_port_is(picked, port);
+    if (picked) CFRelease(picked);
+    gIdleDoneSession = session;
+    if (already) { dlog("idle preference: session already on the speaker"); goto out; }
+
+    CFStringRef name = fn_devName(fn_portType(port));
+    if (!name) goto out;
+    int rc = fn_setProp(session, *(CFStringRef *)(G_KEY_OVERRIDE + (uintptr_t)gSlide), name);
+    CFRelease(name);
+    info("idle speaker preference applied to a media session (status %d)", rc);
+out:
+    objc_release(session);
+}
+
+// CMSUtility_IsAllowedToStartPlaying(session) -> BOOL. Observed only.
+static uintptr_t hook_allow(ARGS8) {
+    uintptr_t rv = orig_allow(PASS8);
+    if (gIdlePort && (rv & 0xff) && a0 && !(a0 & 7) && (void *)a0 != gIdleDoneSession && !killed()) {
+        void *session = objc_retain((void *)a0);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
+                       ^{ idle_apply(session); });
+    }
+    return rv;
+}
+
 // ------------------------------------------------------------------ install / start-up
 
 static bool gInstalled;
@@ -408,6 +511,7 @@ static void install(intptr_t slide) {
     gInstalled = true;
     gSlide = slide;
     if (!verify(&T_PICK) || !verify(&T_CONN) || !verify(&T_PTYPE) || !verify(&T_MKDESC) || !verify(&T_VADPK)) return;
+    bool idle_ok = verify(&T_ROUTE) && verify(&T_ALLOW) && verify(&T_SETPROP) && verify(&T_DEVNAME);
 
     fn_portType = (uint32_t (*)(uint32_t))sign_fn(T_PTYPE.addr + (uintptr_t)slide);
     fn_conn     = (CFArrayRef (*)(uint32_t, uint32_t, CFTypeRef, int))sign_fn(T_CONN.addr + (uintptr_t)slide);
@@ -416,6 +520,13 @@ static void install(intptr_t slide) {
 
     MSHookFunction(sign_fn(T_PICK.addr + (uintptr_t)slide), (void *)hook_pick, (void **)&orig_pick);
     if (!orig_pick) { info("hook installation failed"); return; }
+    if (idle_ok) {
+        fn_setProp = (int (*)(void *, CFStringRef, CFTypeRef))sign_fn(T_SETPROP.addr + (uintptr_t)slide);
+        fn_devName = (CFStringRef (*)(uint32_t))sign_fn(T_DEVNAME.addr + (uintptr_t)slide);
+        MSHookFunction(sign_fn(T_ROUTE.addr + (uintptr_t)slide), (void *)hook_route, (void **)&orig_route);
+        MSHookFunction(sign_fn(T_ALLOW.addr + (uintptr_t)slide), (void *)hook_allow, (void **)&orig_allow);
+        if (!orig_route || !orig_allow) { info("idle selection hooks not installed"); }
+    }
     info("active (slide 0x%lx)", (long)slide);
     dlog("SpeakerPicker " TWEAK_VERSION " active");
 }

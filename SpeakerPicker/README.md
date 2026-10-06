@@ -56,7 +56,21 @@ The audio daemon is sandboxed and cannot see the jailbreak root, so its few file
 `.github/workflows/build-speaker-picker.yml` builds a rootless `.deb` (artifact `SpeakerPicker-<short sha>`), or locally:
 `cd SpeakerPicker && make package FINALPACKAGE=1`.
 
+## Idle selection (test branch `claude/speaker-picker-idle-test`)
+With nothing playing there is no audio session, and the daemon ignores a route pick (`vaeRouteToSelectedPort … session=NULL:
+nothing will be done`) - for the speaker row and for the monitor row alike. This build remembers such a pick:
+* a tap on **iPad** while idle is remembered (memory only); a tap on any other output forgets it;
+* when a media session (category Audio/Video or MediaPlayback) is next allowed to start playing and a wired route is
+  connected, ~200 ms later the daemon's own `OverrideRoute = Speaker` property (the one a tap during playback sets) is
+  set on that session. Expect a brief moment on the wired output before the sound moves;
+* the preference is forgotten when the daemon restarts, when another output is picked, or when no wired route is
+  connected any more. Until playback starts the picker still shows the wired output as current: nothing has moved yet.
+Two more hooks (`vaeRouteToSelectedPort`, `CMSUtility_IsAllowedToStartPlaying`), both observation-only; the apply step
+runs on a global queue, never inside the daemon's call. Unverified on device until tested; the debug log
+(`/var/tmp/SpeakerPicker.debug`) and the unified log (`com.infernowolf19.speakerpicker`) record each remember / apply.
+
 ## Changelog
+* **1.1.0~idle1** - idle selection (test).
 * **1.0.1** - the speaker row disappeared in apps whose audio session mode is not `Default` (Netflix uses
   `MoviePlayback`); the list is now completed for every mode of the Audio/Video and MediaPlayback categories. With the
   debug file present the log notes each category/mode pair seen once.
