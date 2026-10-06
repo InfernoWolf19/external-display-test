@@ -1,4 +1,4 @@
-# AudioRouteProbe 0.2.1 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
+# AudioRouteProbe 0.2.2 (iPadOS 16.0, build 20A8372, arm64e, Dopamine / rootless)
 
 **Passive diagnostics only.** Every hook calls the original function first and then writes a log line;
 nothing about audio routing is changed. Its purpose is to find out why the iPad's built-in speaker disappears
@@ -67,6 +67,9 @@ media daemon, so it can always write its log.
    The first lines of each launch list every location tried and why it failed (uid, errno).
 5. Crash guard: five daemon launches in a row that die within 25 s disable the probe for that version. The counter is
    `/private/var/tmp/AudioRouteProbe.log.<version>.boot` (a new version starts at zero; deleting the file re-arms).
+
+0.2.2: the daemon log records a question only when its answer changes (0.2.1 filled 4 MB in 80 s and truncated away the
+plug-in events) and rotates to `AudioRouteProbe.log.1` instead of truncating; send both files if `.1` exists.
 
 0.2.0 note: `vaemVADRouteChangeListener` takes five register arguments, not the four I assumed, so the 0.2.0 hook
 clobbered the fifth and crashed `mediaserverd` on the first route change. Since 0.2.1 every hook forwards x0..x7

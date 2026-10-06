@@ -111,8 +111,8 @@ static void resolve_paths(void) {
     }
 }
 
-#define MAX_LOG_BYTES    (4 * 1024 * 1024)
-#define PROBE_VERSION "0.2.1"
+#define MAX_LOG_BYTES    (2 * 1024 * 1024)
+#define PROBE_VERSION "0.2.2"
 #define MAX_BOOT_STRIKES 5
 #define STABLE_SECONDS   25
 
@@ -174,8 +174,18 @@ static void plog_open_locked(void) {
 static void plog_locked(const char *msg) {
     if (gNFds < 0) plog_open_locked();
     for (int i = 0; i < gNFds; i++) {                // nothing opened: os_log below still has it
+        if (gFds[i] < 0) continue;
         struct stat st;
-        if (fstat(gFds[i], &st) == 0 && st.st_size > MAX_LOG_BYTES) (void)ftruncate(gFds[i], 0);
+        if (fstat(gFds[i], &st) == 0 && st.st_size > MAX_LOG_BYTES) {
+            // Rotate, never truncate: 0.2.1 truncated at the cap and threw away the plug-in events.
+            const char *p = log_path_for(gFdPath[i]);
+            char old[600];
+            snprintf(old, sizeof old, "%s.1", p);
+            close(gFds[i]);
+            (void)rename(p, old);
+            gFds[i] = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+            if (gFds[i] < 0) continue;
+        }
         (void)!write(gFds[i], msg, strlen(msg));
     }
 }
@@ -312,6 +322,42 @@ static bool verify(const Target *t) {
 static uint32_t (*fn_portType)(uint32_t);
 static uint32_t (*fn_isHeadphones)(uint32_t);
 
+// ------------------------------------------------------------------ change detection
+
+// The daemon asks the same questions hundreds of times per second (AirPlay discovery alone filled 4 MB in 80 s), so
+// each distinct question is logged only when its answer differs from the previous one.
+#define NSEEN 128
+static struct { uint64_t key, hash; bool used; } gSeen[NSEEN];
+static pthread_mutex_t gSeenMu = PTHREAD_MUTEX_INITIALIZER;
+
+static uint64_t fnv(uint64_t h, const char *s) {
+    for (; *s; s++) { h ^= (uint8_t)*s; h *= 1099511628211ull; }
+    return h;
+}
+
+static bool answer_changed(uint64_t key, uint64_t hash) {
+    bool changed = true;
+    pthread_mutex_lock(&gSeenMu);
+    int slot = -1;
+    for (int i = 0; i < NSEEN; i++) {
+        if (gSeen[i].used && gSeen[i].key == key) { slot = i; break; }
+        if (!gSeen[i].used && slot < 0) slot = i;
+    }
+    if (slot >= 0) {
+        if (gSeen[slot].used && gSeen[slot].hash == hash) changed = false;
+        gSeen[slot].used = true; gSeen[slot].key = key; gSeen[slot].hash = hash;
+    }
+    pthread_mutex_unlock(&gSeenMu);
+    return changed;
+}
+
+// CFString -> UTF-8 without the pointer that CFCopyDescription prints (it differs on every call).
+static void cfstr_c(CFTypeRef t, char *buf, size_t n) {
+    buf[0] = 0;
+    if (t && plausible_obj(t) && CFGetTypeID(t) == CFStringGetTypeID() && CFStringGetCString((CFStringRef)t, buf, (CFIndex)n, kCFStringEncodingUTF8)) return;
+    cfdesc(t, buf, n);
+}
+
 // ------------------------------------------------------------------ hooks
 
 static void format_ports(CFArrayRef a, char *buf, size_t n) {
@@ -350,11 +396,12 @@ static uintptr_t hook_conn(ARGS8) {
     uintptr_t rv = orig_conn(PASS8);
     uint32_t cat = (uint32_t)a0, mode = (uint32_t)a1;
     int isInput = (int)a3;
-    CFArrayRef r = (CFArrayRef)rv;
     char desc[400], ports[1400];
     cfdesc((CFTypeRef)a2, desc, sizeof desc);
-    format_ports(r, ports, sizeof ports);
-    plog("conn  cat=%u mode=%u in=%d arg=%s -> %s", cat, mode, isInput, desc, ports);
+    format_ports((CFArrayRef)rv, ports, sizeof ports);
+    uint64_t h = fnv(fnv(1469598103934665603ull, desc), ports);
+    if (answer_changed(((uint64_t)cat << 32) ^ ((uint64_t)mode << 8) ^ (uint64_t)(isInput ? 1 : 2) ^ 0xC0DE000000000000ull, h))
+        plog("conn  cat=%u mode=%u in=%d arg=%s -> %s", cat, mode, isInput, desc, ports);
     event_beacon(B_EV_CONN);
     return rv;
 }
@@ -365,7 +412,10 @@ static uintptr_t hook_incl(ARGS8) {
     uintptr_t rv = orig_incl(PASS8);
     char tc[8], desc[300];
     cfdesc((CFTypeRef)a2, desc, sizeof desc);
-    plog("incl  cat=%u mode=%u type=%s arg=%s -> %d", (uint32_t)a0, (uint32_t)a1, fourcc((uint32_t)a3, tc), desc, (int)(rv & 0xff));
+    int r = (int)(rv & 0xff);
+    uint64_t h = fnv(1469598103934665603ull, desc) ^ (uint64_t)(r + 1);
+    if (answer_changed(((uint64_t)(uint32_t)a0 << 32) ^ ((uint64_t)(uint32_t)a1 << 8) ^ (uint64_t)(uint32_t)a3 * 31u ^ 0x1AC1000000000000ull, h))
+        plog("incl  cat=%u mode=%u type=%s arg=%s -> %d", (uint32_t)a0, (uint32_t)a1, fourcc((uint32_t)a3, tc), desc, r);
     event_beacon(B_EV_INCL);
     return rv;
 }
@@ -375,21 +425,30 @@ static Fn8 orig_pick;
 static uintptr_t hook_pick(ARGS8) {
     uintptr_t rv = orig_pick(PASS8);
     CFTypeRef r = (CFTypeRef)rv;
-    char c[200], m[200], x2[400], x3[400];
-    cfdesc((CFTypeRef)a0, c, sizeof c);
-    cfdesc((CFTypeRef)a1, m, sizeof m);
+    char c[120], m[120], x2[300], x3[300];
+    cfstr_c((CFTypeRef)a0, c, sizeof c);
+    cfstr_c((CFTypeRef)a1, m, sizeof m);
     cfdesc((CFTypeRef)a2, x2, sizeof x2);
     cfdesc((CFTypeRef)a3, x3, sizeof x3);
-    if (r && plausible_obj(r) && CFGetTypeID(r) == CFArrayGetTypeID()) {
-        CFIndex cnt = CFArrayGetCount((CFArrayRef)r);
-        plog("pick  cat=%s mode=%s a2=%s a3=%s -> %ld route(s)", c, m, x2, x3, (long)cnt);
-        for (CFIndex i = 0; i < cnt && i < 24; i++) {
-            char d[1100];
-            cfdesc(CFArrayGetValueAtIndex((CFArrayRef)r, i), d, sizeof d);
-            plog("pick    #%ld %s", (long)i, d);
+    bool isArray = r && plausible_obj(r) && CFGetTypeID(r) == CFArrayGetTypeID();
+    CFIndex cnt = isArray ? CFArrayGetCount((CFArrayRef)r) : 0;
+    char d[1100];
+    uint64_t h = fnv(fnv(1469598103934665603ull, x2), x3);
+    h ^= (uint64_t)cnt + (isArray ? 7 : (r ? 13 : 0));
+    for (CFIndex i = 0; i < cnt && i < 24; i++) {
+        cfdesc(CFArrayGetValueAtIndex((CFArrayRef)r, i), d, sizeof d);
+        h = fnv(h, d);
+    }
+    if (answer_changed(fnv(fnv(0x91C4ull, c), m), h)) {
+        if (isArray) {
+            plog("pick  cat=%s mode=%s a2=%s a3=%s -> %ld route(s)", c, m, x2, x3, (long)cnt);
+            for (CFIndex i = 0; i < cnt && i < 24; i++) {
+                cfdesc(CFArrayGetValueAtIndex((CFArrayRef)r, i), d, sizeof d);
+                plog("pick    #%ld %s", (long)i, d);
+            }
+        } else {
+            plog("pick  cat=%s mode=%s a2=%s a3=%s -> %s", c, m, x2, x3, r ? "<not an array>" : "NULL");
         }
-    } else {
-        plog("pick  cat=%s mode=%s a2=%s a3=%s -> %s", c, m, x2, x3, r ? "<not an array>" : "NULL");
     }
     event_beacon(B_EV_PICK);
     return rv;
