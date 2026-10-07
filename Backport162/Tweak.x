@@ -23,6 +23,7 @@
 //             BackBoard (BKSDisplayServicesSetDisplayBlanked, so the monitor can sleep) and adds a mouse-button-down
 //             gesture, enabled only while the screen is off, that wakes the iPad (SBLockScreenManager
 //             _wakeScreenForMouseButtonDown:). 16.0 registers that gesture with system-gesture type 0x42 (0x43 in 16.2).
+//             The 16.0 black blanking window is kept as a fallback unless the opt-in feature "nowindow" is on.
 
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
@@ -41,9 +42,9 @@
 
 #import "BP.h"
 
-static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost", "blank", "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr" };
+static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost", "blank", "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr", "nowindow" };
 // Opt-in features stay off until <jbroot>/tmp/Backport162.on.<name> exists.
-static const BOOL kOptIn[F_COUNT] = { NO, NO, NO, NO, YES, YES, YES, YES };
+static const BOOL kOptIn[F_COUNT] = { NO, NO, NO, NO, YES, YES, YES, YES, YES };
 
 static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030];
 static char gFeatureOffPath[F_COUNT][1100], gFeatureOnPath[F_COUNT][1100];
@@ -314,7 +315,9 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
 }
 
 - (void)_setBlankingWindowVisible:(BOOL)visible fadeDuration:(double)duration {
-    if (BP_On(F_BLANK) && BP_BlankReady()) return;      // 16.2: no blanking window, the display itself is blanked
+    // 16.2 has no blanking window: the display itself is blanked. Whether backboardd honours that for an external display
+    // on 16.0 is not known, so by default the 16.0 window stays as a fallback; "nowindow" (opt-in) removes it like 16.2.
+    if (BP_On(F_NOWINDOW) && BP_On(F_BLANK) && BP_BlankReady()) return;
     %orig;
 }
 
