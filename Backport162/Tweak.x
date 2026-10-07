@@ -332,7 +332,7 @@ void BP_G4_Setup(void);                // Group4Focus.x
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
-        BP_Log(@"Backport162 0.4.1 loaded");
+        BP_Log(@"Backport162 0.4.2 loaded");
         %init;
         BP4_InstallIfSupported();
         BP_G4_Setup();

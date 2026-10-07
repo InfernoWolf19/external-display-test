@@ -66,15 +66,19 @@ static BOOL BP_G4_OptIn(const char *name) {
         NSString *tmp = ROOT_PATH_NS(@"/tmp");               // same helper Tweak.x uses (<rootless.h>)
         snprintf(base, sizeof base, "%s/Backport162.on.", tmp.fileSystemRepresentation);
     });
-    static uint64_t next;
-    static BOOL last;
+    // one cache slot per name (a shared slot would hand one name's answer to another)
+    static struct { const char *name; uint64_t next; BOOL last; } slots[8];
+    int i = 0;
+    while (i < 8 && slots[i].name && strcmp(slots[i].name, name) != 0) i++;
+    if (i == 8) return NO;
+    if (!slots[i].name) slots[i].name = name;            // names are string literals
     uint64_t t = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
-    if (t < next) return last;
-    next = t + 1000000000ull;
+    if (t < slots[i].next) return slots[i].last;
+    slots[i].next = t + 1000000000ull;
     char path[1200];
     snprintf(path, sizeof path, "%s%s", base, name);
-    last = access(path, F_OK) == 0;
-    return last;
+    slots[i].last = access(path, F_OK) == 0;
+    return slots[i].last;
 #endif
 }
 

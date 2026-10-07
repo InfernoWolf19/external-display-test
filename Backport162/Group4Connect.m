@@ -614,7 +614,8 @@ static void BP4_Install(void) {
 
     // --- nilock
     const char *ni = "SBNonInteractiveDisplaySceneManager";
-    if (objc_getClass(ni) && objc_getClass("SBSuspendedUnderLockManager")) {
+    // Experimental and opt-in: evaluated once at launch, so with the switch off the class is not touched at all.
+    if (BP4_On(BP4_NILOCK) && objc_getClass(ni) && objc_getClass("SBSuspendedUnderLockManager")) {
         BP4_AddMethod(ni, @selector(setSuspendedUnderLock:), (IMP)BP4_NI_SetLocked, "v@:B");
         BP4_AddMethod(ni, @selector(setSuspendedUnderLock:alongsideWillChangeBlock:alongsideDidChangeBlock:), (IMP)BP4_NI_SetLockedFull, "v@:B@?@?");
         BP4_AddMethod(ni, @selector(isSuspendedUnderLock), (IMP)BP4_NI_IsLocked, "B@:");
