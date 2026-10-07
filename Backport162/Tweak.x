@@ -278,13 +278,16 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
 
 %end
 
+void BP4_InstallIfSupported(void);     // Group4Connect.m
+
 // ---------------------------------------------------------------- entry
 
 %ctor {
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
-        BP_Log(@"Backport162 0.2.0 loaded");
+        BP_Log(@"Backport162 0.3.0 loaded");
         %init;
+        BP4_InstallIfSupported();
     }
 }
