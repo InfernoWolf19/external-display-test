@@ -145,6 +145,7 @@ static inline double BP_Clamp(double v, double lo, double hi) {
 - (CGSize)_preferredSizeInPixelsForTargetCADisplay:(id)display {
     CGSize orig = %orig;
     if (!display || !BP_On(F_SCALE)) return orig;
+    if (!(isfinite(orig.width) && isfinite(orig.height) && orig.width > 0 && orig.height > 0)) return orig;
     CADisplayMode *mode = [self _preferredModeForDisplayForTargetCADisplay:display];
     double W = (double)[mode width], H = (double)[mode height];
     if (!(W > 0) || !(H > 0)) return orig;
@@ -220,9 +221,34 @@ static BOOL BP_UsesInputSystemUI(void) {
 - (id)_sbWindowScene;
 @end
 
-static const char kWakeGestureKey = 0;
+static const char kWakeGestureKey = 0, kWakeHelperKey = 0, kWakeSceneKey = 0;
 static const long long kMouseDownGestureType = 0x42;     // 16.0 value of what 16.2 calls 0x43
 static BOOL gWeBlanked;
+
+
+// The gesture's target. UIGestureRecognizer does not retain its target, and the external scene's gesture manager can
+// outlive the cover sheet controller, so the target is this small object, owned by the gesture itself, and not the
+// controller.
+@interface BPWeakBox : NSObject
+@property (nonatomic, weak) id object;
+@end
+@implementation BPWeakBox
+@end
+
+@interface BPWakeTarget : NSObject
+- (void)wake:(id)gesture;
+@end
+@implementation BPWakeTarget
+- (void)wake:(id)gesture {
+    if (!BP_On(F_BLANK)) return;
+    Class c = NSClassFromString(@"SBLockScreenManager");
+    id mgr = [c respondsToSelector:@selector(sharedInstanceIfExists)] ? [c performSelector:@selector(sharedInstanceIfExists)] : nil;
+    if ([mgr respondsToSelector:@selector(_wakeScreenForMouseButtonDown:)]) {
+        BP_Log(@"blank: mouse button down while screen off, waking");
+        [mgr performSelector:@selector(_wakeScreenForMouseButtonDown:) withObject:gesture];
+    }
+}
+@end
 
 static void (*gSetBlanked)(NSString *, BOOL);
 static BOOL BP_BlankReady(void) {
@@ -248,22 +274,29 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
     Class gc = NSClassFromString(@"SBFMouseButtonDownGestureRecognizer");
     id mgr = [(SBWindowScene *)scene systemGestureManager];
     if (!gc || !mgr) { BP_Log(@"blank: wake gesture unavailable (class %p, manager %p)", gc, mgr); return me; }
-    SBFMouseButtonDownGestureRecognizer *g = [[gc alloc] initWithTarget:me action:@selector(_wakeScreenForMouseButtonDown:)];
+    BPWakeTarget *helper = [[BPWakeTarget alloc] init];
+    SBFMouseButtonDownGestureRecognizer *g = [[gc alloc] initWithTarget:helper action:@selector(wake:)];
+    objc_setAssociatedObject(g, &kWakeHelperKey, helper, OBJC_ASSOCIATION_RETAIN_NONATOMIC);   // the gesture owns its target
     objc_setAssociatedObject(me, &kWakeGestureKey, g, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    BPWeakBox *box = [[BPWeakBox alloc] init];
+    box.object = scene;
+    objc_setAssociatedObject(g, &kWakeSceneKey, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);        // weak: the scene may go first
     ((void (*)(id, SEL, id, long long))objc_msgSend)(mgr, @selector(addGestureRecognizer:withType:), g, kMouseDownGestureType);
     [g setEnabled:![me _isScreenOn]];
     BP_Log(@"blank: wake gesture installed");
     return me;
 }
 
-%new
-- (void)_wakeScreenForMouseButtonDown:(id)gesture {
-    Class c = NSClassFromString(@"SBLockScreenManager");
-    id mgr = [c respondsToSelector:@selector(sharedInstanceIfExists)] ? [c performSelector:@selector(sharedInstanceIfExists)] : nil;
-    if ([mgr respondsToSelector:@selector(_wakeScreenForMouseButtonDown:)]) {
-        BP_Log(@"blank: mouse button down while screen off, waking");
-        [mgr performSelector:@selector(_wakeScreenForMouseButtonDown:) withObject:gesture];
+- (void)dealloc {
+    // Take the wake gesture out of play: disable it and, if the manager still exists, remove it.
+    id g = objc_getAssociatedObject(self, &kWakeGestureKey);
+    if (g) {
+        [g setEnabled:NO];
+        id scene = ((BPWeakBox *)objc_getAssociatedObject(g, &kWakeSceneKey)).object;
+        id mgr = [scene respondsToSelector:@selector(systemGestureManager)] ? [scene systemGestureManager] : nil;
+        if ([mgr respondsToSelector:@selector(removeGestureRecognizer:)]) [mgr performSelector:@selector(removeGestureRecognizer:) withObject:g];
     }
+    %orig;
 }
 
 - (void)_setScreenOn:(BOOL)on {
