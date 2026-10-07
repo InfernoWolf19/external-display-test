@@ -1,6 +1,6 @@
 Package: com.infernowolf19.backport162
 Name: Backport162
-Version: 0.4.0
+Version: 0.4.1
 Architecture: iphoneos-arm64
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372). Needs ExtendedDisplayEnabler for the external display features.
 Maintainer: infernowolf19
