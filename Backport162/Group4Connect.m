@@ -22,6 +22,10 @@
 //
 // Feature names:  autoext  mirrorsvc  covernote  nilock(E)  discguard(E)  provmap(E)       (E = experimental)
 
+// The autoext / mirrorsvc / education hooks below are intentionally not installed (ExtendedDisplayEnabler provides them).
+#pragma clang diagnostic ignored "-Wunused-function"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
