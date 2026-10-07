@@ -49,6 +49,11 @@ static void BP_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
 static void BP_Log(NSString *fmt, ...) { (void)fmt; }
 #endif
 
+// `type` is declared with different return types in Foundation, so message it explicitly.
+static inline long long BP_G4_Type(id obj) {
+    return ((long long (*)(id, SEL))objc_msgSend)(obj, @selector(type));
+}
+
 // Opt-in switch: <jbroot>/tmp/Backport162.on.<name>, checked at most once a second per name.
 static BOOL BP_G4_OptIn(const char *name) {
 #ifdef BP_G4_STANDALONE
@@ -281,7 +286,7 @@ static id BP_KeyboardFocusController(void) {
         // UITouchPhase: Began 0, Stationary 2, Ended 3, Cancelled 4.  UITouchType: Direct 0, Indirect 1, Pencil 2, IndirectPointer 3.
 
         // sniffer 1: _SBPointerTouchDownEventSniffer (touch events only; first pointer touch decides)
-        if ([event type] == 0) {
+        if (BP_G4_Type(event) == 0) {
             for (id t in touches) {
                 if (![t _isPointerTouch]) continue;
                 long long ph = [t phase];
@@ -293,7 +298,7 @@ static id BP_KeyboardFocusController(void) {
         // sniffer 2: _SBTouchInteractionEventSniffer
         for (id t in touches) {
             if ([t _isPointerTouch]) continue;
-            long long ph = [t phase], ty = [t type];
+            long long ph = [t phase], ty = BP_G4_Type(t);
             BOOL activePhase = (ph == 4) ? NO : (ph != 2);
             if (ty == 1 || !activePhase || ty == 3) continue;
             [self _handleActiveDisplayQualifyingEventInWindowScene:ws source:@"touch"];
@@ -308,7 +313,7 @@ static id BP_KeyboardFocusController(void) {
             long long ph = [t phase];
             BOOL activePhase = (ph == 4) ? NO : (ph != 2);
             if (same || !activePhase) continue;
-            if ([t type] != 0) continue;                    // as decoded from 16.2; see file header (PARTIAL)
+            if (BP_G4_Type(t) != 0) continue;                    // as decoded from 16.2; see file header (PARTIAL)
             [self _pointerMovedInScene:ws];
             break;
         }
@@ -601,7 +606,10 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 }
 
 - (void)sceneDidDisconnect:(id)scene {
-    if (!BP_On(F_DISCONNECT)) { %orig; return; }
+    if (!BP_On(F_DISCONNECT)) {
+        %orig;
+        return;
+    }
 
     id ws = BP_WindowSceneOf(scene);
     id kfc = BP_KeyboardFocusController();
@@ -609,7 +617,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
     if ([kfc respondsToSelector:@selector(suppressKeyboardFocusEvaluationForReason:)]) {
         id ident = ([[ws screen] respondsToSelector:@selector(displayIdentity)]) ? [[ws screen] displayIdentity] : ws;
         NSString *reason = [NSString stringWithFormat:@"%@ - %@", NSStringFromClass([self class]), ident];   // 16.2 reason format
-        assertion = [kfc suppressKeyboardFocusEvaluationForReason:reason];
+        assertion = ((id (*)(id, SEL, id))objc_msgSend)(kfc, @selector(suppressKeyboardFocusEvaluationForReason:), reason);
     }
     if (ws && [ws respondsToSelector:@selector(setInvalidating:)]) [ws setInvalidating:YES];
     BOOL hadDisplayConfiguration = ![[ws screen] respondsToSelector:@selector(displayConfiguration)] || [[ws screen] displayConfiguration] != nil;
