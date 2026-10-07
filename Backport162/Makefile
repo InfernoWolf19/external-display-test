@@ -7,7 +7,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Backport162
 
-Backport162_FILES = Tweak.x Group4Connect.m
+Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x
 Backport162_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 Backport162_FRAMEWORKS = Foundation CoreGraphics
 

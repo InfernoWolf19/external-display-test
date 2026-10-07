@@ -39,11 +39,14 @@
 
 // ---------------------------------------------------------------- switches and logging
 
-enum { F_SCALE, F_AUTOHOST, F_BLANK, F_COUNT };
-static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost", "blank" };
+#import "BP.h"
+
+static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost", "blank", "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr" };
+// Opt-in features stay off until <jbroot>/tmp/Backport162.on.<name> exists.
+static const BOOL kOptIn[F_COUNT] = { NO, NO, NO, NO, YES, YES, YES, YES };
 
 static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030];
-static char gFeatureOffPath[F_COUNT][1100];
+static char gFeatureOffPath[F_COUNT][1100], gFeatureOnPath[F_COUNT][1100];
 static pthread_mutex_t gMu = PTHREAD_MUTEX_INITIALIZER;
 
 static void BP_InitPaths(void) {
@@ -53,7 +56,10 @@ static void BP_InitPaths(void) {
     snprintf(gDebugPath, sizeof gDebugPath, "%s/Backport162.debug", t);
     snprintf(gLogPath, sizeof gLogPath, "%s/Backport162.log", t);
     snprintf(gLogOldPath, sizeof gLogOldPath, "%s.1", gLogPath);
-    for (int i = 0; i < F_COUNT; i++) snprintf(gFeatureOffPath[i], sizeof gFeatureOffPath[i], "%s/Backport162.off.%s", t, kFeatureNames[i]);
+    for (int i = 0; i < F_COUNT; i++) {
+        snprintf(gFeatureOffPath[i], sizeof gFeatureOffPath[i], "%s/Backport162.off.%s", t, kFeatureNames[i]);
+        snprintf(gFeatureOnPath[i], sizeof gFeatureOnPath[i], "%s/Backport162.on.%s", t, kFeatureNames[i]);
+    }
 }
 
 // A file test, cached for one second.
@@ -70,10 +76,13 @@ static BOOL BP_FeatureOff(int f) {
     static uint64_t n[F_COUNT]; static BOOL l[F_COUNT];
     return BP_FileFlag(gFeatureOffPath[f], &n[f], &l[f]);
 }
-static BOOL BP_On(int f) { return !BP_Killed() && !BP_FeatureOff(f); }
+static BOOL BP_FeatureOn(int f) {
+    static uint64_t n[F_COUNT]; static BOOL l[F_COUNT];
+    return BP_FileFlag(gFeatureOnPath[f], &n[f], &l[f]);
+}
+BOOL BP_On(int f) { return !BP_Killed() && !BP_FeatureOff(f) && (!kOptIn[f] || BP_FeatureOn(f)); }
 
-static void BP_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
-static void BP_Log(NSString *fmt, ...) {
+void BP_Log(NSString *fmt, ...) {
     if (!BP_Logging()) return;
     va_list ap;
     va_start(ap, fmt);
@@ -279,6 +288,7 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
 %end
 
 void BP4_InstallIfSupported(void);     // Group4Connect.m
+void BP_G4_Setup(void);                // Group4Focus.x
 
 // ---------------------------------------------------------------- entry
 
@@ -286,8 +296,9 @@ void BP4_InstallIfSupported(void);     // Group4Connect.m
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
-        BP_Log(@"Backport162 0.3.0 loaded");
+        BP_Log(@"Backport162 0.4.0 loaded");
         %init;
         BP4_InstallIfSupported();
+        BP_G4_Setup();
     }
 }

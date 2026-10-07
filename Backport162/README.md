@@ -7,13 +7,18 @@ Needs ExtendedDisplayEnabler for the external display features.
 - `CLASS_DELTA_NAMES.txt`: classes/methods added or removed in 16.2.
 - `specs/`: reconstructed 16.2 behaviour per class, and findings per group.
 
-## Features in this build (0.2.0, group 4 / external display)
+## Features in this build (0.4.0, group 4 / external display)
 
 | feature | what it ports |
 |---|---|
 | `scale` | per-axis clamp of the external display's logical scale to the monitor's supported range |
 | `autohost` | keyboard arbiter scene is not auto-hosted on the external display when the input system UI is off |
 | `blank` | with the iPad screen off, the external display is really blanked (monitor can sleep) instead of covered by a black window; a mouse click on it wakes the iPad |
+| `provmap` | (Group4Connect.m) on disconnect the display provider drops its controller entry, so a quick unplug/replug does not trip the "one controller per physical display" assertion |
+| `disconnect` | (Group4Focus.x) unplug handling like 16.2: window scene gets an invalidating/invalidated state, keyboard focus is not re-evaluated mid-teardown (needs `on.directhook` for the full effect), the focus controller really handles `windowSceneDidDisconnect:`, the cover sheet observer is released, and the active display falls back to the iPad's scene while a display is going away |
+
+Opt-in (off until `/var/jb/tmp/Backport162.on.<name>` exists): `activedisplay` (active display follows touch/pointer instead of the keyboard), `gesturegate` (Control Center / switcher gestures that began on another display are rejected), `lockedptr` (pointer-lock suppression scoped to the iPad display), `discswitch` (call the switcher coordinator on unplug even when the display configuration is already gone), `directhook` (hook the focus controller's private re-evaluation function so suppression really freezes focus changes), plus `nilock`, `discguard`, `covernote` from Group4Connect.m.
+ExtendedDisplayEnabler already provides the 16.2 extended-versus-mirror decision on connect and the mirroring toggle fix, so those are not duplicated here.
 
 ## Switches (under the jailbreak root, i.e. `/var/jb/tmp/...`)
 
