@@ -197,8 +197,12 @@ static BOOL BP_UsesInputSystemUI(void) {
 - (void)setEnabled:(BOOL)enabled;
 @end
 
+@interface SBDisplayConfigurationStub : NSObject
+- (NSString *)hardwareIdentifier;
+@end
+
 @interface SBWindowScene : NSObject
-- (id)_sbDisplayConfiguration;
+- (SBDisplayConfigurationStub *)_sbDisplayConfiguration;
 - (id)systemGestureManager;
 @end
 
