@@ -7,12 +7,13 @@ Needs ExtendedDisplayEnabler for the external display features.
 - `CLASS_DELTA_NAMES.txt`: classes/methods added or removed in 16.2.
 - `specs/`: reconstructed 16.2 behaviour per class, and findings per group.
 
-## Features in this build (0.1.0, group 4 / external display)
+## Features in this build (0.2.0, group 4 / external display)
 
 | feature | what it ports |
 |---|---|
 | `scale` | per-axis clamp of the external display's logical scale to the monitor's supported range |
 | `autohost` | keyboard arbiter scene is not auto-hosted on the external display when the input system UI is off |
+| `blank` | with the iPad screen off, the external display is really blanked (monitor can sleep) instead of covered by a black window; a mouse click on it wakes the iPad |
 
 ## Switches (under the jailbreak root, i.e. `/var/jb/tmp/...`)
 

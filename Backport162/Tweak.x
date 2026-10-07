@@ -18,6 +18,11 @@
 //             calculation does not use.
 //   autohost  SBSystemShellExternalDisplaySceneManager: 16.2 does not auto-host the keyboard arbiter scene on the
 //             external display while +[UIKeyboard usesInputSystemUI] is NO.
+//   blank     SBExternalDisplayCoverSheetController: while the iPad screen is off, 16.0 covers the external display
+//             with a black window (the monitor stays on). 16.2 has no such window: it blanks the display through
+//             BackBoard (BKSDisplayServicesSetDisplayBlanked, so the monitor can sleep) and adds a mouse-button-down
+//             gesture, enabled only while the screen is off, that wakes the iPad (SBLockScreenManager
+//             _wakeScreenForMouseButtonDown:). 16.0 registers that gesture with system-gesture type 0x42 (0x43 in 16.2).
 
 #import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
@@ -34,8 +39,8 @@
 
 // ---------------------------------------------------------------- switches and logging
 
-enum { F_SCALE, F_AUTOHOST, F_COUNT };
-static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost" };
+enum { F_SCALE, F_AUTOHOST, F_BLANK, F_COUNT };
+static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost", "blank" };
 
 static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030];
 static char gFeatureOffPath[F_COUNT][1100];
@@ -184,13 +189,98 @@ static BOOL BP_UsesInputSystemUI(void) {
 
 %end
 
+
+// ---------------------------------------------------------------- feature: blank
+
+@interface SBFMouseButtonDownGestureRecognizer : NSObject
+- (instancetype)initWithTarget:(id)target action:(SEL)action;
+- (void)setEnabled:(BOOL)enabled;
+@end
+
+@interface SBWindowScene : NSObject
+- (id)_sbDisplayConfiguration;
+- (id)systemGestureManager;
+@end
+
+@interface SBExternalDisplayCoverSheetController : NSObject
+- (BOOL)_isScreenOn;
+- (id)_sbWindowScene;
+@end
+
+static const char kWakeGestureKey = 0;
+static const long long kMouseDownGestureType = 0x42;     // 16.0 value of what 16.2 calls 0x43
+static BOOL gWeBlanked;
+
+static void (*gSetBlanked)(NSString *, BOOL);
+static BOOL BP_BlankReady(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ gSetBlanked = (void (*)(NSString *, BOOL))dlsym(RTLD_DEFAULT, "BKSDisplayServicesSetDisplayBlanked"); });
+    return gSetBlanked != NULL;
+}
+
+static void BP_SetExternalBlanked(id controller, BOOL blanked) {
+    SBWindowScene *scene = [controller _sbWindowScene];
+    NSString *hw = [[scene _sbDisplayConfiguration] hardwareIdentifier];
+    if (!hw) { BP_Log(@"blank: no hardwareIdentifier, not changing the display"); return; }
+    gSetBlanked(hw, blanked);
+    gWeBlanked = blanked;
+    BP_Log(@"blank: display %@ blanked=%d", hw, blanked);
+}
+
+%hook SBExternalDisplayCoverSheetController
+
+- (id)_initWithWindowScene:(id)scene lockStateProvider:(id)provider backlightController:(id)backlight windowFactory:(id)factory externalDisplayCoverSheetViewController:(id)vc {
+    id me = %orig;
+    if (!me || !BP_On(F_BLANK) || !BP_BlankReady()) return me;
+    Class gc = NSClassFromString(@"SBFMouseButtonDownGestureRecognizer");
+    id mgr = [(SBWindowScene *)scene systemGestureManager];
+    if (!gc || !mgr) { BP_Log(@"blank: wake gesture unavailable (class %p, manager %p)", gc, mgr); return me; }
+    SBFMouseButtonDownGestureRecognizer *g = [[gc alloc] initWithTarget:me action:@selector(_wakeScreenForMouseButtonDown:)];
+    objc_setAssociatedObject(me, &kWakeGestureKey, g, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    ((void (*)(id, SEL, id, long long))objc_msgSend)(mgr, @selector(addGestureRecognizer:withType:), g, kMouseDownGestureType);
+    [g setEnabled:![me _isScreenOn]];
+    BP_Log(@"blank: wake gesture installed");
+    return me;
+}
+
+%new
+- (void)_wakeScreenForMouseButtonDown:(id)gesture {
+    Class c = NSClassFromString(@"SBLockScreenManager");
+    id mgr = [c respondsToSelector:@selector(sharedInstanceIfExists)] ? [c performSelector:@selector(sharedInstanceIfExists)] : nil;
+    if ([mgr respondsToSelector:@selector(_wakeScreenForMouseButtonDown:)]) {
+        BP_Log(@"blank: mouse button down while screen off, waking");
+        [mgr performSelector:@selector(_wakeScreenForMouseButtonDown:) withObject:gesture];
+    }
+}
+
+- (void)_setScreenOn:(BOOL)on {
+    BOOL was = [self _isScreenOn];
+    %orig;
+    if (was == on) return;
+    BOOL active = BP_On(F_BLANK) && BP_BlankReady();
+    if (active) {
+        BP_SetExternalBlanked(self, !on);
+        id g = objc_getAssociatedObject(self, &kWakeGestureKey);
+        [g setEnabled:!on];
+    } else if (on && gWeBlanked && BP_BlankReady()) {
+        BP_SetExternalBlanked(self, NO);     // the feature was switched off while the display was blanked
+    }
+}
+
+- (void)_setBlankingWindowVisible:(BOOL)visible fadeDuration:(double)duration {
+    if (BP_On(F_BLANK) && BP_BlankReady()) return;      // 16.2: no blanking window, the display itself is blanked
+    %orig;
+}
+
+%end
+
 // ---------------------------------------------------------------- entry
 
 %ctor {
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
-        BP_Log(@"Backport162 0.1.0 loaded");
+        BP_Log(@"Backport162 0.2.0 loaded");
         %init;
     }
 }
