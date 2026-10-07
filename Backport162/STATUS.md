@@ -10,10 +10,10 @@ User rules: separate branches per project (this one is `claude/backport162`), no
 3. Window/scene/input plumbing (scene handles, app layouts, hosted keyboard, SBMultiDisplayUserInteractionCoordinator, pointer events). Not read yet. Groups 1-3 depend on each other and ship together.
 4. External display lifecycle. In progress.
 
-## Group 4 progress
-Done in `Tweak.x` 0.2.0 (CI green, untested on device): `scale` (per-axis clamp of logical scale), `autohost` (keyboard arbiter scene), `blank` (real display blanking + mouse-click wake instead of a black blanking window; gesture type 0x42 on 16.0).
-Findings: `specs/group4-external-display-notes.md`.
-Two agents were reading the rest (disconnect/focus/pointer lock/multi-display coordinator; connect path/service/suspend-under-lock/education/mirroring) and writing `specs/group4-*.md` plus `specs/group4-*.hooks.m` drafts. Integrate the portable parts into `Tweak.x` as new features (add to the `F_*` enum and README), build, then ask the user to test.
+## Group 4 progress (all agent work integrated)
+Package 0.4.0 (CI run for commit "Backport162 0.4.0"): `Tweak.x` (scale, autohost, blank), `Group4Connect.m` (provmap on by default; nilock/discguard/covernote opt-in), `Group4Focus.x` (disconnect on by default; activedisplay/gesturegate/lockedptr/discswitch/directhook opt-in). Shared enum/helpers in `BP.h`. Opt-in = file `<jbroot>/tmp/Backport162.on.<name>`.
+Not installed on purpose: autoext + mirrorsvc (ExtendedDisplayEnabler 0.2.2 already does both). Not portable: clone-mirroring, education rework, per-scene SBLockedPointerManager, window migration on unplug, per-display focus locks (see specs/group4-*.md).
+Nothing in group 4 has been run on a device yet. Next: tell the user group 4 is done and give them the 0.4.0 artifact; they test; fix issues; then start groups 1-3 (specs for group 1 exist).
 
 ## Facts worth keeping
 * SwitcherDismissFix 0.3.0 already ports one 16.2 Stage Manager class (SBContinuousExposeToHomeSwitcherModifier); remove it once the Stage Manager group ships.
