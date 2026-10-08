@@ -2114,11 +2114,11 @@ static Protocol *BP2B_BuildProto(Protocol *base, const char *name, const BP2BPro
     BOOL known = BP2B_BuildIs20A8372();
     NSMutableSet<NSString *> *dyn = [NSMutableSet set];
     BP2B_CollectEncodings(base, dyn, 0);
-    Protocol *np = objc_allocateProtocol(name);
-    if (!np) return nil;
     unsigned pc = 0;
     Protocol * __unsafe_unretained *pl = protocol_copyProtocolList(base, &pc);
     if (pc > 1) { free(pl); return nil; }                       // the stock walker asserts on this; leave everything alone
+    Protocol *np = objc_allocateProtocol(name);
+    if (!np) { free(pl); return nil; }
     for (unsigned i = 0; i < pc; i++) protocol_addProtocol(np, pl[i]);
     free(pl);
     unsigned n = 0;
@@ -2286,7 +2286,6 @@ static void BP2B_Early(void) {
     // build once, inside the hooked class methods (first sent from the stock +initialize)
     class_replaceMethod(meta, sel_registerName("contextProtocol"), imp_implementationWithBlock(^id(id me) {
         id orig = gBP2B_OrigCtxProto ? ((id (*)(id, SEL))gBP2B_OrigCtxProto)(me, sel_registerName("contextProtocol")) : nil;
-        if (me != (id)objc_getClass("SBSwitcherModifier")) return orig;       // subclasses with their own protocol are untouched
         static dispatch_once_t once;
         dispatch_once(&once, ^{
             gBP2B_ExtCtx = BP2B_BuildProto((Protocol *)orig, "BP162_SBSwitcherContextProviding", kBP2B_PCtx, sizeof kBP2B_PCtx / sizeof kBP2B_PCtx[0], objc_getClass("SBSwitcherModifier"));
@@ -2295,7 +2294,6 @@ static void BP2B_Early(void) {
     }), tc);
     class_replaceMethod(meta, sel_registerName("queryProtocol"), imp_implementationWithBlock(^id(id me) {
         id orig = gBP2B_OrigQryProto ? ((id (*)(id, SEL))gBP2B_OrigQryProto)(me, sel_registerName("queryProtocol")) : nil;
-        if (me != (id)objc_getClass("SBSwitcherModifier")) return orig;
         static dispatch_once_t once;
         dispatch_once(&once, ^{
             gBP2B_ExtQry = BP2B_BuildProto((Protocol *)orig, "BP162_SBSwitcherMultitaskingQueryProviding", kBP2B_PQry, sizeof kBP2B_PQry / sizeof kBP2B_PQry[0], objc_getClass("SBSwitcherModifier"));
