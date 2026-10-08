@@ -7,7 +7,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 - `CLASS_DELTA_NAMES.txt`: classes/methods added or removed in 16.2.
 - `specs/`: reconstructed 16.2 behaviour per class, and findings per group.
 
-## Features in this build (0.5.0, group 4 / external display) — everything is on by default
+## Features in this build (0.5.1, group 4 / external display) — everything is on by default
 
 | feature | what it ports |
 |---|---|
@@ -17,7 +17,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 | `provmap` | (Group4Connect.m) on disconnect the display provider drops its controller entry, so a quick unplug/replug does not trip the "one controller per physical display" assertion |
 | `disconnect` | (Group4Focus.x) unplug handling like 16.2: window scene gets an invalidating/invalidated state, keyboard focus is not re-evaluated mid-teardown (needs `on.directhook` for the full effect), the focus controller really handles `windowSceneDidDisconnect:`, the cover sheet observer is released, and the active display falls back to the iPad's scene while a display is going away |
 
-Nothing is opt-in: every feature below is on unless its `Backport162.off.<name>` file exists. Extra features beyond the table: `nowindow` (no black blanking window, like 16.2), `activedisplay` (active display follows touch/pointer instead of the keyboard), `gesturegate` (Control Center / switcher gestures that began on another display are rejected), `lockedptr` (pointer-lock suppression scoped to the iPad display), `discswitch` (call the switcher coordinator on unplug even when the display configuration is already gone), `directhook` (hook the focus controller's private re-evaluation function so suppression really freezes focus changes; verified against the 20A8372 prologue bytes before patching), `nilock`, `discguard`, `covernote` (Group4Connect.m).
+Nothing is opt-in: every feature below is on unless its `Backport162.off.<name>` file exists. Extra features beyond the table: `nowindow` (no black blanking window, like 16.2), `activedisplay` (active display follows touch/pointer instead of the keyboard), `gesturegate` (Control Center / switcher gestures that began on another display are rejected), `discswitch` (call the switcher coordinator on unplug even when the display configuration is already gone), `directhook` (hook the focus controller's private re-evaluation function so suppression really freezes focus changes; verified against the 20A8372 prologue bytes before patching), `nilock`, `discguard`, `covernote` (Group4Connect.m).
 ExtendedDisplayEnabler already provides the 16.2 extended-versus-mirror decision on connect and the mirroring toggle fix. Group4Connect.m contains ports of both (`autoext`, `mirrorsvc`) but they are deliberately NOT installed: they would override the choice ExtendedDisplayEnabler saves.
 
 ## Switches (under the jailbreak root, i.e. `/var/jb/tmp/...`)
@@ -29,3 +29,8 @@ ExtendedDisplayEnabler already provides the 16.2 extended-versus-mirror decision
 ## Tweaks to remove once the Stage Manager groups ship
 
 SwitcherDismissFix overlaps with the Stage Manager group (the same 16.2 class). Keep it installed until a Backport162 build says otherwise.
+
+## Review notes (0.5.1)
+
+An independent review of 0.5.0 (`specs/REVIEW-0.5.0.md`) found and 0.5.1 fixes: the wake gesture was never armed (16.0's external-display gesture manager refused type 0x42), `nilock` lacked a required delegate method, the pointer sniffer ignored real mouse touches, a cancelled pointer touch left `gesturegate` stuck, `directhook` now patches after the PC-relative `cbz` and signs the trampoline pointer for arm64e, and the `lockedptr` hook was deleted (a no-op on 16.0 and not thread-safe).
+Still unverified without a device: whether backboardd 16.0 blanks an external display through `BKSDisplayServicesSetDisplayBlanked`, and the hooking library's behaviour for `directhook`. If either misbehaves create `Backport162.off.nowindow` / `Backport162.off.directhook` (the latter needs a respring).

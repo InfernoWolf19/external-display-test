@@ -267,6 +267,16 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
     BP_Log(@"blank: display %@ blanked=%d", hw, blanked);
 }
 
+// 16.0's external-display gesture manager only arms an explicit set of system-gesture types and refuses 0x42 (verified
+// at 0x1c6365c28: types <= 0x39 from a bitmask, plus 0x68/0x69); 16.2 accepts the renumbered 0x43. Without this the wake
+// gesture would be registered but never enabled.
+%hook SBExternalDisplaySystemGestureManager
+- (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
+    if (type == 0x42 && BP_On(F_BLANK)) return YES;
+    return %orig;
+}
+%end
+
 %hook SBExternalDisplayCoverSheetController
 
 - (id)_initWithWindowScene:(id)scene lockStateProvider:(id)provider backlightController:(id)backlight windowFactory:(id)factory externalDisplayCoverSheetViewController:(id)vc {
@@ -282,7 +292,13 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
     BPWeakBox *box = [[BPWeakBox alloc] init];
     box.object = scene;
     objc_setAssociatedObject(g, &kWakeSceneKey, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);        // weak: the scene may go first
-    ((void (*)(id, SEL, id, long long))objc_msgSend)(mgr, @selector(addGestureRecognizer:withType:), g, kMouseDownGestureType);
+    @try {
+        ((void (*)(id, SEL, id, long long))objc_msgSend)(mgr, @selector(addGestureRecognizer:withType:), g, kMouseDownGestureType);
+    } @catch (NSException *e) {                 // 16.0 NSAsserts on a duplicate type
+        BP_Log(@"blank: gesture registration failed: %@", e);
+        objc_setAssociatedObject(me, &kWakeGestureKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return me;
+    }
     [g setEnabled:![me _isScreenOn]];
     BP_Log(@"blank: wake gesture installed");
     return me;
@@ -332,7 +348,7 @@ void BP_G4_Setup(void);                // Group4Focus.x
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
-        BP_Log(@"Backport162 0.5.0 loaded");
+        BP_Log(@"Backport162 0.5.1 loaded");
         %init;
         BP4_InstallIfSupported();
         BP_G4_Setup();

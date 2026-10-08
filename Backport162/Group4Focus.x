@@ -295,7 +295,7 @@ static id BP_KeyboardFocusController(void) {
                 if (![t _isPointerTouch]) continue;
                 long long ph = [t phase];
                 if (ph == 0) [self _pointerTouchDownInScene:ws];
-                else if (ph == 3) [self _pointerTouchUp];
+                else if (ph == 3 || ph == 4) [self _pointerTouchUp];   // a cancelled touch counts as up
                 break;
             }
         }
@@ -317,7 +317,7 @@ static id BP_KeyboardFocusController(void) {
             long long ph = [t phase];
             BOOL activePhase = (ph == 4) ? NO : (ph != 2);
             if (same || !activePhase) continue;
-            if (BP_G4_Type(t) != 0) continue;                    // as decoded from 16.2; see file header (PARTIAL)
+            { long long pty = BP_G4_Type(t); if (pty != 0 && pty != 3) continue; }   // 16.2 tests 0; real pointer touches are UITouchTypeIndirectPointer (3), so both are accepted
             [self _pointerMovedInScene:ws];
             break;
         }
@@ -401,7 +401,8 @@ static id BP_ValidateActiveScene(id mgr, id scene, long long methodology) {
 // This function hook adds exactly that. Without it suppressKeyboardFocusEvaluationForReason: is advisory only (the
 // final re-evaluation still happens, evaluation during teardown is just not frozen), which is also what 16.0 does today.
 
-extern void MSHookFunction(void *symbol, void *replace, void **result);
+// MSHookFunction is looked up at run time: if the hooking library does not export it the feature simply stays off.
+typedef void (*BP_MSHookFunction_t)(void *symbol, void *replace, void **result);
 
 static void (*orig_reevaluate)(id self);
 static BOOL BP_SuppressionActive(id kfc) {
@@ -416,11 +417,27 @@ static void hook_reevaluate(id self) {
     orig_reevaluate(self);
 }
 
+// Pointer helpers for arm64e: the hooking library may or may not hand back a signed function pointer, and may or may not
+// strip the pointers it is given, so give it stripped pointers and re-sign what it returns (signing an already-correct
+// pointer yields the same value).
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#define BP_STRIP(p)   ptrauth_strip((p), ptrauth_key_function_pointer)
+#define BP_SIGN(p)    ptrauth_sign_unauthenticated(ptrauth_strip((p), ptrauth_key_function_pointer), ptrauth_key_function_pointer, 0)
+#else
+#define BP_STRIP(p)   (p)
+#define BP_SIGN(p)    (p)
+#endif
+
 static BOOL BP_InstallReevaluateHook(void) {
-    static const uintptr_t kVm = 0x1c6321b74;                 // 20A8372 vmaddr (unslid)
+    // Patch at entry+4, AFTER the PC-relative `cbz x0` (a nil self still short-circuits there), so only
+    // position-independent instructions are copied into the hooking library's trampoline.
+    static const uintptr_t kVmEntry = 0x1c6321b74;            // 20A8372 vmaddr (unslid) of the function
     static const uint32_t kPrologue[7] = {                    // cbz x0,..; pacibsp; sub sp,sp,#0x30; stp x20,x19,[sp,#0x10];
         0xb4000440, 0xd503237f, 0xd100c3ff, 0xa9014ff4,       // stp fp,lr,[sp,#0x20]; add fp,sp,#0x20; mov x19,x0
         0xa9027bfd, 0x910083fd, 0xaa0003f3 };
+    BP_MSHookFunction_t hookFn = (BP_MSHookFunction_t)dlsym(RTLD_DEFAULT, "MSHookFunction");
+    if (!hookFn) { BP_Log(@"direct hook: MSHookFunction not available, not hooking"); return NO; }
     intptr_t slide = 0;
     BOOL found = NO;
     for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
@@ -428,14 +445,19 @@ static BOOL BP_InstallReevaluateHook(void) {
         if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
     }
     if (!found) { BP_Log(@"direct hook: SpringBoard.framework image not found, not hooking"); return NO; }
-    uintptr_t addr = kVm + (uintptr_t)slide;
-    if (memcmp((const void *)addr, kPrologue, sizeof kPrologue) != 0) {
-        BP_Log(@"direct hook: prologue mismatch at %p, not hooking (suppression stays advisory)", (void *)addr);
+    uintptr_t entry = kVmEntry + (uintptr_t)slide;
+    if (memcmp((const void *)entry, kPrologue, sizeof kPrologue) != 0) {      // all 7 words, including the cbz
+        BP_Log(@"direct hook: prologue mismatch at %p, not hooking (suppression stays advisory)", (void *)entry);
         return NO;
     }
-    MSHookFunction((void *)addr, (void *)hook_reevaluate, (void **)&orig_reevaluate);   // arm64e: raw code address, no PAC signing
-    BP_Log(@"direct hook: _reevaluatePolicyAndUpdateRulesIfNeeded hooked at %p", (void *)addr);
-    return orig_reevaluate != NULL;
+    void *target = BP_STRIP((void *)(entry + 4));
+    void *replacement = BP_STRIP((void *)hook_reevaluate);
+    void *original = NULL;
+    hookFn(target, replacement, &original);
+    if (!original) { BP_Log(@"direct hook: MSHookFunction returned no trampoline"); return NO; }
+    orig_reevaluate = (void (*)(id))BP_SIGN(original);
+    BP_Log(@"direct hook: _reevaluatePolicyAndUpdateRulesIfNeeded hooked at %p (entry+4)", target);
+    return YES;
 }
 
 // Gesture gating helper (section 7): reject a pan gesture when the pointer touch-down started on another display.
@@ -498,7 +520,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
         void (^handler)(id) = ^(id a) {
             if ([a isActive]) return;
             BP_Log(@"kfc: finished suppressing keyboard focus evaluation, time to re-evaluate");
-            dispatch_block_t go = ^{ id s = weakSelf; if (s && BP_On(F_DISCONNECT)) [s updateKeyboardFocusDeferringRules]; };
+            dispatch_block_t go = ^{ id s = weakSelf; if (s) [s updateKeyboardFocusDeferringRules]; };   // not gated: the refocus must follow the suppression it undoes
             if ([NSThread isMainThread]) go(); else dispatch_async(dispatch_get_main_queue(), go);
         };
         assertion = ((id (*)(id, SEL, id, id))objc_msgSend)(BSCA, make, @"SBWorkspaceKeyboardFocusSuppressEvaluation", handler);
@@ -686,25 +708,9 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 %end
 
 // ---------------------------------------------------------------------------------------------- pointer lock display
-// PARTIAL: section 6, -[SBLockedPointerManager _queue_lockPointerForSceneIdentifier:]. 16.0 passes display:nil
-// to BKSMousePointerService; 16.2 passes the manager's own window scene's display (hardwareIdentifier). The 16.0 manager
-// only ever serves the embedded display, so substitute the embedded display's identifier. Matches only the manager's
-// reason string and options mask 2. MEDIUM confidence that nil meant "all displays".
-%hook BKSMousePointerService
-- (id)pointerSuppressionAssertionOnDisplay:(id)display forReason:(NSString *)reason withOptionsMask:(unsigned long long)mask {
-    if (!display && mask == 2 && BP_On(F_LOCKEDPTR) && [reason hasPrefix:@"Scene "] && [reason hasSuffix:@" requested locked pointer"]) {
-        id mgr = BP_WindowSceneManager();
-        id embedded = [mgr respondsToSelector:@selector(embeddedDisplayWindowScene)] ? [mgr embeddedDisplayWindowScene] : nil;
-        id cfg = [embedded respondsToSelector:@selector(_fbsDisplayConfiguration)] ? [embedded _fbsDisplayConfiguration] : nil;
-        id hw = [cfg respondsToSelector:@selector(hardwareIdentifier)] ? [cfg hardwareIdentifier] : nil;
-        if ([hw isKindOfClass:[NSString class]]) {
-            BP_Log(@"pointer lock: scoping suppression assertion to embedded display %@", hw);
-            return %orig(hw, reason, mask);
-        }
-    }
-    return %orig;
-}
-%end
+// REMOVED (review F4): scoping the pointer-lock suppression assertion to the iPad display was a no-op on 16.0 (a nil
+// display already means "<main>", the only display SBLockedPointerManager serves) and it ran on that manager's private
+// queue while reading main-thread scene state. The switch name "lockedptr" is kept in the table but nothing uses it.
 
 %end // %group G4
 

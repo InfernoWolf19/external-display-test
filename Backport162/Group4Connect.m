@@ -203,6 +203,7 @@ static inline void BP4_RequestUpdate(id controller, unsigned long long mask) {
 @interface SBNonInteractiveDisplaySceneManager : NSObject
 - (id)displayIdentity;
 - (id)externalForegroundApplicationSceneHandles;
+- (id)externalApplicationSceneHandles;
 - (void)setSuspendedUnderLock:(BOOL)lock;
 @end
 @interface BSServiceConnection : NSObject
@@ -489,6 +490,11 @@ static void BP4_NI_CoverDismiss(id self, SEL _cmd, id note) { if (BP4_On(BP4_NIL
 static id   BP4_NI_VisibleScenes(id self, SEL _cmd, id mgr) {                           // 0x1c770389c
     return [self respondsToSelector:@selector(externalForegroundApplicationSceneHandles)] ? [self externalForegroundApplicationSceneHandles] : nil;
 }
+// 16.2 0x1c7703898: a REQUIRED SBSuspendedUnderLockManagerDelegate method; 16.0's manager calls it on every un-lock.
+static id   BP4_NI_RunningScenes(id self, SEL _cmd, id mgr) {
+    if ([self respondsToSelector:@selector(externalApplicationSceneHandles)]) return [self externalApplicationSceneHandles];
+    return [self respondsToSelector:@selector(externalForegroundApplicationSceneHandles)] ? [self externalForegroundApplicationSceneHandles] : nil;
+}
 static BOOL BP4_NI_PreventSuspend(id self, SEL _cmd, id mgr, id scene) { return NO; }   // 0x1c7703890
 static BOOL BP4_NI_PreventUnder(id self, SEL _cmd, id mgr, id scene)   { return NO; }   // 0x1c7703888
 static id   BP4_NI_SceneHandle(id self, SEL _cmd, id mgr, id scene) {                   // 0x1c7703834: [super existingSceneHandleForScene:]
@@ -622,6 +628,7 @@ static void BP4_Install(void) {
         BP4_AddMethod(ni, @selector(_externalCoverSheetVisibilityDidPresent:), (IMP)BP4_NI_CoverPresent, "v@:@");
         BP4_AddMethod(ni, @selector(_externalCoverSheetVisibilityDidDismiss:), (IMP)BP4_NI_CoverDismiss, "v@:@");
         BP4_AddMethod(ni, @selector(suspendedUnderLockManagerVisibleScenes:), (IMP)BP4_NI_VisibleScenes, "@@:@");
+        BP4_AddMethod(ni, @selector(runningApplicationScenes:), (IMP)BP4_NI_RunningScenes, "@@:@");
         BP4_AddMethod(ni, @selector(suspendedUnderLockManager:shouldPreventSuspendUnderLockForScene:), (IMP)BP4_NI_PreventSuspend, "B@:@@");
         BP4_AddMethod(ni, @selector(suspendedUnderLockManager:shouldPreventUnderLockForScene:), (IMP)BP4_NI_PreventUnder, "B@:@@");
         BP4_AddMethod(ni, @selector(suspendedUnderLockManager:sceneHandleForScene:), (IMP)BP4_NI_SceneHandle, "@@:@@");
