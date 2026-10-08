@@ -631,7 +631,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 
     // PARTIAL (opt-in, MEDIUM confidence): 16.0 only tells the switcher coordinator when the screen still has a display
     // configuration; 16.2 always does. If it was skipped, do it now.
-    if (!hadDisplayConfiguration && ws && BP_G4_OptIn("discswitch")) {
+    if (!hadDisplayConfiguration && ws && BP_On(F_DISCSWITCH)) {
         Class sc = NSClassFromString(@"SBMainSwitcherControllerCoordinator");
         id coord = [sc respondsToSelector:@selector(sharedInstance)] ? [sc sharedInstance] : nil;
         if ([coord respondsToSelector:@selector(windowSceneDidDisconnect:)]) {
@@ -639,7 +639,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
             [coord windowSceneDidDisconnect:scene];
         }
     } else if (!hadDisplayConfiguration) {
-        BP_Log(@"disconnect: display configuration was nil, 16.0 skipped the switcher coordinator (opt-in discswitch not enabled)");
+        BP_Log(@"disconnect: display configuration was nil, 16.0 skipped the switcher coordinator (discswitch is off)");
     }
 
     // 16.2 -[SBExternalDisplayCoverSheetController invalidate] (new) = removeObserver:, then the delegate drops the controller.
@@ -713,8 +713,8 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 void BP_G4_Setup(void) {
     %init(G4);
     // MSHookFunction on a non-ObjC function: opt-in until it has been seen working on Dopamine/arm64e.
-    if (BP_G4_OptIn("directhook")) BP_InstallReevaluateHook();
-    else BP_Log(@"direct hook not installed (create Backport162.on.directhook to enable); suppression is advisory");
+    if (BP_On(F_DIRECTHOOK)) BP_InstallReevaluateHook();
+    else BP_Log(@"direct hook not installed (Backport162.off.directhook exists); suppression is advisory");
 }
 
 // ================================================================================================ NOT PORTABLE

@@ -50,7 +50,7 @@
 
 enum { BP4_AUTOEXT, BP4_MIRRORSVC, BP4_COVERNOTE, BP4_NILOCK, BP4_DISCGUARD, BP4_PROVMAP, BP4_COUNT };
 static const char *const kBP4Names[BP4_COUNT] = { "autoext", "mirrorsvc", "covernote", "nilock", "discguard", "provmap" };
-static const BOOL kBP4Experimental[BP4_COUNT] = { YES, YES, YES, YES, YES, NO };   // provmap is on by default; the rest need Backport162.on.<name>
+static const BOOL kBP4Experimental[BP4_COUNT] = { NO, NO, NO, NO, NO, NO };   // nothing is opt-in: every installed feature is on unless Backport162.off.<name> exists
 
 static char gBP4Off[1024], gBP4Debug[1024], gBP4Log[1024];
 static char gBP4FeatOff[BP4_COUNT][1100], gBP4FeatOn[BP4_COUNT][1100];
@@ -614,7 +614,7 @@ static void BP4_Install(void) {
 
     // --- nilock
     const char *ni = "SBNonInteractiveDisplaySceneManager";
-    // Experimental and opt-in: evaluated once at launch, so with the switch off the class is not touched at all.
+    // Evaluated once at launch: with Backport162.off.nilock present the class is not touched at all.
     if (BP4_On(BP4_NILOCK) && objc_getClass(ni) && objc_getClass("SBSuspendedUnderLockManager")) {
         BP4_AddMethod(ni, @selector(setSuspendedUnderLock:), (IMP)BP4_NI_SetLocked, "v@:B");
         BP4_AddMethod(ni, @selector(setSuspendedUnderLock:alongsideWillChangeBlock:alongsideDidChangeBlock:), (IMP)BP4_NI_SetLockedFull, "v@:B@?@?");
