@@ -35,7 +35,7 @@ the scene data store used instead).
 | SBMedusaDecoratedDeviceApplicationSceneViewController | 5 (+133 offset-only) | user-visible | contentOrientation/containerOrientation split, top-affordance highlight with several displays, 3 split-view/multi-window error toasts removed |
 | SBMedusaHostedKeyboardWindow | 3 | user-visible (external display) | ownership moved from the scene manager to a per-window-scene controller |
 | SBMedusaHostedKeyboardWindowController (new) | n/a | user-visible (external display) | per-scene owner of the hosted keyboard window |
-| SBMedusaBannerViewController | 1 | pending | |
+| SBMedusaBannerViewController | 1 | user-visible (relocated error banner) | types 2/3 for the split-view / multiple-window messages; NOT PORTABLE, 16.0 toast equivalent (section 2.4) |
 | SBSwitcherController | 2 (+ ~25 new/removed) | user-visible | delegate callbacks around a window-management-style change; traits code extracted into SBSwitcherTraitsAssistant |
 | SBFluidSwitcherGestureManager | 2 (+ many renames) | pending | |
 | SBWindowSceneManager | 2 | user-visible | covered in group4 spec (active display tracking); only restated here |
@@ -341,3 +341,273 @@ user-resize orientation on a request; always store the initial device orientatio
 PARTIAL: hook `-[SBTraitsSceneParticipantDelegate _startAlterEgoWithDesiredOrientations:error:]` and, after `%orig`, call
 `[handle _setInterfaceOrientationFromUserResizing:0]` (only meaningful with the user-resize chain in place).
 
+
+### 1.4 Display item / layout state / application controller (mostly refactor)
+
+* `SBDisplayItem` (2 changed): `-descriptionBuilderWithMultilinePrefix:` (31->1 insn) and `-succinctDescriptionBuilder` (4->37) swap roles
+  (the 16.2 succinct builder is `[BSDescriptionBuilder builderWithObject:self]` plus `appendString:(type name table)withName:@"type"`, `appendObject:@bundleIdentifier`,
+  `appendObject:@uniqueIdentifier`). Debug text only. **refactor, NOT PORTABLE / not needed.** 16.2 also gains
+  `+[SBDisplayItem displayItemForLayoutElement:]` 0x1c742ec60 (below).
+* `-[SBLayoutState(SBDisplayItemConversion) displayItemFromLayoutElement:]` 16.0 0x1c5fb7364 became the class method above. Same logic:
+  nil element -> nil; `workspaceEntity`; `isApplicationSceneEntity` -> `[[[entity applicationSceneEntity] sceneHandle] displayItemRepresentation]`
+  (16.0 skipped the `applicationSceneEntity` cast); `isAppClipPlaceholderEntity` -> `+displayItemWithType:0 bundleIdentifier:[entity.appClipPlaceholderEntity bundleIdentifier]
+  uniqueIdentifier:[...futureSceneIdentifier]`; else `+homeScreenDisplayItem`. `-[SBLayoutState appLayout]` and `-[SBMainDisplayLayoutState floatingItem]` merely call it.
+  **refactor.**
+* `-[SBSceneLayoutWorkspaceTransaction _runningOnMainRootOrExtendedExternalDisplay]` 16.0 0x1c62a109c / 16.2 0x1c773aecc:
+  `mainRootDisplay ? YES : (sb_displayWindowingMode == 1 ? _SBFIsChamoisExternalDisplayControllerAvailable() : NO)`; 16.0 reached the same C function through a
+  GOT function pointer (`blraaz`). **refactor.**
+* `-[SBApplicationController applicationForDisplayItem:]` (new, category SBDisplayItemAdditions, 16.2 0x1c742fdb0), **user-visible (tiny), PORTABLE**:
+  ```objc
+  - (SBApplication *)applicationForDisplayItem:(SBDisplayItem *)item {
+      long long t = [item type];
+      if (t == 0 || t == 3) return [self applicationWithBundleIdentifier:[item bundleIdentifier]];
+      if (t == 5)           return [self webApplication];       // web clip items: the single web application
+      return nil;
+  }
+  ```
+  It replaces the inline `[[SBApplicationController sharedInstance] applicationWithBundleIdentifier:[item bundleIdentifier]]` in
+  `-[SBFluidSwitcherViewController _applicationForDisplayItem:]` (16.0 0x1c5fd9638, 16.2 0x1c74529cc) and 6 other callers (`SBDisplayItemLayoutAttributesCalculator`,
+  `SBSwitcherController _deviceApplicationSceneHandleForDisplayItem:`, `SBMainSwitcherControllerCoordinator _entityForDisplayItem:...` etc.). `-webApplication` exists in 16.0.
+  Fix: web-clip display items (type 5) resolved to nothing before (bundle id lookup of the clip). Hook plan: add the method (`%new`); hooking the 16.0 callers is NOT needed because they
+  are other groups' methods. Effect on 16.0 without the callers: none. **PORTABLE as an unused helper; zero standalone value.**
+* `_SBDisplayItemFixedAspectGrid` (init gains `supportsOrthogonalSizes:`, 16.2 0x1c791ec74; new ivar `_supportsOrthogonalSizes` at +0x59) and
+  `SBDisplayItemLayoutGrid _gridForBounds:contentOrientation:layoutRestrictionInfo:screenScale:chamoisLayoutAttributes:` (16.0 0x1c6468bdc, 16.2 0x1c791e180):
+  the layout creates the fixed-aspect grid with `supportsOrthogonalSizes = !(restrictionMask & 0x8)` (`tst x24,#0x8; cset eq`). With the flag the fixed grid adds the
+  transposed size (width and height swapped) as an additional candidate in `_buildFixedGridWithScreenScale:` (16.0 0x1c6469854 -> 16.2 0x1c791ed14, ~+20 insns; the
+  NSNumber arrays were replaced by CGSize-pair arrays and `allWidths`/`allHeights` were added). MEDIUM-LOW on the exact candidate set.
+  `_SBDisplayItemFlexibleGrid _buildGridWithScreenScale:` (141->15 insns) now just copies `chamoisLayoutAttributes.gridWidths/gridHeights`; the arithmetic (strip width,
+  edge padding, minimumWindowWidth, `stageInterItemSpacing`) moved to `SBSwitcherChamoisSettings _gridWidthsForSafeWidth:minimumWidth:stageInterItemSpacing:` (another group).
+  `_gridWidthsForSafeWidth:minimumWidth:` itself only gets a `divisor > 0` guard and an `SBLogAppSwitcher` error log.
+  **NOT PORTABLE** as hooks: direct ObjC methods exist, but the result has no effect without the layout-attributes change and the rotating user-resize chain (they are one feature).
+
+### 1.5 SBDeviceApplicationSceneView / content vs container orientation (context for the rows below, NOT in the worklist)
+
+16.2 `SBDeviceApplicationSceneView` gets `initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester:` (16.0 had one `orientation:`),
+`_anyOverlayViewNeedsCounterRotation`, `_windowManagementStyleDidChange:` and `didMoveToWindow`; `SBDeviceApplicationSceneHandle
+newSceneViewWithReferenceSize:contentOrientation:containerOrientation:hostRequester:` (16.2 0x1c76b7e68) is the factory. `_preferredSizingPolicy` /
+`_supportedSizingPolicies` (no args, they read `currentInterfaceOrientation` and `switcherController.interfaceOrientation`) became `_preferredSizingPolicyForContentOrientation:containerOrientation:` /
+`_supportedSizingPoliciesForContentOrientation:containerOrientation:` (16.2 0x1c76b8464 / 0x1c76b8534), same `SBApplication preferredSizingPolicyForSwitcherWindowManagementStyle:displayIdentity:contentOrientation:containerOrientation:`
+call underneath (that SBApplication method already exists in 16.0). **NOT PORTABLE**: signature change across SBSceneViewController / SBDeviceApplicationSceneView / decorated VC / overlays.
+
+### 1.6 `_SBDeviceApplicationSceneHandleSnapshottingAssertion` and scene hosting info for snapshotting (user-visible, PARTIAL)
+
+16.0: `-[SBDeviceApplicationSceneView(ClassicSupport) _configureSceneLiveHostView:]` (0x1c62a4f50) calls
+`[handle _updateSceneHostingInfoForSnapshottingWithView:host]` once and `_invalidateSceneLiveHostView:` calls it with nil. The handle writes
+`hostContextIdentifierForSnapshotting = [[host window] _contextId]` and `scenePresenterRenderIdentifierForSnapshotting = CALayerGetRenderId([host layer])` into the scene's UI settings
+(`updateUISettingsWithBlock:`). If the view is later moved to another window (Stage Manager window moved to the external display, portal reparenting) the context id is stale and
+snapshots of the scene are taken from the wrong/missing context.
+
+16.2 (HIGH):
+```objc
+// new class, subclass of BSSimpleAssertion, ivars unsigned _contextId (+0x30), unsigned long long _renderId (+0x38)
+- (id)_SBDeviceApplicationSceneHandleSnapshottingAssertion initWithIdentifier:reason:contextId:renderId:invalidationBlock:   // 0x1c76b8be0
+
+- (id<BSInvalidatable>)_sceneHostingInfoForSnapshottingAssertionWithView:(UIView *)view {     // 0x1c76b7acc
+    UIWindow *w = [view window];
+    if (!view || !w) return nil;
+    unsigned ctx = [w _contextId]; unsigned long long rid = CALayerGetRenderId([view layer]);
+    NSString *name = [NSString stringWithFormat:@"%@-%lu-%lu", [self sceneIdentifier], (unsigned long)ctx, (unsigned long)rid];
+    __weak typeof(self) ws = self;
+    id a = [[_SBDeviceApplicationSceneHandleSnapshottingAssertion alloc] initWithIdentifier:name forReason:<const> contextId:ctx renderId:rid
+                invalidationBlock:^(id a){ [ws _removeSnapshottingInfoAssertion:a]; }];
+    [self _addSnapshottingInfoAssertion:a];            // 0x1c76b7ce8: append to _snapshottingInfoAssertions, _currentSnapshottingInfoAssertion = a (weak), update(force:YES)
+    return a;
+}
+- (void)_removeSnapshottingInfoAssertion:(id)a {       // 0x1c76b7d90: remove; if it was current, current = lastObject, update(force:NO)
+- (void)_updateSceneHostingInfoForSnapshottingWithAssertion:(id)a forceUpdate:(BOOL)f {        // 0x1c76b7964
+    if (![[self sceneIfExists] isValid]) return;
+    ctx = [a contextId]; rid = [a renderId]; ui = [scene uiSettings];
+    if (f || [ui hostContextIdentifierForSnapshotting] != ctx || [ui scenePresenterRenderIdentifierForSnapshotting] != rid)
+        [scene updateUISettingsWithBlock:^(UIMutableApplicationSceneSettings *s){ s.hostContextIdentifierForSnapshotting = ctx; s.scenePresenterRenderIdentifierForSnapshotting = rid; }];
+}
+// SBDeviceApplicationSceneView (16.2 0x1c773d7c8), new override:
+- (void)didMoveToWindow { [super didMoveToWindow];
+    UIView *host = _currentHostView (weak);
+    if (host) { id old = _snapshottingInfoAssertion; _snapshottingInfoAssertion = [[self sceneHandle] _sceneHostingInfoForSnapshottingAssertionWithView:host]; [old invalidate]; } }
+```
+The assertion stack makes "last host view wins, previous restored when it goes away" correct when two views host one scene (a window mid-drag shown by the live overlay and its card).
+Confidence: HIGH for mechanics, MEDIUM for "fixes stale snapshot after moving between displays" (inferred from the code, not observed).
+Portability: **PARTIAL** (hooks.m `G3_Snapshot`): hook `-[SBDeviceApplicationSceneView didMoveToWindow]` (no override in 16.0, Logos hooks the inherited method), remember the host view passed to `_configureSceneLiveHostView:`,
+and call the existing 16.0 `-_updateSceneHostingInfoForSnapshottingWithView:` after the move. The assertion stack is not reproduced.
+
+### 1.7 SBDeviceApplicationSceneOverlayBasicWrapperView(+ViewController) (new, user-visible only through other 16.2 code; NOT PORTABLE as such)
+
+Adapter that lets any `UIViewController` serve as a scene overlay (protocol `SBDeviceApplicationSceneOverlayViewController`/`...View`): the view controller owns a
+`SBDeviceApplicationSceneOverlayBasicWrapperView` as its `view` (`loadView` = `initWithFrame:`), `-initWithContentViewController:` stores the child, `viewDidLayoutSubviews` sets
+`contentViewController.view.frame = wrapperView.bounds`, `viewWill/DidAppear/Disappear` forward appearance; the wrapper view stubs the observer API (`addObserver:`/`removeObserver:` no-ops),
+`needsCounterRotation` returns NO, and stores `hostOrientation` / `shouldLayoutOverlayImmediatelyForContainerGeometryChange` (ivars +0x1b8/+0x1b0). It exists because 16.2's
+`SBDeviceApplicationSceneView` tracks overlays by priority in `_overlayViewsByPriority` and asks each for counter rotation when content and container orientations differ
+(`_anyOverlayViewNeedsCounterRotation`). Only useful with 1.5. Pure new classes: a port would be a verbatim ~60-line reimplementation (NEW CLASS) with no consumer in 16.0.
+
+### 1.8 SBFluidSwitcherPortaledSceneLiveContentOverlay (new; NOT PORTABLE)
+
+New class conforming to `SBFullScreenSwitcherSceneLiveContentOverlay` / `SBSceneViewPresentationConfiguring` / `SBUISizeObservingViewDelegate`; ivars `_sceneHandle`, `_contentOrientation`,
+`_containerOrientation`, `_livePortalView`, `_sizeObservingView`, `_sceneView`, `_referenceSize`. It shows the live scene through a portal (`_livePortalView`) instead of hosting the
+scene view directly, so one scene can be visible in two places (window being dragged between displays / the card and the live window), with
+`configureWithWorkspaceEntity:referenceFrame:contentOrientation:containerOrientation:layoutRole:spaceConfiguration:floatingConfiguration:hasClassicAppOrientationMismatch:sizingPolicy:`
+(16.2 0x1c78a679c). Instantiated (`initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:livePortalView:isInsetForHomeAffordance:`, 16.2 0x1c78a6520) from
+`-[SBFullScreenSwitcherLiveContentOverlayCoordinator _updatePortaledSceneLiveContentOverlays]` (0x1c74ce438) and `-[SBShelfLiveContentOverlayCoordinator _addOverlaysIfNeededForTransitionContext:]` (0x1c798b190): the overlay wraps a portal view supplied by the coordinator.
+Verdict: NOT PORTABLE: both coordinators are 16.2-only code paths.
+
+## 2. SBMedusaDecoratedDeviceApplicationSceneViewController (user-visible; 5 logic changes, 133 offset/const-only)
+
+All 133 other changed methods are relocation (ivar offsets shifted by 16.2's removed/added ivars, `_blurView`, `_deviceApplicationSceneViewController` ...) and the renames below.
+
+**2.1 Window-management-style notification (PARTIAL).** 16.2 init (16.0 0x1c6329ec4 / 16.2 0x1c77caf30) registers one more observer:
+`addObserver:self selector:@selector(_windowManagementStyleDidChange:) name:SBSwitcherControllerWindowManagementStyleDidChangeNotification object:nil`.
+The notification is posted by `-[SBFluidSwitcherViewController _chamoisWindowingUIEnabledDefaultChangeHandler]` (16.2 0x1c745fbd0, group 1/2) when Stage Manager is toggled.
+Same observer is added by `SBWindowScenePIPManager windowSceneDidConnect:` (object = the scene's switcherController, section 4), `SBDeviceApplicationSceneView init...` and `SBAppSwitcherReusableSnapshotView`.
+New handler (16.2 0x1c77cfde4), HIGH:
+```objc
+- (void)_windowManagementStyleDidChange:(NSNotification *)n {
+    [self _createOrDestroyTopAffordanceViewControllerAnimated:YES];
+    [self updateTopAffordanceOverrideUserInterfaceStyle];
+    [_topAffordanceViewController updateContextMenuWithLayoutRole:_layoutRole spaceConfiguration:_spaceConfiguration
+        floatingConfiguration:_floatingConfiguration interfaceOrientation:[_deviceApplicationSceneHandle currentInterfaceOrientation] isZoomed:_isZoomed];
+}
+```
+Effect: toggling Stage Manager updates the "..." top affordance and its context menu of live windows immediately. All callees exist in 16.0. Port: `%new` handler + observer in init + a poster hooked on `-[SBSwitcherController setChamoisWindowingUIEnabled:]`. The 16.0 poster does not exist, so the port must post (object = the switcher controller, main thread, after the change). PARTIAL (the handler is correct; whether 16.0 already refreshes the affordance through its layout transition is unverified).
+
+**2.2 `contentInterfaceOrientation` -> `contentOrientation` + `containerOrientation` (NOT PORTABLE)**: the decorated VC forwards both to `_deviceApplicationSceneViewController` (`SBDeviceApplicationSceneViewController`, not in the worklist);
+`setContentReferenceSize:withContentOrientation:andContainerOrientation:` (16.2 0x1c77cc0f0) replaces `setContentReferenceSize:withInterfaceOrientation:`. `viewWillLayoutSubviews` (16.0 0x1c5e3c200, 16.2 0x1c72ae4fc) just calls the renamed getter to pick width/height. New `-applicationSceneViewControllerIsInNonrotatingWindow:` (0x1c77cff68) asks the delegate `medusaDecoratedDeviceApplicationSceneViewControllerIsInNonrotatingWindow:` (default NO). Needs the content/container split (section 1.5).
+
+**2.3 `_updateTopAffordanceHighlight` (PORTABLE), 16.0 0x1c632fb04 / 16.2 0x1c77d0de8, HIGH.**
+```objc
+// 16.0
+- (void)_updateTopAffordanceHighlight {
+    if (![self isViewLoaded]) return;
+    BOOL nub = _nubViewHighlighted;
+    BOOL cond = [SBApp isHardwareKeyboardAttached] ? SBSpaceConfigurationIsSplitView(_spaceConfiguration)
+                                                   : (unsigned long long)(_floatingConfiguration - 1) < 2;
+    if ([self topAffordanceView] == [_topAffordanceViewController view]) return;
+    [_topAffordanceViewController setHighlighted:nub && cond];
+}
+// 16.2
+    BOOL splitOrFloating = SBSpaceConfigurationIsSplitView(_spaceConfiguration) || (unsigned long long)(_floatingConfiguration - 1) < 2;
+    NSUInteger displays = [[[SBApp windowSceneManager] connectedWindowScenes] count];
+    BOOL hw = [SBApp isHardwareKeyboardAttached];
+    if ([self topAffordanceView] == [_topAffordanceViewController view]) return;
+    [_topAffordanceViewController setHighlighted:nub && ((hw && splitOrFloating) || displays > 1)];
+```
+User-visible: with an external display connected the top affordance of a window is highlighted regardless of keyboard state; with a keyboard it is also highlighted for floating (Slide Over) windows. (Highlight = the nub is drawn in its "active" form; a pointer-friendly affordance.)
+Portability: hook `_updateTopAffordanceHighlight`, call `%orig`, then re-apply `setHighlighted:` with the 16.2 formula using ivars read by name (`_nubViewHighlighted`, `_spaceConfiguration`, `_floatingConfiguration`, `_topAffordanceViewController`). `SBSpaceConfigurationIsSplitView` is a C function (dlsym; if missing skip). Group `G3_DecoratedVC` in hooks.m.
+
+**2.4 The three "split view / multiple windows" toasts move out of the decorated VC into a system banner (RELOCATED, not removed; NOT PORTABLE, no parity value).**
+16.0: `layoutStateTransitionCoordinator:transitionWillEndWithTransitionContext:` (0x1c632b5e8) ends with
+`[self _presentTransientErrorMessageIfNeededForLayoutStateTransitionContext:ctx]` (0x1c632fc04) which picks one of three predicates
+(`_shouldShowSplitViewNotAvailableYetMessage...` 0x1c632fe9c, `...SplitViewNotSupportedMessage...` 0x1c632fff8, `...MultipleWindowsNotSupportedMessage...` 0x1c6330230) and calls
+`[_topAffordanceViewController presentTransientMessageWithImage:title:subtitle:duration:animated:]` with SF symbols `rectangle.split.2x1.slash` / `rectangle.on.rectangle.slash`
+and strings `TOP_AFFORDANCE_ERROR_TITLE_{NOT_AVAILABLE_YET,SPLIT_VIEW,MULTIPLE_WINDOWS}`, `TOP_AFFORDANCE_ERROR_SUBTITLE[_USE_DRAG_AND_DROP]`.
+16.2: the decorated VC no longer calls it (0x1c77cc710 ends after forwarding to the child VC). The same decision now lives in
+`-[SBFullScreenSwitcherLiveContentOverlayCoordinator _presentTransientErrorMessageIfNeededForLayoutStateTransitionContext:medusaViewController:]` (0x1c74cc740):
+```objc
+SBSwitcherController *sc = [[self _sbWindowScene] switcherController];
+if      ([self _shouldShowSplitViewNotSupportedMessageForLayoutStateTransitionContext:ctx medusaViewController:vc])        [sc _presentMedusaBanner:2 fireInterval:0 dismissInterval:1.5];
+else if ([self _shouldShowMultipleWindowsNotSupportedMessageForLayoutStateTransitionContext:ctx medusaViewController:vc])  [sc _presentMedusaBanner:3 fireInterval:0 dismissInterval:1.5];
+```
+(the "not available yet" variant is dropped). `-[SBSwitcherController _presentMedusaBanner:fireInterval:dismissInterval:]` (0x1c7605b58) generalises 16.0's `_presentMedusaEducationBanner` (type 1, fire interval 0.7 s, leeway 0.05 s): it builds `SBMedusaBannerViewController initWithType:orientation:peekConfiguration:` with the current layout
+state's orientation, cancels/re-arms `_medusaBannerPresentTimer` (`SBMainSwitcherCoordinator.medusaBannerPresentTimer`) with leeway 0.05 s, and (if dismissInterval > 0) arms a new ivar `_medusaBannerDismissTimer`; `_dismissMedusaBanner` (0x1c7605f14, was `_dismissMedusaEducationBanner`)
+invalidates both timers and revokes the presentable (`bannerManager revokePresentablesWithIdentification:reason:@"Dismiss Medusa Education Banner"`). `SBMedusaBannerViewController _bannerView` (16.0 0x1c637cd80 -> 16.2 0x1c782418c, +77 insns) adds the
+types 2/3 with strings `MEDUSA_BANNER_ERROR_TITLE_SPLIT_VIEW`, `MEDUSA_BANNER_ERROR_TITLE_MULTIPLE_WINDOWS`, `MEDUSA_BANNER_ERROR_SUBTITLE` (new in 16.2 SpringBoard localizations only) and the same two SF symbols.
+Net user-visible effect: the same two messages now appear as a pill banner at the top of the screen (1.5 s) instead of an in-window toast, and also on the external display's switcher. Porting would need the banner types, new
+strings (not present in 16.0 .strings) and a second SBSwitcherController ivar; 16.0's existing toast already tells the user the same thing. **Verdict: leave the 16.0 behaviour.** (Corrects an earlier reading in this file that said the messages were removed.)
+
+**2.5 `_topAffordanceViewController:handleActionType:transitionSource:` (16.0 0x1c632ba50 / 16.2 0x1c77ccb6c), MEDIUM.** Action types are `type - 9` in a jump table of 9 entries; the log line prints the type. The full-screen/maximize
+menu item's request block changed: 16.0 `{ entity = [[SBDeviceApplicationSceneEntity alloc] initWithApplicationSceneHandle:h]; [req _setRequestedFrontmostEntity:entity]; pol = [h _supportedSizingPolicies];
+attrs = [req requestedLayoutAttributesForEntity:entity]; attrs = [attrs attributesByModifyingSizingPolicy:([attrs sizingPolicy] == SmallestOf(pol) ? LargestOf(pol) : SmallestOf(pol))]; [req setRequestedLayoutAttributes:attrs forEntity:entity]; [req setFencesAnimations:YES]; }`
+(toggle between smallest and largest) ->
+16.2 `{ entity...; [req setEntities:@[entity] withPolicy:0 centerEntity:nil floatingEntity:nil]; [req _setRequestedFrontmostEntity:entity]; pol = [h _supportedSizingPoliciesForContentOrientation:[h currentInterfaceOrientation] containerOrientation:[[scene switcherController] interfaceOrientation]];
+attrs = [[req requestedLayoutAttributesForEntity:entity] attributesByModifyingSizingPolicy:SBDisplayItemSizingPolicyAllowingLargestSize(pol)]; attrs = [attrs attributesByModifyingAttributedSize:SBDisplayItemAttributedSizeUnspecified()]; ... }`
+i.e. the menu item now always maximizes (no toggle) and resets the attributed size. Another action case wraps `[SBWorkspace mainWorkspace] requestTransitionWithOptions:displayConfiguration:builder:validator:` with `request.source = <captured>` and `modifyApplicationContext:`.
+Which menu item each case is was not decoded (LOW). NOT PORTABLE here (block bodies inside a 9-way switch; hook would have to re-implement all cases).
+
+## 3. SBSwitcherController (2 logic changes + traits extraction; user-visible)
+
+**3.1 `setChamoisWindowingUIEnabled:` 16.0 0x1c6178ac0 / 16.2 0x1c76006fc, `isChamoisWindowingUIEnabled` 16.0 0x1c6178a54 / 16.2 0x1c760069c (HIGH).**
+```objc
+// 16.0
+- (void)setChamoisWindowingUIEnabled:(BOOL)e {
+    if (_chamoisWindowingUIEnabled == e) return;
+    SBLogAppSwitcher(...);                                   // os_log, level 0x10 (error), removed in 16.2
+    _chamoisWindowingUIEnabled = e;
+    [[[SBDefaults localDefaults] appSwitcherDefaults] setChamoisWindowingEnabled:e];
+    [_gestureManager updateForChamoisWindowingUIEnabled:e];
+}
+// 16.2
+    if (_chamoisWindowingUIEnabled == e) return;
+    id d = _switcherCoordinator;                              // weak ivar +0xb8
+    [d switcherControllerWillUpdateWindowManagementStyle:self];
+    _chamoisWindowingUIEnabled = e;
+    [[[SBDefaults localDefaults] appSwitcherDefaults] setChamoisWindowingEnabled:e];
+    [d switcherControllerDidUpdateWindowManagementStyle:self];
+    [_gestureManager updateForChamoisWindowingUIEnabled:e];
+```
+Delegate (the main switcher coordinator, `SBMainSwitcherControllerCoordinator`): Will = `[self failMultitaskingGesturesForReason:@"Window management style is changing"]` (0x1c76e2bbc; the method exists in 16.0);
+Did = `[self _rebuildCurrentWindowingModeCompatibleAppLayoutsIfNecessary]` (0x1c76e2bc8; new in 16.2, group 1/2). `isChamoisWindowingUIEnabled`: only the availability test changes from a GOT function
+pointer call to a direct call of `_SBFIsChamoisWindowingUIAvailable` (refactor): `available && (windowScene.isExternalDisplayWindowScene || _chamoisWindowingUIEnabled)`.
+User-visible: toggling Stage Manager while a multitasking gesture is in flight no longer leaves the gesture running; app layouts are rebuilt for the new mode.
+Portability: Will part PORTABLE (hook, existing method on the coordinator); Did part NOT PORTABLE here (method does not exist in 16.0; belongs with the app-layout model changes).
+The 16.2 poster `SBSwitcherControllerWindowManagementStyleDidChangeNotification` (section 2.1) is emitted from the switcher VC's default-change handler; a 16.0 port posts it after `%orig`.
+
+**3.2 Display canvas size changes re-run the layout (PORTABLE, HIGH for mechanism, MEDIUM for value).** New in 16.2:
+```objc
+// -[SBAbstractWindowSceneDelegate windowScene:didUpdateCoordinateSpace:interfaceOrientation:traitCollection:]  0x1c74879ac   (UIWindowSceneDelegate callback)
+CGSize (^size)(orientation, space) = ^{ CGSize b = space.bounds.size; return (orientation == 3 || orientation == 4) ? BSSizeSwap(b) : b; };   // block 0x1c7487b84
+CGSize cur = size(scene.interfaceOrientation, scene.coordinateSpace), prev = size(orientationParam, spaceParam);   // UIKit passes the PREVIOUS space/orientation
+CGSize old = prev, nw = cur;
+if (!CGSizeEqualToSize(old, nw)) {
+    os_log(SBLogDisplayScaleMapping, "display %@ canvas size %@ -> %@", scene._sbDisplayConfiguration.identity, NSStringFromCGSize(old), NSStringFromCGSize(nw));
+    [[NSNotificationCenter defaultCenter] postNotificationName:SBWindowSceneCanvasSizeDidChangeNotification object:scene];
+}
+// SBSwitcherController init (16.2 0x1c75ffe28): addObserver:self selector:@selector(_handleDisplayCanvasSizeChange:) name:SBWindowSceneCanvasSizeDidChangeNotification object:_windowScene
+- (void)_handleDisplayCanvasSizeChange:(NSNotification *)n {                                  // 0x1c7607898
+    id cfg = [_windowScene _fbsDisplayConfiguration];
+    [[SBWorkspace mainWorkspace] requestTransitionWithOptions:0 displayConfiguration:cfg
+        builder:^(id req){ [req setEventLabel:@"DisplayCanvasSizeChange"]; }                  // global block 0x1c7607984
+        validator:^BOOL(id req){                                                                 // block 0x1c76079d0
+            if (![self isChamoisWindowingUIEnabled]) return NO;
+            id ls = [self layoutState];
+            [req modifyApplicationContext:^(id ctx){ [ctx setRequestedUnlockedEnvironmentMode:[ls unlockedEnvironmentMode]]; }];   // block 0x1c7607a94
+            return YES; }];
+    [[SBFAnalyticsClient sharedInstance] emitEvent:60];
+}
+```
+Fix: when the display canvas changes size (external display resolution / scale / zoom change, which group 4's `scale` feature now does) Stage Manager windows were left at their old geometry until the next unrelated layout pass; 16.2 forces one.
+16.0 has the UIKit callback and every callee (`requestTransitionWithOptions:displayConfiguration:builder:validator:`, `setEventLabel:`, `modifyApplicationContext:`, `setRequestedUnlockedEnvironmentMode:`); the method is not implemented by `SBAbstractWindowSceneDelegate` (not in the 16.0 class dump). Portable as `%new` + observer (hooks.m `G3_Canvas`); the analytics event is skipped.
+
+**3.3 Traits code extracted into `SBSwitcherTraitsAssistant` (NOT PORTABLE as a whole, 16.2 only).** 16.0 `SBSwitcherController` had `_createTraitsParticipantsForLayoutElementsIfNeeded:shouldPerformFirstResolution:` (0x1c6179530), `_updateParticipantsAndPoliciesWithSwitcherPolicy:nonPrimaryOverlayPolicy:primaryOverlayPolicy:` (0x1c6179c04), `_currentElementsOrientationsForLayoutState:`,
+`_updateAppTransitionContext:withOrientationActuationContext:accountForSceneState:`; 16.2 moves them into `SBSwitcherTraitsAssistant` (ivars: policy specifiers, `_guidingPortraitOnlyParticipant`, `_guidingLandscapeOnlyParticipant`, `_guidingSceneOrientationRequestParticipantsMap`,
+`_participantUniqueIDToAssociatedParticipantMap`) and adds the "guiding" relationship: for iPhone-only app windows the assistant creates extra portrait-only / landscape-only guiding participants chosen by `_isContentContainerAspectRatioPortrait` (window aspect), pairs them with the window's scene participant
+(`_setupGuidingRelationshipIfNeededForParticipant:withSceneHandle:`, which also calls `_setInterfaceOrientationFromUserResizing:`), so the traits arbiter resolves the app's orientation from the window shape instead of the device. It observes `SBClassicPhoneSceneOrientationPreferenceChanged`
+(posted by `-[SBDeviceApplicationSceneView(ClassicSupport) noteApplicationClassicPhoneSceneOrientationPreferenceChangingForUserAction:]`, 0x1c773ecdc) and `SBSceneGeometryOrientationRequestChanged`. SBSwitcherController itself gains `currentElementsParticipants`, `sceneHandleForTraitsParticipant:`,
+`actuateOrientationForTraitsDelegate:withContext:reasons:`, `_noteLayoutStateEvaluationBegan/Ended...`, `isOnExternalDisplay`, `contentContainerAspectRatio`, and the `SBFluidSwitcherGestureManagerDelegate` methods listed in section 5.
+Rewriting 16.0's participant creation to this design = a re-implementation of the whole traits glue; not a hook. Depends on 1.x.
+
+## 4. Medusa hosted keyboard window: from "the main display scene manager" to a per-window-scene controller (user-visible on external displays; NOT PORTABLE)
+
+16.0: `SBMainDisplaySceneManager` owned everything (ivars `_medusaHostedKeyboardWindow` +0x118, `_isUsingMedusaHostedKeyboardWindow` +0x158; methods `_updateMedusaHostedKeyboardWindow` 0x1c63d6fcc,
+`_updateMedusaHostedKeyboardWindowForScene:isForeground:` 0x1c63d7070, `newMedusaHostedKeyboardWindowLevelAssertionWithPriority:windowLevel:` 0x1c63d6f54, `_isKeyboardVisibleForSpringBoard` 0x1c63d6dfc,
+`_keyboardLayersClientSettingsDiffInspector` 0x1c63d51a0), and `SBSystemShellExternalDisplaySceneManager` had its own `_updateMedusaHostedKeyboardWindow` stub. The hosted keyboard window (a window in SpringBoard that presents the single
+keyboard scene, `_SBHostedKeyboardViewController`, when Stage Manager is on or the foreground app is not classic) therefore only ever existed on the embedded display.
+
+16.2: `SBMedusaHostedKeyboardWindowController` (new; ivars `_observers`, `_windowScene` (weak, set by `initWithWindowScene:` 0x1c7626c38), `_keyboardLayersClientSettingsDiffInspector`, `_isUsingMedusaHostedKeyboardWindow`, `_medusaHostedKeyboardWindow`)
+is owned per window scene: `-[SBWindowSceneContext medusaHostedKeyboardWindowController]` / `-[SBWindowScene medusaHostedKeyboardWindowController]`. The 16.0 methods moved over with the same names minus the underscore
+(`updateMedusaHostedKeyboardWindow`, `updateMedusaHostedKeyboardWindowForScene:isForeground:`, `isKeyboardVisibleForSpringBoard`, `newMedusaHostedKeyboardWindowLevelAssertion...`) and the observer set
+(`addObserver:`/`removeObserver:`, protocol `SBMedusaHostedKeyboardWindowControllerObserver.usingMedusaHostedKeyboardWindowDidChange`; `SBKeyboardHomeAffordanceController` and `SBSpotlightMultiplexingViewController` now observe the controller instead of
+`SBMainDisplaySceneManagerObserver`). I compared the call graph of `...ForScene:isForeground:` (16.0 611 insns vs 16.2 617): identical except
+* the candidate scene must belong to this controller's display: `[[scene settings] sb_displayIdentityForSceneManagers] isEqual:[_windowScene _fbsDisplayIdentity]` (new first test), the external foreground app scenes come from
+  `sceneManagerForDisplayIdentity:` of that display instead of the main display scene manager;
+* `isClassic` -> `supportsChamoisSceneResizing` (= `isMedusaCapable`);
+* the Stage Manager test uses the controller's own `_windowScene.switcherController` instead of `[handle _windowScene]`.
+New `-shouldKeyboardBeWindowSizedForHostWithIdentity:` (0x1c7627434): `scene = [FBSceneManager sceneFromIdentityToken:id]; app = <application of the scene's client process>; return scene.uiSettings.enhancedWindowingEnabled && ![app supportsChamoisSceneResizing]` (an app that cannot be resized and runs in an enhanced-windowing scene gets a window-sized keyboard).
+Client-settings trigger: `scene:didUpdateClientSettingsWithDiff:...` (0x1c76281dc) for the keyboard scene identifier while `![UIKeyboard usesInputSystemUI]` and the scene is foreground builds a `SBKeyboardClientSettingObserverContext` (new, 3 strong ivars: scene, diff, settings) and runs `_keyboardLayersClientSettingsDiffInspector evaluateWithInspector:context:` (that inspector then calls `updateMedusaHostedKeyboardWindow...`).
+
+`SBMedusaHostedKeyboardWindow` (3 changed): `initWithWindowScene:keyboardScene:` (16.0 0x1c60ff268 / 16.2 0x1c75844cc) registers for two new notifications, `-setHidden:` (0x1c60ff950 / 0x1c7584c48) posts
+`_SBMedusaHostedKeyboardWindowWillShowNotification` (before unhiding) / `..WillHideNotification` (before hiding) with itself as object, and the new handlers `medusaHostedKeyboardWindowWillShow:` (0x1c7584e00) / `...WillHide:` (0x1c7584eb4)
+deactivate this window's `_remoteHostedKeyboardScenePresenter` if the sender is a different window and it is active. Purpose (MEDIUM): the one keyboard scene can only be presented in one display's window at a time, so showing it on display B deactivates the presenter on A.
+New `-invalidate` (0x1c758486c) invalidates the presenter and `_defaultWindowLevelAssertion`; `-dealloc` now calls it (16.0 `dealloc` invalidated the same two objects inline).
+
+Verdict: **NOT PORTABLE**. The 16.0 owner (`SBMainDisplaySceneManager`) calls its own private methods from ~10 places (observer fan-out, `SBKeyboardHomeAffordanceController`, spotlight, home affordance), and
+`SBSystemShellExternalDisplaySceneManager` has no keyboard path at all. A port would be (a) a new `SBMedusaHostedKeyboardWindowController` class (~250 lines: copy of the 16.0 scene manager methods parametrised by window scene), (b) per-scene storage through an associated
+object on `SBWindowSceneContext` (ivar impossible), (c) forwarding the 16.0 scene manager callbacks, (d) re-pointing all observers. The window-level changes alone (notifications + deactivate handlers + `invalidate`) are PORTABLE
+(`%hook SBMedusaHostedKeyboardWindow`, three ObjC methods plus `%new`) but have no effect while only one such window exists, so they are not drafted. Open question: with ExtendedDisplayEnabler on 16.0, does an app on the external display get its keyboard from the iPad's window (16.0 behaviour) — needs a device.

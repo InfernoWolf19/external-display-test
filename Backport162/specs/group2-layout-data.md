@@ -774,3 +774,143 @@ PORTABLE as a NEW class `BP162ChamoisOverlappingController` (draft in the hooks 
 (`usesStripAreaForOverlapping`, `partiallyOccludedStageScaleForItemWithSize:`, `switcherPileCompactingFactor`, `stageInterItemSpacing`, `maximumWindowHeightWithDock`, `minimumDefaultWindowSize`, `stripWidth`, `screenEdgePadding`, `stageOcclusionDodgingPeekLength/Scale`),
 (3) the CoreGraphics region SPI (resolved by `dlsym`; the 16.0 controller already links `CGRegion*`? UNVERIFIED, so every use is guarded), (4) `-[NSArray bs_reverse]`, `-sb_arrayByInsertingOrMovingObject:toIndex:`, `-sb_arrayByAddingOrMovingObject:` (exist in 16.0: the 16.0 binary has `sb_arrayByInsertingOrMovingObject:toIndex:` 160 0x1c605d920; `sb_arrayByAddingOrMovingObject:` and `bs_reverse` guarded with fallbacks).
 The 16.0 controller class is left untouched. The 16.0 caller (`SBDisplayItemLayoutAttributesCalculator _appLayoutByPerformingAutoLayoutIfNeededInAppLayout:...`, see A7) has to be redirected to the new class: the call site passes the 16.2 arguments, so this is done by hooking the calculator method, not the controller.
+
+---------------------------------------------------------------------------------------------------
+
+## A5. SBSwitcherChamoisLayoutAttributes (value object consumed by modifiers, calculator, controller)
+
+160 class 0x1de0... / 162 0x1dd7... ; plain `NSObject <NSCopying>` created ONLY by `-[SBSwitcherChamoisSettings layoutAttributesForContainerBounds:...]` (via `[Class new]` + setters) and by its own `copyWithZone:` (`[Class new]` + all setters, 162 0x1c78c39e0).
+The first 0xa8 bytes of ivars are identical in both builds up to `_stageOcclusionDodgingPeekScale`; 162 inserts `_stageStatusBarClearingAppScale` (+0x90) which shifts everything after it by 8, and appends
+`_usesStripAreaForOverlapping` (BOOL +0xb), `_gridWidths`/`_gridHeights` (NSArray +0xb0/+0xb8), `_switcherHorizontalEdgeSpacing` +0xc0, `_switcherHorizontalInterItemSpacing` +0xc8, `_switcherVerticalEdgeSpacing` +0xd0, `_switcherVerticalInterItemSpacing` +0xd8,
+`_switcherHeightForIconAndLabelsUnderEachPile` +0xe0, `_switcherPileCardMinimumPeekAmount` +0xe8, `_switcherPileCompactingFactor` +0xf0, then `_defaultWindowSize` +0xf8 (was +0xa8), `_minimumDefaultWindowSize` +0x108, `_containerBounds` (CGRect, new) +0x118.
+
+New logic methods:
+```objc
+// 162 0x1c78c336c
+- (double)partiallyOccludedStageScaleForItemWithSize:(CGSize)size {
+    // _containerBounds.size at +0x128: a window exactly as big as the container is scaled by the status-bar-clearing scale, any other by the plain occluded scale
+    return CGSizeEqualToSize(size, _containerBounds.size) ? [self stageStatusBarClearingAppScale] : [self stageOccludedAppScale];
+}
+// 162 0x1c78c3820  -hash  = (NSUInteger)(_defaultWindowSize.width + 13 * _defaultWindowSize.height)           (not present in 160)
+// 162 0x1c78c3384  -isEqual: compares ALL fields (containerBounds via CGRectEqualToRect, doubles with BSFloatEqualToFloat, gridWidths/Heights with BSEqualArrays, the new switcher* doubles, usesStripArea).
+// 162 0x1c78c39e0  -copyWithZone: copies all (listed above).
+// property accessors for the new fields are plain ivar getters/setters; description* builders are debug only.
+```
+PORTABILITY: PARTIAL. The class is a pure value object created by one factory (A6) and copied by `copyWithZone:`; the 16.0 class lacks the new ivars (cannot add) -> associated object `BP162AttrExtras` {containerBounds, stageStatusBarClearingAppScale, usesStripAreaForOverlapping, gridWidths, gridHeights, 6 switcher doubles}
+with accessor methods added via `class_addMethod`; `copyWithZone:` is hooked to copy the extras; `isEqual:` hook additionally compares the extras (optional but needed if 16.2 code caches by attribute equality); `hash` unchanged. `partiallyOccludedStageScaleForItemWithSize:` is a %new method.
+Draft: hooks file section A5. The 160 attributes already have everything else (`stripWidth`, `stageInterItemSpacing`, `maximumWindowHeightWithDock`, `minimumDefaultWindowSize`, `screenEdgePadding`, `stageOcclusionDodgingPeekLength/Scale`, `numberOfRowsWhileInApp`, ...).
+
+---------------------------------------------------------------------------------------------------
+
+## A6. SBSwitcherChamoisSettings (PTSettings subclass: tunables + the factory of the attributes)
+
+16.0 factory: `-layoutAttributesForWindowScene:interfaceOrientation:requiresFullScreen:` (160 0x1c64132d0) -> `-layoutAttributesForContainerBounds:nativeContainerReferencePixelBounds:interfaceOrientation:floatingDockHeight:statusBarHeight:requiresFullScreen:prefersStripHidden:prefersDockHidden:isEmbeddedDisplay:` (160 0x1c6413524, 173 insns). It also had `-widthThresholdToHideContinuousExposeStripsForStageWithItemCount:bounds:chamoisLayoutAttributes:` (160 0x1c64138a0, removed in 162: replaced by the controller's `_widthThresholdToHide...`, A4) and `_defaultAppSizeFor...`.
+
+16.2 changes (162 addresses):
+* `-initWithDefaultValues` 0x1c78c0c80 (`[super initWithDefaultValues]` then `_observeAppSwitcherDefaults` 0x1c78c23a0) and `-dealloc`: the settings observe `SBAppSwitcherDefaults` keys for "hide strips / hide dock" (ivars `_cachedChamoisHideStrips`, `...External`, `...HideDock`, `...HideDockExternal`; `_updateCachedAppSwitcherDefaults` 0x1c78c260c). `_shouldPreferStripHiddenForWindowScene:interfaceOrientation:` 0x1c78c22ec / `_shouldPreferDockHiddenForWindowScene:` 0x1c78c2358 read these cached BOOLs (16.0 read `SBAppSwitcherDefaults` each call through `_appSwitcherDefaults`, ivar removed). Behaviour-neutral refactor (+ per-display variants). (The VC mirrors this: `_chamoisDefaultsObserver_prefersStripsHidden/prefersDockHidden`, see B.)
+* new entry point 0x1c78c0d28 `-layoutAttributesForWindowScene:interfaceOrientation:requiresFullScreen:floatingDockHeight:`:
+  ```objc
+  BOOL ps = [self _shouldPreferStripHiddenForWindowScene:scene interfaceOrientation:o], pd = [self _shouldPreferDockHiddenForWindowScene:scene];
+  CGRect b = [[[scene screen] displayConfiguration] bounds];     // UIScreen -> _sbDisplayConfiguration? : `screen` then `displayConfiguration` then `bounds`
+  if ([scene isMainDisplayWindowScene]) { if (o is landscape (o-1 < 2 ? swap : keep)) swap width/height so the bounds match the interface orientation }
+  else { w = MAX(w,h), h = MIN(w,h)   (external display: landscape always) }      // the two branches at 0x1c78c0de0 / 0x1c78c0e28
+  statusBar = [self _statusBarHeight];   native = [[scene screen] nativeBounds];
+  return [self layoutAttributesForContainerBounds:b nativeContainerReferencePixelBounds:native interfaceOrientation:o floatingDockHeight:dockH statusBarHeight:statusBar requiresFullScreen:rfs prefersStripHidden:ps prefersDockHidden:pd isEmbeddedDisplay:![scene isExternalDisplayWindowScene]];
+  ```
+* 9-argument builder 0x1c78c0f50 (537 insns). Adds a CACHE: it compares all inputs with the `_cachedChamoisLayoutAttributes_*` ivars and returns the cached object (`_cachedChamoisLayoutAttributes` +0x38) when identical (ivars: containerBounds +0x40, nativeBounds +0x60, orientation +0x80, dockHeight +0x88, statusBarHeight +0x90, requiresFullScreen +0x98, prefersStripHidden +0x99, prefersDockHidden +0x9a, isEmbedded +0x9b).
+  On a miss it computes (verified constants):
+  * `W,H` = bounds; `portrait = (o-1) < 2` is the pre-existing orientation test; `rows = isEmbedded ? numberOfRowsWhileInAppOnEmbeddedDisplay : (externalDisplayHighResVerticalResolution <= H ? ...HighRes : ...ExternalDisplay)`
+    (`H >= highResVertical` selects `numberOfRowsWhileInAppOnExternalDisplayHighRes`).
+  * `screenEdgePadding = (W > 1920.0 /*0x409e000000000000*/) ? 36.0 /*0x4042..*/ : statusBarHeight` (the stack argument pair is (floatingDockHeight, statusBarHeight)).
+  * `stripIconLength = (X > <const @0x1c7a91508>) ? 40.0 (0x4044..) : 30.0` (X is a bounds dimension, UNSURE which); `stripStackDistance = 60.0` (0x404e); `stripCornerRaddii = 10`; `stageCornerRaddii = 20`; `stageInterItemSpacing = 10`; `stageOcclusionDodgingPeekLength = 44.0` (0x4046..), `peekScale` = const @0x1c7a90ee0;
+    `stripCardScale = _stripCardScaleForContainerBounds:screenEdgePadding:` (0x1c78c203c), `stripWidth = _stripWidthForContainerBounds:screenEdgePadding:...` (0x1c78c1dd0), `minimumDefaultWindowSize = _minimumDefaultWindowSizeForContainerBounds:stripWidth:` (0x1c78c207c, new signature).
+  * `stageOccludedAppScale = 1 - 32/H`, `stageStatusBarClearingAppScale = 1 - 2*statusBarHeight/H`  (the 32.0 constant 0x4040.. and the ratio code at 0x1c78c1418-0x1c78c14fc).
+  * `usesStripAreaForOverlapping = isEmbeddedDisplay` (the final `w20`), `numberOfRowsWhileInApp = rows`, `prefersStripHidden/DockHidden` echo the inputs.
+  * grids: `gridWidths` built by `_gridWidthsForSafeWidth:minimumWidth:stageInterItemSpacing:` (0x1c78c18fc) (safe width = W-2*pad or W-pad-strip according to ps/pd; minimum = 0x4074...=320 or const), `gridHeights` by `_gridHeightsForSafeHeight:minimumHeight:stageInterItemSpacing:` (0x1c78c1b54), last entries appended with `numberWithDouble:`; `defaultWindowSize` and `maximumWindowWidthForOverlapping` from `_nearestGridSizeForSize:gridWidths:gridHeights:bounds:` (0x1c78c1c24, new). These feed the 162 `SBDisplayItemLayoutGrid` (flexible grid, see A7) which is new logic.
+  * switcher (app switcher grid/piles) spacings: `switcherHorizontalEdgeSpacing = round(H*0.0625)`, `switcherVerticalEdgeSpacing = round(H*0.10546875)`, `switcherHorizontalInterItemSpacing = hEdge`, `switcherVerticalInterItemSpacing = round(H*0.0859375)`; if W > 1920 the two edge spacings are multiplied by 1.5 and rounded;
+    `switcherHeightForIconAndLabelsUnderEachPile / switcherPileCardMinimumPeekAmount / switcherPileCompactingFactor` copied from the settings.
+* `setDefaultValues` 0x1c78c26bc new defaults: `switcherHeightForIconAndLabelsUnderEachPile = 60.0`, `switcherPileCardMinimumPeekAmount = 25.0`, `switcherPileCompactingFactor = 0.6`, `rasterizeScaledApps = NO` (new property); unchanged ones: `numberOfVisibleItemsPerGroup 3`, rows embedded 4 / external 4 / external-high-res 5, `externalDisplayHighResVerticalResolution 1440 (0x5a0)`, `stripsHoverRevealZoneWidthFixed 5.0`, `pinWindowEdgeForResizeMargin 88 (0x4056)`, `maximumNumberOfAppsOnStage 4`, `rejectDropsWhenStageIsFull NO`, `allowTrueMaximizeForAllApps NO`.
+* `+settingsControllerModule` 0x1c78c28dc: debug UI rows for the new settings only (not needed).
+
+What it fixes (medium): per-window-scene bounds (external display landscape always; embedded follows interface orientation) so the Stage Manager layout on the external display is computed against the right size; grid snapping of default window sizes; cheaper (cached) attribute computation; strip/dock hide preferences no longer re-read from defaults on every query.
+
+PORTABILITY (A6): PARTIAL.
+* Hook the 16.0 9-arg builder: call `%orig` and then attach the A5 extras computed from the same inputs (containerBounds, `usesStripAreaForOverlapping = isEmbeddedDisplay`, `stageStatusBarClearingAppScale = 1 - 2*statusBarHeight/H`, switcher* spacings with the formulas above, settings-derived piles values, `gridWidths/gridHeights = nil`).
+  The remaining 16.2 numeric changes in the builder (edge padding rule, icon length, `_minimumDefaultWindowSize...:stripWidth:`) were NOT diffed against the 160 builder (160 0x1c6413524 not read); if they differ, the 16.0 values are kept (visible only as slightly different strip metrics).
+* The new 4-argument entry `layoutAttributesForWindowScene:interfaceOrientation:requiresFullScreen:floatingDockHeight:` is added as `%new` calling the 16.0 3-argument API logic (we reproduce the 16.2 bounds/orientation logic above and call the 9-arg builder) - needed by ported callers.
+* New settings properties (`switcherHeightForIconAndLabelsUnderEachPile`, `switcherPileCardMinimumPeekAmount`, `switcherPileCompactingFactor`, `rasterizeScaledApps`): the PTSettings ivars cannot be added -> constants (60 / 25 / 0.6 / NO) returned by `%new` getters; setters are no-ops. (`PTSettings` archiving is irrelevant.)
+* The defaults-observer cache: NOT needed (behaviour-neutral); skip.
+* Grid helpers (`_gridWidths...`, `_nearestGridSize...`): NOT PORTABLE unless `SBDisplayItemLayoutGrid` is ported (A7): their sole consumer is the 162 grid.
+
+---------------------------------------------------------------------------------------------------
+
+## A7. SBDisplayItemLayoutAttributes and SBDisplayItemLayoutAttributesCalculator
+
+### A7.1 SBDisplayItemLayoutAttributes (per-window persisted layout state) - schema change
+| | 160 | 162 |
+|---|---|---|
+| geometry | `_size` (CGSize abs), `_center` (CGPoint abs), `_userConfiguredSizeBeforeOverlapping` (CGSize), `_fullyOccludedPeekingCenter` | `_attributedSize` (struct `SBDisplayItemAttributedSize {CGSize normalizedSize; CGRect referenceBounds; long long semanticSizeType}` +0x50), `_normalizedCenter` (CGPoint +0x30), `_attributedUserSizeBeforeOverlapping` (+0x88), `_unoccludedPeekingCenter` (+0x40) |
+| other | `_contentOrientation`, `_lastInteractionTime`, `_sizingPolicy`, `_occlusionState`, `_hash` | same (offsets shift) |
+Object size 0x58+... -> 0xb8; persisted via `plistRepresentation` / `protobufRepresentation` (both extended, 162 `initWithPlistRepresentation:` 253 insns incl. migration from the old absolute format).
+
+Semantic size (`_SBDisplayItemAttributedSizeInfer(size, bounds, padding)` 162 0x1c75cedfc): normalized = size / bounds; `semanticSizeType` classifies the window: 1 = unspecified, 2/3 = full height / full width ("size.w == bounds.w" etc. via BSFloatEqual), 4..6 = left/right variants, 7..9 = with screen-edge padding (`bounds - 2*padding`). Methods:
+`-sizeInBounds:defaultSize:screenEdgePadding:` 0x1c75cf618 / `_sizeForAttributedSize:inBounds:defaultSize:screenEdgePadding:` 0x1c75d0a3c: converts the attributed size back to a concrete size for the CURRENT bounds (semantic types re-evaluated so a maximized window stays maximized when the container changes).
+`-userSizeBeforeOverlappingInBounds:defaultSize:screenEdgePadding:` 0x1c75cf6b8, `attributesByModifyingAttributedSize:` / `...NormalizedCenter:` / `...AttributedUserSizeBeforeOverlapping:` / `...UnoccludedPeekingCenter:` replace 160 `attributesByModifyingSize:`, `...Center:`, `...Size:center:`, `...UserConfiguredSizeBeforeOverlapping:`, `...FullyOccludedPeekingCenter:`.
+This is the 16.2 fix for "windows keep their relative geometry when the display is resized / rotated / switched between embedded and external display" (high confidence for intent).
+
+PORTABILITY: NOT PORTABLE as a faithful port (new ivar layout of a persisted model, new plist/protobuf schema with migration, ~40 consumers of size/center/peek in modifiers and the VC). Recommended emulation (PARTIAL): keep the 16.0 absolute `size/center`; implement the 16.2 selectors the ported controller/calculator call as `%new` shims on the 16.0 class:
+`sizeInBounds:defaultSize:screenEdgePadding:` -> `[self sizeInBounds:]`; `userSizeBeforeOverlappingInBounds:defaultSize:screenEdgePadding:` -> `[self userConfiguredSizeBeforeOverlappingInBounds:]`; `unoccludedPeekingCenter` -> `fullyOccludedPeekingCenter`;
+`attributesByModifyingUnoccludedPeekingCenter:` -> `attributesByModifyingFullyOccludedPeekingCenter:`; `attributesByModifyingAttributedSize:`/`NormalizedCenter:` -> take `.normalizedSize*referenceBounds.size` / `normalizedCenter*bounds` and call the 16.0 `...Size:` / `...Center:` (needs the bounds, which only the calculator has; the shim lives in the calculator hook). `SBDisplayItemAttributedSize` helpers (`Infer`, `Unspecified`, `SizeIsUnspecified`, 162 0x1c75cedfc/0x1c75cedc4/0x1c75cf03c) are plain C functions that can be ported 1:1 (only `semanticSizeType` classification, used to keep windows maximized).
+
+### A7.2 SBDisplayItemLayoutAttributesCalculator (16 -> 20 methods, 5 logic-changed)
+ivars unchanged (4 caches). Removed: `initialStageFrameForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:` (160 0x1c611a25c: computed the stage frame that was handed to the 160 controller) and `sizingPolicyForDisplayItem:contentOrientation:containerOrientation:proposedSizingPolicy:` (replaced by a `windowScene:` variant 0x1c75a475c; `_applicationForDisplayItem:` 0x1c75a59f0 new helper).
+`_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:` (162 0x1c75a4848; 666 insns) reconstructed outline (verified selectors):
+```objc
+key = [SBAppLayoutOverlappingModelCacheKey cacheKeyForSnapshotOfAppLayout:layout containerBounds:bounds containerOrientation:o floatingDockHeight:dockH hideStrips:ps hideDock:pd draggingItem:dragging];   // A8: floatingDockHeight is new
+if ([key isEqual:[layout cachedLastOverlappingModelKey]]) return layout;                              // cache hit (as 160, plus dock height in the key)
+grid = [self _chamoisLayoutGridCache];
+// (1) clamp user sizes: for every item with a layout role valid for split view (SBLayoutRoleIsValidForSplitView) / the center item:
+//     attrs = [layout layoutAttributesForItem:item]; defaultSize = [chamoisAttrs defaultWindowSize]; pad = [chamoisAttrs screenEdgePadding];
+//     user = [attrs userSizeBeforeOverlappingInBounds:bounds defaultSize:defaultSize screenEdgePadding:pad];
+//     if the size is wider than [chamoisAttrs maximumWindowWidthForOverlapping] (BSFloatGreaterThanFloat) -> `attributesByModifyingAttributedUserSizeBeforeOverlapping: SBDisplayItemAttributedSizeInfer(clamped)` / `attributesByModifyingAttributedSize:`,
+//     via [grid nearestGridSizeForProposedSize:inBounds:contentOrientation:layoutRestrictionInfo...]  ([grid layoutRestrictionInfoWithLayoutRestrictions:restrictedSize...]) and `appLayoutByModifyingLayoutAttributes:forItem:`.
+// (2) build the preferred model: for item in [[layout zOrderedItems]] (sorted by interaction time via sortUsingComparator:): frame = [self _frameForLayoutRole:... skipAutoLayout:YES];
+//     centers[item] = NSValue(UIRectGetCenter(frame)); sizes[item] = NSValue(frame.size);
+//     model = [[SBChamoisOverlappingModel alloc] initWithItems:items centersForItems:centers sizesForItems:sizes containerBounds:bounds];            // new 4-arg init (A3)
+// (3) result = [[self _chamoisOverlappingControllerCache] modelByPerformingAutoLayoutForModel:model chamoisLayoutAttributes:a draggingItem:dragging modelBeforeDragging:before floatingDockHeight:dockH bounds:bounds screenScale:scale prefersStripHidden:ps prefersDockHidden:pd];   // A4
+// (4) write back to the layout for each item: normalizedSizeForSize:inBounds:/normalizedPointForPoint:inBounds: of centerForItem:/sizeForItem:, `attributesByModifyingSizingPolicy:` (using `_SBPreferredDisplayItemSizingPolicy` + `_supportedSizingPoliciesForContentOrientation:containerOrientation:...`),
+//     `attributesByModifyingNormalizedCenter:`, `attributesByModifyingOcclusionState:` (partial/full), `attributesByModifyingUnoccludedPeekingCenter:` (peek center when fully occluded), and `attributedSize` handling (`_SBDisplayItemSizeIsUnspecified`, CGRectIsNull/IsEmpty guard on the box),
+//     then layout = [layout appLayoutByModifyingLayoutAttributesForItems:map]; [layout setCachedLastOverlappingModel:model]; [layout setCachedLastOverlappingModelKey:key];
+```
+(the full 666-instruction body is not reconstructed line by line; the controller-facing contract above is verified. UNSURE: the clamp/nearest-grid rules in step (1).)
+`_frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:skipAutoLayout:` (162 0x1c75a3614, 671 vs 379 insns): same role dispatch (split/center/floating) but the Stage Manager branch now uses `sizeInBounds:defaultSize:screenEdgePadding:` and the `layoutRestrictionInfoForItem:` min/max restrictions, with the grid for default placement; it ends with `_SBDisplayItemAttributedSizeInfer`. `layoutRestrictionInfoForItem:` 162 0x1c75a4670: uses `_deviceApplicationSceneHandleForDisplayItem:` (0x1c75a5784, 52 insns: now falls back to the `_applicationForDisplayItem:` lookup when no scene handle, fix for restrictions of apps without a live scene).
+PORTABILITY (A7.2): PARTIAL. Hook `_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:...` (16.0 signature carries ALL inputs the controller needs: floatingDockHeight, screenScale, bounds, prefersStripHidden/DockHidden, draggingItem, overlappingModelBeforeDragging) and replace the call to `modelForPreferredModel:initialStageFrame:...` by the A4 class; the model is built exactly as in step (2) with the A3 shims. Steps (1)/(4) are the attributed-size/normalized-center plumbing: keep the 16.0 absolute attributes (A7.1 emulation), writing `size/center` and `fullyOccludedPeekingCenter`/`occlusionState` back with the 16.0 `attributesByModifying*` methods. Full reconstruction of the outer method for the hook is still to be written against the 16.0 body (160 0x1c611a81c, 636 insns) - tagged TODO in the hooks file (the integration point is declared, the body falls back to `%orig`).
+
+---------------------------------------------------------------------------------------------------
+
+## A8. SBAppLayout and SBAppLayoutOverlappingModelCacheKey
+
+SBAppLayout (ivars identical 160/162; class dump 71 -> 75 methods; 5 logic-changed):
+* `-continuousExposeIdentifier` (160 0x1c628d514 / 162 0x1c77265c4, block 160 0x1c628d62c / 162 0x1c7726714) - **identifier algorithm changed**:
+  ```objc
+  // 160: enumerate items in layout order; for each item with a bundleIdentifier AND a layout role valid for split view (SBLayoutRoleIsValidForSplitView) build  "bid1&bid2..." with stringByAppendingFormat:@"&%@"
+  // 162:
+  NSMutableSet *set = [NSMutableSet set];
+  [self enumerate:^(SBLayoutRole role, SBDisplayItem *item, BOOL *stop) { NSString *bid = item.bundleIdentifier; if (bid && ![set containsObject:bid]) [set addObject:bid]; }];   // ALL roles (also center/floating), de-duplicated
+  return [[set allObjects] componentsJoinedByString:@"&"];                // order = NSSet order (unsorted!)
+  ```
+  Effect: the group (pile/strip entry) identity no longer depends on the split-view order or on role, and a window layout containing the same app twice is one group id (fixes duplicate/unstable groups in the strip when a split pair is swapped, or an app with several windows in a split). Confidence high on the algorithm, medium on the symptom.
+  Portable: PORTABLE as a hook on the existing class (same ivars). Use a sorted join for determinism (16.2's set order is arbitrary but stable per set content; sorting is a strict superset). Note the id strings are used as dictionary keys at runtime only (the VC's id caches), nothing persisted -> safe to change at install time; but ALL ported code must see the same function (install before the first layout).
+* NEW `-zOrderedLeafAppLayouts` 162 0x1c7725460: `[[self zOrderedItems] bs_compactMap:^(SBDisplayItem *i){ return [self leafAppLayoutForItem:i]; }]` (both helpers exist in 160: 0x1c628c67c / 0x1c628c9f0). PORTABLE (%new; `bs_compactMap:` guarded, fallback loop).
+* NEW `-_preferredWindowScene` 0x1c77272bc and `preferredDisplayIdentity` (160 0x1c628e1a0 -> 162 0x1c77273a8): same result (the display identity of the window scene for `preferredDisplayOrdinal`), refactored: 16.0 searched `connectedWindowScenes` with `bs_firstObjectPassingTest:` twice; 162 delegates to `_preferredWindowScene`. Behaviour-neutral. No port needed.
+* NEW `-appLayoutByModifyingPreferredDisplayOrdinal:` 0x1c7725f34 and `-appLayoutsBySplittingMedusaIncompatibleItemsWithApplicationController:` 0x1c77262e8: part of cross-display moves / Medusa compatibility (not traced; cross-display feature -> out of scope, NOT PORTABLE here).
+* `-isInsetForHomeAffordance` (160 0x1c628e03c / 162 0x1c77270e8): 162 adds a precondition: on iPad idiom, if `[[[self _preferredWindowScene] switcherController] isChamoisWindowingUIEnabled]` the enumeration that decides the inset is skipped (result stays NO). I.e. with Stage Manager enabled, layouts are never "inset for the home affordance" (the grabber overlays the window instead). UNSURE about the exact idiom comparison direction (0x1c7727130-0x1c7727144 not decoded). PARTIAL: hook returning NO when chamois windowing is enabled on iPad; verify on device.
+* `-appLayoutByModifyingHiddenState:` (160 0x1c628ce40 / 162 0x1c7725bb8): same behaviour (rebuilds via `initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributesMap:...` and refreshes the cached overlapping model/key); 162 simply stores the BOOL in a register; no port needed.
+
+SBAppLayoutOverlappingModelCacheKey (cache key for `cachedLastOverlappingModel`):
+| | 160 | 162 |
+|---|---|---|
+| ivars | `_zOrderedItems`, `_sizesForItems`, `_sizingPolicyForItems`, `_centersForItems`, `_containerBounds`, `_containerOrientation`, `_hideStrips`, `_hideDock`, `_draggingItemIfAny`, `_hash` | `_zOrderedItems`, `_recordsForItems` (dict item -> per-item record built from the layout attributes, replaces the 3 dictionaries), `_containerBounds`, `_containerOrientation`, **`_floatingDockHeight`**, `_hideStrips`, `_hideDock`, `_draggingItemIfAny`, `_hash` |
+| factory | `+cacheKeyForSnapshotOfAppLayout:containerBounds:containerOrientation:hideStrips:hideDock:draggingItem:` | `+cacheKeyForSnapshotOfAppLayout:containerBounds:containerOrientation:floatingDockHeight:hideStrips:hideDock:draggingItem:` (0x1c778a0d0 / init 0x1c778a1a0) |
+`isEqual:` (0x1c778a5e8) / `hash` (0x1c778a400) / `copyWithZone:` (0x1c778a6ec) now include the dock height and compare `_recordsForItems` (the record per item carries the attribute fields used by the layout: attributed size, normalized center, sizing policy, occlusion state...). Fixes stale cached overlapping models when only the floating dock height changes (dock shown/hidden) - confidence high.
+PORTABILITY: PARTIAL. The key class has no external ivar users: subclass-free approach = hook the 16.0 `+cacheKeyForSnapshotOfAppLayout:containerBounds:containerOrientation:hideStrips:hideDock:draggingItem:` (it is the only creator, called from the calculator) to attach the dock height via an associated object, and hook `isEqual:`/`hash` to include it; or (simpler, used by the draft) fold `floatingDockHeight` into `containerBounds.size.height`-independent salt: a new `%new` factory with the 162 name that calls the 16.0 factory and stores the dock height as an associated NSNumber, with `isEqual:` extended. The `_recordsForItems` restructuring is internal (equivalent information to the 3 dictionaries in 160) and not needed.

@@ -828,3 +828,518 @@ static void G1B_BuildTongueView(void) {
     }
 }
 // ---- end 1.9
+
+// ============================================================================================================
+// 1.3  SBInvalidateContinuousExposeIdentifiersEventResponse  (PARTIAL: type 40 in 16.0, see spec 1.3)
+// ============================================================================================================
+static ptrdiff_t gInvAnimOff = -1;
+static char kInvFrom, kInvTo;
+static long long G1B_InvResp_Type(id self, SEL _cmd) { return G1BRespInvalidateContinuousExposeIdentifiers; }
+static id G1B_InvResp_Init(id self, SEL _cmd, id from, id to, BOOL animated) {
+    id me = G1B_SUPER(id, class_getSuperclass(gInvalidateRespCls), self, @selector(init), (struct objc_super *, SEL));
+    if (!me) return nil;
+    G1B_SET(me, kInvFrom, from); G1B_SET(me, kInvTo, to);
+    if (gInvAnimOff >= 0) *(BOOL *)((uint8_t *)(__bridge void *)me + gInvAnimOff) = animated;
+    return me;
+}
+static id G1B_InvResp_From(id self, SEL _cmd) { return G1B_GET(self, kInvFrom); }
+static id G1B_InvResp_To(id self, SEL _cmd) { return G1B_GET(self, kInvTo); }
+static BOOL G1B_InvResp_Animated(id self, SEL _cmd) { return gInvAnimOff >= 0 && *(BOOL *)((uint8_t *)(__bridge void *)self + gInvAnimOff); }
+static void G1B_BuildInvalidateResponse(void) {
+    Class respBase = NSClassFromString(@"SBSwitcherModifierEventResponse");
+    if (!respBase) return;
+    const G1BIvar iv[] = { { "_g1b_animated", sizeof(BOOL), 0, "B" } };
+    const G1BMethod m[] = {
+        { "initWithTransitioningFromAppLayout:transitioningToAppLayout:animated:", (IMP)G1B_InvResp_Init, "@36@0:8@16@24B32" },
+        { "type", (IMP)G1B_InvResp_Type, "q16@0:8" }, { "transitioningFromAppLayout", (IMP)G1B_InvResp_From, "@16@0:8" },
+        { "transitioningToAppLayout", (IMP)G1B_InvResp_To, "@16@0:8" }, { "animated", (IMP)G1B_InvResp_Animated, "B16@0:8" },
+    };
+    BOOL made = NO;
+    gInvalidateRespCls = G1B_MakeClass("SBInvalidateContinuousExposeIdentifiersEventResponse", respBase, iv, 1, m, sizeof m / sizeof m[0], NULL, &made);
+    if (made) gInvAnimOff = G1B_IvarOffset(gInvalidateRespCls, "_g1b_animated");
+}
+// consumer: add this to the _performEventResponse: hook above (kept separate so it can be switched off alone):
+%group G1B_VCInvalidate
+%hook SBFluidSwitcherViewController
+- (void)_performEventResponse:(id)response {
+    if (G1B_ON() && gInvalidateRespCls && [response isKindOfClass:gInvalidateRespCls]
+        && [self respondsToSelector:@selector(_updateContinuousExposeIdentifiersTransitioningFromAppLayout:toAppLayout:animated:)]) {
+        ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(self, @selector(_updateContinuousExposeIdentifiersTransitioningFromAppLayout:toAppLayout:animated:),
+            G1B_InvResp_From(response, 0), G1B_InvResp_To(response, 0), G1B_InvResp_Animated(response, 0));
+    }
+    %orig;
+}
+%end
+%end
+
+// ============================================================================================================
+// 2.0  transition-event flags (PORTABLE): isiPadOSWindowingModeChangeEvent / isCommandTabTransition / isLaunchingFromDockTransition
+// ============================================================================================================
+static char kEvFlagWin, kEvFlagCmdTab, kEvFlagDock;
+static BOOL G1B_EvFlag(id ev, const char *key) { return [objc_getAssociatedObject(ev, key) boolValue]; }
+static void G1B_EvSetFlag(id ev, const char *key, BOOL v) { objc_setAssociatedObject(ev, key, @(v), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static BOOL G1B_EvWin(id s, SEL c) { return G1B_EvFlag(s, &kEvFlagWin); }
+static BOOL G1B_EvCmd(id s, SEL c) { return G1B_EvFlag(s, &kEvFlagCmdTab); }
+static BOOL G1B_EvDock(id s, SEL c) { return G1B_EvFlag(s, &kEvFlagDock); }
+static void G1B_EvSetWin(id s, SEL c, BOOL v) { G1B_EvSetFlag(s, &kEvFlagWin, v); }
+static void G1B_EvSetCmd(id s, SEL c, BOOL v) { G1B_EvSetFlag(s, &kEvFlagCmdTab, v); }
+static void G1B_EvSetDock(id s, SEL c, BOOL v) { G1B_EvSetFlag(s, &kEvFlagDock, v); }
+static void G1B_InstallTransitionEventFlags(void) {
+    Class ev = NSClassFromString(@"SBTransitionSwitcherModifierEvent");
+    if (!ev) return;
+    struct { const char *s; IMP i; const char *t; } m[] = {
+        { "isiPadOSWindowingModeChangeEvent", (IMP)G1B_EvWin, "B16@0:8" }, { "setiPadOSWindowingModeChangeEvent:", (IMP)G1B_EvSetWin, "v20@0:8B16" },
+        { "isCommandTabTransition", (IMP)G1B_EvCmd, "B16@0:8" }, { "setCommandTabTransition:", (IMP)G1B_EvSetCmd, "v20@0:8B16" },
+        { "isLaunchingFromDockTransition", (IMP)G1B_EvDock, "B16@0:8" }, { "setLaunchingFromDockTransition:", (IMP)G1B_EvSetDock, "v20@0:8B16" },
+    };
+    for (size_t i = 0; i < sizeof m / sizeof m[0]; i++) { SEL s = sel_registerName(m[i].s); if (!class_getInstanceMethod(ev, s)) class_addMethod(ev, s, m[i].i, m[i].t); }
+}
+// Set the flags from the transition request source (values decoded from 16.2 @0x1c76d485c..: 0x40 / 0x10 / 0x18,0x19).
+%group G1B_Coordinator
+%hook SBMainSwitcherControllerCoordinator
+- (id)transitionEventForContext:(id)context identifier:(id)identifier phase:(unsigned long long)phase animated:(BOOL)animated {
+    id ev = %orig;
+    if (G1B_ON() && ev && context && [ev respondsToSelector:@selector(setCommandTabTransition:)]) {
+        id req = nil;
+        for (NSString *n in @[ @"request", @"transitionRequest" ]) { SEL s = NSSelectorFromString(n); if ([context respondsToSelector:s]) { req = G1B_Send0(context, s); if (req) break; } }
+        if (req && [req respondsToSelector:@selector(source)]) {
+            long long src = G1B_SendLL0(req, @selector(source));
+            G1B_SendVLL(ev, @selector(setiPadOSWindowingModeChangeEvent:), src == 0x40);     // BOOL args passed as long long: low byte is read
+            G1B_SendVLL(ev, @selector(setCommandTabTransition:), src == 0x10);
+            G1B_SendVLL(ev, @selector(setLaunchingFromDockTransition:), src == 0x18 || src == 0x19);
+        }
+    }
+    return ev;
+}
+%end
+%end
+
+// ============================================================================================================
+// 2.1 / 2.2  FullScreenToStrip + Crossblur transitions  (PARTIAL: see spec; needs the AppToApp hook 4.8)
+// ============================================================================================================
+typedef struct { double tl, bl, br, tr; } G1BRadii;             // UIRectCornerRadii
+static ptrdiff_t gF2S_Phase = -1, gXB_Phase = -1, gXB_Frame = -1, gXB_Scale = -1, gXB_Radii = -1;
+static Class gF2SCls, gXBCls, gTransSuper;
+static char kF2SOut, kF2SReason, kXBTo, kXBFrom, kXBReason;
+#define LL_AT(o, off) (*(long long *)((uint8_t *)(__bridge void *)(o) + (off)))
+
+static id G1B_Layout(id self, unsigned long long i) {
+    NSArray *a = [self respondsToSelector:@selector(appLayouts)] ? G1B_Send0(self, @selector(appLayouts)) : nil;
+    return (i < a.count) ? a[i] : nil;
+}
+static id G1B_Timer(double delay, NSString *reason) {
+    Class c = NSClassFromString(@"SBTimerEventSwitcherEventResponse"); SEL s = @selector(initWithDelay:validator:reason:);
+    return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, double, id, id))objc_msgSend)([c alloc], s, delay, nil, reason) : nil;
+}
+static id G1B_AppendTo(id newR, id existing) { return newR ? G1B_Append(newR, existing) : existing; }
+static NSString *G1B_ReasonFor(NSString *base) { return [NSString stringWithFormat:@"%@:%@", base, [[NSUUID UUID] UUIDString]]; }
+static id G1B_AnimSettingsCopy(id self, double response, double damping) {
+    id as = G1B_AnimSettings(self);
+    id s = (as && [as respondsToSelector:NSSelectorFromString(@"crossblurDosidoSettings")]) ? [G1B_Send0(as, NSSelectorFromString(@"crossblurDosidoSettings")) copy] : nil;
+    if (s && [s respondsToSelector:@selector(setResponse:)]) ((void (*)(id, SEL, double))objc_msgSend)(s, @selector(setResponse:), response);
+    if (s && damping > 0 && [s respondsToSelector:@selector(setDampingRatio:)]) ((void (*)(id, SEL, double))objc_msgSend)(s, @selector(setDampingRatio:), damping);
+    return s;
+}
+static double G1B_ASDouble(id self, NSString *name) { return G1B_Dbl0(G1B_AnimSettings(self), NSSelectorFromString(name)); }
+static id G1B_Attrs(id self, SEL _cmd, id el, Class sup, double lResp, double lDamp, double oResp, BOOL separateOpacity) {
+    id base = G1B_SUPER(id, sup, self, _cmd, (struct objc_super *, SEL, id), el);
+    id a = [base respondsToSelector:@selector(mutableCopy)] ? [base mutableCopy] : nil;
+    if (!a) return base;
+    id ls = G1B_AnimSettingsCopy(self, lResp, lDamp);
+    if (ls && [a respondsToSelector:@selector(setLayoutUpdateMode:)] && [a respondsToSelector:@selector(setLayoutSettings:)]) {
+        G1B_SendVLL(a, @selector(setLayoutUpdateMode:), 3); G1B_SendV1(a, @selector(setLayoutSettings:), ls);
+        id os = separateOpacity ? G1B_AnimSettingsCopy(self, oResp, 0) : ls;
+        if (os && [a respondsToSelector:@selector(setOpacitySettings:)]) G1B_SendV1(a, @selector(setOpacitySettings:), os);
+    }
+    return a;
+}
+static CGRect G1B_OverlapBBox(id self, id layout) {
+    SEL s = @selector(overlappingModelForAppLayout:);
+    if (!layout || ![self respondsToSelector:s]) return CGRectZero;
+    id model = G1B_Send1(self, s, layout);
+    return (model && [model respondsToSelector:@selector(boundingBox)]) ? ((CGRect (*)(id, SEL))objc_msgSend)(model, @selector(boundingBox)) : CGRectZero;
+}
+static G1BRadii G1B_StageRadii(id self, double scale) {
+    id attrs = [self respondsToSelector:@selector(chamoisLayoutAttributes)] ? G1B_Send0(self, @selector(chamoisLayoutAttributes)) : nil;
+    double r = G1B_Dbl0(attrs, NSSelectorFromString(@"stageCornerRaddii"));
+    double v = scale != 0 ? r / scale : r;
+    return (G1BRadii){ v, v, v, v };                              // _SBRectCornerRadiiForRadius(v)
+}
+static double G1B_Tilt(id self) {
+    id attrs = [self respondsToSelector:@selector(chamoisLayoutAttributes)] ? G1B_Send0(self, @selector(chamoisLayoutAttributes)) : nil;
+    double t = G1B_Dbl0(attrs, NSSelectorFromString(@"stripTiltAngle"));
+    return ([UIApplication sharedApplication].userInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft) ? -t : t;
+}
+
+// ---- FullScreenToStrip
+#define F2S_O(self_, layout_) ([G1B_GET(self_, kF2SOut) isEqual:(layout_)])
+#define F2S_PH(self_) LL_AT(self_, gF2S_Phase)
+static id G1B_F2S_Init(id self, SEL _cmd, id tid, id outgoing) {
+    id me = G1B_SUPER(id, gTransSuper, self, @selector(initWithTransitionID:), (struct objc_super *, SEL, id), tid);
+    if (!me || gF2S_Phase < 0) return nil;
+    G1B_SET(me, kF2SOut, outgoing); F2S_PH(me) = 0;
+    G1B_SET(me, kF2SReason, G1B_ReasonFor(@"SBContinuousExposeFullScreenToStripTransitionSwitcherModifierTimerEventReason"));
+    return me;
+}
+static id G1B_F2S_WillBegin(id self, SEL _cmd) {
+    id r = G1B_SUPER(id, gTransSuper, self, _cmd, (struct objc_super *, SEL));
+    if (gF2S_Phase >= 0 && F2S_PH(self) == 0) { NSString *re = G1B_GET(self, kF2SReason); r = G1B_AppendTo(G1B_Timer(0.14, re), r); r = G1B_AppendTo(G1B_Timer(0.14, re), r); }
+    return r;
+}
+static id G1B_F2S_Timer(id self, SEL _cmd, id event) {
+    id r = G1B_SUPER(id, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), event);
+    id reason = [event respondsToSelector:@selector(reason)] ? G1B_Send0(event, @selector(reason)) : nil;
+    if (gF2S_Phase >= 0 && [reason isKindOfClass:[NSString class]] && [reason isEqualToString:G1B_GET(self, kF2SReason)] && (F2S_PH(self) == 0 || F2S_PH(self) == 1)) {
+        long long mode = F2S_PH(self) == 0 ? 2 : 3; F2S_PH(self) = F2S_PH(self) == 0 ? 1 : 2;
+        r = G1B_AppendTo(G1B_NewUpdateLayoutResponse(0x1e, mode), r);
+    }
+    return r;
+}
+#define F2S_SUPER_RECT(sel_, T_, v_) G1B_SUPER(CGRect, gTransSuper, self, sel_, (struct objc_super *, SEL, T_), v_)
+static CGRect G1B_F2S_Frame(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (!l || gF2S_Phase < 0 || !F2S_O(self, l)) return F2S_SUPER_RECT(_cmd, unsigned long long, i);
+    if (F2S_PH(self) == 0) return G1B_OverlapBBox(self, l);
+    CGRect f = F2S_SUPER_RECT(_cmd, unsigned long long, i);
+    return F2S_PH(self) == 1 ? CGRectMake(f.origin.x * 0.1, f.origin.y * 1.065, f.size.width, f.size.height) : f;
+}
+static CGRect G1B_F2S_IconOverlay(id self, SEL _cmd, id l) {
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l)) return G1B_OverlapBBox(self, l);
+    return G1B_SUPER(CGRect, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), l);
+}
+static CGRect G1B_F2S_AccessoryFrame(id self, SEL _cmd, CGRect f, id l) { return f; }
+static G1BRadii G1B_F2S_Radii(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l) && F2S_PH(self) == 0) {
+        double sc = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(scaleForIndex:), i);
+        return G1B_StageRadii(self, sc);
+    }
+    return G1B_SUPER(G1BRadii, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static CGPoint G1B_F2S_Anchor(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l) && F2S_PH(self) < 2) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1B_F2S_Persp(id self, SEL _cmd, id l) {
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l) && F2S_PH(self) == 0) return 0.0;
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), l);
+}
+static double G1B_F2S_Scale(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l)) { if (F2S_PH(self) == 0) return G1B_ASDouble(self, @"crossblurDosidoSmallScale"); if (F2S_PH(self) == 1) return 0.32; }
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1B_F2S_Opacity(id self, SEL _cmd, long long role, id l, unsigned long long i) {
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l) && F2S_PH(self) < 2) return 0.0;
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, l, i);
+}
+static double G1B_F2S_TitleOpacity(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gF2S_Phase >= 0 && F2S_O(self, l) && F2S_PH(self) < 2) return 0.0;
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static id G1B_F2S_Attrs(id self, SEL _cmd, id el) { return G1B_Attrs(self, _cmd, el, gTransSuper, 0.4, 1.0, 0.15, YES); }
+
+// ---- Crossblur
+#define XB_PH(self_) LL_AT(self_, gXB_Phase)
+#define XB_F(self_, l_) ([G1B_GET(self_, kXBFrom) isEqual:(l_)])
+#define XB_T(self_, l_) ([G1B_GET(self_, kXBTo) isEqual:(l_)])
+static id G1B_XB_Init(id self, SEL _cmd, id tid, id to, id from) {
+    id me = G1B_SUPER(id, gTransSuper, self, @selector(initWithTransitionID:), (struct objc_super *, SEL, id), tid);
+    if (!me || gXB_Phase < 0) return nil;
+    G1B_SET(me, kXBTo, to); G1B_SET(me, kXBFrom, from); XB_PH(me) = 0;
+    G1B_SET(me, kXBReason, G1B_ReasonFor(@"SBContinuousExposeFullScreenToStripCrossblurTransitionSwitcherModifierTimerEventReason"));
+    return me;
+}
+static void G1B_XB_DidMove(id self, SEL _cmd, id parent) {
+    G1B_SUPER(void, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), parent);
+    if (!parent || gXB_Frame < 0 || gXB_Scale < 0 || gXB_Radii < 0 || ![self respondsToSelector:@selector(appLayouts)]) return;
+    NSUInteger idx = [(NSArray *)G1B_Send0(self, @selector(appLayouts)) indexOfObject:G1B_GET(self, kXBTo)];
+    if (idx == NSNotFound) { BP_Log(@"g1b: Crossblur: toAppLayout unknown"); return; }          // 16.2 asserts here
+    *(CGRect *)((uint8_t *)(__bridge void *)self + gXB_Frame) = G1B_SUPER(CGRect, gTransSuper, self, @selector(frameForIndex:), (struct objc_super *, SEL, unsigned long long), (unsigned long long)idx);
+    *(double *)((uint8_t *)(__bridge void *)self + gXB_Scale) = G1B_SUPER(double, gTransSuper, self, @selector(scaleForIndex:), (struct objc_super *, SEL, unsigned long long), (unsigned long long)idx);
+    *(G1BRadii *)((uint8_t *)(__bridge void *)self + gXB_Radii) = G1B_SUPER(G1BRadii, gTransSuper, self, @selector(cornerRadiiForIndex:), (struct objc_super *, SEL, unsigned long long), (unsigned long long)idx);
+}
+static id G1B_XB_WillUpdate(id self, SEL _cmd) {
+    id r = G1B_SUPER(id, gTransSuper, self, _cmd, (struct objc_super *, SEL));
+    if (gXB_Phase >= 0 && XB_PH(self) == 0) r = G1B_AppendTo(G1B_Timer(0.045, G1B_GET(self, kXBReason)), r);
+    return r;
+}
+static id G1B_XB_Timer(id self, SEL _cmd, id event) {
+    id r = G1B_SUPER(id, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), event);
+    id reason = [event respondsToSelector:@selector(reason)] ? G1B_Send0(event, @selector(reason)) : nil;
+    if (gXB_Phase < 0 || ![reason isKindOfClass:[NSString class]] || ![reason isEqualToString:G1B_GET(self, kXBReason)]) return r;
+    NSString *re = G1B_GET(self, kXBReason);
+    long long ph = XB_PH(self), mode; double delay;
+    switch (ph) { case 0: XB_PH(self) = 1; delay = 0.01; mode = 2; break; case 1: XB_PH(self) = 2; delay = 0.25; mode = 3; break;
+                  case 2: XB_PH(self) = 3; delay = 0.01; mode = 2; break; case 3: XB_PH(self) = 4; delay = -1; mode = 3; break; default: return r; }
+    if (delay >= 0) r = G1B_AppendTo(G1B_Timer(delay, re), r);
+    return G1B_AppendTo(G1B_NewUpdateLayoutResponse(0xc, mode), r);
+}
+static CGRect G1B_XB_Frame(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l) && XB_PH(self) <= 2) return G1B_OverlapBBox(self, l);
+        if (!XB_F(self, l) && XB_T(self, l) && XB_PH(self) == 0 && gXB_Frame >= 0) return *(CGRect *)((uint8_t *)(__bridge void *)self + gXB_Frame);
+    }
+    return G1B_SUPER(CGRect, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1B_XB_Scale(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l)) { if (XB_PH(self) <= 2) return G1B_ASDouble(self, @"crossblurDosidoLargeScale");
+                              if (XB_PH(self) == 3) return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i) - 0.02; }
+        else if (XB_T(self, l)) { if (XB_PH(self) == 0 && gXB_Scale >= 0) return *(double *)((uint8_t *)(__bridge void *)self + gXB_Scale);
+                                  if (XB_PH(self) == 1) return G1B_ASDouble(self, @"crossblurDosidoSmallScale"); }
+    }
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1B_XB_Opacity(id self, SEL _cmd, long long role, id l, unsigned long long i) {
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l) && XB_PH(self) < 4) return 0.0;
+        if (!XB_F(self, l) && XB_T(self, l)) { if (XB_PH(self) == 0) return 0.0; if (XB_PH(self) == 1) return 0.1; }
+    }
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, l, i);
+}
+static double G1B_XB_Persp(id self, SEL _cmd, id l) {
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l) && XB_PH(self) < 3) return 0.0;
+        if (!XB_F(self, l) && XB_T(self, l) && XB_PH(self) == 0) return G1B_Tilt(self);
+    }
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), l);
+}
+static CGPoint G1B_XB_Anchor(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l) && XB_PH(self) < 3) return CGPointMake(0.5, 0.5);
+        if (!XB_F(self, l) && XB_T(self, l) && XB_PH(self) == 0) {
+            BOOL rtl = [UIApplication sharedApplication].userInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+            return rtl ? CGPointMake(0.5, 0.0) : CGPointMake(0.0, 0.5);       // as shipped in 16.2 (RTL value looks like an Apple bug)
+        }
+    }
+    return G1B_SUPER(CGPoint, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static G1BRadii G1B_XB_Radii(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l) && XB_PH(self) <= 2) return G1B_StageRadii(self, ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(scaleForIndex:), i));
+        if (!XB_F(self, l) && XB_T(self, l) && XB_PH(self) == 0 && gXB_Radii >= 0) return *(G1BRadii *)((uint8_t *)(__bridge void *)self + gXB_Radii);
+    }
+    return G1B_SUPER(G1BRadii, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1B_XB_TitleOpacity(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    if (l && gXB_Phase >= 0) {
+        if (XB_F(self, l) && XB_PH(self) < 3) return 0.0;
+        if (!XB_F(self, l) && XB_T(self, l) && XB_PH(self) < 2) return 0.0;
+    }
+    return G1B_SUPER(double, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static id G1B_XB_Attrs(id self, SEL _cmd, id el) { return G1B_Attrs(self, _cmd, el, gTransSuper, 0.45, 0.92, 0, NO); }
+
+static void G1B_BuildFullScreenToStrip(void) {
+    Class sup = NSClassFromString(@"SBTransitionSwitcherModifier");
+    if (!sup || !G1B_HasSuper(sup, @selector(initWithTransitionID:)) || !G1B_HasSuper(sup, @selector(overlappingModelForAppLayout:))) return;
+    gTransSuper = sup;
+    const G1BIvar i1[] = { { "_g1b_phase", sizeof(long long), 3, "q" } };
+    const G1BMethod m1[] = {
+        { "initWithTransitionID:outgoingAppLayout:", (IMP)G1B_F2S_Init, "@32@0:8@16@24" }, { "transitionWillBegin", (IMP)G1B_F2S_WillBegin, "@16@0:8" },
+        { "handleTimerEvent:", (IMP)G1B_F2S_Timer, "@24@0:8@16" }, { "frameForIndex:", (IMP)G1B_F2S_Frame, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" },
+        { "frameForIconOverlayInAppLayout:", (IMP)G1B_F2S_IconOverlay, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8@16" },
+        { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)G1B_F2S_AccessoryFrame, "{CGRect={CGPoint=dd}{CGSize=dd}}56@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16@48" },
+        { "cornerRadiiForIndex:", (IMP)G1B_F2S_Radii, "{?=dddd}24@0:8Q16" }, { "anchorPointForIndex:", (IMP)G1B_F2S_Anchor, "{CGPoint=dd}24@0:8Q16" },
+        { "perspectiveAngleForAppLayout:", (IMP)G1B_F2S_Persp, "d24@0:8@16" }, { "scaleForIndex:", (IMP)G1B_F2S_Scale, "d24@0:8Q16" },
+        { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1B_F2S_Opacity, "d40@0:8q16@24Q32" }, { "titleAndIconOpacityForIndex:", (IMP)G1B_F2S_TitleOpacity, "d24@0:8Q16" },
+        { "animationAttributesForLayoutElement:", (IMP)G1B_F2S_Attrs, "@24@0:8@16" },
+    };
+    BOOL made = NO;
+    gF2SCls = G1B_MakeClass("SBContinuousExposeFullScreenToStripTransitionSwitcherModifier", sup, i1, 1, m1, sizeof m1 / sizeof m1[0], NULL, &made);
+    if (made) gF2S_Phase = G1B_IvarOffset(gF2SCls, "_g1b_phase");
+
+    const G1BIvar i2[] = { { "_g1b_phase", sizeof(long long), 3, "q" }, { "_g1b_initialFrame", sizeof(CGRect), 3, "{CGRect=dddd}" },
+                           { "_g1b_initialScale", sizeof(double), 3, "d" }, { "_g1b_initialRadii", sizeof(G1BRadii), 3, "{?=dddd}" } };
+    const G1BMethod m2[] = {
+        { "initWithTransitionID:toAppLayout:fromAppLayout:", (IMP)G1B_XB_Init, "@40@0:8@16@24@32" }, { "didMoveToParentModifier:", (IMP)G1B_XB_DidMove, "v24@0:8@16" },
+        { "transitionWillUpdate", (IMP)G1B_XB_WillUpdate, "@16@0:8" }, { "handleTimerEvent:", (IMP)G1B_XB_Timer, "@24@0:8@16" },
+        { "frameForIndex:", (IMP)G1B_XB_Frame, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" }, { "scaleForIndex:", (IMP)G1B_XB_Scale, "d24@0:8Q16" },
+        { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1B_XB_Opacity, "d40@0:8q16@24Q32" }, { "perspectiveAngleForAppLayout:", (IMP)G1B_XB_Persp, "d24@0:8@16" },
+        { "anchorPointForIndex:", (IMP)G1B_XB_Anchor, "{CGPoint=dd}24@0:8Q16" }, { "cornerRadiiForIndex:", (IMP)G1B_XB_Radii, "{?=dddd}24@0:8Q16" },
+        { "titleAndIconOpacityForIndex:", (IMP)G1B_XB_TitleOpacity, "d24@0:8Q16" }, { "animationAttributesForLayoutElement:", (IMP)G1B_XB_Attrs, "@24@0:8@16" },
+    };
+    made = NO;
+    gXBCls = G1B_MakeClass("SBContinuousExposeFullScreenToStripCrossblurTransitionSwitcherModifier", sup, i2, 4, m2, sizeof m2 / sizeof m2[0], NULL, &made);
+    if (made) { gXB_Phase = G1B_IvarOffset(gXBCls, "_g1b_phase"); gXB_Frame = G1B_IvarOffset(gXBCls, "_g1b_initialFrame");
+                gXB_Scale = G1B_IvarOffset(gXBCls, "_g1b_initialScale"); gXB_Radii = G1B_IvarOffset(gXBCls, "_g1b_initialRadii"); }
+}
+// ---- end 2.1 / 2.2
+
+// ============================================================================================================
+// 2.4  SBiPadOSWindowModeChangeTransitionModifier  (PORTABLE: new class + creator hook; needs 2.0 flags)
+// ============================================================================================================
+static Class gWinModeCls;
+static char kWmFrom, kWmTo;
+static id G1B_Wm_Init(id self, SEL _cmd, id tid, id from, id to) {
+    if (!from || !to) return nil;                              // 16.2 asserts both
+    id me = G1B_SUPER(id, gTransSuper, self, @selector(initWithTransitionID:), (struct objc_super *, SEL, id), tid);
+    if (!me) return nil;
+    G1B_SET(me, kWmFrom, from); G1B_SET(me, kWmTo, to);
+    return me;
+}
+static BOOL G1B_Wm_MatchMoved(id self, SEL _cmd, long long role, id layout) {
+    id from = G1B_GET(self, kWmFrom), to = G1B_GET(self, kWmTo);
+    SEL c = @selector(containsAnyItemFromAppLayout:);
+    if (layout && ((from && [from respondsToSelector:c] && G1B_SendB1(from, c, layout)) || (to && [to respondsToSelector:c] && G1B_SendB1(to, c, layout)))) return YES;
+    return G1B_SUPER(BOOL, gTransSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+}
+static unsigned long long G1B_Wm_MaskedCorners(id self, SEL _cmd, unsigned long long i) {
+    id l = G1B_Layout(self, i);
+    unsigned long long m = G1B_SUPER(unsigned long long, gTransSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    id to = G1B_GET(self, kWmTo);
+    if (l && to && [to respondsToSelector:@selector(isOrContainsAppLayout:)] && G1B_SendB1(to, @selector(isOrContainsAppLayout:), l)) {
+        BOOL chamois = [self respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled));
+        if (!chamois || ([self respondsToSelector:@selector(appLayoutContainsAnUnoccludedMaximizedDisplayItem:)] && G1B_SendB1(self, @selector(appLayoutContainsAnUnoccludedMaximizedDisplayItem:), l))) m = 0;
+    }
+    return m;
+}
+static void G1B_BuildWindowModeChange(void) {
+    Class sup = NSClassFromString(@"SBTransitionSwitcherModifier");
+    if (!sup || !G1B_HasSuper(sup, @selector(initWithTransitionID:))) return;
+    gTransSuper = sup;
+    const G1BMethod m[] = {
+        { "initWithTransitionID:fromAppLayout:toAppLayout:", (IMP)G1B_Wm_Init, "@40@0:8@16@24@32" },
+        { "isLayoutRoleMatchMovedToScene:inAppLayout:", (IMP)G1B_Wm_MatchMoved, "B32@0:8q16@24" },
+        { "maskedCornersForIndex:", (IMP)G1B_Wm_MaskedCorners, "Q24@0:8Q16" },
+    };
+    gWinModeCls = G1B_MakeClass("SBiPadOSWindowModeChangeTransitionModifier", sup, NULL, 0, m, sizeof m / sizeof m[0], NULL, NULL);
+}
+%group G1B_Platform
+%hook SBiPadOSPlatformSwitcherModifier
+- (id)handleTransitionEvent:(id)event {
+    id r = %orig;
+    if (!G1B_ON() || !gWinModeCls || ![event respondsToSelector:@selector(isiPadOSWindowingModeChangeEvent)] || !G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent))) return r;
+    if (G1B_SendLL0(event, @selector(phase)) != 1 || !G1B_SendB0(event, @selector(isAnimated))) return r;
+    Ivar iv = class_getInstanceVariable([self class], "_currentUnlockedEnvironmentMode");
+    if (!iv || *(long long *)((uint8_t *)(__bridge void *)self + ivar_getOffset(iv)) != 3) return r;
+    id from = G1B_Send0(event, @selector(fromAppLayout)), to = G1B_Send0(event, @selector(toAppLayout));
+    if (!from || !to || ![self respondsToSelector:@selector(addChildModifier:)]) return r;
+    id m = ((id (*)(id, SEL, id, id, id))objc_msgSend)([gWinModeCls alloc], @selector(initWithTransitionID:fromAppLayout:toAppLayout:), G1B_Send0(event, @selector(transitionID)), from, to);
+    if (m) G1B_SendV1(self, @selector(addChildModifier:), m);
+    return r;
+}
+%end
+%end
+
+// ============================================================================================================
+// 2.5  SBContinuousExposeDragAndDropToAppTransitionSwitcherModifier  (PORTABLE as a class; creator is NOT PORTABLE, 3.3)
+// ============================================================================================================
+static Class gDndToAppCls;
+static id G1B_Dnd_Attrs(id self, SEL _cmd, id el) {
+    id base = G1B_SUPER(id, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), el);
+    id a = [base respondsToSelector:@selector(mutableCopy)] ? [base mutableCopy] : base;
+    id ss = [self respondsToSelector:@selector(switcherSettings)] ? G1B_Send0(self, @selector(switcherSettings)) : nil;
+    id med = (ss && [ss respondsToSelector:NSSelectorFromString(@"medusaSettings")]) ? G1B_Send0(ss, NSSelectorFromString(@"medusaSettings")) : nil;
+    id rs = (med && [med respondsToSelector:NSSelectorFromString(@"resizeAnimationSettings")]) ? G1B_Send0(med, NSSelectorFromString(@"resizeAnimationSettings")) : nil;
+    if (a && rs && [a respondsToSelector:@selector(setLayoutSettings:)] && [a respondsToSelector:@selector(setUpdateMode:)]) { G1B_SendV1(a, @selector(setLayoutSettings:), rs); G1B_SendVLL(a, @selector(setUpdateMode:), 3); }
+    return a;
+}
+static id G1B_Dnd_Resign(id self, SEL _cmd) { return @{}; }
+static id G1B_Dnd_Keyboard(id self, SEL _cmd) {
+    Class c = NSClassFromString(@"SBSwitcherKeyboardSuppressionMode"); SEL s = NSSelectorFromString(@"suppressionModeNone");
+    return (c && [c respondsToSelector:s]) ? G1B_Send0((id)c, s) : nil;
+}
+static G1BAsyncRendering G1B_Dnd_Async(id self, SEL _cmd, id l) { return (G1BAsyncRendering){ NO, NO }; }
+static BOOL G1B_Dnd_Crossfade(id self, SEL _cmd) { return NO; }
+static void G1B_BuildDndToApp(void) {
+    Class sup = NSClassFromString(@"SBTransitionSwitcherModifier");
+    if (!sup) return;
+    gTransSuper = sup;
+    const G1BMethod m[] = {
+        { "animationAttributesForLayoutElement:", (IMP)G1B_Dnd_Attrs, "@24@0:8@16" }, { "appLayoutsToResignActive", (IMP)G1B_Dnd_Resign, "@16@0:8" },
+        { "keyboardSuppressionMode", (IMP)G1B_Dnd_Keyboard, "@16@0:8" }, { "asyncRenderingAttributesForAppLayout:", (IMP)G1B_Dnd_Async, "{?=BB}24@0:8@16" },
+        { "shouldPerformCrossfadeForReduceMotion", (IMP)G1B_Dnd_Crossfade, "B16@0:8" },
+    };
+    gDndToAppCls = G1B_MakeClass("SBContinuousExposeDragAndDropToAppTransitionSwitcherModifier", sup, NULL, 0, m, sizeof m / sizeof m[0], NULL, NULL);
+}
+
+// ============================================================================================================
+// 4.1  SBContinuousExposeRootSwitcherModifier -_effectiveEnvironmentMode  (PORTABLE: real 16.0 bug)
+// ============================================================================================================
+// 16.0 answers 1 (home) for App Expose / inline App Expose floors; 16.2 answers 2 (switcher).
+%group G1B_Root
+%hook SBContinuousExposeRootSwitcherModifier
+- (long long)_effectiveEnvironmentMode {
+    long long r = %orig;
+    if (!G1B_ON() || r != 1 || ![self respondsToSelector:@selector(floorModifier)]) return r;
+    id floor = G1B_Send0(self, @selector(floorModifier));
+    if (!floor) return r;
+    for (NSString *n in @[ @"SBAppExposeContinuousExposeSwitcherModifier", @"SBInlineAppExposeContinuousExposeSwitcherModifier" ]) {
+        Class c = NSClassFromString(n);
+        if (c && [floor isKindOfClass:c]) return 2;
+    }
+    return r;
+}
+%end
+%end
+
+// ============================================================================================================
+// 4.8  SBContinuousExposeAppToAppModifier -didMoveToParentModifier:  (PARTIAL: replaces the 16.0 crossblur child; opt-in)
+// ============================================================================================================
+// Switch file <jbroot>/tmp/Backport162.on.group1b.apptoapp (opt-in): changes the look of every app-to-app transition.
+%group G1B_AppToApp
+%hook SBContinuousExposeAppToAppModifier
+- (void)didMoveToParentModifier:(id)parent {
+    NSMutableSet *before = [NSMutableSet set];
+    if (parent && [self respondsToSelector:@selector(enumerateChildModifiersWithBlock:)])
+        ((void (*)(id, SEL, void (^)(id)))objc_msgSend)(self, @selector(enumerateChildModifiersWithBlock:), ^(id c) { [before addObject:c]; });
+    %orig;
+    if (!G1B_ON() || !parent || !gF2SCls || !gXBCls || gTransSuper == Nil) return;
+    Ivar ivTo = class_getInstanceVariable([self class], "_toAppLayout"), ivFrom = class_getInstanceVariable([self class], "_fromAppLayout");
+    id to = ivTo ? object_getIvar(self, ivTo) : nil, from = ivFrom ? object_getIvar(self, ivFrom) : nil;
+    SEL cmdTab = @selector(isCommandTabTransition), dock = @selector(isLaunchingFromDockTransition);
+    if (!to || !from || ![to respondsToSelector:@selector(containsAnyItemFromAppLayout:)] || ![self respondsToSelector:cmdTab] || ![self respondsToSelector:dock]
+        || ![self respondsToSelector:@selector(transitionID)] || ![self respondsToSelector:@selector(appLayouts)]) return;
+    // 16.2 condition: different apps (no shared item) and the target layout is known to the switcher.
+    if (G1B_SendB1(to, @selector(containsAnyItemFromAppLayout:), from) || ![(NSArray *)G1B_Send0(self, @selector(appLayouts)) containsObject:to]) return;
+    // remove the 16.0 crossblur child that %orig may have added
+    Class old = NSClassFromString(@"SBContinuousExposeCrossblurModifier");
+    if (old) ((void (*)(id, SEL, void (^)(id)))objc_msgSend)(self, @selector(enumerateChildModifiersWithBlock:), ^(id c) {
+        if ([c isKindOfClass:old] && ![before containsObject:c]) G1B_SendV1(self, @selector(removeChildModifier:), c); });
+    id tid = G1B_Send0(self, @selector(transitionID));
+    id child = (G1B_SendB0(self, cmdTab) || G1B_SendB0(self, dock))
+        ? ((id (*)(id, SEL, id, id, id))objc_msgSend)([gXBCls alloc], @selector(initWithTransitionID:toAppLayout:fromAppLayout:), tid, to, from)
+        : ((id (*)(id, SEL, id, id))objc_msgSend)([gF2SCls alloc], @selector(initWithTransitionID:outgoingAppLayout:), tid, from);
+    if (child) G1B_SendV1(self, @selector(addChildModifier:), child);
+}
+%end
+%end
+
+// ============================================================================================================
+// setup
+// ============================================================================================================
+static BOOL G1B_OptIn(const char *name);   // supplied by the host (see group4 hooks: BP_G4_OptIn); stand-in below
+#ifdef BP_G1B_STANDALONE
+static BOOL G1B_OptIn(const char *name) { (void)name; return NO; }
+#endif
+
+static void G1B_Setup(void) {
+    G1B_BuildFiltering();
+    G1B_BuildOverrideIds();
+    G1B_BuildPulse();
+    G1B_BuildEventsAndResponses();
+    G1B_BuildInvalidateResponse();
+    G1B_BuildTongueView();
+    G1B_BuildFullScreenToStrip();
+    G1B_BuildWindowModeChange();
+    G1B_BuildDndToApp();
+    G1B_InstallTransitionEventFlags();
+    %init(G1B_Base);                         // 0.1  event types 36..38
+    %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
+    %init(G1B_VCInvalidate);                 // 1.3 consumer
+    %init(G1B_Header);                       // 1.5 (inert unless the FullScreen port defines handleTapAppLayoutHeaderEvent:)
+    %init(G1B_Coordinator);                  // 2.0 transition-event flags
+    %init(G1B_Platform);                     // 2.4 creator
+    %init(G1B_Root);                         // 4.1 _effectiveEnvironmentMode fix
+    if (G1B_OptIn("group1b.apptoapp")) %init(G1B_AppToApp);   // 4.8: opt-in, changes every app-to-app transition
+}
+// Not drafted (see spec): 1.1 users (peek / drag root), 1.9 hosting in the VC, 2.3, 2.6, 3.x, 4.2-4.7, 4.9.
