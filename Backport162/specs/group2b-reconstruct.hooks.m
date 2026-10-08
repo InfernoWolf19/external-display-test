@@ -1908,3 +1908,436 @@ static void BP2B_SetupTongue(void) {
     }));
 }
 
+
+// =================================================================================================================
+// ITEM 6: extended protocols (+contextProtocol / +queryProtocol) made SAFE.   DONE (guarded) / UNSURE:see md 6.6
+//
+// This section REPLACES "Section 0" of group2-layout-data.hooks.m (do not %init both: two hooks of the same class
+// methods would each build a different protocol and the second would win silently).  What it changes against group2:
+//   * only selectors whose type encoding is known to be in SpringBoard's static trampoline table are put in the
+//     protocols (an encoding that is missing makes the stock +initialize abort: SBChainableModifierMethodCache*
+//     TrampolineForMethod has no fallback);
+//   * the three 162 query selectors whose encoding is NOT in the 16.0 table are answered by plain methods on
+//     SBSwitcherModifier that walk the query chain themselves (BP2B_SetupProtocolFallbacks);
+//   * installed from BP2B_Early() with a crash-loop breadcrumb, the initialisation is forced and verified,
+//     and every assumption is re-checked (BP2B_ProtocolsOK()).
+// 16.0 facts (20A8372) this relies on, all read from the disassembly:
+//   +[SBChainableModifier initialize] (0x1c6428068) is a tail call to [self _initalizeIMPCaching] (0x1c642a6c0).
+//   _initalizeIMPCaching, when self == [self baseClassForQueryProtocol] (the topmost class defining +queryProtocol:
+//   SBSwitcherModifier): for each protocol level starting at +queryProtocol (then +contextProtocol): required instance
+//   methods (protocol_copyMethodDescriptionList(p, YES, YES)): if [self instancesRespondToSelector:] -> assertion
+//   "Cannot implement %@ on an implementer of +queryProtocol"; else class_addMethod(self, sel, trampolineForTypes) with
+//   _SBChainableModifierMethodCache{Query,Context}TrampolineForMethod; then protocol_copyProtocolList: >1 parents ->
+//   assertion "Multiple sub protocols not currently supported".  The trampoline table (81 entries) is static.
+// =================================================================================================================
+
+#include <sys/sysctl.h>
+#include <stdio.h>
+
+// The 81 encodings of the 20A8372 table (0x1e16f1de0), in table order.
+static const char *const kBP2B_Tramp160[] = {
+    "@16@0:8",
+    "@24@0:8@16",
+    "@24@0:8Q16",
+    "B16@0:8",
+    "B24@0:8Q16",
+    "q16@0:8",
+    "Q16@0:8",
+    "Q24@0:8Q16",
+    "d16@0:8",
+    "d24@0:8Q16",
+    "{_NSRange=QQ}16@0:8",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16",
+    "{UIRectCornerRadii=dddd}24@0:8Q16",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8",
+    "{CGPoint=dd}16@0:8",
+    "{CGSize=dd}16@0:8",
+    "B24@0:8@16",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8@16",
+    "d24@0:8@16",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}32@0:8q16q24",
+    "v24@0:8@16",
+    "{CGPoint=dd}32@0:8@16d24",
+    "q24@0:8@16",
+    "Q24@0:8@16",
+    "{CGPoint=dd}32@0:8Q16q24",
+    "{CGPoint=dd}48@0:8{CGPoint=dd}16{CGPoint=dd}32",
+    "v16@0:8",
+    "{CGPoint=dd}96@0:8{CGPoint=dd}16{CGPoint=dd}32{CGPoint=dd}48{CGPoint=dd}64N^d80N^d88",
+    "{CGPoint=dd}40@0:8@16{CGPoint=dd}24",
+    "@32@0:8@16@24",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}40@0:8q16@24q32",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}32@0:8q16@24",
+    "B32@0:8@16Q24",
+    "{UIRectCornerRadii=dddd}32@0:8q16@24",
+    "@32@0:8q16@24",
+    "B32@0:8q16@24",
+    "@40@0:8@16{CGPoint=dd}24",
+    "{CGSize=dd}24@0:8@16",
+    "B32@0:8@16@24",
+    "@40@0:8@16{CGSize=dd}24",
+    "{CGSize=dd}40@0:8{CGSize=dd}16@32",
+    "d32@0:8q16@24",
+    "@48@0:8q16@24{CGPoint=dd}32",
+    "q32@0:8q16@24",
+    "d32@0:8q16Q24",
+    "q24@0:8Q16",
+    "Q40@0:8Q16q24@32",
+    "{CGPoint=dd}24@0:8Q16",
+    "{CGAffineTransform=dddddd}32@0:8{CGSize=dd}16",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}32@0:8@16@24",
+    "d32@0:8@16@24",
+    "{SBSwitcherAsyncRenderingAttributes=BB}24@0:8@16",
+    "d40@0:8q16@24Q32",
+    "d36@0:8@16d24B32",
+    "{SBSwitcherShelfPresentationAttributes=B{CGRect={CGPoint=dd}{CGSize=dd}}QQ}24@0:8@16",
+    "Q32@0:8q16@24",
+    "B40@0:8q16@24Q32",
+    "{CGPoint=dd}32@0:8q16@24",
+    "{CGPoint=dd}24@0:8@16",
+    "{CGPoint=dd}32@0:8q16Q24",
+    "B40@0:8Q16{CGPoint=dd}24",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}56@0:8Q16{CGRect={CGPoint=dd}{CGSize=dd}}24",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}64@0:8q16@24{CGRect={CGPoint=dd}{CGSize=dd}}32",
+    "{CGPoint=dd}112@0:8q16Q24{CGRect={CGPoint=dd}{CGSize=dd}}32{CGPoint=dd}64{CGRect={CGPoint=dd}{CGSize=dd}}80",
+    "B48@0:8q16Q24{CGPoint=dd}32",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}72@0:8q16@24q32{CGRect={CGPoint=dd}{CGSize=dd}}40",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}32@0:8@16q24",
+    "{UIRectCornerRadii=dddd}64@0:8q16@24{UIRectCornerRadii=dddd}32",
+    "Q40@0:8q16@24Q32",
+    "d32@0:8Q16d24",
+    "Q32@0:8@16Q24",
+    "c24@0:8@16",
+    "{CGSize=dd}32@0:8q16@24",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}72@0:8q16@24{CGRect={CGPoint=dd}{CGSize=dd}}32q64",
+    "{CGSize=dd}64@0:8q16@24{CGRect={CGPoint=dd}{CGSize=dd}}32",
+    "{CGRect={CGPoint=dd}{CGSize=dd}}56@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16@48",
+    "{CGPoint=dd}40@0:8{CGPoint=dd}16@32",
+    "d32@0:8@16d24",
+    "{SBSwitcherGradientWallpaperAttributes=dd}24@0:8Q16",
+    "Q32@0:8@16@24",
+    "B36@0:8@16@24B32"
+};
+
+typedef struct { const char *sel; const char *types; } BP2BProtoSpec;
+// 16.2 context-protocol additions (final provider = the VC; all already implemented by group2 section A2).
+static const BP2BProtoSpec kBP2B_PCtx[] = {
+    { "appLayoutOnContinuousExposeStage",                         "@16@0:8" },
+    { "continuousExposeIdentifiersGenerationCount",               "Q16@0:8" },
+    { "continuousExposeIdentifiersInStrip",                       "@16@0:8" },
+    { "continuousExposeIdentifiersInSwitcher",                    "@16@0:8" },
+    { "continuousExposeStripProgress",                            "d16@0:8" },
+    { "continuousExposeStripTongueBackdropCaptureLayoutElement",  "@16@0:8" },
+    { "draggingAppLayoutsForContinuousExposeWindowDrag",          "@16@0:8" },
+    { "layoutRestrictionInfoForItem:",                            "@24@0:8@16" },
+    { "newContinuousExposeIdentifiersGenerationCount",            "Q16@0:8" },
+    { "proposedAppLayoutsForContinuousExposeWindowDrag",          "@16@0:8" },
+    { "requireStripContentsInViewHierarchy",                      "B16@0:8" },
+    { "supportedContentInterfaceOrientationsForItem:",            "Q24@0:8@16" },
+};
+// 16.2 query-protocol additions that have a trampoline in 16.0.
+static const BP2BProtoSpec kBP2B_PQry[] = {
+    { "activeLeafAppLayoutsReachableByKeyboardShortcut",          "@16@0:8" },
+    { "canSelectLeafWithModifierKeysInAppLayout:",                "B24@0:8@16" },
+    { "inactiveAppLayoutsReachableByKeyboardShortcut",            "@16@0:8" },
+    { "shouldAllowGroupOpacityForAppLayout:",                     "B24@0:8@16" },
+    { "adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16" },
+    { "adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24" },
+    { "isContinuousExposeStripVisible",                           "B16@0:8" },
+    { "proposedAppLayoutForContinuousExposeWindowDrag",           "@16@0:8" },
+    { "spaceAccessoryViewIconHitTestOutsetForAppLayout:",         "d24@0:8@16" },
+    { "wantsContinuousExposeHoverGesture",                        "B16@0:8" },
+};
+// 16.2 query selectors with NO trampoline in 16.0 (encodings new in 16.2).  Never put in a protocol.
+static const BP2BProtoSpec kBP2B_PNoChain[] = {
+    { "adjustedSpaceAccessoryViewScale:forAppLayout:",            "d32@0:8d16@24" },
+    { "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:",
+      "{CGRect={CGPoint=dd}{CGSize=dd}}72@0:8q16@24Q32{CGRect={CGPoint=dd}{CGSize=dd}}40" },
+    { "continuousExposeStripTongueAttributes",                    "{SBSwitcherContinuousExposeStripTongueAttributes=QQ}16@0:8" },
+};
+
+static BOOL gBP2B_ProtoOK = NO;                       // set by BP2B_VerifyProtocols
+static BOOL gBP2B_ProtoTried = NO;
+static NSMutableArray<NSString *> *gBP2B_ProtoAdded;  // "sel|types" actually registered
+static NSMutableArray<NSString *> *gBP2B_ProtoSkipped;
+static IMP gBP2B_OrigCtxProto, gBP2B_OrigQryProto;
+static Protocol *gBP2B_ExtCtx, *gBP2B_ExtQry;
+
+BOOL BP2B_ProtocolsOK(void) { return gBP2B_ProtoOK; }
+
+static BOOL BP2B_BuildIs20A8372(void) {
+    char buf[64] = {0}; size_t len = sizeof buf - 1;
+    if (sysctlbyname("kern.osversion", buf, &len, NULL, 0) != 0) return NO;
+    return strcmp(buf, "20A8372") == 0;
+}
+
+// Encodings that the STOCK protocols of this build already use: the stock +initialize built trampolines for all of them,
+// so they are in the table on every build (dynamic whitelist, build independent).
+static void BP2B_CollectEncodings(Protocol *p, NSMutableSet<NSString *> *out, int depth) {
+    if (!p || depth > 8) return;
+    unsigned n = 0;
+    struct objc_method_description *ms = protocol_copyMethodDescriptionList(p, YES, YES, &n);
+    for (unsigned i = 0; i < n; i++) if (ms[i].types) [out addObject:@(ms[i].types)];
+    free(ms);
+    unsigned pc = 0;
+    Protocol * __unsafe_unretained *pl = protocol_copyProtocolList(p, &pc);
+    for (unsigned i = 0; i < pc; i++) BP2B_CollectEncodings(pl[i], out, depth + 1);
+    free(pl);
+}
+
+static BOOL BP2B_StaticTableHas(const char *enc) {
+    for (size_t i = 0; i < sizeof kBP2B_Tramp160 / sizeof kBP2B_Tramp160[0]; i++)
+        if (strcmp(kBP2B_Tramp160[i], enc) == 0) return YES;
+    return NO;
+}
+
+static BOOL BP2B_ProtoHasSel(Protocol *p, SEL s) {
+    for (int d = 0; p && d < 8; d++) {
+        struct objc_method_description md = protocol_getMethodDescription(p, s, YES, YES);
+        if (md.name) return YES;
+        unsigned pc = 0;
+        Protocol * __unsafe_unretained *pl = protocol_copyProtocolList(p, &pc);
+        Protocol *next = pc ? pl[0] : nil;
+        free(pl);
+        p = next;
+    }
+    return NO;
+}
+
+// Same shape as group2's builder (copy of `base`'s own required methods + adds, same single parent) but filtered:
+// an addition is dropped when (a) its encoding is not provably in the trampoline table, (b) the selector is already in
+// the protocol chain, (c) SBSwitcherModifier/SBChainableModifier already respond to it (the stock +initialize would assert).
+static Protocol *BP2B_BuildProto(Protocol *base, const char *name, const BP2BProtoSpec *adds, size_t nAdds, Class owner) {
+    if (!base) return nil;
+    Protocol *existing = objc_getProtocol(name);
+    if (existing) return existing;
+    BOOL known = BP2B_BuildIs20A8372();
+    NSMutableSet<NSString *> *dyn = [NSMutableSet set];
+    BP2B_CollectEncodings(base, dyn, 0);
+    Protocol *np = objc_allocateProtocol(name);
+    if (!np) return nil;
+    unsigned pc = 0;
+    Protocol * __unsafe_unretained *pl = protocol_copyProtocolList(base, &pc);
+    if (pc > 1) { free(pl); return nil; }                       // the stock walker asserts on this; leave everything alone
+    for (unsigned i = 0; i < pc; i++) protocol_addProtocol(np, pl[i]);
+    free(pl);
+    unsigned n = 0;
+    struct objc_method_description *ms = protocol_copyMethodDescriptionList(base, YES, YES, &n);
+    for (unsigned i = 0; i < n; i++) protocol_addMethodDescription(np, ms[i].name, ms[i].types, YES, YES);
+    free(ms);
+    ms = protocol_copyMethodDescriptionList(base, NO, YES, &n);
+    for (unsigned i = 0; i < n; i++) protocol_addMethodDescription(np, ms[i].name, ms[i].types, NO, YES);
+    free(ms);
+    for (size_t i = 0; i < nAdds; i++) {
+        SEL s = sel_registerName(adds[i].sel);
+        NSString *tag = [NSString stringWithFormat:@"%s|%s", adds[i].sel, adds[i].types];
+        BOOL encOK = [dyn containsObject:@(adds[i].types)] || (known && BP2B_StaticTableHas(adds[i].types));
+        if (!encOK) { [gBP2B_ProtoSkipped addObject:[tag stringByAppendingString:@"|encoding-not-in-table"]]; continue; }
+        if (BP2B_ProtoHasSel(base, s)) { [gBP2B_ProtoSkipped addObject:[tag stringByAppendingString:@"|already-in-protocol"]]; continue; }
+        if (owner && [owner instancesRespondToSelector:s]) { [gBP2B_ProtoSkipped addObject:[tag stringByAppendingString:@"|class-implements"]]; continue; }
+        protocol_addMethodDescription(np, s, adds[i].types, YES, YES);
+        [gBP2B_ProtoAdded addObject:tag];
+    }
+    objc_registerProtocol(np);
+    return np;
+}
+
+// True when the stock +initialize already ran for SBSwitcherModifier (its own method list then contains the trampolines).
+static BOOL BP2B_ProtocolsAlreadyInstalled(Class sm) {
+    if (!sm) return NO;
+    SEL probe = sel_registerName("animationAttributesForLayoutElement:");   // required query method, never implemented by the class itself
+    unsigned n = 0;
+    Method *ml = class_copyMethodList(sm, &n);
+    BOOL found = NO;
+    for (unsigned i = 0; i < n && !found; i++) if (method_getName(ml[i]) == probe) found = YES;
+    free(ml);
+    return found;
+}
+
+// Post-init check: every selector we registered has the trampoline (own method of SBSwitcherModifier, same types) and
+// the protocol the class now reports is ours.
+static BOOL BP2B_VerifyProtocols(Class sm) {
+    if (!sm || !gBP2B_ProtoAdded) return NO;
+    if (!BP2B_ProtocolsAlreadyInstalled(sm)) return NO;              // initialisation did not run
+    for (NSString *tag in gBP2B_ProtoAdded) {
+        NSArray<NSString *> *p = [tag componentsSeparatedByString:@"|"];
+        Method m = class_getInstanceMethod(sm, sel_registerName(p[0].UTF8String));
+        if (!m) return NO;
+        const char *t = method_getTypeEncoding(m);
+        if (!t || strcmp(t, p[1].UTF8String) != 0) return NO;
+    }
+    id q = BP2B_Obj((id)sm, sel_registerName("queryProtocol"));
+    id c = BP2B_Obj((id)sm, sel_registerName("contextProtocol"));
+    if (gBP2B_ExtQry && q && !protocol_isEqual((Protocol *)q, gBP2B_ExtQry)) return NO;
+    if (gBP2B_ExtCtx && c && !protocol_isEqual((Protocol *)c, gBP2B_ExtCtx)) return NO;
+    return YES;
+}
+
+static NSString *BP2B_CrumbPath(void) {
+#ifdef BP_G2B_STANDALONE
+    return @"/tmp/Backport162.proto.inflight";
+#else
+    return ROOT_PATH_NS(@"/tmp/Backport162.proto.inflight");
+#endif
+}
+static NSString *BP2B_OffPath(void) {
+#ifdef BP_G2B_STANDALONE
+    return @"/tmp/Backport162.off.g2bproto";
+#else
+    return ROOT_PATH_NS(@"/tmp/Backport162.off.g2bproto");
+#endif
+}
+
+// ---- the query-chain fallback used for the selectors that cannot be protocol members --------------------------------
+// Query chain model (16.0): each modifier has -nextQueryModifier (ivar +0x40) = the next modifier of the query chain, and
+// -enumerateChildModifiersWithBlock:.  A fallback call finds the first modifier at/after `me` whose class implements `sel`
+// with an IMP other than this fallback and calls it (it may call [super sel], which re-enters this fallback with
+// me = that modifier and continues behind it).  Nobody overrides -> 162 default (SBDefaultImplementationsSwitcherModifier).
+static IMP gBP2B_FbScale, gBP2B_FbClip, gBP2B_FbTongue;
+
+static id BP2B_FindOverriderInChildren(id m, SEL sel, IMP fallback, int *budget) {
+    SEL en = sel_registerName("enumerateChildModifiersWithBlock:");
+    if (!m || (*budget)-- <= 0 || ![m respondsToSelector:en]) return nil;
+    NSMutableArray *kids = [NSMutableArray array];
+    ((void (*)(id, SEL, id))objc_msgSend)(m, en, ^(id child) { if (child) [kids addObject:child]; });
+    for (id child in [kids reverseObjectEnumerator]) {
+        IMP i = class_getMethodImplementation(object_getClass(child), sel);
+        if (i && i != fallback) return child;
+        id r = BP2B_FindOverriderInChildren(child, sel, fallback, budget);
+        if (r) return r;
+    }
+    return nil;
+}
+
+static id BP2B_FindOverrider(id me, SEL sel, IMP fallback) {
+    SEL nextSel = sel_registerName("nextQueryModifier");
+    id n = BP2B_Obj(me, nextSel);
+    for (int g = 0; n && g < 512; g++) {
+        IMP i = class_getMethodImplementation(object_getClass(n), sel);
+        if (i && i != fallback) return n;
+        n = BP2B_Obj(n, nextSel);
+    }
+    // UNSURE:nextQueryModifier may be nil on the root -> depth-first search of the child tree, last child (highest level) first
+    int budget = 512;
+    return BP2B_FindOverriderInChildren(me, sel, fallback, &budget);
+}
+
+static void BP2B_SetupProtocolFallbacks(void) {
+    Class sm = objc_getClass("SBSwitcherModifier");
+    if (!sm) return;
+    // 162 default implementations: scale -> identity, clipping -> the bounds argument, tongue -> {0,0} (state "none").
+    gBP2B_FbScale = imp_implementationWithBlock(^double(id me, double scale, id layout) {
+        SEL s = sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:");
+        id n = BP2B_FindOverrider(me, s, gBP2B_FbScale);
+        if (!n) return scale;
+        return ((double (*)(id, SEL, double, id))class_getMethodImplementation(object_getClass(n), s))(n, s, scale, layout);
+    });
+    gBP2B_FbClip = imp_implementationWithBlock(^CGRect(id me, long long role, id layout, unsigned long long idx, CGRect bounds) {
+        SEL s = sel_registerName("clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:");
+        id n = BP2B_FindOverrider(me, s, gBP2B_FbClip);
+        if (!n) return bounds;
+        return ((CGRect (*)(id, SEL, long long, id, unsigned long long, CGRect))class_getMethodImplementation(object_getClass(n), s))(n, s, role, layout, idx, bounds);
+    });
+    typedef struct { unsigned long long state, direction; } BP2BTongueAttrs;
+    gBP2B_FbTongue = imp_implementationWithBlock(^BP2BTongueAttrs(id me) {
+        SEL s = sel_registerName("continuousExposeStripTongueAttributes");
+        id n = BP2B_FindOverrider(me, s, gBP2B_FbTongue);
+        BP2BTongueAttrs none = { 0, 0 };
+        if (!n) return none;
+        return ((BP2BTongueAttrs (*)(id, SEL))class_getMethodImplementation(object_getClass(n), s))(n, s);
+    });
+    // class_addMethod only: a later 16.0 or ported implementation on a subclass overrides, and an existing one is kept.
+    BP2B_AddIfMissing(sm, "adjustedSpaceAccessoryViewScale:forAppLayout:", gBP2B_FbScale, kBP2B_PNoChain[0].types);
+    BP2B_AddIfMissing(sm, "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", gBP2B_FbClip, kBP2B_PNoChain[1].types);
+    BP2B_AddIfMissing(sm, "continuousExposeStripTongueAttributes", gBP2B_FbTongue, kBP2B_PNoChain[2].types);
+}
+
+// Called FIRST from the %ctor (before any %init of other groups, before anything messages SBSwitcherModifier).
+static void BP2B_Early(void) {
+    if (gBP2B_ProtoTried) return;
+    gBP2B_ProtoTried = YES;
+    gBP2B_ProtoAdded = [NSMutableArray array];
+    gBP2B_ProtoSkipped = [NSMutableArray array];
+    if (!BP2B_Enabled("g2bproto")) { BP_Log(@"G2B: protocol extension disabled by switch"); return; }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if ([fm fileExistsAtPath:BP2B_CrumbPath()]) {
+        // the previous launch died inside the forced +initialize: switch the feature off for good
+        [@"auto-disabled after crash" writeToFile:BP2B_OffPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        [fm removeItemAtPath:BP2B_CrumbPath() error:nil];
+        BP_Log(@"G2B: crumb found, protocol extension auto-disabled");
+        return;
+    }
+    Class sm = objc_getClass("SBSwitcherModifier");
+    Class cm = objc_getClass("SBChainableModifier");
+    // shape check of the 16.0 mechanism
+    if (!sm || !cm || !class_getClassMethod(cm, sel_registerName("_initalizeIMPCaching")) ||
+        !class_getClassMethod(cm, sel_registerName("baseClassForQueryProtocol")) ||
+        !class_getClassMethod(sm, sel_registerName("queryProtocol")) || !class_getClassMethod(sm, sel_registerName("contextProtocol"))) {
+        BP_Log(@"G2B: chain mechanism not found, protocol extension off");
+        return;
+    }
+    if (BP2B_ProtocolsAlreadyInstalled(sm)) { BP_Log(@"G2B: too late (SBSwitcherModifier already initialised): fallback route only"); return; }
+    Class meta = object_getClass((id)sm);
+    Method mq = class_getClassMethod(sm, sel_registerName("queryProtocol"));
+    Method mc = class_getClassMethod(sm, sel_registerName("contextProtocol"));
+    gBP2B_OrigQryProto = method_getImplementation(mq);
+    gBP2B_OrigCtxProto = method_getImplementation(mc);
+    const char *tq = method_getTypeEncoding(mq), *tc = method_getTypeEncoding(mc);
+    // build once, inside the hooked class methods (first sent from the stock +initialize)
+    class_replaceMethod(meta, sel_registerName("contextProtocol"), imp_implementationWithBlock(^id(id me) {
+        id orig = gBP2B_OrigCtxProto ? ((id (*)(id, SEL))gBP2B_OrigCtxProto)(me, sel_registerName("contextProtocol")) : nil;
+        if (me != (id)objc_getClass("SBSwitcherModifier")) return orig;       // subclasses with their own protocol are untouched
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            gBP2B_ExtCtx = BP2B_BuildProto((Protocol *)orig, "BP162_SBSwitcherContextProviding", kBP2B_PCtx, sizeof kBP2B_PCtx / sizeof kBP2B_PCtx[0], objc_getClass("SBSwitcherModifier"));
+        });
+        return gBP2B_ExtCtx ?: orig;
+    }), tc);
+    class_replaceMethod(meta, sel_registerName("queryProtocol"), imp_implementationWithBlock(^id(id me) {
+        id orig = gBP2B_OrigQryProto ? ((id (*)(id, SEL))gBP2B_OrigQryProto)(me, sel_registerName("queryProtocol")) : nil;
+        if (me != (id)objc_getClass("SBSwitcherModifier")) return orig;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            gBP2B_ExtQry = BP2B_BuildProto((Protocol *)orig, "BP162_SBSwitcherMultitaskingQueryProviding", kBP2B_PQry, sizeof kBP2B_PQry / sizeof kBP2B_PQry[0], objc_getClass("SBSwitcherModifier"));
+        });
+        return gBP2B_ExtQry ?: orig;
+    }), tq);
+    // Force the stock initialisation NOW (deterministic order) under the breadcrumb.
+    [@"1" writeToFile:BP2B_CrumbPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    ((id (*)(id, SEL))objc_msgSend)((id)sm, sel_registerName("class"));      // +class on a class object runs +initialize first
+    gBP2B_ProtoOK = BP2B_VerifyProtocols(sm);
+    [fm removeItemAtPath:BP2B_CrumbPath() error:nil];
+    BP_Log(@"G2B: protocols %s; added %lu skipped %lu", gBP2B_ProtoOK ? "OK" : "FAILED-verification",
+           (unsigned long)gBP2B_ProtoAdded.count, (unsigned long)gBP2B_ProtoSkipped.count);
+    for (NSString *s in gBP2B_ProtoSkipped) BP_Log(@"G2B: skipped %@", s);
+}
+
+// The final context provider for a modifier when the chain route is not available (gBP2B_ProtoOK == NO): the root's delegate.
+static id BP2B_ContextProviderFor(id modifier) {
+    id m = modifier;
+    for (int g = 0; m && g < 64; g++) {
+        id parent = BP2B_Obj(m, sel_registerName("parentModifier"));
+        if (!parent) break;
+        m = parent;
+    }
+    return BP2B_Obj(m, sel_registerName("delegate"));
+}
+
+// ---------------------------------------------------------------------------------------------- entry point
+// Call order (from the tweak %ctor):  BP2B_Early();  <group2 setup that adds %new methods to the VC / models>;  BP2B_Setup();
+static void BP2B_Setup(void) {
+    if (!BP2B_Enabled("g2b")) return;
+    BP2B_SetupProtocolFallbacks();
+    BP2B_SetupAttributes();
+    BP2B_SetupCalculator();
+    BP2B_SetupLayoutAppLayout();
+    BP2B_SetupTapEvent();
+    BP2B_SetupSelection();
+    BP2B_SetupKeyboardNav();
+    BP2B_SetupGestureNames();
+    BP2B_SetupAperture();
+    BP2B_SetupGrabberClick();
+    BP2B_SetupContainerPointer();
+    BP2B_SetupTongue();
+    BP_Log(@"G2B: setup done (protocols %s)", gBP2B_ProtoOK ? "chain" : "fallback-route");
+}

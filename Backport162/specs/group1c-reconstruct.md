@@ -12,7 +12,7 @@ type numbers, query-protocol trampolines, run-time subclass contract, `G1B_*` he
 its helpers (`G1B_MakeClass`, `G1B_SUPER`, `G1B_GET/G1B_SET`, `G1B_Send*`, `G1B_Append`, `G1B_HasSuper`, `G1B_IvarOffset`, `G1B_NewUpdateLayoutResponse`).
 
 ## Progress log
-(see end of file; the SUMMARY section is written last)
+5a, 5b, 5c, 5d, 5e, 5f, 3, 4 (earlier sessions); 1d, 1f, 1b, 1a, 2/2b, 5.x producers, data-layer requirements, SUMMARY (this session). All items have a section; see SUMMARY for the tags.
 
 
 ---------------------------------------------------------------------------------------------------
@@ -223,3 +223,124 @@ State machine: `_gestureEnded`, `_isResizing`, `_hasResizedEnoughToUnblur`, `_is
 ### _SBContinuousExposeWindowDragContentSwitcherModifier (SBSwitcherModifier, `_selectedDisplayItem +0x60`)
 init 0x1c762a3b0: children `SBContinuousExposeWindowDragSwitcherModifier initWithGestureID:initialAppLayout:selectedDisplayItem:` (level 0), `SBFullScreenContinuousExposeSwitcherModifier initWithFullScreenAppLayout:initialAppLayout` with tap flags NO (level 1), `SBAppSwitcherContinuousExposeSwitcherModifier new` with tap flags NO (level 2); `adjustedAppLayoutsForAppLayouts:` = layouts containing `_selectedDisplayItem` first.
 Wiring: the Root's `gestureModifierForGestureEvent:` returns `G1C_NewDndRoot(3, _currentAppLayout)` for gesture type 7 (item 2); the 16.0 pending-eviction root is simply not created.
+
+
+---------------------------------------------------------------------------------------------------
+
+## 1d. Window drag family: SBContinuousExposeWindowDragSwitcherModifier, ...DestinationSwitcherModifier, ...RootSwitcherModifier, event size field   **DONE** (Destination = UNSURE: composition over the 16.0 algorithm)
+
+Method used: class-by-class size/structure diff of 160 vs 162 (`sizes.py`), then symbolic decode (`dec.py`) and raw reading of every changed or new method. Design: **BP162 subclasses of the 16.0 classes**
+(`BP162ContinuousExposeWindowDragSwitcherModifier`, `...DestinationSwitcherModifier`, `...RootSwitcherModifier`); only the changed and new methods are overridden, the 16.0 ivars are read by name
+(`_location`, `_anchorPoint`, ...; no offsets) and the new 16.2 ivars are added with `class_addIvar` (`_bp_sizeOfSelectedDisplayItem`, `_bp_dragBeganInOtherSwitcher`, `_bp_dragBeganInAnyStrip`, `_bp_dragBeganOnAnyStage`).
+Constants read from 162: `SBInvalidPoint = {DBL_MAX, DBL_MAX}` (0x1c7a92f20), fling threshold 2500 pt/s (0x1c7a91d40), drag scale 0.6 (0x1c7a90d98), velocity projection 0.15 (0x1c7a90d70).
+
+### Drag modifier (superclass SBGestureSwitcherModifier; 16.0 had `_translation`, 16.2 `_sizeOfSelectedDisplayItem` and three flags)
+| method (162 addr) | behaviour implemented |
+|---|---|
+| `initWithGestureID:initialAppLayout:selectedDisplayItem:` 0x1c76092bc | super `initWithGestureID:`, both anchors = SBInvalidPoint, creates the BP162 destination (`initWithSelectedDisplayItem:initialAppLayout:delegate:self`) and adds it as child |
+| `handleGestureEvent:` 0x1c7609578 | `_location` = event location; `_gestureWasCanceled = (destination.proposedDestination == 0)`. Phase 1: size from `event.sizeOfSelectedDisplayItem`; `_dragBeganInOtherSwitcher = draggedLayout.preferredDisplayOrdinal != displayOrdinal` (draggedLayout from `draggingAppLayoutsForContinuousExposeWindowDrag`); `_dragBeganInAnyStrip = event.isDraggingFromContinuousExposeStrips`, `_dragBeganOnAnyStage = !that`; anchor = `locationInSelectedDisplayItem / frame size` (frame = the other display's size when the drag began elsewhere); appends `UpdateLayout(2,2)` then `UpdateLayout(8,3)`. Phase 3: cancelled -> perform transition activating the initial layout (gesture initiated); otherwise the proposed layout; a fling (velocity.y > 2500 and > abs(velocity.x)) whose bottom edge passes `maximumWindowHeightWithDock + screenEdgePadding` removes the dragged window (layout without it, or the home layout when nothing is left); else `appLayoutByBringingItemToFront:` ; strips presentation response `(0,1)` when `continuousExposeStripProgress != 0` and the final layout no longer contains the item |
+| `scaleForIndex:` 0x1c760a4b4 | selected layout with valid anchor: from a strip -> 0.6 if any proposed layout contains the item else `chamoisLayoutAttributes.stripCardScale`; from a stage -> `began-in-other-switcher ? (inProposed ? 0.6 : 1.0) : (inProposed ? 1.0 : 0.6)` when any proposed layout holds the item, else `stripCardScale`; other layouts: super |
+| `frameForIndex:` 0x1c760a1e0 | size = `_sizeOfSelectedDisplayItem` when (began in other switcher and any proposed holds item and the destination's proposed layout does not), else the calculator frame of the item in (proposed layout or current layout); size 0 -> super's size; result = `UIRectCenteredAboutPoint(SBRectWithSize(size), _location)` |
+| `preferredCenterForSelectedItemInDestinationModifier:` 0x1c7609494 | `_location + size*scale*(0.5 - anchor)`; plain `_location` when the layout is not in `appLayouts` |
+| `shouldUseAnchorPointToPinLayoutRolesToSpace:` (new) | NO for the selected layout, else super |
+| `shouldPinLayoutRolesToSpace:` | YES for the selected layout with a valid anchor, else super |
+| `frameForLayoutRole:inAppLayout:withBounds:` / `opacityForLayoutRole:...` (new) | selected layout: bounds / 1.0; others super |
+| `visibleAppLayouts` (new) | super set plus the layout containing the selected item |
+| `perspectiveAngleForAppLayout:` | selected layout: 0 if any proposed layout holds it, else `stripTiltAngle` negated for RTL; others super |
+| `animationAttributesForLayoutElement:` | dragged app layout: `layoutSettings` = new `SBFFluidBehaviorSettings` with tracking damping/response copied from `medusaSettings.resizeAnimationSettings`, `positionSettings` = `windowDragAnimationSettings`; everything else = plain super (the 16.0 `updateMode 3` moved to the root) |
+| `continuousExposeStripProgress`, `appLayoutOnContinuousExposeStage`, `appLayoutContainingAppLayout:`, `isSwitcherWindowVisible`, `_anyItemExceedsWidthThresholdToHideStrip` (= `!overlappingModel(proposed).isContinuousExposeStripVisible`), `_anyProposedAppLayoutContainsSelectedDisplayItem` | as in the code |
+
+UNSURE: the home-fling branch and the anchor for drags that began on another display (an internal helper at 0x1c7609790 scales the in-item location; reconstructed as location / other-display size); `phase 3` order of the "strip hide" response.
+
+### Event field and its producer
+`SBContinuousExposeWindowDragModifierEvent.sizeOfSelectedDisplayItem` is added with associated storage (copied in `copyWithZone:`). Producer in 162: `-[SBFluidSwitcherGestureWorkspaceTransaction _currentGestureEventForGesture:]` (0x1c74aef3c) copies `[transaction sizeOfSelectedDisplayItem]` into the event; the 16.0 transaction has no such property, so the hook only fills it when the transaction answers (else CGSizeZero, which the drag modifier turns into "use the layout's own size" = the single-display behaviour).
+
+### Destination (UNSURE)
+`handleGestureEvent:` is 634 instructions in 162 against 500 in 160 and the 16.2 form no longer uses `translationInContainerView`. The reconstruction does not duplicate the 160 decision logic (cancel zone, `maximumNumberOfAppsOnStage` eviction, `rejectDropsWhenStageIsFull`, `appLayoutByDraggingItem:...`, destinations 0..3): the 16.0 algorithm already implements the same tree, so the subclass calls super and adds the 16.2 deltas: phase 1 stores `_initialSelectedDisplayItemLayoutAttributes` and `_dragBeganInOtherSwitcher`; every event compares the proposed layout with `_lastAppLayoutForStripCalculation` and, when it changed, appends `SBInvalidateContinuousExposeIdentifiersEventResponse(from: last, to: proposed, animated: YES)` (type 40 here). `_widthThresholdToHideStrips` = `overlappingModel(proposed).widthThresholdToHideStrip` (DM6). `_frameForSelectedDisplayItem` / `_appLayoutByAddingItem:` keep the 16.0 bodies; they use `attributesByModifyingCenter:` (absolute) and rely on the data layer (DM3/DM4) converting to `normalizedCenter`/`attributedSize`. Check on device: dragging a window out of the stage into the strip and back; the strip must open/close at the same x as 16.2.
+
+### Root
+`initWithStartingEnvironmentMode:initialAppLayout:` (0x1c7460f98), `gestureChildModifierForGestureEvent:activeTransitionModifier:` (0x1c7461188: `SBFilteringSwitcherModifier initWithAppLayouts:@[selectedAppLayout] modifier:[_SBContinuousExposeWindowDragContentSwitcherModifier ...]`), `handleGestureEvent:` (phase 1 -> `SBInvalidateAdjustedAppLayoutsSwitcherEventResponse`), `handleTransitionEvent:` (initial layout = toAppLayout or the home layout of the event's display; gesture modifier `state = 1` at phase 1, root `state = 1` at phase 3), `animationAttributesForLayoutElement:` (non-selected elements: `resizeAnimationSettings` + `updateMode 3`), `appLayoutsToResignActive` = `@{}`.
+
+## 1f. SBHomeScreenContinuousExposeSwitcherModifier   **DONE** (UNSURE: the peek-end response transformer)
+`BP162HomeScreenContinuousExposeSwitcherModifier` (subclass of the 16.0 class): `init` additionally creates `SBStripContinuousExposeSwitcherModifier` into `_stripModifier` **only when that class exists** (the FullScreen/Strip package or a real 16.2 build), `continuousExposeStripProgress` = 0.0, `isResizeGrabberVisibleForAppLayout:` = NO. `responseForProposedChildResponse:childModifier:event:` (0x1c77f393c): for transition events whose `fromPeekConfiguration` is valid and `toPeekConfiguration` is not, type-31 (perform transition) responses coming from a peek transition modifier have their app layout filtered with `appLayoutWithItemsPassingTest:` (block 0x1c77f3e04). The block's predicate was not resolved; the override passes the response through. Removed-in-162 methods (`appLayoutsToCacheSnapshots`, `dimmingAlphaForLayoutRole:...`, `scrollViewContentOffset`, `topMostLayoutElements`) stay as the 16.0 versions, because they are answered by the strip child only when it exists.
+
+## 1b. SBInlineAppExposeContinuousExposeSwitcherModifier   **DONE** (UNSURE: `frameForLayoutRole:`/`scaleForLayoutRole:`/`homeScreenDimmingAlpha` keep the 16.0 maths; the reopen button has no view in 16.0)
+`BP162InlineAppExposeContinuousExposeSwitcherModifier` (subclass). Implemented from the decode: `handleTapAppLayoutEvent:` (0x1c7686a58: unhandled tap on the active layout -> `requestForTapAppLayoutEvent:`; on another layout -> request with `appLayout` = item brought to front inside `appLayoutContainingAppLayout:`, `activatingDisplayItem`; event handled with reason "I"), `handleTapAppLayoutHeaderEvent:` (new, 0x1c7686bf8: multi-window item of the expose bundle: active layout -> `SBPulseDisplayItemSwitcherModifier` child at level 3, other layout -> activation request; item of another bundle -> request with `source 3` + `bundleIdentifierForAppExpose`), `handleTransitionEvent:` (phase 2 and differing expose bundle IDs -> reopen-button presence response + `SBInvalidateReopenButtonTextSwitcherEventResponse`), `handleInsertionEvent:`, `handleTimerEvent:` (reason `SBInlineAppExposeContinuousExposeSwitcherModifierTimerEventReason` -> showing = YES, `UpdateLayout(8,3)`), `titleAndIconOpacityForIndex:` (active layout 0.0, others 1.0; this settles the "UNSURE inversion" of group1b), `isFocusEnabledForAppLayout:` (= active layout), `handleHighlightEvent:` (ignores handled events), `_isLayoutRoleOccluded:` (adds `isItemCoveredByFullyOccludedPeekingItem:`), RTL mirroring of `frameForIndex:` (the grid maths is identical to 16.0, 16.2 only mirrors for `userInterfaceLayoutDirection == RTL`), the button accessors (`numberOfHiddenAppLayouts` etc. as associated state; the button never shows when `numberOfHiddenAppLayoutsForBundleIdentifier:` is 0 or unanswered).
+
+## 1a. SBAppSwitcherContinuousExposeSwitcherModifier   **DONE** (behaviour); pile layout UNSURE and OFF by default
+`BP162AppSwitcherContinuousExposeSwitcherModifier` (subclass; ivars `_bp_handlesTap`, `_bp_handlesHeaderTap`, `_bp_ongoingRemovals`, `_bp_eventGen`). Behaviour layer decoded and implemented: `init` (flags YES, `SBDefaultImplementationsSwitcherModifier` child at level 1), `handleEvent:` (generation counter), `handleTapAppLayoutEvent:` (gated by the flag; perform transition activating the layout; handled with reason "App Switcher Continuous Expose"), `handleTapAppLayoutHeaderEvent:` (multi-window item -> request `source 3` + expose bundle; otherwise pulse child level 3), `handleTapOutsideToDismissEvent:` (`requestForActivatingHomeScreen`), `handleRemovalEvent:` (counts phases 1/2; when the last window is gone and no removal is pending -> home with `autoPIPDisabled`), `appLayoutsToResignActive` = `@{ @3: set(appLayouts) }` (constant 3 read from the `NSConstantIntegerNumber` at 0x1e18f9ff0), the tap flags, `isResizeGrabberVisibleForAppLayout:` NO, `isSwitcherWindowVisible` YES.
+Pile layout (`buildLayoutCalculationsForCache:` 0x1c7812acc, 516 instructions) reconstructed with an own cache (associated dictionary keyed by a token of generation counts + orientation + bounds + event generation), not with `SBSwitcherLayoutCalculationsCache`: card height = `(switcherViewBounds.h - floatingDockHeight - screenEdgePadding - statusBarHeight - 2*vEdge - vInter*(rows-1)) / rows` rounded for scale; piles fill rows alternately (`index % rows`), a column advances by its widest pile + `switcherHorizontalInterItemSpacing`; card k of a pile has scale `cardH/size.h - 0.01*k` (constant 0x1c7a916c0) and is offset by `k * switcherPileCardMinimumPeekAmount`; frames are stored unscaled and centred, the scale separately; `frameForIndex:` applies the scroll offset only; `opacityForLayoutRole:...` is 1 for `indexInPile < numberOfVisibleItemsPerGroup`, else 0; `_defaultCardScale` = card height / container height. Switch: `G1C_PILES_DEFAULT` (compile time, default 0). With 0 the 16.0 grid stays. UNSURE: direction of the peek offset, RTL cursor signs (the decode shows both signs of `hEdge`/`hInter` selected by `isRTLEnabled`; reconstructed as a mirror), the exact start of the column cursor; `adjustedContinuousExposeIdentifiersIn{Switcher,Strip}...` (118 and 579 instructions) are identity here, the 16.2 versions order the "forward" pile of a cycle first and are only consumed by the Slide/Override modifiers, which fall back to the plain identifiers.
+
+## 2 / 2b. The Root: factories, gesture mapping, peek child, slide/cycle spawning   **DONE** (UNSURE: floor state carry-over)
+All hooks are in `%group G1C_Root` on `SBContinuousExposeRootSwitcherModifier` (16.0 class; the 16.2 ivars `_effectiveAppLayoutOnStage`, `_isStripTonguePresented`, `_initialFloorModifierForContinuousExposeWindowDrag` are associated objects because the controller allocates the class).
+
+| 162 method | what the hook does |
+|---|---|
+| `floorModifierForTransitionEvent:` 0x1c78180e8 | by `toEnvironmentMode`: 1 -> reuse the Home floor or `G1C_NewHomeModifier()`; 2 -> `multitaskingModifier` (no expose bundle) or reuse / new `SBAppExposeContinuousExposeSwitcherModifier initWithBundleIdentifier:`; 3 without expose bundle -> reuse the FullScreen floor when `fullScreenAppLayout isEqual:toAppLayout`, else new FullScreen (`initWithFullScreenAppLayout:`) with `highlightedByTouch/HoverAppLayouts` copied from the old FullScreen floor; 3 with expose bundle -> reuse the Inline floor with the same `appExposeBundleIdentifier`, else the BP162 inline class. Falls back to `%orig` whenever a needed class is missing |
+| `floorModifierForGestureEvent:` 0x1c78183f0 (new) | window-drag events only: phase 1 stores the current floor; phase 2/3 with the proposed layout holding the dragged window -> FullScreen floor for the proposed layout (kept if already FullScreen); not holding it -> restores the stored floor (`setState:0`); phase 3 clears the stored floor |
+| `gestureModifierForGestureEvent:` 0x1c7818d78 | type 3 -> `G1C_NewGridSwipeUpRoot(_effectiveEnvironmentMode, AppSwitcher modifier)`; 7 -> DnD root (mode 3, `_currentAppLayout`); 9 -> window-drag root (`initWithStartingEnvironmentMode:initialAppLayout:`, `_currentAppLayout` or the home layout of the display); type 1 root also gets `setEnsuresSelectedAppLayoutUsesAnchorPointSpacePinning:YES` when it has the setter; 10, 11, 12 unchanged |
+| `handleGestureEvent:` | for window-drag events at phase != 1 additionally `_updateFloorModifierWithGestureEvent:` (16.0 already has the method) |
+| `handleEvent:` 0x1c7819254 | keeps `_effectiveAppLayoutOnStage` (phase table of the decode); the Invalidate response of 162 is NOT emitted because the 16.0 controller calls `_updateContinuousExposeIdentifiers...` inline |
+| `handleTransitionEvent:` 0x1c7819470 | peek child (`G1C_NewPeekModifier`, level 2, key `SBContinuousExposePeekModifierKey`) when `phase == 2 \|\| !animated`, valid `toPeekConfiguration` and no such child |
+| `handleContinuousExposeIdentifiersChangedEvent:` 0x1c78195b8 | replaced (calls the base class, not the 16.0 body): animated, mode 3, both layouts -> Slide(direction 1) for ids that left the strip, Slide(direction 0) for ids that entered it (level 5), plus the Cycle modifier (level 5) when from/to share an identifier |
+| `transitionModifierForMainTransitionEvent:` 0x1c781859c | `%orig`, then: windowing-mode-change events -> nil; animated, non-gesture events only: (2,3) SwitcherToApp(0), (3,2) SwitcherToApp(1), (2,1) / (1,2) CEToHome with a copy of `multitaskingModifier`, (3,3) the BP162 AppToApp with the three event flags. All pulse / window commit / decline / delete / entity-removal cases stay `%orig` (identical) |
+| `appLayoutOnContinuousExposeStage`, `handleContinuousExposeStripEdgeProtectTongueEvent:` (stores the flag, `UpdateLayout(4,2)`), `continuousExposeStripTongueAttributes` (`{presented ? 2 : 1, RTL ? 2 : 1}`), `shouldUseWallpaperGradientTreatment` YES, `shouldScaleContentToFillBoundsAtIndex:` NO, `shouldUseNonuniformSnapshotScalingForLayoutRole:...` NO | added (`%new`) |
+
+Not done on purpose: removing the 16.0 Root helpers (`adjustedAppLayoutsForAppLayouts:`, `_adjustedAppLayoutsForAppLayouts:`, `appLayoutsForContinuousExposeIdentifier:`, `adjustedContinuousExposeIdentifiersForIdentifiers:`): they are only dead code once the Strip package answers the same queries from the Strip modifier; with the 16.0 FullScreen modifier (strip inlined) they are still needed.
+Coupling with the FullScreen/Strip port: the factories need `initWithFullScreenAppLayout:`, `fullScreenAppLayout`, `highlightedByTouch/HoverAppLayouts` (+ setters), `setHandlesTapAppLayoutEvents:`/`...HeaderEvents:` and the `appLayoutOnContinuousExposeStage` query; all exist on the 16.0 FullScreen class except the two handles setters (provided by the Strip package, or inert: the content modifiers check `respondsToSelector:`).
+
+## Requirements on the data layer (what this package needs from group2 / group2b)
+| id | need | used by |
+|---|---|---|
+| DM1 | `-[SBDisplayItemLayoutAttributes sizeInBounds:defaultSize:screenEdgePadding:]` (returns absolute size from `attributedSize`) | DnD, destination, AppToApp (`isLayoutRoleMatchMovedToScene:`) |
+| DM2 | `centerInBounds:` (absolute centre from `normalizedCenter`) | DnD, destination |
+| DM3 | `attributesByModifyingNormalizedCenter:` / absolute-centre shim on 16.0 attributes | destination (`_appLayoutByAddingItem:`), DnD |
+| DM4 | `SBDisplayItemAttributedSizeInfer` + `attributesByModifyingAttributedSize:` | DnD drop sizing, destination |
+| DM5 | `SBSwitcherChamoisLayoutAttributes`: `stripWidth`, `stripCardScale`, `stripTiltAngle`, `screenEdgePadding`, `defaultWindowSize`, `maximumWindowHeightWithDock`, `switcher{Horizontal,Vertical}{Edge,InterItem}Spacing`, `switcherPileCardMinimumPeekAmount` | drag modifier, AppSwitcher piles |
+| DM6 | `SBChamoisOverlappingModel`: `widthThresholdToHideStrip`, `stageArea`, `compactedBoundingBox`, `isContinuousExposeStripVisible`, `isItemCoveredByFullyOccludedPeekingItem:`, `centerForItem:` | destination, drag modifier, inline expose, AppSwitcher |
+| DM7 | the "extended protocols" (group2 section 0) must route these 16.2-only queries through the chain: `draggingAppLayoutsForContinuousExposeWindowDrag`, `proposedAppLayoutsForContinuousExposeWindowDrag`, `proposedAppLayoutForContinuousExposeWindowDrag`, `appLayoutOnContinuousExposeStage`, `continuousExposeStripProgress`, `isRTLEnabled`, `displayOrdinal`, `overlappingModelForAppLayout:`, `isResizeGrabberVisibleForAppLayout:`, `numberOfHiddenAppLayoutsForBundleIdentifier:`, `frameForContinuousExposePeekingDisplayItem:...`; the VC answers the three drag queries (`dragging` = the layout(s) being dragged, `proposed(s)` = the destination modifier's proposed layout) |
+| DM8 | ordering: group2's `%init(G2B)` of `_updateContinuousExposeIdentifiers...` before `%init(G1C_VCIds)`; the FullScreen/Strip port API listed under section 2 |
+
+## Install order
+1. group2 / group2b data layer (DM1..DM7), 2. group1b setup (`G1B_Setup`), 3. `G1C_Setup()` (this file): event predicates -> grid swipe -> transactions -> ids/slide -> AppToApp -> SwitcherToApp -> peek -> DnD -> window-drag content -> AppSwitcher -> floors -> window-drag family -> window-drag event hooks -> Root hooks -> reveal -> Cycle -> VC ids. **Do not enable the group1b opt-in `group1b.apptoapp`** together with this file (it patches the 16.0 AppToApp class, which the Root now replaces).
+
+
+## 5.x Producers of the grabber and orientation responses   **DONE**
+Consumers are in group1b (1.7, 1.10); the producers are in `G1C_Producers`:
+* Grabber (response type 39): `-[SBFullScreenContinuousExposeSwitcherModifier handlePointerCrossedDisplayBoundaryEvent:]` (0x1c75c5144): `r = [super ...]`; when `event.edge == _continuousExposeStripEdge` (0x1c75c5520: `userInterfaceLayoutDirection == RTL ? 2 : 0`) and `BSFloatIsZero(continuousExposeStripProgress)`: `event.direction == 1` -> `initForInitialPresentation:YES`, `== 0` -> `NO`, any other direction -> nothing. Event type 38 reaches it through the 1b `_handleEvent:` hook. Added with `%new` to the 16.0 FullScreen class.
+* Orientation (response type 38): `-[SBItemResizeGestureSwitcherModifier _responseForSceneSizeUpdateToSize:center:sceneUpdatesOnly:]` (0x1c76bf0bc, present in both builds): item = `[_currentAppLayout itemForLayoutRole:_selectedLayoutRole]`; when `([[self layoutRestrictionInfoForItem:item] layoutRestrictions] & 0xa) == 2` the response gets a child `SBSetInterfaceOrientationFromUserResizingEventResponse initWithDisplayItem:desiredContentOrientation:` with orientation `size.width > size.height ? 3 : 1`. UNSURE: the meaning of restriction bits 0xa/2 on 16.0 (the bitmask is read from the same class in both builds; check that a resize-restricted app, e.g. an iPhone-only app, rotates its content while the window is dragged wider than tall).
+
+---------------------------------------------------------------------------------------------------
+
+## SUMMARY
+
+### What is complete
+All five parts of the brief have a reconstruction in `group1c-reconstruct.hooks.m` (3511 lines, `G1C_Setup()` at the end) and a section here.
+
+| item | piece | tag |
+|---|---|---|
+| 1a | AppSwitcherCE: behaviour layer (tap, header tap, tap outside, removal, flags, resign-active, pile opacity) | DONE |
+| 1a | AppSwitcherCE: pile layout / frames / scales / fitted size | UNSURE:direction of the card peek offset, RTL cursor, start of the column cursor; compile-time switch `G1C_PILES_DEFAULT` (0) |
+| 1a | `adjustedContinuousExposeIdentifiersIn{Switcher,Strip}...` | UNSURE:identity here; compare the Slide animation of a pile that moves to the front |
+| 1b | InlineAppExpose (tap, header tap, transition, insertion, timer, title opacity, focus, RTL mirror, occlusion, reopen button state) | DONE; UNSURE:`frameForLayoutRole:`, `scaleForLayoutRole:`, `homeScreenDimmingAlpha` use the 16.0 maths |
+| 1d | WindowDrag modifier + event size field + Root | DONE; UNSURE:cross-display anchor scaling, fling-to-home threshold use |
+| 1d | WindowDragDestination | UNSURE:composition over the 16.0 algorithm; Invalidate emission condition |
+| 1f | HomeScreen | DONE; UNSURE:peek-end response transformer (passthrough) |
+| 2/2b | Root factories (floor transition / gesture), gesture mapping, peek child, ids-changed (slide + cycle), transition post-processing, tongue, stage bookkeeping | DONE; UNSURE:floor state carry-over in `floorModifierForGestureEvent:` |
+| 3 | peek family | DONE (UNSURE: producer of a valid peek configuration over Stage Manager) |
+| 4 | app drag and drop family | DONE |
+| 5a..5f | grid swipe-up, gesture transactions, ids pipeline, cycle, reveal / overflow, AppToApp | DONE (earlier sessions, with their own UNSURE lists) |
+| 5.x | grabber and orientation producers | DONE; UNSURE:restriction bits |
+
+### Confidence
+High for everything tagged DONE whose logic is a direct decode (taps, requests, queries, constants, Root mapping, Cycle / Slide spawning). Medium for composition-based pieces (Destination) and for the pile arithmetic. Nothing was compiled or run: the environment has no Foundation / UIKit headers and no device. The code follows the brief's rules (ivars by name, guarded private calls, nil-safe, `%orig` on its own line, `objc_msgSend` casts, pragmas for unused statics); the first build on a machine with the SDK may still need small syntax fixes.
+
+### Install order
+group2 / group2b data layer (DM1..DM7) -> group1b `G1B_Setup()` (without the opt-in `group1b.apptoapp`) -> `G1C_Setup()` (order fixed in the trailer; `%init(G1C_VCIds)` last, after `%init(G2B)`).
+
+### Open questions (to check on a device)
+1. `proposedAppLayout(s)ForContinuousExposeWindowDrag` / `draggingAppLayoutsForContinuousExposeWindowDrag` must really be answered through the 16.0 query chain (DM7); without them the drag falls back to the single-display behaviour (`initial layout` as the dragged layout, destination layout as proposed), which is correct for one display.
+2. Whether the 16.0 VC lets `SBItemResizeGestureSwitcherModifier` responses with child responses through (`addChildResponse:` order).
+3. Pile layout on or off (`G1C_PILES_DEFAULT`): compare card positions against a 16.2 device; the 16.0 scroll maths (`contentOffsetForIndex:alignment:`) reads our frames.
+4. Whether `SBStripContinuousExposeSwitcherModifier` exists at run time (FullScreen/Strip package): the HomeScreen subclass and the Root's `appLayoutOnContinuousExposeStage` rely on it only when present.
+5. The two internal helpers not resolved by the tracer (0x1c7609790 anchor scaling, 0x1c77f3e04 predicate block) are the only places where behaviour was reconstructed instead of decoded.
