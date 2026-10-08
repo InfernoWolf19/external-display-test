@@ -967,3 +967,944 @@ static void BP2B_SetupCalculator(void) {
     BP_Log(@"[g2b] item3: calculator auto layout replaced");
 }
 
+
+// =================================================================================================================
+// ITEM 2: -[SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion:] (+ its 31 blocks)
+// Reconstruction of 162 0x1c74431b0 / block 0x1c744326c (2639 insns) / blocks _2.._31 (0x1c7445ba8..0x1c7446bdc),
+// cross-checked against 160 0x1c5fca458 / 0x1c5fca514 (2577 insns).   See md ITEM 2.
+// Policy (md 2.4): full port of the Stage Manager (chamois) path; the classic switcher (chamois off) and the three
+// pin/rotation/in-flight-anchor-adoption situations run the saved original 16.0 IMP unchanged.
+// =================================================================================================================
+
+typedef struct { double tl, bl, br, tr; } BP2BRadii;            // UIRectCornerRadii (HFA of 4 doubles)
+typedef void (^BP2BDone)(BOOL, BOOL);
+typedef BP2BDone (^BP2BMaker)(NSString *);
+
+static IMP gOrigLayoutAppLayout;
+
+static BOOL BP2B_RoleMaskContains(unsigned long long mask, long long role) {
+    static BOOL (*fn)(unsigned long long, long long); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (BOOL (*)(unsigned long long, long long))dlsym(RTLD_DEFAULT, "SBLayoutRoleMaskContainsRole"); });
+    if (fn) return fn(mask, role);
+    return role >= 0 && role < 64 && ((mask >> role) & 1);
+}
+static void BP2B_EnumerateValidRoles(void (^blk)(long long)) {
+    static void (*fn)(void (^)(long long)); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (void (*)(void (^)(long long)))dlsym(RTLD_DEFAULT, "SBLayoutRoleEnumerateValidRoles"); });
+    if (fn) { fn(blk); return; }
+    for (long long r = 1; r <= 9; r++) if (BP2B_RoleValidForSplitView(r)) blk(r);
+}
+static CGRect BP2B_RectWithSize(double w, double h) { return CGRectMake(0, 0, w, h); }            // SBRectWithSize
+
+#define BP2B_S0(RET, o, sel) ((RET (*)(id, SEL))objc_msgSend)((o), sel_registerName(sel))
+#define BP2B_S1(RET, o, sel, a) ((RET (*)(id, SEL, __typeof__(a)))objc_msgSend)((o), sel_registerName(sel), (a))
+#define BP2B_S2(RET, o, sel, a, b) ((RET (*)(id, SEL, __typeof__(a), __typeof__(b)))objc_msgSend)((o), sel_registerName(sel), (a), (b))
+#define BP2B_S3(RET, o, sel, a, b, c) ((RET (*)(id, SEL, __typeof__(a), __typeof__(b), __typeof__(c)))objc_msgSend)((o), sel_registerName(sel), (a), (b), (c))
+#define BP2B_S4(RET, o, sel, a, b, c, d) ((RET (*)(id, SEL, __typeof__(a), __typeof__(b), __typeof__(c), __typeof__(d)))objc_msgSend)((o), sel_registerName(sel), (a), (b), (c), (d))
+
+// 160 and 162 both apply the animation through +[UIView sb_animateWithSettings:mode:animations:completion:]
+static void BP2B_Animate(id settings, long long mode, void (^anims)(void), void (^completion)(BOOL, BOOL)) {
+    Class ui = [UIView class];
+    SEL s = sel_registerName("sb_animateWithSettings:mode:animations:completion:");
+    if (settings && [ui respondsToSelector:s])
+        ((void (*)(Class, SEL, id, long long, void (^)(void), void (^)(BOOL, BOOL)))objc_msgSend)(ui, s, settings, mode, anims, completion);
+    else {                                                                                     // no settings: apply without animation
+        anims();
+        if (completion) completion(YES, NO);
+    }
+}
+
+// An "animatable property with notifications" (resize / reposition progress): set to 1.0 inside the animation, invalidated in the completion.
+static id BP2B_ProgressProperty(id vc, id notifications, NSString *eventClassName) {
+    if (![notifications respondsToSelector:@selector(count)] || [(NSArray *)notifications count] == 0) return nil;
+    Class ev = NSClassFromString(eventClassName);
+    SEL s = sel_registerName("_animatablePropertyWithNotifications:progressEventType:");
+    if (!ev || ![vc respondsToSelector:s]) return nil;
+    return ((id (*)(id, SEL, id, Class))objc_msgSend)(vc, s, notifications, ev);
+}
+static void BP2B_SetProp(id prop, double v) { if (prop && [prop respondsToSelector:@selector(setValue:)]) ((void (*)(id, SEL, double))objc_msgSend)(prop, @selector(setValue:), v); }
+static void (^BP2B_CompletionFor(id prop, BP2BDone maker))(BOOL, BOOL) {                           // blocks _11/_20/_22/_24: [prop invalidate]; maker(finished, retargeted)
+    return ^(BOOL f, BOOL r) {
+        if (prop && [prop respondsToSelector:@selector(invalidate)]) ((void (*)(id, SEL))objc_msgSend)(prop, @selector(invalidate));
+        if (maker) maker(f, r);
+    };
+}
+
+// Does any property animation with one of the given key paths run on the layer? (the 0x1e18eb1e0/200/220/240 test blocks)
+static BOOL BP2B_LayerHasModifier(id layer, NSArray<NSString *> *keyPaths) {
+    NSArray *mods = BP2B_Obj(layer, sel_registerName("presentationModifiers"));
+    for (id m in mods) {
+        NSString *kp = BP2B_Obj(m, sel_registerName("keyPath"));
+        if ([kp isKindOfClass:[NSString class]] && [keyPaths containsObject:kp]) return YES;
+    }
+    return NO;
+}
+
+static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long long roleMask, id completion) {
+    typedef void (*Orig)(id, SEL, id, unsigned long long, id);
+    #define BP2B_FALLBACK() do { if (gOrigLayoutAppLayout) ((Orig)gOrigLayoutAppLayout)(vc, cmd, appLayout, roleMask, completion); return; } while (0)
+    if (!appLayout || !BP2B_Enabled("g2blayout")) BP2B_FALLBACK();
+    id root = BP2B_IvarObj(vc, "_rootModifier");
+    if (!root || !BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled"))) BP2B_FALLBACK();         // classic switcher: 16.0 code unchanged
+    NSArray *aps = BP2B_Obj(vc, sel_registerName("appLayouts"));
+    NSUInteger idx = aps ? [aps indexOfObject:appLayout] : NSNotFound;
+    BOOL rotationAnim = BP2B_Bool(root, sel_registerName("shouldPerformRotationAnimationForOrientationChange"));
+    if (idx != NSNotFound) {
+        if (rotationAnim) BP2B_FALLBACK();
+        SEL pinS = sel_registerName("shouldPinLayoutRolesToSpace:");
+        if ([root respondsToSelector:pinS] && ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(root, pinS, idx)) BP2B_FALLBACK();
+    }
+    Class group = NSClassFromString(@"SBC2GroupCompletion");
+    SEL performS = sel_registerName("perform:finalCompletion:options:delegate:");
+    if (!group || !class_getClassMethod(group, performS)) BP2B_FALLBACK();
+
+    long long contentOrientation = 0;
+    BP2B_IvarGet(vc, "_contentOrientation", &contentOrientation, sizeof contentOrientation);
+    NSDictionary *adjustedMap = BP2B_IvarObj(vc, "_leafAppLayoutsToAdjustedAppLayouts");
+    NSDictionary *liveOverlays = BP2B_IvarObj(vc, "_liveContentOverlays");
+    NSDictionary *overlayViews = BP2B_IvarObj(vc, "_visibleOverlayAccessoryViews");
+    NSDictionary *underlayViews = BP2B_IvarObj(vc, "_visibleUnderlayAccessoryViews");
+    Class uiViewClass = [UIView class];
+    (void)uiViewClass;
+
+    void (^body)(BP2BMaker) = ^(BP2BMaker make) {
+        if (idx == NSNotFound) return;
+        // ---- (1) queries by index (162 0x1c74432f8..0x1c7443840) ----------------------------------------------------------------
+        CGPoint anchor = BP2B_S1(CGPoint, root, "anchorPointForIndex:", (NSUInteger)(idx));
+        CGRect frame = BP2B_S1(CGRect, root, "frameForIndex:", (NSUInteger)(idx));
+        double S = BP2B_S1(double, root, "scaleForIndex:", (NSUInteger)(idx));
+        double rotation = BP2B_S1(double, root, "rotationAngleForIndex:", (NSUInteger)(idx));
+        BP2BRadii radii = BP2B_S1(BP2BRadii, root, "cornerRadiiForIndex:", (NSUInteger)(idx));
+        double minKill = BP2B_S1(double, root, "minimumTranslationToKillIndex:", (NSUInteger)(idx));
+        double pageScale = BP2B_S2(double, root, "contentPageViewScaleForAppLayout:withScale:", (id)(appLayout), (double)(S));
+        BOOL overlayFill = BP2B_S1(BOOL, root, "shouldScaleOverlayToFillBoundsAtIndex:", (NSUInteger)(idx));
+        BOOL contentFill = BP2B_S1(BOOL, root, "shouldScaleContentToFillBoundsAtIndex:", (NSUInteger)(idx));
+        CGRect clipIdx = BP2B_S2(CGRect, root, "clippingFrameForIndex:withBounds:", (NSUInteger)(idx), (CGRect)(BP2B_RectWithSize(frame.size.width, frame.size.height)));
+        BOOL clips = BP2B_S1(BOOL, root, "clipsToBoundsAtIndex:", (NSUInteger)(idx));
+        unsigned long long maskedCorners = BP2B_S1(unsigned long long, root, "maskedCornersForIndex:", (NSUInteger)(idx));
+        double perspective = BP2B_S1(double, root, "perspectiveAngleForAppLayout:", (id)(appLayout));
+        id mesh = BP2B_S1(id, root, "meshTransformForIndex:", (NSUInteger)(idx));
+        // home-affordance counter rotation of the accessory home grabber
+        CATransform3D homeT = CATransform3DIdentity;
+        {
+            SEL bs = sel_registerName("_bestSupportedHomeAffordanceOrientationForOrientation:inAppLayout:");
+            if ([vc respondsToSelector:bs]) {
+                long long best = ((long long (*)(id, SEL, long long, id))objc_msgSend)(vc, bs, contentOrientation, appLayout);
+                static double (*angleFn)(long long, long long); static dispatch_once_t o2;
+                dispatch_once(&o2, ^{ angleFn = (double (*)(long long, long long))dlsym(RTLD_DEFAULT, "SBFAngleForRotationFromInterfaceOrientationToInterfaceOrientation"); });
+                if (best != contentOrientation && angleFn) homeT = CATransform3DMakeRotation(angleFn(contentOrientation, best), 0, 0, 1);
+            }
+        }
+        id grabberAttrs = BP2B_S1(id, root, "resizeGrabberLayoutAttributesForAppLayout:", (id)(appLayout));
+        id grabberLeaf = BP2B_Obj(grabberAttrs, sel_registerName("leafAppLayout"));
+        id adjusted = grabberLeaf ? adjustedMap[grabberLeaf] : nil;
+        CGRect grabberRect = CGRectNull;
+        if (adjusted) {
+            id gi = BP2B_S1(id, grabberLeaf, "itemForLayoutRole:", (long long)(1));
+            long long gr = ((long long (*)(id, SEL, id))objc_msgSend)(adjusted, sel_registerName("layoutRoleForItem:"), gi);
+            CGRect sf = BP2B_S3(CGRect, root, "frameForLayoutRole:inAppLayout:withBounds:", (long long)(gr), (id)(adjusted), (CGRect)(BP2B_RectWithSize(frame.size.width, frame.size.height)));
+            double sepW = BP2B_Dbl(vc, sel_registerName("separatorViewWidth"));
+            long long edge = BP2B_LL(grabberAttrs, sel_registerName("edge"));
+            double gx = (edge == 2) ? CGRectGetMinX(sf) - sepW : CGRectGetMaxX(sf);
+            grabberRect = CGRectMake(gx, CGRectGetMinY(sf), sepW, CGRectGetHeight(sf));          // UNSURE: width is separatorViewWidth (0x58 slot)
+        }
+        BOOL perspectiveIsZero = fabs(perspective) < 1e-9;                                      // _BSFloatIsZero
+        CGPoint accOffset = BP2B_S1(CGPoint, root, "contentViewOffsetForAccessoriesOfAppLayout:", (id)(appLayout));
+        unsigned long long multiMask = BP2B_S1(unsigned long long, root, "multipleWindowsIndicatorLayoutRoleMaskForAppLayout:", (id)(appLayout));
+        BOOL wallpaperTreatment = BP2B_Bool(root, sel_registerName("shouldUseWallpaperGradientTreatment"));
+        struct { double a, b; } grad = BP2B_S1(__typeof__(grad), root, "wallpaperGradientAttributesForIndex:", (NSUInteger)(idx));
+        id attrsObj = BP2B_Obj1(root, sel_registerName("animationAttributesForLayoutElement:"), appLayout);
+        #define AM(sel) BP2B_LL(attrsObj, sel_registerName(sel))
+        long long updateMode = AM("updateMode");
+        #define MODE(sel) ({ long long m_ = AM(sel); m_ ? m_ : updateMode; })
+        long long layoutMode = MODE("layoutUpdateMode"), positionMode = MODE("positionUpdateMode"), scaleMode = MODE("scaleUpdateMode");
+        long long cornerMode = MODE("cornerRadiusUpdateMode"), clippingMode = MODE("clippingUpdateMode"), meshMode = MODE("meshUpdateMode");
+        long long opacityMode = MODE("opacityUpdateMode");
+        id layoutSettings = BP2B_Obj(attrsObj, sel_registerName("layoutSettings"));
+        #define ST(sel) ({ id s_ = BP2B_Obj(attrsObj, sel_registerName(sel)); s_ ?: layoutSettings; })
+        id positionSettings = ST("positionSettings"), scaleSettings = ST("scaleSettings"), cornerSettings = ST("cornerRadiusSettings");
+        id clippingSettings = ST("clippingSettings"), meshSettings = ST("meshSettings"), opacitySettings = ST("opacitySettings");
+
+        NSArray *leafs = BP2B_Obj(appLayout, sel_registerName("leafAppLayouts")) ?: @[];
+        double minRadius = fmin(fmin(fmin(radii.tl, radii.bl), radii.br), radii.tr);
+        double bw = frame.size.width, bh = frame.size.height;
+        double ancX = anchor.x * bw, ancY = anchor.y * bh;                                       // [sp,#0xb8] / [sp,#0x118]
+        double baseX = frame.origin.x + (0.5 - anchor.x) * bw;                                   // [sp,#0xe8]
+        double baseY = frame.origin.y + (0.5 - anchor.y) * bh;                                   // [sp,#0xd0]
+        double gradDelta = grad.a - grad.b;
+        CGRect lastR = CGRectZero;
+        double lastAdjScale = S; BOOL accessoriesRan = NO;
+
+        // ---- (2) per leaf (162 0x1c74439b8..0x1c7445228) ---------------------------------------------------------------------------
+        for (id leaf in leafs) {
+            id item0 = [[BP2B_Obj(leaf, sel_registerName("allItems")) ?: @[] ] firstObject];
+            long long role = ((long long (*)(id, SEL, id))objc_msgSend)(appLayout, sel_registerName("layoutRoleForItem:"), item0);
+            if (!BP2B_RoleMaskContains(roleMask, role)) continue;
+            id c = BP2B_Obj1(vc, sel_registerName("_itemContainerForAppLayoutIfExists:"), leaf);
+            if (!c) continue;
+            // role frame / scale / clipping from the root modifier
+            CGRect R = BP2B_S3(CGRect, root, "frameForLayoutRole:inAppLayout:withBounds:", (long long)(role), (id)(appLayout), (CGRect)(BP2B_RectWithSize(bw, bh)));
+            double roleScale = BP2B_S2(double, root, "scaleForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout));
+            CGRect clip = BP2B_S4(CGRect, root, "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", (long long)(role), (id)(appLayout), (NSUInteger)(idx), (CGRect)(BP2B_RectWithSize(bw, bh)));
+            lastR = R;
+            // position math (the A region): pin == NO on this path, so the anchor applied is the index anchor and no compensation translation exists
+            double dx = 0.5 - anchor.x, dy = 0.5 - anchor.y;
+            double X = (baseX + R.origin.x) - R.size.width * dx;
+            double Y = (baseY + R.origin.y) - R.size.height * dy;
+            X += S * (1.0 - roleScale) * (R.size.width * dx);                                    // chamois term (isChamoisWindowingUIEnabled == YES here)
+            Y += S * (1.0 - roleScale) * (R.size.height * dy);
+            double layerScale = S * roleScale;                                                   // [sp,#0x2f8]
+            CGPoint anchorApplied = anchor;
+            // cornerRadii / maskedCorners / blur / drag per role
+            BP2BRadii rr = BP2B_S3(BP2BRadii, root, "cornerRadiiForLayoutRole:inAppLayout:withCornerRadii:", (long long)(role), (id)(appLayout), (BP2BRadii)(radii));
+            unsigned long long mc = BP2B_S3(unsigned long long, root, "maskedCornersForLayoutRole:inAppLayout:withMaskedCorners:", (long long)(role), (id)(appLayout), (unsigned long long)(maskedCorners));
+            BOOL blurred = BP2B_S2(BOOL, root, "isLayoutRoleBlurred:inAppLayout:", (long long)(role), (id)(appLayout));
+            long long blurTarget = BP2B_S2(long long, root, "blurTargetPreferenceForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout));
+            BOOL canDnD = BP2B_S2(BOOL, root, "canLayoutRoleParticipateInSwitcherDragAndDrop:appLayout:", (long long)(role), (id)(appLayout));
+            BOOL draggable = BP2B_S2(BOOL, root, "isLayoutRoleDraggable:inAppLayout:", (long long)(role), (id)(appLayout));
+            BOOL nonuniform = BP2B_S2(BOOL, root, "shouldUseNonuniformSnapshotScalingForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout));
+            double blurDelay = BP2B_S2(double, root, "blurDelayForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout));
+            double blurIcon = BP2B_S1(double, root, "blurViewIconScaleForIndex:", (NSUInteger)(idx));
+            CGPoint pageOffset = BP2B_S2(CGPoint, root, "contentViewOffsetForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout));
+            BOOL tether = BP2B_S1(BOOL, root, "shouldTetherItemsAndAccessoriesInAppLayout:", (id)(appLayout));
+            double pageAnchorX = tether ? ((bw * 0.5) - R.origin.x) / R.size.width : 0.5;        // [sp,#0x278]
+            id live = liveOverlays[leaf];
+            // progress properties: only when the size / centre really change
+            id resizeProp = nil, repositionProp = nil;
+            CGRect cb = BP2B_Rect(c, @selector(bounds));
+            if (!(R.size.width == cb.size.width && R.size.height == cb.size.height))
+                resizeProp = BP2B_ProgressProperty(vc, BP2B_S2(id, root, "resizeProgressNotificationsForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout)), @"SBResizeProgressSwitcherModifierEvent");
+            CGPoint cc = BP2B_Point(c, @selector(center));
+            CGPoint newC = CGPointMake(X + R.size.width * 0.5, Y + R.size.height * 0.5);        // UIRectGetCenter(X, Y, Rw, Rh)
+            if (!(cc.x == newC.x && cc.y == newC.y))
+                repositionProp = BP2B_ProgressProperty(vc, BP2B_S2(id, root, "repositionProgressNotificationsForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout)), @"SBRepositionProgressSwitcherModifierEvent");
+            BOOL legacyRot = rotationAnim ? BP2B_Bool1(vc, sel_registerName("_appLayoutRequiresLegacyRotationSupport:"), appLayout) : NO;
+            // plain container setters (outside any animation)
+            BP2B_S1(void, c, "setShouldScaleOverlayToFillBounds:", (BOOL)(overlayFill));
+            BP2B_S1(void, c, "setPositionAnimationsBeginFromModelState:", (BOOL)(rotationAnim));
+            BP2B_S1(void, c, "setTransformAnimationsAreLegacyCounterRotations:", (BOOL)(legacyRot));
+            id cv = BP2B_Obj(c, sel_registerName("contentView"));
+            if ([cv respondsToSelector:sel_registerName("setShouldStretchToBounds:")]) BP2B_S1(void, cv, "setShouldStretchToBounds:", (BOOL)(contentFill));
+            if ([cv respondsToSelector:sel_registerName("setUsesNonuniformScaling:")]) BP2B_S1(void, cv, "setUsesNonuniformScaling:", (BOOL)(nonuniform));
+            BOOL liveBlur = blurred && live != nil && blurTarget == 1;
+            BP2B_S1(void, c, "setDraggable:", (BOOL)(draggable));
+            BP2B_S1(void, c, "setSupportsSwitcherDragAndDrop:", (BOOL)(canDnD));
+            Class blurEv = NSClassFromString(@"SBBlurProgressSwitcherModifierEvent");
+            void (^began)(void) = ^{ id e = [blurEv alloc]; e = ((id (*)(id, SEL, double))objc_msgSend)(e, sel_registerName("initWithProgress:"), 0.0); BP2B_Obj1(vc, sel_registerName("_dispatchEventAndHandleAction:"), e); };
+            void (^done)(void) = ^{ id e = [blurEv alloc]; e = ((id (*)(id, SEL, double))objc_msgSend)(e, sel_registerName("initWithProgress:"), 1.0); BP2B_Obj1(vc, sel_registerName("_dispatchEventAndHandleAction:"), e); };
+            SEL liveBlurS = sel_registerName("setLiveContentBlurEnabled:duration:blurDelay:iconViewScale:began:completion:");
+            if (live && [live respondsToSelector:liveBlurS])
+                ((void (*)(id, SEL, BOOL, double, double, double, void (^)(void), void (^)(void)))objc_msgSend)(live, liveBlurS, liveBlur, 0.25, blurDelay, blurIcon, began, done);
+            SEL blurS = sel_registerName("setBlurred:duration:blurDelay:iconViewScale:began:completion:");
+            if ([c respondsToSelector:blurS])
+                ((void (*)(id, SEL, BOOL, double, double, double, void (^)(void), void (^)(void)))objc_msgSend)(c, blurS, blurred && !liveBlur, 0.25, blurDelay, blurIcon, began, done);
+            // 16.2 NEW: group opacity
+            if ([root respondsToSelector:sel_registerName("shouldAllowGroupOpacityForAppLayout:")]) {
+                BOOL gop = BP2B_Bool1(root, sel_registerName("shouldAllowGroupOpacityForAppLayout:"), appLayout);
+                id layer = BP2B_Obj(c, @selector(layer));
+                if ([layer respondsToSelector:@selector(setAllowsGroupOpacity:)]) [(CALayer *)layer setAllowsGroupOpacity:gop];
+            }
+            // ---- "center" ----
+            BP2BDone mkCenter = make(@"center");
+            BP2B_Animate(positionSettings, positionMode, ^{
+                [(CALayer *)BP2B_Obj(c, @selector(layer)) setAnchorPoint:anchorApplied];
+                BP2B_S1(void, c, "setCenter:", (CGPoint)(newC));
+                BP2B_SetProp(repositionProp, 1.0);
+            }, BP2B_CompletionFor(repositionProp, mkCenter));
+            BP2B_S1(void, c, "setMaskedCorners:", (unsigned long long)(mc));
+            // ---- "corner radius" ----
+            BP2B_Animate(cornerSettings, cornerMode, ^{ BP2B_S1(void, c, "setContentCornerRadii:", (BP2BRadii)(rr)); }, (void (^)(BOOL, BOOL))make(@"corner radius"));
+            // ---- "wallpaperGradientAttributes" (opacity settings) ----
+            double gA = grad.b, gB = grad.a;
+            if (leafs.count >= 2 && frame.size.width != 0) {
+                gA = grad.b + gradDelta * CGRectGetMinX(R) / frame.size.width;
+                gB = grad.b + gradDelta * CGRectGetMaxX(R) / frame.size.width;
+            }
+            BP2B_Animate(opacitySettings, opacityMode, ^{
+                if ([c respondsToSelector:sel_registerName("setShouldUseWallpaperGradientTreatment:")]) BP2B_S1(void, c, "setShouldUseWallpaperGradientTreatment:", (BOOL)(wallpaperTreatment));
+                struct { double a, b; } ga = { gA, gB };
+                if ([c respondsToSelector:sel_registerName("setWallpaperGradientAttributes:")]) BP2B_S1(void, c, "setWallpaperGradientAttributes:", (__typeof__(ga))(ga));
+            }, (void (^)(BOOL, BOOL))make(@"wallpaperGradientAttributes"));
+            // ---- mesh transform (Jindo) ----
+            SEL jindo = NULL; (void)jindo;
+            {
+                static BOOL (*enableJindo)(void); static dispatch_once_t oj;
+                dispatch_once(&oj, ^{ enableJindo = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "SBEnableJindo"); });
+                CALayer *cl = BP2B_Obj(c, @selector(layer));
+                if (enableJindo && enableJindo()) {
+                    id curMesh = [cl valueForKey:@"meshTransform"];
+                    BOOL needMesh = (curMesh == nil) && (mesh != nil);
+                    BOOL inflight = BP2B_LayerHasModifier(cl, @[@"meshTransform"]);
+                    id identity = (needMesh || inflight) ? BP2B_S1(id, root, "identityMeshTransformForIndex:", (NSUInteger)(idx)) : nil;
+                    if (needMesh) [UIView performWithoutAnimation:^{ [cl setValue:identity forKey:@"meshTransform"]; }];
+                    id animTarget = (!needMesh && mesh == nil && inflight) ? identity : mesh;
+                    BP2B_Animate(meshSettings, meshMode, ^{ [cl setValue:animTarget forKey:@"meshTransform"]; }, (void (^)(BOOL, BOOL))make(@"mesh transform"));
+                }
+            }
+            // ---- "bounds" ----
+            void (^boundsBlock)(void) = ^{
+                BP2BDone mk = make(@"bounds");
+                BP2B_Animate(layoutSettings, layoutMode, ^{
+                    BP2B_S1(void, c, "setBounds:", (CGRect)(BP2B_RectWithSize(R.size.width, R.size.height)));
+                    BP2B_S1(void, c, "setPageViewAnchorPoint:", (CGPoint)(CGPointMake(pageAnchorX, 0.5)));
+                    BP2B_S1(void, c, "setPageViewOffset:", (CGPoint)(pageOffset));
+                    BP2B_S1(void, c, "setSizeForContainingSpace:", (CGSize)(frame.size));
+                    BP2B_S1(void, c, "setMinimumTranslationForKillingContainer:", (double)(minKill));
+                    BP2B_Obj(c, @selector(layoutIfNeeded));
+                    BP2B_SetProp(resizeProp, 1.0);
+                }, BP2B_CompletionFor(resizeProp, mk));
+            };
+            if (legacyRot) [UIView performWithoutAnimation:boundsBlock]; else boundsBlock();
+            // ---- "clipping" (16.2: only when something changed) ----
+            BOOL wasClipping = BP2B_Bool(c, sel_registerName("isContentClippingEnabled"));
+            BOOL clipFrameChanged = wasClipping && !CGRectEqualToRect(BP2B_Rect(c, sel_registerName("contentClippingFrame")), clip);
+            if ((clips != wasClipping) || clipFrameChanged) {
+                BP2B_S1(void, c, "setContentClippingEnabled:", (BOOL)(clips));
+                BP2BDone mkClip = make(@"clipping");
+                BP2B_Animate(clippingSettings, clippingMode, ^{
+                    BP2B_S2(void, c, "setContentClippingFrame:cornerRadii:", (CGRect)(clip), (BP2BRadii)(rr));
+                    BP2B_Obj(c, @selector(layoutIfNeeded));
+                }, ^(BOOL f, BOOL r) {
+                    BP2B_S1(void, vc, "_noteItemContainerDidUpdateContentClippingWithMode:", (long long)(clippingMode));
+                    if (mkClip) mkClip(f, r);
+                });
+            }
+            // ---- "transform and content page view scale" ----
+            BP2B_Animate(scaleSettings, scaleMode, ^{
+                CALayer *l = BP2B_Obj(c, @selector(layer));
+                [l setValue:@(layerScale) forKeyPath:@"transform.scale"];
+                [l setValue:@(0.0) forKeyPath:@"transform.translation.x"];                         // compensation X (0 on this path)
+                [l setValue:@(0.0) forKeyPath:@"transform.translation.y"];
+                [l setValue:@(perspective) forKeyPath:@"transform.rotation.y"];
+                [l setValue:@(rotation) forKeyPath:@"transform.rotation.z"];
+                BP2B_S1(void, c, "setContentPageViewScale:", (double)(pageScale));
+                BP2B_S1(void, c, "setBlurViewIconScale:", (double)(blurIcon));
+                if (live) BP2B_S1(void, live, "setBlurViewIconScale:", (double)(blurIcon));
+            }, (void (^)(BOOL, BOOL))make(@"transform and content page view scale"));
+        }
+
+        // ---- (3) accessories (162 0x1c7445248..0x1c7445a44) --------------------------------------------------------------------------
+        __block BOOL anyRole = NO;
+        BP2B_EnumerateValidRoles(^(long long r) {
+            id item = ((id (*)(id, SEL, long long))objc_msgSend)(appLayout, sel_registerName("itemForLayoutRole:"), r);
+            if (item && BP2B_RoleMaskContains(roleMask, r)) anyRole = YES;
+        });
+        __block unsigned long long allMask = 0;
+        BP2B_EnumerateValidRoles(^(long long r) { allMask |= (1ull << r); });
+        if (roleMask == allMask || anyRole) {                                                      // UNSURE: 162 compares with the constant at 0x1c7a933c8 (assumed "all valid roles")
+            id overlay = overlayViews[appLayout], underlay = underlayViews[appLayout];
+            double accScale = S;
+            if ([root respondsToSelector:sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:")]) {
+                accScale = ((double (*)(id, SEL, double, id))objc_msgSend)(root, sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:"), S, appLayout);
+            }
+            CGRect adjF = BP2B_S2(CGRect, root, "adjustedSpaceAccessoryViewFrame:forAppLayout:", (CGRect)(frame), (id)(appLayout));
+            CGPoint adjA = BP2B_S2(CGPoint, root, "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (CGPoint)(anchor), (id)(appLayout));
+            double accPageScale = pageScale;
+            if (fabs(S) >= 1e-9) accPageScale = pageScale * (accScale / S);                    // 162 NEW: scale ratio (0x1c7445454..0x1c7445478)
+            lastAdjScale = accScale; accessoriesRan = YES;
+            BP2BDone m1 = make(@"accessory center");
+            BP2B_Animate(positionSettings, positionMode, ^{
+                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) {
+                    if (v == (id)[NSNull null]) continue;
+                    [(CALayer *)BP2B_Obj(v, @selector(layer)) setAnchorPoint:adjA];
+                    BP2B_S1(void, v, "setCenter:", (CGPoint)(CGPointMake(CGRectGetMidX(adjF), CGRectGetMidY(adjF))));
+                }
+            }, (void (^)(BOOL, BOOL))m1);
+            for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) BP2B_S1(void, v, "setMaskedCorners:", (unsigned long long)(maskedCorners));
+            BP2B_Animate(cornerSettings, cornerMode, ^{
+                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) BP2B_S1(void, v, "setCornerRadius:", (double)(minRadius));
+            }, (void (^)(BOOL, BOOL))make(@"accessory corner radius"));
+            BP2B_Animate(layoutSettings, layoutMode, ^{
+                if (overlay) {
+                    BP2B_S1(void, overlay, "setMultiWindowIndicatorRoleMask:", (unsigned long long)(multiMask));
+                    BP2B_S1(void, overlay, "setBounds:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height)));
+                    BP2B_S1(void, overlay, "setContentViewOffset:", (CGPoint)(accOffset));
+                    BP2B_Obj(overlay, @selector(layoutIfNeeded));
+                }
+                if (underlay) {
+                    BP2B_S1(void, underlay, "setBounds:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height)));
+                    BP2B_S1(void, underlay, "setContentViewOffset:", (CGPoint)(accOffset));
+                    BP2B_S1(void, underlay, "setResizeGrabberBounds:", (CGRect)(BP2B_RectWithSize(grabberRect.size.width, grabberRect.size.height)));
+                    BP2B_S1(void, underlay, "setResizeGrabberCenter:", (CGPoint)(CGPointMake(CGRectGetMidX(grabberRect), CGRectGetMidY(grabberRect))));
+                    BP2B_Obj(underlay, @selector(layoutIfNeeded));
+                }
+            }, (void (^)(BOOL, BOOL))make(@"accessory bounds"));
+            for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) BP2B_S1(void, v, "setContentClippingEnabled:", (BOOL)(clips));
+            BP2B_Animate(clippingSettings, clippingMode, ^{
+                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) {
+                    BP2B_S2(void, v, "setContentClippingFrame:cornerRadii:", (CGRect)(clipIdx), (BP2BRadii)(radii));
+                    BP2B_Obj(v, @selector(layoutIfNeeded));
+                }
+            }, (void (^)(BOOL, BOOL))make(@"accessory clipping"));
+            BP2B_Animate(scaleSettings, scaleMode, ^{
+                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) {
+                    if (v == (id)[NSNull null]) continue;
+                    CALayer *l = BP2B_Obj(v, @selector(layer));
+                    [l setValue:@(accScale) forKeyPath:@"transform.scale"];
+                    [l setValue:@(rotation) forKeyPath:@"transform.rotation.z"];
+                    if (v == overlay) {
+                        BP2B_S1(void, v, "setIconAlignment:", (unsigned long long)((unsigned long long)(!perspectiveIsZero ? 0 : 1)));   // UNSURE polarity of [sp,#4]^1
+                        BP2B_S1(void, v, "setUniqueIconsOnly:", (BOOL)(YES));
+                        BP2B_S1(void, v, "setFooterStyle:", (unsigned long long)(BP2B_S0(unsigned long long, vc, "_itemContainerFooterStyle")));
+                        id hg = BP2B_Obj(v, sel_registerName("homeGrabberView"));
+                        if (hg) { BP2B_S1(void, hg, "setTransform3D:", (CATransform3D)(homeT)); BP2B_S1(void, hg, "setFrame:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height))); }
+                    }
+                    BP2B_S1(void, v, "setContentScale:", (double)(accPageScale));
+                    BP2B_Obj(v, @selector(layoutIfNeeded));
+                }
+            }, (void (^)(BOOL, BOOL))make(@"accessory transform and content page view scale"));
+            static dispatch_once_t okb; static id kbSettings;
+            dispatch_once(&okb, ^{                                                              // block_2: response 0.25, damping 1.0, frame rate range
+                Class bs = NSClassFromString(@"SBFluidBehaviorSettings");
+                kbSettings = [[bs alloc] initWithDefaultValues];
+                if ([kbSettings respondsToSelector:@selector(setResponse:)]) ((void (*)(id, SEL, double))objc_msgSend)(kbSettings, @selector(setResponse:), 0.25);
+                if ([kbSettings respondsToSelector:@selector(setDampingRatio:)]) ((void (*)(id, SEL, double))objc_msgSend)(kbSettings, @selector(setDampingRatio:), 1.0);
+            });
+            BP2B_Animate(kbSettings, 3, ^{
+                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null])
+                    BP2B_S1(void, v, "setKeyboardHeight:", (double)(BP2B_Dbl(vc, sel_registerName("keyboardHeight"))));
+            }, (void (^)(BOOL, BOOL))make(@"accessory keyboard height"));
+        }
+
+        // ---- (4) item container backdrop (162 0x1c74459a4..0x1c7445a44) ----------------------------------------------------------------
+        SEL bd = sel_registerName("_updateItemContainerBackdropPresenceForIndex:scale:rotation:cornerRadius:animationAttributes:completion:");
+        if ([vc respondsToSelector:bd]) {
+            BP2BDone mk = make(@"item container backdrop");
+            ((void (*)(id, SEL, NSUInteger, double, double, double, id, id))objc_msgSend)(vc, bd, idx, accessoriesRan ? lastAdjScale : S, rotation, minRadius, attrsObj, mk);   // UNSURE: scale argument when no accessories
+        }
+        (void)lastR; (void)mesh; (void)ancX; (void)ancY; (void)clipIdx; (void)contentFill;
+        #undef AM
+        #undef MODE
+        #undef ST
+    };
+
+    void (^performBlock)(BP2BMaker) = ^(BP2BMaker m) { body(m); };
+    ((void (*)(Class, SEL, id, id, unsigned long long, id))objc_msgSend)(group, performS, performBlock, completion, 0ull, vc);
+    #undef BP2B_FALLBACK
+}
+
+static void BP2B_SetupLayoutAppLayout(void) {
+    Class vcc = objc_getClass("SBFluidSwitcherViewController");
+    if (!vcc) return;
+    SEL s = sel_registerName("_layoutAppLayout:roleMask:completion:");
+    if (!class_getInstanceMethod(vcc, s)) { BP_Log(@"[g2b] item2: _layoutAppLayout:roleMask:completion: not found"); return; }
+    // 16.2 selectors that the extended-protocol / ported modifiers expect on the VC are not needed here; only the method itself is replaced.
+    gOrigLayoutAppLayout = BP2B_Replace(vcc, "_layoutAppLayout:roleMask:completion:", (IMP)BP2B_LayoutAppLayoutImpl);
+    BP_Log(@"[g2b] item2: _layoutAppLayout:roleMask:completion: replaced");
+}
+
+
+// =================================================================================================================
+// ITEM 5a-5g: keyboard navigation, shift-select, gesture-manager names, system aperture, per-display, pointer, strip tongue.
+// New ivars of system classes (VC, item container, tap event) are held in associated objects (no alloc swizzling: the VC and the
+// containers are created by SpringBoard, the tap events by the modifier code; an associated object works for every creator).
+// =================================================================================================================
+
+static BOOL BP2B_Chamois(id vc) { return BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled")); }
+
+// ---- 5b part 1: SBTapAppLayoutSwitcherModifierEvent gains modifierFlags + source (162 ivars +0x28 / +0x30) ----------------------------
+static const void *kBP2B_TapFlags = &kBP2B_TapFlags, *kBP2B_TapSource = &kBP2B_TapSource;
+static void BP2B_SetupTapEvent(void) {
+    Class c = objc_getClass("SBTapAppLayoutSwitcherModifierEvent");
+    if (!c) return;
+    BP2B_AddIfMissing(c, "modifierFlags", imp_implementationWithBlock(^long long(id me) { return [objc_getAssociatedObject(me, kBP2B_TapFlags) longLongValue]; }), "q16@0:8");
+    BP2B_AddIfMissing(c, "source", imp_implementationWithBlock(^long long(id me) { return [objc_getAssociatedObject(me, kBP2B_TapSource) longLongValue]; }), "q16@0:8");
+    SEL init2 = sel_registerName("initWithAppLayout:layoutRole:");
+    BP2B_AddIfMissing(c, "initWithAppLayout:layoutRole:modifierFlags:source:", imp_implementationWithBlock(^id(id me, id layout, long long role, long long flags, long long source) {
+        id o = ((id (*)(id, SEL, id, long long))objc_msgSend)(me, init2, layout, role);
+        if (o) { objc_setAssociatedObject(o, kBP2B_TapFlags, @(flags), OBJC_ASSOCIATION_RETAIN_NONATOMIC); objc_setAssociatedObject(o, kBP2B_TapSource, @(source), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        return o;
+    }), "@48@0:8@16q24q32q40");
+    BP2B_AddIfMissing(c, "initWithAppLayout:layoutRole:modifierFlags:", imp_implementationWithBlock(^id(id me, id layout, long long role, long long flags) {
+        id o = ((id (*)(id, SEL, id, long long))objc_msgSend)(me, init2, layout, role);
+        if (o) objc_setAssociatedObject(o, kBP2B_TapFlags, @(flags), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return o;
+    }), "@40@0:8@16q24q32");
+    // events are copied by the modifier chain: carry the two values over
+    SEL cz = @selector(copyWithZone:);
+    static IMP origCopy;
+    origCopy = BP2B_Replace(c, "copyWithZone:", imp_implementationWithBlock(^id(id me, void *zone) {
+        id n = origCopy ? ((id (*)(id, SEL, void *))origCopy)(me, cz, zone) : me;
+        if (n && n != me) {
+            id f = objc_getAssociatedObject(me, kBP2B_TapFlags), s = objc_getAssociatedObject(me, kBP2B_TapSource);
+            if (f) objc_setAssociatedObject(n, kBP2B_TapFlags, f, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            if (s) objc_setAssociatedObject(n, kBP2B_TapSource, s, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        return n;
+    }));
+}
+
+// ---- 5b part 2: shift-select. VC -didSelectContainer:modifierFlags: (162 0x1c7452050) and the container callers --------------------------
+static void BP2B_DispatchTap(id vc, id layout, long long role, long long flags, long long source, BOOL withSource) {
+    Class te = NSClassFromString(@"SBTapAppLayoutSwitcherModifierEvent");
+    id ev = [te alloc];
+    SEL s4 = sel_registerName("initWithAppLayout:layoutRole:modifierFlags:source:"), s3 = sel_registerName("initWithAppLayout:layoutRole:modifierFlags:");
+    if (withSource && [ev respondsToSelector:s4]) ev = ((id (*)(id, SEL, id, long long, long long, long long))objc_msgSend)(ev, s4, layout, role, flags, source);
+    else if ([ev respondsToSelector:s3]) ev = ((id (*)(id, SEL, id, long long, long long))objc_msgSend)(ev, s3, layout, role, flags);
+    else ev = ((id (*)(id, SEL, id, long long))objc_msgSend)(ev, sel_registerName("initWithAppLayout:layoutRole:"), layout, role);
+    BP2B_Obj1(vc, sel_registerName("_dispatchEventAndHandleAction:"), ev);
+}
+static void BP2B_DidSelectContainer(id vc, id container, long long flags) {
+    id leaf = BP2B_Obj(container, @selector(appLayout));
+    if (!leaf) return;
+    id item = ((id (*)(id, SEL, long long))objc_msgSend)(leaf, sel_registerName("itemForLayoutRole:"), 1);
+    // per-scene locked pointer client: unlock the pointer for the window being selected (needs group4b's per-scene manager; guarded)
+    id uid = BP2B_Obj(item, sel_registerName("uniqueIdentifier"));
+    id lpm = BP2B_Obj(BP2B_Obj(vc, sel_registerName("_sbWindowScene")), sel_registerName("lockedPointerManager"));
+    SEL clientS = sel_registerName("clientWithSceneIdentifier:suppressPreferredLockStatus:");
+    if (uid && [lpm respondsToSelector:clientS]) (void)((id (*)(id, SEL, id, BOOL))objc_msgSend)(lpm, clientS, uid, NO);
+    NSDictionary *adjustedMap = BP2B_IvarObj(vc, "_leafAppLayoutsToAdjustedAppLayouts");
+    id adjusted = adjustedMap[leaf] ?: leaf;
+    id root = BP2B_IvarObj(vc, "_rootModifier");
+    BOOL shiftSelect = BP2B_Chamois(vc) && (flags & (1ll << 17)) && BP2B_Bool1(root, sel_registerName("canSelectLeafWithModifierKeysInAppLayout:"), adjusted);
+    id layout = shiftSelect ? leaf : adjusted;
+    long long role = ((long long (*)(id, SEL, id))objc_msgSend)(layout, sel_registerName("layoutRoleForItem:"), item);
+    BP2B_DispatchTap(vc, layout, role, flags, 0, NO);
+}
+static void BP2B_SetupSelection(void) {
+    Class vc = objc_getClass("SBFluidSwitcherViewController"), ic = objc_getClass("SBFluidSwitcherItemContainer");
+    if (vc) BP2B_AddIfMissing(vc, "didSelectContainer:modifierFlags:", imp_implementationWithBlock(^(id me, id container, long long flags) { BP2B_DidSelectContainer(me, container, flags); }), "v32@0:8@16q24");
+    if (!ic) return;
+    SEL sc = sel_registerName("didSelectContainer:modifierFlags:");
+    // 162 _handlePageViewTap: / _returnKeyPressed: forward [sender modifierFlags] (a gesture recognizer / UIKeyCommand)
+    static IMP origTap, origRet;
+    origTap = BP2B_Replace(ic, "_handlePageViewTap:", imp_implementationWithBlock(^(id me, id gr) {
+        id d = BP2B_Obj(me, @selector(delegate));
+        if (BP2B_Bool(me, sel_registerName("isSelectable")) && [d respondsToSelector:sc] && BP2B_Enabled("g2bkeys")) {
+            long long flags = [gr respondsToSelector:@selector(modifierFlags)] ? ((long long (*)(id, SEL))objc_msgSend)(gr, @selector(modifierFlags)) : 0;
+            ((void (*)(id, SEL, id, long long))objc_msgSend)(d, sc, me, flags);
+        } else if (origTap) ((void (*)(id, SEL, id))origTap)(me, sel_registerName("_handlePageViewTap:"), gr);
+    }));
+    origRet = BP2B_Replace(ic, "_returnKeyPressed:", imp_implementationWithBlock(^(id me, id cmd) {
+        id d = BP2B_Obj(me, @selector(delegate));
+        if (BP2B_Bool(me, sel_registerName("isFocusable")) && BP2B_Bool(me, sel_registerName("isSelectable")) && [d respondsToSelector:sc] && BP2B_Enabled("g2bkeys")) {
+            long long flags = [cmd respondsToSelector:@selector(modifierFlags)] ? ((long long (*)(id, SEL))objc_msgSend)(cmd, @selector(modifierFlags)) : 0;
+            ((void (*)(id, SEL, id, long long))objc_msgSend)(d, sc, me, flags);
+        } else if (origRet) ((void (*)(id, SEL, id))origRet)(me, sel_registerName("_returnKeyPressed:"), cmd);
+    }));
+}
+
+// ---- 5a: keyboard window navigation (162 0x1c743b200 / 0x1c743b590 / 0x1c743b844) ------------------------------------------------------
+// 162 _keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex: (chamois branch): the list is the modifier's
+// activeLeafAppLayoutsReachableByKeyboardShortcut compacted by: (matchFocusedApp -> same bundle id as the focused app), not part of a
+// resigning set, and (when any active layout is a center window) environment in {2,3}.
+static IMP gOrigKbdList, gOrigNavOld, gOrigCanPerform;
+static NSArray *BP2B_KbdList(id vc, BOOL match, NSUInteger *outIdx) {
+    id root = BP2B_IvarObj(vc, "_rootModifier");
+    id coord = BP2B_IvarObj(vc, "_liveContentOverlayCoordinator");
+    id focused = BP2B_Obj(coord, sel_registerName("appLayoutForKeyboardFocusedScene"));
+    NSArray *active = BP2B_Obj(root, sel_registerName("activeLeafAppLayoutsReachableByKeyboardShortcut"));
+    if (!active) return nil;
+    id leaf0 = focused;
+    if (!leaf0 && active.count) {
+        id sc = BP2B_Obj(vc, sel_registerName("switcherController"));
+        id cur = BP2B_Obj(BP2B_Obj(sc, sel_registerName("layoutState")), @selector(appLayout));
+        leaf0 = [BP2B_Obj(cur, sel_registerName("zOrderedLeafAppLayouts")) firstObject];
+    }
+    NSString *focusedBundle = BP2B_Obj(BP2B_Obj([BP2B_Obj(leaf0, sel_registerName("allItems")) firstObject], @selector(self)), sel_registerName("bundleIdentifier"));
+    BOOL anyCenter = NO;
+    for (id l in active) if (BP2B_LL(l, sel_registerName("environment")) == 3) { anyCenter = YES; break; }
+    NSMutableArray *out = [NSMutableArray array];
+    for (id l in active) {
+        if (match) {
+            NSString *b = BP2B_Obj([BP2B_Obj(l, sel_registerName("allItems")) firstObject], sel_registerName("bundleIdentifier"));
+            if (!focusedBundle || ![b isEqualToString:focusedBundle]) continue;
+        }
+        if (anyCenter && (BP2B_LL(l, sel_registerName("environment")) & ~1ll) != 2) continue;
+        [out addObject:l];
+    }
+    if (outIdx) *outIdx = leaf0 ? [out indexOfObject:leaf0] : NSNotFound;
+    return out;
+}
+static void BP2B_NavigateFromStrip(id vc, BOOL fwd, NSArray *reachable) {
+    // 162 0x1c743b844: ring = the strip-reachable layouts with the current stage layout inserted at its group position; step +-1 with wrap.
+    id sc = BP2B_Obj(vc, sel_registerName("switcherController"));
+    id cur = BP2B_Obj(BP2B_Obj(sc, sel_registerName("layoutState")), @selector(appLayout));
+    NSMutableArray *ring = [reachable mutableCopy] ?: [NSMutableArray array];
+    NSString *curId = BP2B_Obj(cur, sel_registerName("continuousExposeIdentifier"));
+    NSUInteger pos = ring.count;
+    for (NSUInteger i = 0; i < ring.count; i++) {
+        NSString *gid = BP2B_Obj(ring[i], sel_registerName("continuousExposeIdentifier"));
+        if (curId && [gid isEqualToString:curId]) { pos = i; break; }
+    }
+    if (cur && ![ring containsObject:cur]) { [ring insertObject:cur atIndex:MIN(pos, ring.count)]; } else if (cur) { pos = [ring indexOfObject:cur]; }
+    if (ring.count < 2) return;
+    NSUInteger at = cur ? [ring indexOfObject:cur] : 0;
+    NSUInteger next = fwd ? (at + 1) % ring.count : (at > 0 ? at - 1 : ring.count - 1);
+    id target = ring[next];
+    if (target == cur) return;
+    NSDictionary *adjustedMap = BP2B_IvarObj(vc, "_leafAppLayoutsToAdjustedAppLayouts");
+    id layout = adjustedMap[target] ?: target;
+    id item = ((id (*)(id, SEL, long long))objc_msgSend)(target, sel_registerName("itemForLayoutRole:"), 1);
+    long long role = ((long long (*)(id, SEL, id))objc_msgSend)(layout, sel_registerName("layoutRoleForItem:"), item);
+    BP2B_DispatchTap(vc, layout, role, 0, 1, YES);
+}
+static void BP2B_NavigateKbd(id vc, BOOL fwd, BOOL match) {
+    NSUInteger idx = NSNotFound;
+    NSArray *list = BP2B_KbdList(vc, match, &idx);
+    id root = BP2B_IvarObj(vc, "_rootModifier");
+    NSArray *inactive = nil;
+    if (match && idx != NSNotFound && idx < list.count) {
+        NSString *fb = BP2B_Obj([BP2B_Obj(list[idx], sel_registerName("allItems")) firstObject], sel_registerName("bundleIdentifier"));
+        NSArray *all = BP2B_Obj(root, sel_registerName("inactiveAppLayoutsReachableByKeyboardShortcut")) ?: @[];
+        NSMutableArray *f = [NSMutableArray array];
+        for (id l in all) { NSString *b = BP2B_Obj([BP2B_Obj(l, sel_registerName("allItems")) firstObject], sel_registerName("bundleIdentifier")); if ([b isEqualToString:fb]) [f addObject:l]; }
+        inactive = f;
+    } else if (!match) {
+        inactive = BP2B_Obj(root, sel_registerName("inactiveAppLayoutsReachableByKeyboardShortcut"));
+    }
+    if (idx == NSNotFound) return;
+    BOOL atEdge = fwd ? (idx == list.count - 1) : (idx == 0);
+    if (atEdge && inactive.count) { BP2B_NavigateFromStrip(vc, fwd, inactive); return; }
+    if (list.count < 2) return;
+    NSUInteger next = fwd ? (idx + 1) % list.count : (idx > 0 ? idx - 1 : list.count - 1);
+    id target = list[next];
+    NSDictionary *adjustedMap = BP2B_IvarObj(vc, "_leafAppLayoutsToAdjustedAppLayouts");
+    id layout = adjustedMap[target] ?: target;
+    id item = ((id (*)(id, SEL, long long))objc_msgSend)(target, sel_registerName("itemForLayoutRole:"), 1);
+    long long role = ((long long (*)(id, SEL, id))objc_msgSend)(layout, sel_registerName("layoutRoleForItem:"), item);
+    BP2B_DispatchTap(vc, layout, role, 0, 1, YES);
+}
+static void BP2B_SetupKeyboardNav(void) {
+    Class vc = objc_getClass("SBFluidSwitcherViewController");
+    if (!vc) return;
+    // 162 names (callable by ported code)
+    BP2B_AddIfMissing(vc, "_navigateFromFocusedAppWindowSceneToNextSceneInForwardDirection:matchFocusedApp:", imp_implementationWithBlock(^(id me, BOOL fwd, BOOL match) { BP2B_NavigateKbd(me, fwd, match); }), "v24@0:8B16B20");
+    BP2B_AddIfMissing(vc, "_navigateFromFocusedAppWindowSceneToNextSceneFromStripInForwardDirection:withReachableAppLayouts:", imp_implementationWithBlock(^(id me, BOOL fwd, NSArray *r) { BP2B_NavigateFromStrip(me, fwd, r); }), "v28@0:8B16@20");
+    // 160 entry points: chamois -> 162 algorithm, otherwise the 16.0 code
+    gOrigNavOld = BP2B_Replace(vc, "_navigateFromFocusedAppWindowSceneToNextScene:matchFocusedApp:", imp_implementationWithBlock(^(id me, BOOL fwd, BOOL match) {
+        if (BP2B_Chamois(me) && BP2B_Enabled("g2bkeys")) { BP2B_NavigateKbd(me, fwd, match); return; }
+        if (gOrigNavOld) ((void (*)(id, SEL, BOOL, BOOL))gOrigNavOld)(me, sel_registerName("_navigateFromFocusedAppWindowSceneToNextScene:matchFocusedApp:"), fwd, match);
+    }));
+    gOrigKbdList = BP2B_Replace(vc, "_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:", imp_implementationWithBlock(^id(id me, BOOL match, NSUInteger *outIdx) {
+        if (BP2B_Chamois(me) && BP2B_Enabled("g2bkeys")) { NSArray *l = BP2B_KbdList(me, match, outIdx); if (l) return l; }
+        return gOrigKbdList ? ((id (*)(id, SEL, BOOL, NSUInteger *))gOrigKbdList)(me, sel_registerName("_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:"), match, outIdx) : nil;
+    }));
+    // can-perform: window navigation actions (4,5 same-app next/previous window, 15,16 next/previous window) are available whenever the modifier
+    // exposes at least one reachable layout other than the focused one (UNSURE: 162's version is a 280 insn decision tree)
+    gOrigCanPerform = BP2B_Replace(vc, "canPerformKeyboardShortcutAction:forBundleIdentifier:", imp_implementationWithBlock(^BOOL(id me, long long action, id bid) {
+        BOOL r = gOrigCanPerform ? ((BOOL (*)(id, SEL, long long, id))gOrigCanPerform)(me, sel_registerName("canPerformKeyboardShortcutAction:forBundleIdentifier:"), action, bid) : NO;
+        if (r || !BP2B_Chamois(me) || !BP2B_Enabled("g2bkeys")) return r;
+        if (action == 4 || action == 5 || action == 15 || action == 16) {
+            id root = BP2B_IvarObj(me, "_rootModifier");
+            return [BP2B_Obj(root, sel_registerName("activeLeafAppLayoutsReachableByKeyboardShortcut")) count] + [BP2B_Obj(root, sel_registerName("inactiveAppLayoutsReachableByKeyboardShortcut")) count] > 1;
+        }
+        return r;
+    }));
+}
+
+// ---- 5c: gesture-manager API names (162: handleFluidSwitcherGestureManager:didBegin/Update/EndGesture:) ------------------------------------
+// 16.0 manager/controller call handleGestureDidBegin:/Update:/End: ; 162 bodies are identical to the 160 ones plus an assertion that the manager is the
+// switcher controller's gestureManager (or the event is a cross-display CE window drag). The 162 names are added as forwarders so ported callers work.
+static id BP2B_ConvertCEDragEvent(id vc, id event, id fromContentVC) {
+    // 162 0x1c745f3b0: re-express a window-drag event that came from the NEIGHBOURING display's switcher in this display's coordinates
+    UIViewController *other = [fromContentVC isKindOfClass:[UIViewController class]] ? fromContentVC : nil;
+    if (!other || other == vc) return event;
+    id myScene = BP2B_Obj(vc, sel_registerName("_sbWindowScene")), otherScene = BP2B_Obj(other, sel_registerName("_sbWindowScene"));
+    SEL cp = sel_registerName("convertPoint:toNeighboringDisplayWindowScene:");
+    SEL ca = sel_registerName("convertAppLayout:fromSwitcherController:toSwitcherController:");
+    if (![otherScene respondsToSelector:cp]) return event;
+    CGPoint loc = ((CGPoint (*)(id, SEL, CGPoint, id))objc_msgSend)(otherScene, cp, BP2B_Point(event, sel_registerName("locationInContainerView")), myScene);
+    id fromSC = BP2B_Obj(otherScene, sel_registerName("switcherController")), toSC = BP2B_Obj(myScene, sel_registerName("switcherController"));
+    id coord = BP2B_Obj(fromSC, sel_registerName("switcherCoordinator"));
+    id al = BP2B_Obj(event, sel_registerName("selectedAppLayout"));
+    if ([coord respondsToSelector:ca]) al = ((id (*)(id, SEL, id, id, id))objc_msgSend)(coord, ca, al, fromSC, toSC) ?: al;
+    Class ec = [event class];
+    id n = [ec alloc];
+    SEL ini = sel_registerName("initWithGestureID:selectedAppLayout:gestureType:phase:");
+    if (![n respondsToSelector:ini]) return event;
+    n = ((id (*)(id, SEL, long long, id, long long, long long))objc_msgSend)(n, ini, BP2B_LL(event, sel_registerName("gestureID")), al, BP2B_LL(event, sel_registerName("gestureType")), BP2B_LL(event, sel_registerName("phase")));
+    ((void (*)(id, SEL, CGPoint))objc_msgSend)(n, sel_registerName("setLocationInContainerView:"), loc);
+    if ([n respondsToSelector:sel_registerName("setDraggingFromContinuousExposeStrips:")]) ((void (*)(id, SEL, BOOL))objc_msgSend)(n, sel_registerName("setDraggingFromContinuousExposeStrips:"), BP2B_Bool(event, sel_registerName("isDraggingFromContinuousExposeStrips")));
+    if ([n respondsToSelector:sel_registerName("setLocationInSelectedDisplayItem:")]) ((void (*)(id, SEL, CGPoint))objc_msgSend)(n, sel_registerName("setLocationInSelectedDisplayItem:"), BP2B_Point(event, sel_registerName("locationInSelectedDisplayItem")));
+    if ([n respondsToSelector:sel_registerName("setSizeOfSelectedDisplayItem:")]) ((void (*)(id, SEL, CGSize))objc_msgSend)(n, sel_registerName("setSizeOfSelectedDisplayItem:"), BP2B_Size(event, sel_registerName("sizeOfSelectedDisplayItem")));
+    return n;
+}
+static void BP2B_SetupGestureNames(void) {
+    Class vc = objc_getClass("SBFluidSwitcherViewController");
+    if (!vc) return;
+    struct { const char *n, *old; } t[] = { { "handleFluidSwitcherGestureManager:didBeginGesture:", "handleGestureDidBegin:" }, { "handleFluidSwitcherGestureManager:didUpdateGesture:", "handleGestureDidUpdate:" }, { "handleFluidSwitcherGestureManager:didEndGesture:", "handleGestureDidEnd:" } };
+    for (size_t i = 0; i < 3; i++) {
+        SEL old = sel_registerName(t[i].old);
+        BP2B_AddIfMissing(vc, t[i].n, imp_implementationWithBlock(^(id me, id manager, id gesture) {
+            if ([me respondsToSelector:old]) ((void (*)(id, SEL, id))objc_msgSend)(me, old, gesture);
+        }), "v32@0:8@16@24");
+    }
+    BP2B_AddIfMissing(vc, "_convertContinuousExposeWindowDragEvent:fromSwitcherContentViewController:", imp_implementationWithBlock(^id(id me, id ev, id from) { return BP2B_ConvertCEDragEvent(me, ev, from); }), "@32@0:8@16@24");
+    BP2B_AddIfMissing(vc, "_adjustedGestureEventForGestureEvent:fromGestureManager:", imp_implementationWithBlock(^id(id me, id ev, id mgr) {
+        if (BP2B_Bool(ev, sel_registerName("isContinuousExposeWindowDragEvent"))) {
+            id other = BP2B_Obj(BP2B_Obj(me, sel_registerName("switcherController")), sel_registerName("contentViewController"));
+            return BP2B_ConvertCEDragEvent(me, ev, other);
+        }
+        return ev;
+    }), "@32@0:8@16@24");
+}
+
+// ---- 5d: system aperture suppression responses (162 0x1c745e4f4 / 0x1c745e788 / 0x1c745e8e8) -------------------------------------------------
+static const void *kBP2B_GlobalAsserts = &kBP2B_GlobalAsserts;
+static NSMutableDictionary *BP2B_GlobalAsserts(id vc) {
+    NSMutableDictionary *d = objc_getAssociatedObject(vc, kBP2B_GlobalAsserts);
+    if (!d) { d = [NSMutableDictionary dictionary]; objc_setAssociatedObject(vc, kBP2B_GlobalAsserts, d, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    return d;
+}
+static id BP2B_ApertureController(void) {
+    // 162 sends systemApertureControllerForMainDisplay to a singleton (class ref 0x1dd7eeeb0); look for the singleton that answers it.
+    SEL s = sel_registerName("systemApertureControllerForMainDisplay");
+    for (NSString *n in @[@"SBSystemApertureController", @"SBSceneManagerCoordinator", @"SBSystemApertureManager", @"SBApertureController"]) {
+        Class k = NSClassFromString(n);
+        id inst = k ? BP2B_Obj((id)k, sel_registerName("sharedInstance")) : nil;
+        if (inst && [inst respondsToSelector:s]) return BP2B_Obj(inst, s);
+    }
+    return nil;
+}
+static void BP2B_SetupAperture(void) {
+    Class vc = objc_getClass("SBFluidSwitcherViewController");
+    if (!vc) return;
+    static IMP oReq, oRel, oBounce;
+    SEL rs = sel_registerName("_performRequestSystemApertureElementSuppressionResponse:");
+    oReq = BP2B_Replace(vc, "_performRequestSystemApertureElementSuppressionResponse:", imp_implementationWithBlock(^(id me, id resp) {
+        if (oReq) ((void (*)(id, SEL, id))oReq)(me, rs, resp);
+        if (!BP2B_Enabled("g2baperture")) return;
+        if (!BP2B_Bool(resp, sel_registerName("wantsGlobalSuppression"))) return;
+        id settings = BP2B_Obj(BP2B_IvarObj(me, "_settings"), sel_registerName("systemApertureSettings"));
+        if (settings && ![settings respondsToSelector:sel_registerName("zoomToJindoCollapseToInert")]) return;            // 16.0 settings have no such flag: nothing to do
+        if (settings && !BP2B_Bool(settings, sel_registerName("zoomToJindoCollapseToInert"))) return;
+        id ctrl = BP2B_ApertureController();
+        SEL rr = sel_registerName("restrictSystemApertureToInertWithReason:");
+        if (!ctrl || ![ctrl respondsToSelector:rr]) return;
+        id assertion = BP2B_Obj1(ctrl, rr, @"Switcher");
+        id key = BP2B_Obj(resp, sel_registerName("invalidationIdentifier"));
+        if (assertion && key) BP2B_GlobalAsserts(me)[key] = assertion;
+    }));
+    SEL rls = sel_registerName("_performRelinquishSystemApertureElementSuppressionResponse:");
+    oRel = BP2B_Replace(vc, "_performRelinquishSystemApertureElementSuppressionResponse:", imp_implementationWithBlock(^(id me, id resp) {
+        if (oRel) ((void (*)(id, SEL, id))oRel)(me, rls, resp);
+        id key = BP2B_Obj(resp, sel_registerName("invalidationIdentifier"));
+        id a = key ? BP2B_GlobalAsserts(me)[key] : nil;
+        if (a) { SEL inv = sel_registerName("invalidateWithReason:"); if ([a respondsToSelector:inv]) ((void (*)(id, SEL, id))objc_msgSend)(a, inv, @"Switcher"); [BP2B_GlobalAsserts(me) removeObjectForKey:key]; }
+    }));
+    SEL bs = sel_registerName("_performSystemApertureBounceResponse:");
+    oBounce = BP2B_Replace(vc, "_performSystemApertureBounceResponse:", imp_implementationWithBlock(^(id me, id resp) {
+        if (oBounce) ((void (*)(id, SEL, id))oBounce)(me, bs, resp);
+        id key = BP2B_Obj(resp, sel_registerName("suppressionIdentifierToInvalidate"));
+        id a = key ? BP2B_GlobalAsserts(me)[key] : nil;
+        if (a) { SEL inv = sel_registerName("invalidateWithReason:"); if ([a respondsToSelector:inv]) ((void (*)(id, SEL, id))objc_msgSend)(a, inv, @"Switcher"); [BP2B_GlobalAsserts(me) removeObjectForKey:key]; }
+    }));
+}
+
+// ---- 5e: per-display: home-grabber click suspends only the ACTIVE display (162 0x1c743a460) ----------------------------------------------------
+// 160 calls _SBWorkspaceSuspendAllDisplays at the end of the click; 162 calls _SBWorkspaceSuspendActiveDisplay (0x1c736e970 = a thin entry into
+// __SBWorkspaceActivateSpringBoardWithResult(nil, nil, animated=1, 1, 0, nil, nil), 160's entry has the arguments (nil, allDisplays=1, 1, 0, nil, nil)).
+// UNSURE: 16.0 has no single-display entry. The port: when more than one display window scene is connected the click is routed to the main
+// workspace for the display of the grabber's window scene (a transition request with that display configuration); with one display the 16.0 call stays.
+static void BP2B_SetupGrabberClick(void) {
+    // Decision (md 5.6): the 16.0 body is kept. The only 16.2 difference is the last call (_SBWorkspaceSuspendActiveDisplay instead of
+    // _SBWorkspaceSuspendAllDisplays); 16.0 has no single-display entry into __SBWorkspaceActivateSpringBoardWithResult and replacing it with a
+    // guessed transition request would break the click. If the process exports SBWorkspaceSuspendActiveDisplay (a 16.2-like runtime) nothing is
+    // needed either. Nothing is installed.
+}
+
+// ---- 5f: pointer edge-resize in the item container (162 0x1c75e44a8 / 0x1c75e4570 / 0x1c75e4858 / 0x1c75e48f8 / init 0x1c75e10b4) --------------
+static const void *kBP2B_CScene = &kBP2B_CScene, *kBP2B_CSuppressed = &kBP2B_CSuppressed;
+static void BP2B_SetupContainerPointer(void) {
+    Class ic = objc_getClass("SBFluidSwitcherItemContainer");
+    if (!ic) return;
+    SEL old = sel_registerName("pointerIsHoveringOverEdge:");
+    // 162 renames: -[container appSwitcherPageView:pointerIsHoveringOverEdge:] (the page view is now passed) and -_updateForPointerHoveringOverEdge:
+    BP2B_AddIfMissing(ic, "_updateForPointerHoveringOverEdge:", imp_implementationWithBlock(^(id me, BOOL hover) { if ([me respondsToSelector:old]) ((void (*)(id, SEL, BOOL))objc_msgSend)(me, old, hover); }), "v20@0:8B16");
+    BP2B_AddIfMissing(ic, "appSwitcherPageView:pointerIsHoveringOverEdge:", imp_implementationWithBlock(^(id me, id pv, BOOL hover) { if ([me respondsToSelector:old]) ((void (*)(id, SEL, BOOL))objc_msgSend)(me, old, hover); }), "v28@0:8@16B24");
+    // preferred pointer lock status suppression (new ivar -> associated object); reset by prepareForReuse
+    BP2B_AddIfMissing(ic, "isPreferredPointerLockStatusSuppressed", imp_implementationWithBlock(^BOOL(id me) { return [objc_getAssociatedObject(me, kBP2B_CSuppressed) boolValue]; }), "B16@0:8");
+    BP2B_AddIfMissing(ic, "setPreferredPointerLockStatusSuppressed:", imp_implementationWithBlock(^(id me, BOOL v) { objc_setAssociatedObject(me, kBP2B_CSuppressed, @(v), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }), "v20@0:8B16");
+    static IMP oReuse;
+    oReuse = BP2B_Replace(ic, "prepareForReuse", imp_implementationWithBlock(^(id me) {
+        if (oReuse) ((void (*)(id, SEL))oReuse)(me, @selector(prepareForReuse));
+        objc_setAssociatedObject(me, kBP2B_CSuppressed, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }));
+    // windowScene argument of the 162 initialiser
+    BP2B_AddIfMissing(ic, "initWithFrame:appLayout:delegate:active:windowScene:", imp_implementationWithBlock(^id(id me, CGRect f, id layout, id delegate, BOOL active, id scene) {
+        SEL i4 = sel_registerName("initWithFrame:appLayout:delegate:active:");
+        id o = ((id (*)(id, SEL, CGRect, id, id, BOOL))objc_msgSend)(me, i4, f, layout, delegate, active);
+        if (o && scene) objc_setAssociatedObject(o, kBP2B_CScene, scene, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return o;
+    }), "@64@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16@48@56B64@72");
+    BP2B_AddIfMissing(ic, "windowScene", imp_implementationWithBlock(^id(id me) {
+        id s = objc_getAssociatedObject(me, kBP2B_CScene);
+        return s ?: BP2B_Obj(BP2B_Obj(me, @selector(delegate)), sel_registerName("_sbWindowScene"));            // 16.0 containers: the delegate is the VC of that scene
+    }), "@16@0:8");
+}
+
+// ---- 5g: Continuous Expose strip tongue (162 SBContinuousExposeStripTongueView 0x1c797196c.. ; VC hosting 0x1c7459648 / 0x1c744306c) -------------------
+typedef struct { unsigned long long state, direction; } BP2BTongueAttrs;      // SBSwitcherContinuousExposeStripTongueAttributes (state 0 none, 1 hidden, 2 shown)
+@protocol SBContinuousExposeStripTongueViewDelegate <NSObject>
+- (void)continuousExposeStripTongueView:(id)view didFinishAnimatingToState:(unsigned long long)state;
+- (void)continuousExposeStripTongueViewTapped:(id)view;
+@end
+@interface SBContinuousExposeStripTongueView : UIView
+@property (nonatomic, weak) id<SBContinuousExposeStripTongueViewDelegate> delegate;
+@property (nonatomic, readonly) BP2BTongueAttrs attributes;
+@property (nonatomic, readonly, getter=isAnimating) BOOL animating;
+- (void)setAttributes:(BP2BTongueAttrs)attributes animated:(BOOL)animated;
+@end
+@implementation SBContinuousExposeStripTongueView {
+    UIView *_tongueContainerView; UIImageView *_chevronImageView; UIImageView *_tongueMaskView; UIView *_backdropView;
+    UITapGestureRecognizer *_tap; CGSize _bitmapMaskSize; BOOL _animating; BP2BTongueAttrs _attributes;
+}
+@synthesize delegate = _delegate;
+- (instancetype)initWithFrame:(CGRect)frame {
+    if (!(self = [super initWithFrame:frame])) return nil;
+    _attributes.state = 0; _attributes.direction = 0;                                          // _SBSwitcherContinuousExposeStripTongueAttributesNone
+    UIImage *mask = [UIImage imageNamed:@"SlideOverTongueMask"];                                // the Slide Over tongue bitmap, shared with 16.0
+    _bitmapMaskSize = mask.size;
+    _tongueContainerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, _bitmapMaskSize.width, _bitmapMaskSize.height)];
+    _tongueContainerView.layer.anchorPoint = CGPointMake(1.0, 0.5);
+    [self addSubview:_tongueContainerView];
+    Class bd = NSClassFromString(@"_UIBackdropView");
+    _backdropView = bd ? ((id (*)(id, SEL, long long))objc_msgSend)([bd alloc], sel_registerName("initWithPrivateStyle:"), -2) : [UIView new];
+    id inputs = BP2B_Obj(_backdropView, sel_registerName("inputSettings"));
+    if ([inputs respondsToSelector:@selector(setBlurRadius:)]) ((void (*)(id, SEL, double))objc_msgSend)(inputs, @selector(setBlurRadius:), 0.0);
+    if ([inputs respondsToSelector:@selector(setScale:)]) ((void (*)(id, SEL, double))objc_msgSend)(inputs, @selector(setScale:), 1.0);
+    if ([inputs respondsToSelector:@selector(setBackdropVisible:)]) ((void (*)(id, SEL, BOOL))objc_msgSend)(inputs, @selector(setBackdropVisible:), YES);
+    [_tongueContainerView addSubview:_backdropView];
+    _tongueMaskView = [[UIImageView alloc] initWithImage:mask];
+    _tongueMaskView.contentMode = UIViewContentModeScaleToFill;
+    _tongueMaskView.layer.compositingFilter = @"destOut";                                       // UNSURE: 162 loads a CA compositing filter constant (0x1d83ef000+0xa90)
+    [_tongueContainerView addSubview:_tongueMaskView];
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:34.0];        // 0x4046... == 44? decoded as the double constant; UNSURE value
+    _chevronImageView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.compact.left" withConfiguration:cfg]];
+    _chevronImageView.semanticContentAttribute = UISemanticContentAttributeForceLeftToRight;
+    _chevronImageView.tintColor = [UIColor blackColor];
+    [_tongueContainerView addSubview:_chevronImageView];
+    _tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_handleTap:)];
+    [_tongueContainerView addGestureRecognizer:_tap];
+    self.isAccessibilityElement = YES;
+    self.accessibilityIdentifier = @"continuous-expose-strip-tongue";
+    return self;
+}
+- (BP2BTongueAttrs)attributes { return _attributes; }
+- (BOOL)isAnimating { return _animating; }
+- (void)_updateContainerPosition { _tongueContainerView.center = CGPointMake(_attributes.direction == 1 ? 0.0 : self.bounds.size.width, self.bounds.size.height * 0.5); }
+- (void)_updateContainerTransform { _tongueContainerView.transform = (_attributes.direction == 2) ? CGAffineTransformMakeScale(-1.0, 1.0) : CGAffineTransformIdentity; }
+- (void)_updateSubviewLayoutForCollapsedOrExpandedState {
+    CGAffineTransform t = (_attributes.state == 1) ? CGAffineTransformMakeScale(0.0, 1.0) : CGAffineTransformIdentity;
+    _backdropView.transform = t; _tongueMaskView.transform = t; _chevronImageView.transform = t;
+    CGFloat cx = (_attributes.state == 1) ? _bitmapMaskSize.width : _bitmapMaskSize.width * 0.5, cy = floor(_bitmapMaskSize.height * 0.5);
+    _backdropView.center = CGPointMake(cx, cy); _tongueMaskView.center = CGPointMake(cx, cy); _chevronImageView.center = CGPointMake(cx, cy);
+}
+- (void)_updateSubviewOpacityForCollapsedOrExpandedState { _chevronImageView.alpha = (_attributes.state == 2) ? 1.0 : 0.0; }
+- (void)layoutSubviews { [super layoutSubviews]; [self _updateContainerPosition]; [self _updateContainerTransform]; [self _updateSubviewLayoutForCollapsedOrExpandedState]; }
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event { return [_tongueContainerView pointInside:[self convertPoint:point toView:_tongueContainerView] withEvent:event]; }
+- (void)_handleTap:(id)tap { [_delegate continuousExposeStripTongueViewTapped:self]; }
+- (void)setAttributes:(BP2BTongueAttrs)attributes animated:(BOOL)animated {
+    BP2BTongueAttrs old = _attributes;
+    _attributes = attributes;
+    [self _updateContainerPosition]; [self _updateContainerTransform];
+    if (old.state == attributes.state || !animated) {
+        [self _updateSubviewLayoutForCollapsedOrExpandedState]; [self _updateSubviewOpacityForCollapsedOrExpandedState];
+        return;
+    }
+    id root = BP2B_Obj((id)NSClassFromString(@"SBAppSwitcherDomain"), sel_registerName("rootSettings"));
+    id fs = BP2B_Obj(root, sel_registerName("floatingSwitcherSettings"));
+    id settings = BP2B_Obj(fs, old.state == 1 ? sel_registerName("tongueCollapsedToExpandedAnimationSettings") : sel_registerName("tongueExpandedToCollapsedAnimationSettings"));
+    _animating = YES;
+    __weak SBContinuousExposeStripTongueView *wself = self;
+    unsigned long long target = attributes.state;
+    BP2B_Animate(settings, 3, ^{ [wself _updateSubviewLayoutForCollapsedOrExpandedState]; [wself _updateSubviewOpacityForCollapsedOrExpandedState]; },
+                 ^(BOOL f, BOOL r) { SBContinuousExposeStripTongueView *s = wself; if (!s) return; s->_animating = NO; [s->_delegate continuousExposeStripTongueView:s didFinishAnimatingToState:target]; });
+}
+@end
+
+static const void *kBP2B_Tongue = &kBP2B_Tongue, *kBP2B_TongueBackdrop = &kBP2B_TongueBackdrop, *kBP2B_TongueElement = &kBP2B_TongueElement, *kBP2B_StripOpts = &kBP2B_StripOpts;
+static BP2BTongueAttrs BP2B_TongueAttrsFor(id vc) {
+    id root = BP2B_IvarObj(vc, "_rootModifier");
+    SEL s = sel_registerName("continuousExposeStripTongueAttributes");
+    BP2BTongueAttrs z = { 0, 0 };
+    return (root && [root respondsToSelector:s]) ? ((BP2BTongueAttrs (*)(id, SEL))objc_msgSend)(root, s) : z;
+}
+static void BP2B_LayoutTongue(id vc, BOOL animated, void (^completion)(void)) {
+    SBContinuousExposeStripTongueView *t = objc_getAssociatedObject(vc, kBP2B_Tongue);
+    if (t) {
+        BP2BTongueAttrs a = BP2B_TongueAttrsFor(vc);
+        CGRect b = BP2B_Rect(vc, sel_registerName("containerViewBounds"));
+        t.bounds = b; t.center = CGPointMake(CGRectGetMidX(b), CGRectGetMidY(b));
+        UIView *bd = objc_getAssociatedObject(vc, kBP2B_TongueBackdrop);
+        bd.bounds = b; bd.center = CGPointMake(CGRectGetMidX(b), CGRectGetMidY(b));
+        [t setAttributes:a animated:animated];
+    }
+    if (completion) completion();
+}
+static void BP2B_UpdateTonguePresence(id vc) {
+    BP2BTongueAttrs a = BP2B_TongueAttrsFor(vc);
+    SBContinuousExposeStripTongueView *t = objc_getAssociatedObject(vc, kBP2B_Tongue);
+    UIView *content = BP2B_IvarObj(vc, "_contentView");
+    if (a.state == 2 && content) {
+        if (!t) {
+            t = [SBContinuousExposeStripTongueView new];
+            t.delegate = (id)vc;
+            objc_setAssociatedObject(vc, kBP2B_Tongue, t, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            [content addSubview:t];
+            Class bdc = NSClassFromString(@"_UIBackdropView");
+            id bd = bdc ? ((id (*)(id, SEL, long long))objc_msgSend)([bdc alloc], sel_registerName("initWithPrivateStyle:"), -2) : nil;
+            id in = BP2B_Obj(bd, sel_registerName("inputSettings"));
+            if ([in respondsToSelector:@selector(setBlurRadius:)]) ((void (*)(id, SEL, double))objc_msgSend)(in, @selector(setBlurRadius:), 0.0);
+            if ([in respondsToSelector:@selector(setScale:)]) ((void (*)(id, SEL, double))objc_msgSend)(in, @selector(setScale:), 1.0);
+            if ([in respondsToSelector:@selector(setBackdropVisible:)]) ((void (*)(id, SEL, BOOL))objc_msgSend)(in, @selector(setBackdropVisible:), YES);
+            id eff = BP2B_Obj(bd, sel_registerName("effectView"));
+            CALayer *l = BP2B_Obj(eff, @selector(layer));
+            if ([l respondsToSelector:sel_registerName("setCaptureOnly:")]) ((void (*)(id, SEL, BOOL))objc_msgSend)(l, sel_registerName("setCaptureOnly:"), NO);     // UNSURE: layer class cast is SBSafeCast(0x...2b0)
+            if (bd) { [content addSubview:bd]; objc_setAssociatedObject(vc, kBP2B_TongueBackdrop, bd, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+            Class le = NSClassFromString(@"SBSwitcherLayoutElement");                                                                // class at 0x1db40b9f0; type 6 = tongue backdrop capture element
+            id el = le ? ((id (*)(id, SEL, long long))objc_msgSend)([le alloc], sel_registerName("initWithType:"), 6) : nil;
+            if (el) objc_setAssociatedObject(vc, kBP2B_TongueElement, el, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            BP2B_Obj(vc, sel_registerName("_ensureSubviewOrdering"));
+            BP2B_LayoutTongue(vc, NO, nil);
+            BP2BTongueAttrs hidden = { 1, a.direction };
+            [t setAttributes:hidden animated:NO];
+        }
+        [t setAttributes:a animated:YES];
+    } else if (t && !t.isAnimating) {
+        [t removeFromSuperview];
+        objc_setAssociatedObject(vc, kBP2B_Tongue, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [(UIView *)objc_getAssociatedObject(vc, kBP2B_TongueBackdrop) removeFromSuperview];
+        objc_setAssociatedObject(vc, kBP2B_TongueBackdrop, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(vc, kBP2B_TongueElement, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        BP2B_Obj(vc, sel_registerName("_ensureSubviewOrdering"));
+    }
+}
+static void BP2B_SetupTongue(void) {
+    Class vc = objc_getClass("SBFluidSwitcherViewController");
+    if (!vc) return;
+    BP2B_AddIfMissing(vc, "_updateContinuousExposeStripTonguePresence", imp_implementationWithBlock(^(id me) { BP2B_UpdateTonguePresence(me); }), "v16@0:8");
+    BP2B_AddIfMissing(vc, "_layoutContinuousExposeStripTongueAnimated:completion:", imp_implementationWithBlock(^(id me, BOOL animated, void (^completion)(void)) { BP2B_LayoutTongue(me, animated, completion); }), "v32@0:8B16@?24");
+    BP2B_AddIfMissing(vc, "continuousExposeStripTongueView:didFinishAnimatingToState:", imp_implementationWithBlock(^(id me, id view, unsigned long long state) { BP2B_UpdateTonguePresence(me); }), "v32@0:8@16Q24");
+    BP2B_AddIfMissing(vc, "continuousExposeStripTongueViewTapped:", imp_implementationWithBlock(^(id me, id view) {
+        unsigned long long o = [objc_getAssociatedObject(me, kBP2B_StripOpts) unsignedLongLongValue];
+        if (!(o & 1)) {
+            objc_setAssociatedObject(me, kBP2B_StripOpts, @(o | 1), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            Class rc = NSClassFromString(@"SBUpdateLayoutSwitcherEventResponse");
+            id r = rc ? ((id (*)(id, SEL, unsigned long long, long long))objc_msgSend)([rc alloc], sel_registerName("initWithOptions:updateMode:"), 0x1eull, 3ll) : nil;
+            if (r) BP2B_Obj1(me, sel_registerName("_handleEventResponse:"), r);
+        }
+        if ([me respondsToSelector:sel_registerName("dismissContinuousExposeStripEdgeProtectTongue")]) BP2B_Obj(me, sel_registerName("dismissContinuousExposeStripEdgeProtectTongue"));
+        BP2B_UpdateTonguePresence(me);
+    }), "v24@0:8@16");
+    // post-event / post-layout / ordering hooks (162 calls these from _updateImplicitModifierStackInvalidatables / _updateLayoutWithCompletion: / _ensureSubviewOrdering)
+    static IMP oDisp, oLayout, oOrder;
+    oDisp = BP2B_Replace(vc, "_dispatchEventAndHandleAction:", imp_implementationWithBlock(^id(id me, id ev) {
+        id r = oDisp ? ((id (*)(id, SEL, id))oDisp)(me, sel_registerName("_dispatchEventAndHandleAction:"), ev) : nil;
+        if (BP2B_Enabled("g2btongue") && BP2B_Chamois(me)) BP2B_UpdateTonguePresence(me);
+        return r;
+    }));
+    oLayout = BP2B_Replace(vc, "_updateLayoutWithCompletion:", imp_implementationWithBlock(^(id me, id completion) {
+        if (oLayout) ((void (*)(id, SEL, id))oLayout)(me, sel_registerName("_updateLayoutWithCompletion:"), completion);
+        if (BP2B_Enabled("g2btongue") && objc_getAssociatedObject(me, kBP2B_Tongue)) BP2B_LayoutTongue(me, NO, nil);
+    }));
+    oOrder = BP2B_Replace(vc, "_ensureSubviewOrdering", imp_implementationWithBlock(^(id me) {
+        if (oOrder) ((void (*)(id, SEL))oOrder)(me, sel_registerName("_ensureSubviewOrdering"));
+        UIView *content = BP2B_IvarObj(me, "_contentView");
+        UIView *bd = objc_getAssociatedObject(me, kBP2B_TongueBackdrop), *t = objc_getAssociatedObject(me, kBP2B_Tongue);
+        if (bd.superview == content) [content bringSubviewToFront:bd];
+        if (t.superview == content) [content bringSubviewToFront:t];
+    }));
+}
+

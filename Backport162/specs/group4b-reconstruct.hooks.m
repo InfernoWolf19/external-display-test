@@ -85,6 +85,35 @@ static BOOL G4B_On(const char *name) {
 #endif
 }
 
+// opt-in switch: <jbroot>/tmp/Backport162.on.<name>, checked at most once a second
+static BOOL G4B_OptIn(const char *name) {
+#ifdef BP_G4B_STANDALONE
+    (void)name;
+    return NO;
+#else
+    static char base[1024];
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+#if defined(ROOT_PATH_NS)
+        snprintf(base, sizeof base, "%s", ROOT_PATH_NS(@"/tmp").fileSystemRepresentation);
+#else
+        snprintf(base, sizeof base, "/var/jb/tmp");
+#endif
+    });
+    static struct { const char *name; uint64_t next; BOOL last; } slots[8];
+    int i = 0;
+    while (i < 8 && slots[i].name && strcmp(slots[i].name, name) != 0) i++;
+    if (i == 8) return NO;
+    if (!slots[i].name) slots[i].name = name;
+    uint64_t t = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (t < slots[i].next) return slots[i].last;
+    slots[i].next = t + 1000000000ull;
+    char p[1100]; snprintf(p, sizeof p, "%s/Backport162.on.%s", base, name);
+    slots[i].last = access(p, F_OK) == 0;
+    return slots[i].last;
+#endif
+}
+
 // `type`, `count` ... are declared with different return types in Foundation: message explicitly when needed.
 static inline long long G4B_LL(id obj, SEL sel) { return ((long long (*)(id, SEL))objc_msgSend)(obj, sel); }
 static inline BOOL G4B_Bool(id obj, SEL sel) { return ((BOOL (*)(id, SEL))objc_msgSend)(obj, sel); }
@@ -380,3 +409,987 @@ static void G4B_InvalidateCloneRequest(G4BCloneRequest *req) {   // block 0x18e4
 %end // G4B_Clone
 
 // ----- (item 1 ends; further items are appended below)
+
+// ================================================================================================================
+// 2. EDUCATION REWORK                                                                          [UNSURE, md 2.6]
+// ================================================================================================================
+#import <UIKit/UIKit.h>
+
+static NSString *const kG4BNoteConnect    = @"SBSystemShellExtendedDisplayControllerPolicyConnectNotification";
+static NSString *const kG4BNoteDisconnect = @"SBSystemShellExtendedDisplayControllerPolicyDisconnectNotification";
+static NSString *const kG4BNoteWindowExp  = @"SBSystemShellExtendedDisplayControllerPolicyDeviceConnectionWindowExpiredNotification";
+static NSString *const kG4BNoteHardware   = @"SBSystemShellExtendedDisplayControllerHardwareAvailabilityNotification";
+static NSString *const kG4BKeyAvailable   = @"kSBSystemShellExtendedDisplayControllerHardwareAvailabilityIsAvailableKey";
+static NSString *const kG4BKeyInWindow    = @"kSBSystemShellExtendedDisplayControllerFiredDuringDeviceConnectionWindowKey";
+static NSString *const kG4BKeyIdentity    = @"kSBSystemShellExtendedDisplayControllerDisplayIdentityKey";
+static NSString *const kG4BEduDefaultsKey = @"SBExternalDisplayEducationReasons";   // 16.2 SBExternalDisplayDefaults key, md 2.1
+
+// ---- protocols that 16.0 lacks (names as in 16.2)
+@protocol SBRemoteHandshakeProtocol
+- (void)wakeUpConnection;
+@end
+@protocol SBExternalDisplayHardwareRequirementsChangedProtocol
+- (void)dismissAnimated:(BOOL)animated;
+- (void)externalDisplayHardwareRequirementsSatisfiedChanged:(BOOL)changed;
+@end
+@protocol SBExternalDisplayEducationPillViewControllerDelegate <NSObject>
+- (void)pillViewControllerDidReceiveUserTap:(id)tap;
+@end
+
+// ---- defaults shim (md 2.1)
+static unsigned long long G4B_EduReasonsRead(id defaults) {
+    CFPropertyListRef v = CFPreferencesCopyAppValue((__bridge CFStringRef)kG4BEduDefaultsKey, CFSTR("com.apple.springboard"));
+    if (v) {
+        unsigned long long r = 0;
+        if (CFGetTypeID(v) == CFNumberGetTypeID()) CFNumberGetValue(v, kCFNumberLongLongType, &r);
+        CFRelease(v);
+        return r;
+    }
+    unsigned long long m = 0;     // migrate from the 16.0 booleans
+    if ([defaults respondsToSelector:@selector(extendedDisplayEverEnabledWithHardwareReqsSatisfied)] &&
+        G4B_Bool(defaults, @selector(extendedDisplayEverEnabledWithHardwareReqsSatisfied))) m |= 1;
+    if ([defaults respondsToSelector:@selector(extendedDisplayEverEnabledWithoutHardwareReqsSatisfied)] &&
+        G4B_Bool(defaults, @selector(extendedDisplayEverEnabledWithoutHardwareReqsSatisfied))) m |= 2;
+    return m;
+}
+static void G4B_EduReasonsWrite(unsigned long long r) {
+    CFPreferencesSetAppValue((__bridge CFStringRef)kG4BEduDefaultsKey, (__bridge CFNumberRef)@(r), CFSTR("com.apple.springboard"));
+    CFPreferencesAppSynchronize(CFSTR("com.apple.springboard"));
+}
+static id G4B_ExternalDisplayDefaults(void) {
+    Class k = NSClassFromString(@"SBDefaults");
+    id ld = [k respondsToSelector:@selector(localDefaults)] ? G4B_Obj((id)k, @selector(localDefaults)) : nil;
+    return [ld respondsToSelector:@selector(externalDisplayDefaults)] ? G4B_Obj(ld, @selector(externalDisplayDefaults)) : nil;
+}
+static void G4B_EduSetReasons(unsigned long long r) { G4B_EduReasonsWrite(r); }
+
+// ---- native fallback alert (md 2.6) --------------------------------------------------------------------------
+static UIWindow *gG4BNativeWindow;
+static void G4B_NativeAlert(BOOL hardwareInWindow, void (^done)(NSUInteger result)) {
+    G4B_Main(^{
+        id wsm = [[UIApplication sharedApplication] respondsToSelector:@selector(windowSceneManager)] ? G4B_Obj([UIApplication sharedApplication], @selector(windowSceneManager)) : nil;
+        id scene = [wsm respondsToSelector:@selector(embeddedDisplayWindowScene)] ? G4B_Obj(wsm, @selector(embeddedDisplayWindowScene)) : nil;
+        if (![scene isKindOfClass:[UIWindowScene class]]) { done(0); return; }
+        UIWindow *w = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+        w.windowLevel = UIWindowLevelAlert + 10;
+        w.rootViewController = [UIViewController new];
+        w.hidden = NO;
+        gG4BNativeWindow = w;
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"External Display"
+            message:hardwareInWindow ? @"A keyboard and pointer are connected. Use this display as an extended display?" : @"Use this display as an extended display? Connect a keyboard and pointer to use it fully."
+            preferredStyle:UIAlertControllerStyleAlert];
+        void (^finish)(NSUInteger) = ^(NSUInteger r) { gG4BNativeWindow.hidden = YES; gG4BNativeWindow = nil; done(r); };
+        [a addAction:[UIAlertAction actionWithTitle:@"Extended Display" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) { finish(1); }]];
+        [a addAction:[UIAlertAction actionWithTitle:@"Mirror" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) { finish(2); }]];
+        [w.rootViewController presentViewController:a animated:YES completion:nil];
+    });
+}
+
+// ---- pill view controller (md 2.4) ---------------------------------------------------------------------------
+@interface SBExternalDisplayEducationPillViewController : UIViewController {
+    BOOL _extendedDisplayEnabled;
+    UIView *_pillView;
+    __weak id<SBExternalDisplayEducationPillViewControllerDelegate> _delegate;
+}
+@property (nonatomic, weak) id<SBExternalDisplayEducationPillViewControllerDelegate> delegate;
+@property (nonatomic, weak) id presentableContext;
+- (instancetype)initWithExtendedDisplayEnabled:(BOOL)enabled;
+- (void)updateExtendedDisplayEnabled:(BOOL)enabled;
+@end
+
+static NSString *G4B_SymString(const char *n) {            // exported NSString* constant of SpringBoard
+    void *p = dlsym(RTLD_DEFAULT, n);
+    return p ? *(__unsafe_unretained NSString *const *)p : nil;
+}
+static NSString *G4B_Localized(NSString *key, NSString *fallback) {
+    NSString *s = [[NSBundle mainBundle] localizedStringForKey:key value:@"" table:nil];
+    return (s.length && ![s isEqualToString:key]) ? s : fallback;
+}
+
+@implementation SBExternalDisplayEducationPillViewController
+@synthesize delegate = _delegate;
+- (instancetype)initWithExtendedDisplayEnabled:(BOOL)enabled {
+    if ((self = [super initWithNibName:nil bundle:nil])) {
+        _extendedDisplayEnabled = enabled;
+        [self loadViewIfNeeded];
+        if ([_pillView respondsToSelector:@selector(intrinsicContentSize)]) self.preferredContentSize = [_pillView intrinsicContentSize];
+    }
+    return self;
+}
+- (id)_pillSubtitleContentItem {
+    Class ci = NSClassFromString(@"PLPillContentItem");
+    NSString *t = _extendedDisplayEnabled ? G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY_ON", @"On") : G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY_OFF", @"Off");
+    return ((id (*)(id, SEL, id, long long))objc_msgSend)([ci alloc], NSSelectorFromString(@"initWithText:style:"), t, 2);
+}
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    Class pill = NSClassFromString(@"PLPillView"), ci = NSClassFromString(@"PLPillContentItem");
+    if (!pill || !ci) return;
+    UIView *host = self.view;
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithHierarchicalColor:[UIColor labelColor]];
+    UIImageView *lead = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"display" withConfiguration:cfg]];
+    UIImageView *trail = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"]];
+    NSString *title = G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY", @"Extended Display");
+    UIView *pv = ((id (*)(id, SEL, id, id))objc_msgSend)([pill alloc], NSSelectorFromString(@"initWithLeadingAccessoryView:trailingAccessoryView:"), lead, trail);
+    _pillView = pv;
+    id titleItem = ((id (*)(id, SEL, id, long long))objc_msgSend)([ci alloc], NSSelectorFromString(@"initWithText:style:"), title, 1);
+    id sub = [self _pillSubtitleContentItem];
+    if (titleItem && sub) ((void (*)(id, SEL, id))objc_msgSend)(pv, NSSelectorFromString(@"setCenterContentItems:"), @[titleItem, sub]);
+    pv.frame = host.bounds;
+    pv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [host addSubview:pv];
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(_handleSingleTap:)];
+    tap.numberOfTouchesRequired = 1;
+    tap.numberOfTapsRequired = 1;
+    [host addGestureRecognizer:tap];
+}
+- (void)updateExtendedDisplayEnabled:(BOOL)enabled {
+    if (_extendedDisplayEnabled == enabled) return;
+    _extendedDisplayEnabled = enabled;
+    SEL c = NSSelectorFromString(@"centerContentItems"), u = NSSelectorFromString(@"updateCenterContentItem:withContentItem:");
+    if (![_pillView respondsToSelector:c] || ![_pillView respondsToSelector:u]) return;
+    NSArray *items = G4B_Obj(_pillView, c);
+    if (items.count < 2) return;
+    ((void (*)(id, SEL, id, id))objc_msgSend)(_pillView, u, items[1], [self _pillSubtitleContentItem]);
+}
+- (void)_handleSingleTap:(id)tap { [_delegate pillViewControllerDidReceiveUserTap:self]; }
+// BNPresentable / BNPresentableIdentifying (protocols attached at runtime in G4B_Setup)
+- (NSString *)requestIdentifier { return @"ExternalDisplayEducation"; }
+- (NSString *)requesterIdentifier { return @"com.apple.SpringBoard.ExternalDisplayEducation"; }
+- (NSString *)presentableDescription { return @"External Display Education"; }
+- (long long)presentableBehavior { return 1; }
+- (UIViewController *)viewController { return self; }
+- (void)addPresentableObserver:(id)o {}
+- (void)removePresentableObserver:(id)o {}
+@end
+
+// ---- session (md 2.3) ----------------------------------------------------------------------------------------
+@interface SBExternalDisplayEducationSession : NSObject <SBExternalDisplayEducationPillViewControllerDelegate, SBRemoteHandshakeProtocol, NSXPCListenerDelegate> {
+    id _displayIdentity;
+    BOOL _disconnected;
+    BOOL _isHardwareAvailable;
+    BOOL _isHardwareAvailableDuringDisplayConnectionWindow;
+    id _bannerPoster;
+    unsigned long long _previousPresentedReasons;
+    BOOL _isPresenting;
+    id _alertHandle;
+    NSXPCConnection *_xpcConnection;
+    NSXPCListener *_listener;
+    SBExternalDisplayEducationPillViewController *_educationBannerViewController;
+    NSUInteger _bannerGeneration;
+}
+@property (nonatomic, readonly) id displayIdentity;
+- (instancetype)initWithDisplayIdentity:(id)ident hardwareAvailability:(BOOL)hw bannerPoster:(id)poster;
+- (void)displayConnected;
+- (void)displayDisconnected;
+- (void)deviceConnectionWindowExpired;
+- (void)updateHardwareAvailability:(BOOL)avail withinDisplayConnectionWindow:(BOOL)inWindow;
+@end
+
+@implementation SBExternalDisplayEducationSession
+@synthesize displayIdentity = _displayIdentity;
+- (instancetype)initWithDisplayIdentity:(id)ident hardwareAvailability:(BOOL)hw bannerPoster:(id)poster {
+    if ((self = [super init])) {
+        _displayIdentity = ident;
+        _isHardwareAvailable = hw;
+        _isHardwareAvailableDuringDisplayConnectionWindow = hw;
+        _bannerPoster = poster;
+        _previousPresentedReasons = G4B_EduReasonsRead(G4B_ExternalDisplayDefaults());
+        BP_Log(@"edu: creating session with previous reasons: %llu", _previousPresentedReasons);
+    }
+    return self;
+}
+- (void)dealloc { [_listener invalidate]; [_xpcConnection invalidate]; }
+
+- (void)_recordReason:(unsigned long long)bit {     // alert completion blocks 0x37b8 / 0x3978 / 0x3e8c / 0x4238
+    unsigned long long r = G4B_EduReasonsRead(G4B_ExternalDisplayDefaults());
+    G4B_EduSetReasons(r | bit);
+}
+- (void)displayConnected {
+    BP_Log(@"edu: display connected");
+    unsigned long long reasons = _previousPresentedReasons;
+    __weak typeof(self) ws = self;
+    if (reasons == 0) {
+        BP_Log(@"edu: not presented either alert before, presenting now");
+        [self _presentEducationAlert:^(NSUInteger ok) { typeof(self) s = ws; if (ok && s) [s _recordReason:s->_isHardwareAvailableDuringDisplayConnectionWindow ? 1 : 2]; }];
+    } else if (_isHardwareAvailableDuringDisplayConnectionWindow) {
+        if (reasons & 1) [self _presentBanner];
+        else [self _presentEducationAlert:^(NSUInteger ok) { typeof(self) s = ws; if (ok && s) [s _recordReason:1]; }];
+    } else if (reasons == 3) {
+        [self _presentBanner];
+    }
+}
+- (void)deviceConnectionWindowExpired {
+    BP_Log(@"edu: device connection window expired");
+    if (_isHardwareAvailableDuringDisplayConnectionWindow || _isPresenting) return;
+    __weak typeof(self) ws = self;
+    if (_previousPresentedReasons & 2) [self _presentBanner];
+    else [self _presentEducationAlert:^(NSUInteger ok) { typeof(self) s = ws; if (ok && s) [s _recordReason:2]; }];
+}
+- (void)updateHardwareAvailability:(BOOL)avail withinDisplayConnectionWindow:(BOOL)inWindow {
+    if (!_isHardwareAvailable && !avail) return;
+    _isHardwareAvailable = avail;
+    if (inWindow && !_isHardwareAvailableDuringDisplayConnectionWindow) _isHardwareAvailableDuringDisplayConnectionWindow = avail;
+    __weak typeof(self) ws = self;
+    if (_isHardwareAvailableDuringDisplayConnectionWindow && !_isPresenting) {
+        if (!(_previousPresentedReasons & 1))
+            [self _presentEducationAlert:^(NSUInteger ok) { typeof(self) s = ws; if (ok && s && s->_isHardwareAvailableDuringDisplayConnectionWindow) [s _recordReason:1]; }];
+        else [self _presentBanner];
+    } else if (_isPresenting) {
+        if (_xpcConnection) {
+            id proxy = [_xpcConnection remoteObjectProxy];
+            if ([proxy respondsToSelector:@selector(externalDisplayHardwareRequirementsSatisfiedChanged:)])
+                [(id<SBExternalDisplayHardwareRequirementsChangedProtocol>)proxy externalDisplayHardwareRequirementsSatisfiedChanged:_isHardwareAvailable];
+        } else if (_educationBannerViewController) {
+            [_educationBannerViewController updateExtendedDisplayEnabled:_isHardwareAvailableDuringDisplayConnectionWindow];
+        }
+    }
+}
+- (void)displayDisconnected {
+    _disconnected = YES;
+    BP_Log(@"edu: display disconnected");
+    if (_isPresenting) {
+        [self _dismissEducationAlert:@"Display Disconnected"];
+        [self _dismissBanner:@"Display Disconnected"];
+    }
+}
+
+- (void)_presentEducationAlert:(void (^)(NSUInteger))completion {
+    if (!completion || _isPresenting) { BP_Log(@"edu: refusing second presentation"); return; }    // 16.2 NSAssert
+    _isPresenting = YES;
+    BOOL hwInWindow = _isHardwareAvailableDuringDisplayConnectionWindow;
+    void (^complete)(NSUInteger) = ^(NSUInteger result) {
+        if (result) {                                     // the session writes the mirroring default itself (0x1c77d4ab8)
+            id d = G4B_ExternalDisplayDefaults();
+            if ([d respondsToSelector:@selector(setMirroringEnabled:)])
+                ((void (*)(id, SEL, BOOL))objc_msgSend)(d, @selector(setMirroringEnabled:), result == 2);
+        }
+        BP_Log(@"edu: received response from user. externalDisplayEnabled: %d", result == 1);
+        completion(result);
+    };
+    if (G4B_OptIn("edunative")) { G4B_NativeAlert(hwInWindow, complete); return; }       // opt-in fallback, md 2.6
+
+    Class defC = NSClassFromString(@"SBSRemoteAlertDefinition"), cfgC = NSClassFromString(@"SBSRemoteAlertConfigurationContext");
+    Class handleC = NSClassFromString(@"SBSRemoteAlertHandle"), actC = NSClassFromString(@"SBSRemoteAlertActivationContext");
+    Class actionC = NSClassFromString(@"BSAction"), respC = NSClassFromString(@"BSActionResponder");
+    if (!defC || !cfgC || !handleC || !actC || !actionC || !respC) { _isPresenting = NO; complete(0); return; }
+    _listener = [NSXPCListener anonymousListener];
+    _listener.delegate = self;
+    [_listener activate];
+    id def = ((id (*)(id, SEL, id, id))objc_msgSend)([defC alloc], NSSelectorFromString(@"initWithServiceName:viewControllerClassName:"), @"com.apple.SpringBoardEducation", @"SBERemoteViewController");
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(def, NSSelectorFromString(@"setPrefersEmbeddedDisplayPresentation:"), YES);
+    id cfg = [[cfgC alloc] init];
+    id ep = [[_listener endpoint] respondsToSelector:@selector(_endpoint)] ? G4B_Obj([_listener endpoint], @selector(_endpoint)) : nil;
+    if (ep) ((void (*)(id, SEL, id))objc_msgSend)(cfg, NSSelectorFromString(@"setXpcEndpoint:"), ep);
+    _alertHandle = ((id (*)(id, SEL, id, id))objc_msgSend)((id)handleC, NSSelectorFromString(@"newHandleWithDefinition:configurationContext:"), def, cfg);
+    id act = [[actC alloc] init];
+    NSString *kType = G4B_SymString("SBEducationRemoteViewControllerEducationTypeKey");
+    NSString *kHw = G4B_SymString("SBEducationRemoteViewControllerHasPointerAndKeyboardConnectedKey");
+    if (kType && kHw) ((void (*)(id, SEL, id))objc_msgSend)(act, NSSelectorFromString(@"setUserInfo:"), @{ kType: @1, kHw: @(hwInWindow) });
+    id responder = ((id (*)(id, SEL, id))objc_msgSend)((id)respC, NSSelectorFromString(@"responderWithHandler:"), ^(id response) {
+        NSUInteger result = 0;
+        if (![response respondsToSelector:@selector(error)] || !G4B_Obj(response, @selector(error))) {
+            id info = [response respondsToSelector:@selector(info)] ? G4B_Obj(response, @selector(info)) : nil;
+            long long flag = [info respondsToSelector:NSSelectorFromString(@"flagForSetting:")]
+                ? ((long long (*)(id, SEL, unsigned long long))objc_msgSend)(info, NSSelectorFromString(@"flagForSetting:"), 1) : LLONG_MAX;
+            result = (flag == LLONG_MAX) ? 0 : (flag == 0 ? 2 : 1);     // flag NO -> user chose mirroring (2), YES -> extended (1)
+        }
+        complete(result);
+    });
+    ((void (*)(id, SEL, id))objc_msgSend)(responder, NSSelectorFromString(@"setQueue:"), dispatch_get_main_queue());
+    id action = ((id (*)(id, SEL, id, id))objc_msgSend)([actionC alloc], NSSelectorFromString(@"initWithInfo:responder:"), nil, responder);
+    if (action) ((void (*)(id, SEL, id))objc_msgSend)(act, NSSelectorFromString(@"setActions:"), [NSSet setWithObject:action]);
+    ((void (*)(id, SEL, id))objc_msgSend)(_alertHandle, NSSelectorFromString(@"activateWithContext:"), act);
+}
+- (BOOL)listener:(NSXPCListener *)listener shouldAcceptNewConnection:(NSXPCConnection *)c {
+    if (_disconnected) return NO;
+    c.exportedObject = self;
+    c.exportedInterface = [NSXPCInterface interfaceWithProtocol:@protocol(SBRemoteHandshakeProtocol)];
+    c.remoteObjectInterface = [NSXPCInterface interfaceWithProtocol:@protocol(SBExternalDisplayHardwareRequirementsChangedProtocol)];
+    [c resume];
+    _xpcConnection = c;
+    BP_Log(@"edu: client connected");
+    return YES;
+}
+- (void)wakeUpConnection {}
+- (void)_dismissEducationAlert:(NSString *)reason {
+    if (_xpcConnection) {
+        BP_Log(@"edu: dismissing alert for reason: %@ via xpcConnection", reason);
+        [(id<SBExternalDisplayHardwareRequirementsChangedProtocol>)[_xpcConnection remoteObjectProxy] dismissAnimated:YES];
+    } else if (_alertHandle) {
+        BP_Log(@"edu: dismissing alert for reason: %@ via alertHandle", reason);
+        if ([_alertHandle respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)_alertHandle invalidate];
+    }
+    if (gG4BNativeWindow) { gG4BNativeWindow.hidden = YES; gG4BNativeWindow = nil; }
+}
+- (void)_presentBanner {
+    if (_isPresenting) { BP_Log(@"edu: refusing second presentation"); return; }
+    _isPresenting = YES;
+    _educationBannerViewController = [[SBExternalDisplayEducationPillViewController alloc] initWithExtendedDisplayEnabled:_isHardwareAvailableDuringDisplayConnectionWindow];
+    _educationBannerViewController.delegate = self;
+    NSError *err = nil;
+    SEL post = NSSelectorFromString(@"postPresentable:withOptions:userInfo:error:");
+    if ([_bannerPoster respondsToSelector:post])
+        ((id (*)(id, SEL, id, unsigned long long, id, NSError **))objc_msgSend)(_bannerPoster, post, _educationBannerViewController, 1, nil, &err);
+    if (err) BP_Log(@"edu: error while presenting education banner: %@", err);
+    NSUInteger gen = ++_bannerGeneration;                       // BSAbsoluteMachTimer 3.0 s, leeway 0.05
+    __weak typeof(self) ws = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        typeof(self) s = ws;
+        if (s && s->_bannerGeneration == gen) [s _dismissBanner:@"Timer"];
+    });
+}
+- (void)_dismissBanner:(NSString *)reason {
+    SBExternalDisplayEducationPillViewController *vc = _educationBannerViewController;
+    if (!vc) return;
+    Class idc = NSClassFromString(@"BNPresentableIdentification");
+    SEL uid = NSSelectorFromString(@"uniqueIdentificationForPresentable:"), rev = NSSelectorFromString(@"revokePresentablesWithIdentification:reason:options:userInfo:error:");
+    if ([(id)idc respondsToSelector:uid] && [_bannerPoster respondsToSelector:rev]) {
+        id ident = G4B_Obj1((id)idc, uid, vc);
+        ((id (*)(id, SEL, id, id, unsigned long long, id, NSError **))objc_msgSend)(_bannerPoster, rev, ident, reason, 0, nil, NULL);
+    }
+}
+- (void)pillViewControllerDidReceiveUserTap:(id)tap {
+    _bannerGeneration++;                                         // invalidates the dismiss timer
+    [self _dismissBanner:@"User Interaction"];
+    NSURL *url = [NSURL URLWithString:@"prefs:root=DISPLAY&path=DISPLAY_ARRANGEMENT"];
+    typedef void (*ActFn)(NSURL *, id);
+    ActFn act = (ActFn)dlsym(RTLD_DEFAULT, "SBWorkspaceActivateApplicationFromURL");
+    if (act) act(url, nil);
+    else [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+}
+@end
+
+// ---- passive producer of the four policy notifications (md 2.2) ----------------------------------------------
+@interface G4BPolicyNoteState : NSObject
+@property (nonatomic) BOOL windowOpen;
+@property (nonatomic) BOOL disconnected;
+@property (nonatomic) NSUInteger generation;
+@property (nonatomic, strong) id identity;
+@end
+@implementation G4BPolicyNoteState
+@end
+
+static NSString *G4B_KeyboardNoteName(void) {
+    static NSString *s; static dispatch_once_t once;
+    dispatch_once(&once, ^{ void *p = dlsym(RTLD_DEFAULT, "SBHardwareKeyboardAvailabilityChangedNotification"); if (p) s = *(__unsafe_unretained NSString *const *)p; });
+    return s;
+}
+static void G4B_PostPolicyNote(id policy, NSString *name, NSDictionary *extra) {
+    G4BPolicyNoteState *st = objc_getAssociatedObject(policy, kG4BKeyD);
+    NSMutableDictionary *ui = [NSMutableDictionary dictionary];
+    if (st.identity) ui[kG4BKeyIdentity] = st.identity;
+    if (extra) [ui addEntriesFromDictionary:extra];
+    [[NSNotificationCenter defaultCenter] postNotificationName:name object:policy userInfo:ui];
+}
+static void G4B_PolicyHardwareChanged(id policy) {
+    G4BPolicyNoteState *st = objc_getAssociatedObject(policy, kG4BKeyD);
+    if (!st || st.disconnected || ![policy respondsToSelector:@selector(_areRuntimeAvailabilityRequirementsMet)]) return;
+    BOOL met = G4B_Bool(policy, @selector(_areRuntimeAvailabilityRequirementsMet));
+    G4B_PostPolicyNote(policy, kG4BNoteHardware, @{ kG4BKeyAvailable: @(met), kG4BKeyInWindow: @(st.windowOpen) });
+}
+
+%group G4B_Edu
+
+%hook SBExternalDisplayDefaults
+%new
+- (unsigned long long)externalDisplayEducationReasons { return G4B_EduReasonsRead(self); }
+%new
+- (void)setExternalDisplayEducationReasons:(unsigned long long)reasons { G4B_EduReasonsWrite(reasons); }
+// Makes the stock 16.0 launch code skip the OLD observer + its BSSimpleAssertion (0x1c5ed78b0), see md 2.2.
+- (BOOL)hasShownAllExtendedDisplayEducations {
+    if (G4B_On("edu")) return YES;
+    return %orig;
+}
+%end
+
+%hook SBExternalDisplayEducationObserver
+%new
+- (id)initWithBannerPoster:(id)poster {
+    self = [self init];
+    if (self) {
+        objc_setAssociatedObject(self, kG4BKeyA, poster, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+        [nc addObserver:self selector:@selector(_extendedDisplayControllerDidConnect:) name:kG4BNoteConnect object:nil];
+        [nc addObserver:self selector:@selector(_extendedDisplayControllerDidDisconnect:) name:kG4BNoteDisconnect object:nil];
+        [nc addObserver:self selector:@selector(_deviceConnectionWindowExpired:) name:kG4BNoteWindowExp object:nil];
+        [nc addObserver:self selector:@selector(_hardwareAvailabilityChanged:) name:kG4BNoteHardware object:nil];
+    }
+    return self;
+}
+%new
+- (void)_extendedDisplayControllerDidConnect:(NSNotification *)n {
+    id ident = n.userInfo[kG4BKeyIdentity];
+    NSNumber *avail = n.userInfo[kG4BKeyAvailable];
+    if (!ident || !avail) { BP_Log(@"edu: connect without identity/availability"); return; }
+    if (objc_getAssociatedObject(self, kG4BKeyB)) { BP_Log(@"edu: already tracking a session"); return; }
+    SBExternalDisplayEducationSession *s = [[SBExternalDisplayEducationSession alloc] initWithDisplayIdentity:ident hardwareAvailability:avail.boolValue bannerPoster:objc_getAssociatedObject(self, kG4BKeyA)];
+    objc_setAssociatedObject(self, kG4BKeyB, s, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [s displayConnected];
+}
+%new
+- (void)_extendedDisplayControllerDidDisconnect:(NSNotification *)n {
+    SBExternalDisplayEducationSession *s = objc_getAssociatedObject(self, kG4BKeyB);
+    if (!n.userInfo[kG4BKeyIdentity] || !s) return;
+    [s displayDisconnected];
+    objc_setAssociatedObject(self, kG4BKeyB, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+%new
+- (void)_deviceConnectionWindowExpired:(NSNotification *)n {
+    SBExternalDisplayEducationSession *s = objc_getAssociatedObject(self, kG4BKeyB);
+    if (!n.userInfo[kG4BKeyIdentity] || !s) return;
+    [s deviceConnectionWindowExpired];
+}
+%new
+- (void)_hardwareAvailabilityChanged:(NSNotification *)n {
+    SBExternalDisplayEducationSession *s = objc_getAssociatedObject(self, kG4BKeyB);
+    id ident = n.userInfo[kG4BKeyIdentity];
+    NSNumber *avail = n.userInfo[kG4BKeyAvailable], *inWin = n.userInfo[kG4BKeyInWindow];
+    if (!s || !ident || !avail || !inWin || ![s.displayIdentity isEqual:ident]) return;
+    [s updateHardwareAvailability:avail.boolValue withinDisplayConnectionWindow:inWin.boolValue];
+}
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    %orig;
+}
+%end
+
+%hook SpringBoard
+- (void)applicationDidFinishLaunching:(id)application {
+    %orig;
+    if (!G4B_On("edu")) return;
+    Class oc = NSClassFromString(@"SBExternalDisplayEducationObserver");
+    id poster = [self respondsToSelector:@selector(bannerManager)] ? G4B_Obj(self, @selector(bannerManager)) : nil;
+    if (!oc || !poster || ![oc instancesRespondToSelector:@selector(initWithBannerPoster:)]) return;
+    id obs = ((id (*)(id, SEL, id))objc_msgSend)([oc alloc], @selector(initWithBannerPoster:), poster);
+    objc_setAssociatedObject(self, kG4BKeyC, obs, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+%end
+
+%hook SBSystemShellExtendedDisplayControllerPolicy
+- (void)connectToDisplayController:(id)controller displayConfiguration:(id)config {
+    %orig;
+    if (!G4B_On("edu") || objc_getAssociatedObject(self, kG4BKeyD)) return;
+    G4BPolicyNoteState *st = [G4BPolicyNoteState new];
+    id ident = G4B_Ivar(self, "_displayIdentity");
+    st.identity = [ident respondsToSelector:@selector(rootIdentity)] ? G4B_Obj(ident, @selector(rootIdentity)) : ident;
+    st.windowOpen = YES;
+    objc_setAssociatedObject(self, kG4BKeyD, st, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    BOOL met = [self respondsToSelector:@selector(_areRuntimeAvailabilityRequirementsMet)] ? G4B_Bool(self, @selector(_areRuntimeAvailabilityRequirementsMet)) : NO;
+    NSString *kn = G4B_KeyboardNoteName();
+    if (kn) [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_bp_keyboardAvailabilityChanged:) name:kn object:nil];
+    id mgr = G4B_Ivar(self, "_mousePointerManager");
+    if ([mgr respondsToSelector:@selector(addObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(mgr, @selector(addObserver:), self);
+    G4B_PostPolicyNote(self, kG4BNoteConnect, @{ kG4BKeyAvailable: @(met), kG4BKeyInWindow: @YES });
+    NSUInteger gen = st.generation;
+    __weak id wself = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{      // BSContinuousMachTimer 4.0 s
+        id s = wself; G4BPolicyNoteState *t = objc_getAssociatedObject(s, kG4BKeyD);
+        if (!s || !t || t.disconnected || t.generation != gen) return;
+        t.windowOpen = NO;
+        G4B_PostPolicyNote(s, kG4BNoteWindowExp, nil);
+    });
+}
+%new
+- (void)_bp_keyboardAvailabilityChanged:(NSNotification *)n { G4B_PolicyHardwareChanged(self); }
+// SBMousePointerHardwareConnectionObserver (16.2 conformance); sent only if the manager honours optional methods
+%new
+- (void)mousePointerManager:(id)mgr hardwarePointingDeviceAttachedDidChange:(BOOL)attached { G4B_PolicyHardwareChanged(self); }
+- (void)displayControllerDidDisconnect:(id)controller sceneManager:(id)sceneManager {
+    G4BPolicyNoteState *st = objc_getAssociatedObject(self, kG4BKeyD);
+    if (st && !st.disconnected) {
+        st.disconnected = YES; st.windowOpen = NO; st.generation++;
+        NSString *kn = G4B_KeyboardNoteName();
+        if (kn) [[NSNotificationCenter defaultCenter] removeObserver:self name:kn object:nil];
+        id mgr = G4B_Ivar(self, "_mousePointerManager");
+        if ([mgr respondsToSelector:@selector(removeObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(mgr, @selector(removeObserver:), self);
+        G4B_PostPolicyNote(self, kG4BNoteDisconnect, nil);
+    }
+    %orig;
+}
+%end
+
+%end // G4B_Edu
+
+// ----- (item 2 ends)
+
+// ================================================================================================================
+// 3. PRESENTATION-UPDATE SCENE SUBSET                                                                     [DONE]
+// ================================================================================================================
+static id G4B_SceneManagerForScene(id scene) {
+    id settings = [scene respondsToSelector:@selector(settings)] ? G4B_Obj(scene, @selector(settings)) : nil;
+    SEL ds = NSSelectorFromString(@"sb_displayIdentityForSceneManagers");
+    id ident = [settings respondsToSelector:ds] ? G4B_Obj(settings, ds) : nil;
+    Class cc = NSClassFromString(@"SBSceneManagerCoordinator");
+    id coord = [(id)cc respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)cc, @selector(sharedInstance)) : nil;
+    SEL fm = NSSelectorFromString(@"sceneManagerForDisplayIdentity:");
+    return (ident && [coord respondsToSelector:fm]) ? G4B_Obj1(coord, fm, ident) : nil;
+}
+static NSHashTable *G4B_PointerScenes(id sceneManager, BOOL create) {
+    NSHashTable *t = objc_getAssociatedObject(sceneManager, kG4BKeyA);
+    if (!t && create) { t = [NSHashTable weakObjectsHashTable]; objc_setAssociatedObject(sceneManager, kG4BKeyA, t, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    return t;
+}
+
+%group G4B_PreSubset
+
+%hook SBSceneManager
+%new
+- (id)boundPointerUIScenes { return [NSSet setWithArray:[G4B_PointerScenes(self, NO) allObjects] ?: @[]]; }
+%new
+- (void)addPointerUISceneToPresentationBinder:(id)scene { if (scene) [G4B_PointerScenes(self, YES) addObject:scene]; }
+%new
+- (void)removePointerUISceneFromPresentationBinder:(id)scene { if (scene) [G4B_PointerScenes(self, NO) removeObject:scene]; }
+%end
+
+%hook SBMousePointerManager
+- (void)pointerClientController:(id)controller sceneDidActivate:(id)scene {
+    %orig;
+    if (!G4B_On("presubset")) return;
+    id sm = G4B_SceneManagerForScene(scene);
+    if ([sm respondsToSelector:@selector(addPointerUISceneToPresentationBinder:)]) ((void (*)(id, SEL, id))objc_msgSend)(sm, @selector(addPointerUISceneToPresentationBinder:), scene);
+}
+- (void)pointerClientController:(id)controller sceneWillDeactivate:(id)scene {
+    if (G4B_On("presubset")) {
+        id sm = G4B_SceneManagerForScene(scene);
+        if ([sm respondsToSelector:@selector(removePointerUISceneFromPresentationBinder:)]) ((void (*)(id, SEL, id))objc_msgSend)(sm, @selector(removePointerUISceneFromPresentationBinder:), scene);
+    }
+    %orig;
+}
+%end
+
+%hook SBSystemShellExtendedDisplayControllerPolicy
+- (void)displayController:(id)controller updatePresentationWithSceneManager:(id)sm displayConfiguration:(id)cfg completion:(void (^)(void))completion {
+    if (!G4B_On("presubset") || !sm) {
+        %orig;
+        return;
+    }
+    NSMutableSet *scenes = [NSMutableSet set];
+    NSSet *bound = [sm respondsToSelector:@selector(boundPointerUIScenes)] ? G4B_Obj(sm, @selector(boundPointerUIScenes)) : nil;
+    if (bound) [scenes unionSet:bound];
+    id cur = G4B_Ivar(self, "_currentScene");
+    if (cur) [scenes addObject:cur];
+    if (scenes.count == 0) {
+        NSSet *all = [sm respondsToSelector:@selector(allScenes)] ? G4B_Obj(sm, @selector(allScenes)) : nil;
+        static BOOL fell;                                           // safety net: one 16.0-style pass if the producer never fired
+        if (all.count && !fell) { fell = YES; BP_Log(@"presubset: empty subset, falling back once"); %orig; return; }
+        if (completion) completion();
+        return;
+    }
+    BP_Log(@"presubset: updating %lu scenes", (unsigned long)scenes.count);
+    __block NSUInteger done = 0;
+    NSUInteger total = scenes.count;
+    SEL upd = NSSelectorFromString(@"updateSettings:withTransitionContext:completion:");
+    CGRect bounds = [cfg respondsToSelector:@selector(bounds)] ? ((CGRect (*)(id, SEL))objc_msgSend)(cfg, @selector(bounds)) : CGRectZero;
+    for (id scene in scenes) {
+        id settings = [scene respondsToSelector:@selector(settings)] ? G4B_Obj(scene, @selector(settings)) : nil;
+        id ms = [settings mutableCopy];
+        if (!ms || ![scene respondsToSelector:upd]) { if (++done == total && completion) completion(); continue; }
+        if ([ms respondsToSelector:NSSelectorFromString(@"setDisplayConfiguration:")]) ((void (*)(id, SEL, id))objc_msgSend)(ms, NSSelectorFromString(@"setDisplayConfiguration:"), cfg);
+        if ([ms respondsToSelector:NSSelectorFromString(@"setFrame:")]) ((void (*)(id, SEL, CGRect))objc_msgSend)(ms, NSSelectorFromString(@"setFrame:"), bounds);
+        void (^each)(BOOL) = ^(BOOL ok) { if (++done == total && completion) completion(); };
+        ((void (*)(id, SEL, id, id, id))objc_msgSend)(scene, upd, ms, nil, each);
+    }
+}
+%end
+
+%end // G4B_PreSubset
+
+// ----- (item 3 ends)
+
+// ================================================================================================================
+// 4. 100 ms DEFERRED ACTIVATION OF EXTERNAL-DISPLAY ASSERTIONS                                           [DONE]
+// ================================================================================================================
+static BOOL G4B_StackPending(id stack) { return [objc_getAssociatedObject(stack, kG4BKeyA) boolValue]; }
+
+%group G4B_DeferAct
+
+%hook _SBDisplayAssertionStack
+// 16.2 -activateAssertionsForDisplay: (0x1c74d1898)
+%new
+- (void)activateAssertionsForDisplay:(id)display {
+    if (!G4B_StackPending(self)) return;                               // 16.2 NSAssert(!_activated)
+    objc_setAssociatedObject(self, kG4BKeyA, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    BOOL inval = NO;
+    G4B_IvarBytes(self, "_invalidated", &inval, sizeof inval);
+    if (inval) return;                                                  // 16.2 NSAssert(!_invalidated)
+    id prefs = G4B_Ivar(self, "_assertionControlPreferences");
+    Class mt = NSClassFromString(@"NSMapTable");
+    SEL ev = @selector(_evalAndApplyOldPreferences:newPreferences:);
+    if (prefs && [self respondsToSelector:ev])
+        ((void (*)(id, SEL, id, id))objc_msgSend)(self, ev, [mt new], prefs);
+}
+// the sink: 16.2 only calls it when _activated
+- (void)_evalAndApplyOldPreferences:(id)oldPrefs newPreferences:(id)newPrefs {
+    if (G4B_StackPending(self)) return;
+    %orig;
+}
+%end
+
+%hook SBDisplayAssertionCoordinator
+%new
+- (void)activateAssertionsForDisplay:(id)display {                     // 16.2 0x1c77de510
+    if (!display || (![display respondsToSelector:@selector(isRootIdentity)] || !G4B_Bool(display, @selector(isRootIdentity)))) return;
+    NSDictionary *map = G4B_Ivar(self, "_assertionStackMap");
+    id stack = map[display];
+    if ([stack respondsToSelector:@selector(activateAssertionsForDisplay:)]) ((void (*)(id, SEL, id))objc_msgSend)(stack, @selector(activateAssertionsForDisplay:), display);
+}
+- (id)_createDisplayAssertionStackForRootDisplay:(id)display {
+    id stack = %orig;
+    if (stack && G4B_On("deferact") && [display respondsToSelector:@selector(isExternal)] && G4B_Bool(display, @selector(isExternal))) {
+        objc_setAssociatedObject(stack, kG4BKeyA, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);       // _activated = NO
+        __weak id wself = self; __weak id wstack = stack;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC), dispatch_get_main_queue(), ^{
+            id s = wself, st = wstack;
+            if (!s || !st) return;
+            NSDictionary *map = G4B_Ivar(s, "_assertionStackMap");
+            if (map[display] != st) return;                                                       // display gone / replaced
+            BOOL inval = NO;
+            G4B_IvarBytes(st, "_invalidated", &inval, sizeof inval);
+            if (inval) return;                                                                    // [record isValid] == NO
+            ((void (*)(id, SEL, id))objc_msgSend)(s, @selector(activateAssertionsForDisplay:), display);
+        });
+    }
+    return stack;
+}
+%end
+
+%end // G4B_DeferAct
+
+// ----- (item 4 ends)
+
+// ================================================================================================================
+// 5. PER-WINDOW-SCENE SBLockedPointerManager, _UIPointerUnlockAction, SUPPRESS-PREFERRED-STATUS            [UNSURE, md 5.6]
+// ================================================================================================================
+static const void *kLPMScene = &kLPMScene;      // on SBLockedPointerManager: G4BWeakBox -> SBWindowScene
+static const void *kLPMHw    = &kLPMHw;         // on SBLockedPointerManager: NSString display hardware id (external scenes only)
+static const void *kLPMInv   = &kLPMInv;        // on SBLockedPointerManager: NSNumber BOOL _queue_isInvalidated
+static const void *kLPMSup   = &kLPMSup;        // on SBLockedPointerManager: NSMutableSet _queue_sceneIdentifiersThatSuppressPreferredLockStatus (queue only)
+static const void *kLPMOwn   = &kLPMOwn;        // on SBWindowScene: the manager
+static const void *kLPMSupC  = &kLPMSupC;       // on SBFluidSwitcherItemContainer: NSNumber BOOL
+
+@interface G4BWeakBox : NSObject
+@property (nonatomic, weak) id obj;
+@end
+@implementation G4BWeakBox
+@end
+
+static id G4B_LPMScene(id m) { return ((G4BWeakBox *)objc_getAssociatedObject(m, kLPMScene)).obj; }
+static BOOL G4B_LPMInv(id m) {                               // snapshot taken with dispatch_sync on the manager's queue, like 16.2
+    dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(m, "_stateSerialQueue");
+    __block BOOL inv = NO;
+    if (q) dispatch_sync(q, ^{ inv = [objc_getAssociatedObject(m, kLPMInv) boolValue]; });
+    else inv = [objc_getAssociatedObject(m, kLPMInv) boolValue];
+    return inv;
+}
+static BOOL G4B_LPMInvOnQueue(id m) { return [objc_getAssociatedObject(m, kLPMInv) boolValue]; }
+static void G4B_SetObjIvar(id obj, const char *name, id v) {
+    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    if (iv) object_setIvar(obj, iv, v);
+}
+static void G4B_OnLPMQueue(id m, dispatch_block_t b) {
+    dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(m, "_stateSerialQueue");
+    if (q) dispatch_async(q, b);
+}
+static id G4B_GlobalLockedPointerManager(void) {
+    return G4B_Ivar([UIApplication sharedApplication], "_lockedPointerManager");
+}
+static void G4B_LPMAttach(id m, id ws, BOOL external) {
+    G4BWeakBox *box = [G4BWeakBox new];
+    box.obj = ws;
+    objc_setAssociatedObject(m, kLPMScene, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (external) {
+        id cfg = [ws respondsToSelector:@selector(_fbsDisplayConfiguration)] ? G4B_Obj(ws, @selector(_fbsDisplayConfiguration)) : nil;
+        NSString *hw = [cfg respondsToSelector:@selector(hardwareIdentifier)] ? G4B_Obj(cfg, @selector(hardwareIdentifier)) : nil;
+        if (hw.length) objc_setAssociatedObject(m, kLPMHw, hw, OBJC_ASSOCIATION_RETAIN_NONATOMIC);   // captured on the main thread (review F4)
+    }
+}
+
+%group G4B_LockedPtr
+
+%hook SBWindowScene
+%new
+- (id)lockedPointerManager {
+    id m = objc_getAssociatedObject(self, kLPMOwn);
+    if (m) return m;
+    id wsm = [[UIApplication sharedApplication] respondsToSelector:@selector(windowSceneManager)] ? G4B_Obj([UIApplication sharedApplication], @selector(windowSceneManager)) : nil;
+    id emb = [wsm respondsToSelector:@selector(embeddedDisplayWindowScene)] ? G4B_Obj(wsm, @selector(embeddedDisplayWindowScene)) : nil;
+    if (emb == self) {
+        m = G4B_GlobalLockedPointerManager();                       // 16.0: the one global manager serves the iPad scene
+        if (!m) return nil;
+        G4B_LPMAttach(m, self, NO);
+    } else {
+        Class k = NSClassFromString(@"SBLockedPointerManager");
+        id sm = [self respondsToSelector:@selector(sceneManager)] ? G4B_Obj(self, @selector(sceneManager)) : nil;
+        if (!k || !sm || ![k instancesRespondToSelector:@selector(initWithSceneManager:)]) return nil;
+        m = ((id (*)(id, SEL, id))objc_msgSend)([k alloc], @selector(initWithSceneManager:), sm);
+        if (!m) return nil;
+        G4B_LPMAttach(m, self, YES);
+        BP_Log(@"lockedptr2: created manager for external scene");
+    }
+    objc_setAssociatedObject(self, kLPMOwn, m, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return m;
+}
+%end
+
+%hook SBLockedPointerManager
+%new
+- (id)initWithWindowScene:(id)ws {
+    id sm = [ws respondsToSelector:@selector(sceneManager)] ? G4B_Obj(ws, @selector(sceneManager)) : nil;
+    id m = ((id (*)(id, SEL, id))objc_msgSend)(self, @selector(initWithSceneManager:), sm);
+    if (m) G4B_LPMAttach(m, ws, NO);
+    return m;
+}
+// 16.2 -invalidate (0x1c76b9298)
+%new
+- (void)invalidate {
+    id ws = G4B_LPMScene(self);
+    id sm = [ws respondsToSelector:@selector(sceneManager)] ? G4B_Obj(ws, @selector(sceneManager)) : nil;
+    if ([sm respondsToSelector:@selector(removeObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(sm, @selector(removeObserver:), self);
+    id coord = [sm respondsToSelector:@selector(_layoutStateTransitionCoordinator)] ? G4B_Obj(sm, @selector(_layoutStateTransitionCoordinator)) : nil;
+    if ([coord respondsToSelector:@selector(removeObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(coord, @selector(removeObserver:), self);
+    dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(self, "_stateSerialQueue");
+    __weak id wself = self;
+    void (^body)(void) = ^{
+        id s = wself; if (!s) return;
+        id a = G4B_Ivar(s, "_queue_backboardLockedPointerAssertion"); G4B_SetObjIvar(s, "_queue_backboardLockedPointerAssertion", nil);
+        if ([a respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)a invalidate];
+        id h = G4B_Ivar(s, "_queue_pointerHiddenAssertion"); G4B_SetObjIvar(s, "_queue_pointerHiddenAssertion", nil);
+        if ([h respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)h invalidate];
+        objc_setAssociatedObject(s, kLPMInv, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    };
+    if (q) dispatch_sync(q, body); else body();
+}
+// 16.2 clientWithSceneIdentifier:suppressPreferredLockStatus: (0x1c76b8fc4)
+%new
+- (void)clientWithSceneIdentifier:(NSString *)sid suppressPreferredLockStatus:(BOOL)suppress {
+    dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(self, "_stateSerialQueue");
+    if (!q || !sid) return;
+    __block BOOL inv = NO;
+    dispatch_sync(q, ^{
+        inv = G4B_LPMInvOnQueue(self);
+        if (inv) return;
+        NSMutableSet *set = objc_getAssociatedObject(self, kLPMSup);
+        if (!set) { set = [NSMutableSet set]; objc_setAssociatedObject(self, kLPMSup, set, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        BOOL has = [set containsObject:sid];
+        if (suppress && !has) [set addObject:sid]; else if (!suppress && has) [set removeObject:sid];
+    });
+    if (inv) { BP_Log(@"lockedptr2: ignoring suppress request, invalidated"); return; }
+    id ws = G4B_LPMScene(self);
+    id sw = [ws respondsToSelector:@selector(switcherController)] ? G4B_Obj(ws, @selector(switcherController)) : nil;
+    id vc = [sw respondsToSelector:@selector(contentViewController)] ? G4B_Obj(sw, @selector(contentViewController)) : nil;
+    Class fl = NSClassFromString(@"SBFluidSwitcherViewController");
+    if (vc && fl && [vc isKindOfClass:fl] && [vc respondsToSelector:@selector(clientWithSceneIdentifier:suppressPreferredPointerLockStatusUpdated:)])
+        ((void (*)(id, SEL, id, BOOL))objc_msgSend)(vc, @selector(clientWithSceneIdentifier:suppressPreferredPointerLockStatusUpdated:), sid, suppress);
+    [self _notInvalidated_updateLockForLayoutState:nil];
+}
+// 16.2 sceneHandle:didDestroyScene: (0x1c76b9b80)
+%new
+- (void)sceneHandle:(id)handle didDestroyScene:(id)scene {
+    NSString *sid = [scene respondsToSelector:@selector(identifier)] ? G4B_Obj(scene, @selector(identifier)) : nil;
+    if (!sid || G4B_LPMInv(self)) return;
+    __weak id wself = self;
+    G4B_OnLPMQueue(self, ^{
+        id s = wself; if (!s) return;
+        NSMutableDictionary *prefs = G4B_Ivar(s, "_queue_preferredLockStatusBySceneIdentifier");
+        [prefs removeObjectForKey:sid];
+        [(NSMutableSet *)objc_getAssociatedObject(s, kLPMSup) removeObject:sid];
+    });
+    [self _notInvalidated_updateLockForLayoutState:nil];
+}
+%new
+- (void)_notInvalidated_updateLockForLayoutState:(id)state { [self _updateLockForLayoutState:state]; }
+
+// ----- invalid guards (every 16.2 entry point snapshots _queue_isInvalidated)
+- (void)clientWithSceneIdentifier:(id)sid prefersPointerLockStatus:(long long)status {
+    if (G4B_On("lockedptr2") && G4B_LPMInv(self)) return;
+    %orig;
+}
+- (void)_updateLockForLayoutState:(id)state {
+    if (G4B_On("lockedptr2")) {
+        if (G4B_LPMInv(self)) return;
+        if (!state) {                                               // 16.0 defaults to the MAIN display layout state
+            id ws = G4B_LPMScene(self);
+            id sm = [ws respondsToSelector:@selector(sceneManager)] ? G4B_Obj(ws, @selector(sceneManager)) : nil;
+            id own = [sm respondsToSelector:@selector(currentLayoutState)] ? G4B_Obj(sm, @selector(currentLayoutState)) : nil;
+            if (own) { %orig(own); return; }
+        }
+    }
+    %orig;
+}
+- (void)layoutStateTransitionCoordinator:(id)c transitionDidBeginWithTransitionContext:(id)ctx {
+    if (G4B_On("lockedptr2") && G4B_LPMInv(self)) return;
+    %orig;
+}
+- (void)layoutStateTransitionCoordinator:(id)c transitionDidEndWithTransitionContext:(id)ctx {
+    if (G4B_On("lockedptr2") && G4B_LPMInv(self)) return;
+    %orig;
+}
+- (void)sceneManager:(id)m didAddExternalForegroundApplicationSceneHandle:(id)h {
+    if (G4B_On("lockedptr2") && G4B_LPMInv(self)) return;
+    %orig;
+}
+- (void)sceneManager:(id)m didRemoveExternalForegroundApplicationSceneHandle:(id)h {
+    if (G4B_On("lockedptr2") && G4B_LPMInv(self)) return;
+    %orig;
+}
+- (void)sceneHandle:(id)h didUpdateSettingsWithDiff:(id)diff previousSettings:(id)prev {
+    if (G4B_On("lockedptr2") && G4B_LPMInv(self)) return;
+    %orig;
+}
+
+// ----- 16.2 _queue_updateLockForLayoutState: (0x1c76ba124), whole method
+- (void)_queue_updateLockForLayoutState:(id)state {
+    if (!G4B_On("lockedptr2") || !G4B_LPMScene(self)) { %orig; return; }
+    if (G4B_LPMInvOnQueue(self)) { BP_Log(@"lockedptr2: ignoring update, invalidated"); return; }
+    id h = [self _possibleSceneHandleForLockingPointerFromLayoutState:state];
+    NSString *sid = [h respondsToSelector:@selector(sceneIdentifier)] ? G4B_Obj(h, @selector(sceneIdentifier)) : nil;
+    NSString *cur = G4B_Ivar(self, "_queue_sceneIdentifierThatHasLockedPointer");
+    BOOL shouldLock = NO;
+    if (sid && [self _queue_prefersLockForSceneIdentifier:sid] && ![(NSSet *)objc_getAssociatedObject(self, kLPMSup) containsObject:sid])
+        shouldLock = [self _shouldAllowPointerLockedForScene:h];
+    BP_Log(@"lockedptr2: scene %@ shouldBeLocked:%d isCurrentlyLocked:%d", sid, shouldLock, cur != nil);
+    if (shouldLock && !cur) [self _queue_lockPointerForSceneIdentifier:sid];
+    else if (!shouldLock && cur) [self _queue_unlockPointer];
+}
+// ----- 16.2 _queue_lockPointerForSceneIdentifier: (0x1c76ba3dc), whole method; display scoping decided in md 5.2
+- (void)_queue_lockPointerForSceneIdentifier:(NSString *)sid {
+    if (!G4B_On("lockedptr2") || !G4B_LPMScene(self) || !sid) { %orig; return; }
+    NSString *cur = G4B_Ivar(self, "_queue_sceneIdentifierThatHasLockedPointer");
+    if (cur) [self _setPointerLockStatus:0 forSceneWithIdentifier:cur];
+    NSString *reason = [NSString stringWithFormat:@"Scene %@ requested locked pointer", sid];
+    Class bk = NSClassFromString(@"BKSMousePointerService");
+    id svc = [(id)bk respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)bk, @selector(sharedInstance)) : nil;
+    NSString *display = objc_getAssociatedObject(self, kLPMHw);       // nil for the iPad (identical to 16.0), hardware id for external scenes
+    SEL sup = NSSelectorFromString(@"pointerSuppressionAssertionOnDisplay:forReason:withOptionsMask:");
+    id a1 = [svc respondsToSelector:sup] ? ((id (*)(id, SEL, id, id, unsigned long long))objc_msgSend)(svc, sup, display, reason, 2) : nil;
+    G4B_SetObjIvar(self, "_queue_backboardLockedPointerAssertion", a1);
+    id pc = G4B_Ivar(self, "_pointerClientController");
+    SEL hide = NSSelectorFromString(@"persistentlyHidePointerAssertionForReason:");
+    id a2 = [pc respondsToSelector:hide] ? ((id (*)(id, SEL, unsigned long long))objc_msgSend)(pc, hide, 4) : nil;
+    G4B_SetObjIvar(self, "_queue_pointerHiddenAssertion", a2);
+    G4B_SetObjIvar(self, "_queue_sceneIdentifierThatHasLockedPointer", sid);
+    [self _setPointerLockStatus:1 forSceneWithIdentifier:sid];
+    BP_Log(@"lockedptr2: locked pointer for %@ on display %@", sid, display ?: @"<main>");
+}
+// ----- 16.2 _shouldAllowPointerLockedForScene: (0x1c76b9e5c): Control Center only counts for ITS OWN window scene
+- (BOOL)_shouldAllowPointerLockedForScene:(id)handle {
+    id ws = G4B_LPMScene(self);
+    if (!G4B_On("lockedptr2") || !ws) return %orig;
+    Class ccc = NSClassFromString(@"SBControlCenterController"), cvc = NSClassFromString(@"SBCoverSheetPresentationManager");
+    id cc = [(id)ccc respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)ccc, @selector(sharedInstance)) : nil;
+    id win = [cc respondsToSelector:@selector(_controlCenterWindow)] ? G4B_Obj(cc, @selector(_controlCenterWindow)) : nil;
+    id ccws = [win respondsToSelector:@selector(windowScene)] ? G4B_Obj(win, @selector(windowScene)) : nil;
+    BOOL ccOK = (ccws && [ccws isEqual:ws]) ? !G4B_Bool(cc, @selector(isPresented)) : YES;
+    id cov = [(id)cvc respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)cvc, @selector(sharedInstance)) : nil;
+    BOOL coverOK = ![cov respondsToSelector:@selector(isPresented)] || !G4B_Bool(cov, @selector(isPresented));
+    id scene = [handle respondsToSelector:@selector(sceneIfExists)] ? G4B_Obj(handle, @selector(sceneIfExists)) : nil;
+    BOOL sceneOK = NO;
+    if (scene) {
+        BOOL fg = [handle respondsToSelector:@selector(isEffectivelyForeground)] && G4B_Bool(handle, @selector(isEffectivelyForeground));
+        id settings = [scene respondsToSelector:@selector(settings)] ? G4B_Obj(scene, @selector(settings)) : nil;
+        BOOL ui = [settings respondsToSelector:@selector(isUISubclass)] && G4B_Bool(settings, @selector(isUISubclass));
+        unsigned long long reasons = [settings respondsToSelector:@selector(deactivationReasons)] ? (unsigned long long)G4B_LL(settings, @selector(deactivationReasons)) : 0;
+        sceneOK = fg && (!ui || (reasons & ~0x100ull) == 0);
+    }
+    BP_Log(@"lockedptr2: shouldAllow:%d cc:%d cover:%d scene:%d", ccOK && coverOK && sceneOK, ccOK, coverOK, sceneOK);
+    return ccOK && coverOK && sceneOK;
+}
+%end
+
+// ----- external display apps can lock the pointer: forward the client-settings change (16.2 inspector block 0x1c7859008)
+%hook SBSystemShellExternalDisplaySceneManager
+- (void)_scene:(id)scene didUpdateClientSettingsWithDiff:(id)diff oldClientSettings:(id)old transitionContext:(id)ctx {
+    %orig;
+    if (!G4B_On("lockedptr2") || !scene) return;
+    id cs = [scene respondsToSelector:@selector(clientSettings)] ? G4B_Obj(scene, @selector(clientSettings)) : nil;
+    SEL ps = NSSelectorFromString(@"preferredPointerLockStatus");
+    if (![cs respondsToSelector:ps]) return;
+    long long st = G4B_LL(cs, ps);
+    long long ost = [old respondsToSelector:ps] ? G4B_LL(old, ps) : 0;
+    if (st == ost) return;
+    id ws = [self respondsToSelector:@selector(windowScene)] ? G4B_Obj(self, @selector(windowScene)) : nil;
+    id m = [ws respondsToSelector:@selector(lockedPointerManager)] ? G4B_Obj(ws, @selector(lockedPointerManager)) : nil;
+    NSString *sid = [scene respondsToSelector:@selector(identifier)] ? G4B_Obj(scene, @selector(identifier)) : nil;
+    if (m && sid) {
+        BP_Log(@"lockedptr2: client prefers %lld for %@", st, sid);
+        ((void (*)(id, SEL, id, long long))objc_msgSend)(m, @selector(clientWithSceneIdentifier:prefersPointerLockStatus:), sid, st);
+    }
+}
+%end
+
+// ----- _UIPointerUnlockAction (16.2 0x1c72e3f38)
+%hook SBSceneManager
+- (BOOL)_handleAction:(id)action forScene:(id)scene {
+    Class pu = NSClassFromString(@"_UIPointerUnlockAction");
+    if (G4B_On("lockedptr2") && pu && [action isKindOfClass:pu]) {
+        id ws = [self respondsToSelector:@selector(_windowScene)] ? G4B_Obj(self, @selector(_windowScene)) : nil;
+        id m = [ws respondsToSelector:@selector(lockedPointerManager)] ? G4B_Obj(ws, @selector(lockedPointerManager)) : nil;
+        NSString *sid = [scene respondsToSelector:@selector(identifier)] ? G4B_Obj(scene, @selector(identifier)) : nil;
+        if (m && sid) {
+            ((void (*)(id, SEL, id, BOOL))objc_msgSend)(m, @selector(clientWithSceneIdentifier:suppressPreferredLockStatus:), sid, YES);
+            return YES;
+        }
+    }
+    return %orig;
+}
+%end
+
+// ----- teardown (16.2 SBAbstractWindowSceneDelegate sceneDidDisconnect:)
+%hook SBAbstractWindowSceneDelegate
+- (void)sceneDidDisconnect:(id)scene {
+    if (G4B_On("lockedptr2")) {
+        id m = objc_getAssociatedObject(scene, kLPMOwn);
+        if (m && m != G4B_GlobalLockedPointerManager() && [m respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)m invalidate];
+    }
+    %orig;
+}
+%end
+
+// ----- switcher side
+%hook SBFluidSwitcherViewController
+%new
+- (void)clientWithSceneIdentifier:(NSString *)sid suppressPreferredPointerLockStatusUpdated:(BOOL)suppress {     // 0x1c7451f0c
+    id overlay = [self respondsToSelector:@selector(liveOverlayForSceneIdentifier:)] ? G4B_Obj1(self, @selector(liveOverlayForSceneIdentifier:), sid) : nil;
+    NSDictionary *live = G4B_Ivar(self, "_liveContentOverlays");
+    if (!overlay || ![live isKindOfClass:[NSDictionary class]]) return;
+    for (id appLayout in [live allKeysForObject:overlay]) {
+        id c = [self respondsToSelector:@selector(_itemContainerForAppLayoutIfExists:)] ? G4B_Obj1(self, @selector(_itemContainerForAppLayoutIfExists:), appLayout) : nil;
+        if ([c respondsToSelector:@selector(setPreferredPointerLockStatusSuppressed:)]) ((void (*)(id, SEL, BOOL))objc_msgSend)(c, @selector(setPreferredPointerLockStatusSuppressed:), suppress);
+    }
+}
+- (void)didSelectContainer:(id)container modifierFlags:(long long)flags {
+    if (G4B_On("lockedptr2") && [container respondsToSelector:@selector(appLayout)]) {
+        id layout = G4B_Obj(container, @selector(appLayout));
+        id item = [layout respondsToSelector:@selector(itemForLayoutRole:)] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, @selector(itemForLayoutRole:), 1) : nil;
+        NSString *uid = [item respondsToSelector:@selector(uniqueIdentifier)] ? G4B_Obj(item, @selector(uniqueIdentifier)) : nil;
+        id sw = G4B_Ivar(self, "_switcherController");
+        id ws = [sw respondsToSelector:@selector(windowScene)] ? G4B_Obj(sw, @selector(windowScene)) : nil;
+        id m = [ws respondsToSelector:@selector(lockedPointerManager)] ? G4B_Obj(ws, @selector(lockedPointerManager)) : nil;
+        if (uid && m) ((void (*)(id, SEL, id, BOOL))objc_msgSend)(m, @selector(clientWithSceneIdentifier:suppressPreferredLockStatus:), uid, NO);
+    }
+    %orig;
+}
+%end
+
+%hook SBFluidSwitcherItemContainer
+%new
+- (BOOL)isPreferredPointerLockStatusSuppressed { return [objc_getAssociatedObject(self, kLPMSupC) boolValue]; }
+%new
+- (void)setPreferredPointerLockStatusSuppressed:(BOOL)suppressed {                                              // 0x1c75e161c
+    if ([self isPreferredPointerLockStatusSuppressed] == suppressed) return;
+    objc_setAssociatedObject(self, kLPMSupC, suppressed ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self setContentViewBlocksTouches:[self contentViewBlocksTouches]];
+    [self setSelectable:[self isSelectable]];
+}
+- (void)setContentViewBlocksTouches:(BOOL)blocks {                                                               // 0x1c75e15c8
+    %orig(blocks || [self isPreferredPointerLockStatusSuppressed]);
+}
+- (void)setSelectable:(BOOL)selectable {                                                                         // 0x1c75e15f4
+    %orig(selectable || [self isPreferredPointerLockStatusSuppressed]);
+}
+%end
+
+%end // G4B_LockedPtr
+
+// ----- (item 5 ends)
