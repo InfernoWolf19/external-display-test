@@ -33,24 +33,23 @@ the scene data store used instead).
 | SBDeviceApplicationSceneOverlayBasicWrapperView(+ViewController) (new) | n/a | user-visible | see section 1.7 |
 | SBFluidSwitcherPortaledSceneLiveContentOverlay (new) | n/a | user-visible | see section 1.8 |
 | SBMedusaDecoratedDeviceApplicationSceneViewController | 5 (+133 offset-only) | user-visible | contentOrientation/containerOrientation split, top-affordance highlight with several displays, 3 split-view/multi-window error toasts removed |
-| SBMedusaHostedKeyboardWindow | 3 | user-visible (external display) | ownership moved from the scene manager to a per-window-scene controller |
+| SBMedusaHostedKeyboardWindow | 3 | user-visible (external display) | ownership moved from the scene manager to a per-window-scene controller; NOT PORTABLE (4) |
 | SBMedusaHostedKeyboardWindowController (new) | n/a | user-visible (external display) | per-scene owner of the hosted keyboard window |
 | SBMedusaBannerViewController | 1 | user-visible (relocated error banner) | types 2/3 for the split-view / multiple-window messages; NOT PORTABLE, 16.0 toast equivalent (section 2.4) |
 | SBSwitcherController | 2 (+ ~25 new/removed) | user-visible | delegate callbacks around a window-management-style change; traits code extracted into SBSwitcherTraitsAssistant |
-| SBFluidSwitcherGestureManager | 2 (+ many renames) | pending | |
+| SBFluidSwitcherGestureManager | 2 (+ many renames) | user-visible (strip reveal tongue) | NOT PORTABLE here, strip/tongue family of group 1/2 (5.1) |
 | SBWindowSceneManager | 2 | user-visible | covered in group4 spec (active display tracking); only restated here |
 | SBWindowSceneContext | 2 logic, 52 offset-only | refactor + 4 new properties | ivars re-ordered (all offset-only); `sceneManager` now read from the FBSScene transient local settings |
-| SBWindowSceneStatusBarManager / StatusBarAssertionManager / StatusBarLayoutManager / StatusBarSettingsAssertion | 2 + 1 + 0 + 0 | pending | |
-| SBWindowScenePIPManager | 3 | user-visible | per-scene PiP "end stash tab" suppression gesture manager, window-management-style observer |
-| SBTransientUIInteractionManager | init changed | pending | |
-| SBTraitsSceneOrientationRequestAssistant / SBSwitcherTraitsAssistant (new), SBTraitsExternalDisplay* | 1 + 2 new | pending | |
-| SBPrivacyPreflightController / SBApplicationPrivacyPreflightController (new) | n/a | pending | |
+| SBWindowSceneStatusBarManager / StatusBarAssertionManager / StatusBarLayoutManager / StatusBarSettingsAssertion | 2 + 1 + 0 + 0 | refactor (UIKit API rename `isInteractive:` -> `options:`) + one per-display fix | 5.3, NOT PORTABLE |
+| SBWindowScenePIPManager | 3 | user-visible (external display) | per-scene PiP "end stash tab" suppression gesture manager, window-management-style observer; NOT PORTABLE (5.2) |
+| SBTransientUIInteractionManager | init changed | refactor (per-scene ownership) | `initWithWindow:` -> `initWithSystemGestureManager:` (5.4) |
+| SBTraitsSceneOrientationRequestAssistant / SBSwitcherTraitsAssistant (new), SBTraitsExternalDisplay* | 1 + 2 new | assistant = refactor of 16.0 AlterEgo code + 2 behaviour lines (1.3); switcher assistant = user-visible, NOT PORTABLE (3.3); external provider = new roles only (6.4) | |
+| SBPrivacyPreflightController / SBApplicationPrivacyPreflightController (new) | n/a | user-visible but unrelated to windowing | NOT PORTABLE (PDCPreflightManager absent in 16.0), 6.3 |
 | SBSystemShellEmbeddedDisplayController | 5 | user-visible (small) | SystemApp scene gets `enhancedWindowingEnabled` and tracks the Stage Manager default |
-| SpringBoard (app delegate) | see 7 | pending | |
+| SpringBoard (app delegate) | see 7 | key shortcuts: pure renames; `_bootOrientation` user-visible at boot; accessors for per-scene managers | 6.2, 7 |
 | SBMedusaSettings | 280 "changed" | refactor / prototype only | method sets identical, bodies identical modulo relocation, all default values identical (section 8) |
 | SBMedusa1oSettings | 17 | refactor / prototype only | same |
 
-(rows marked "pending" are replaced by the analysis in the sections below)
 
 
 ## 1. Theme A: scene content orientation, "user resizing" orientation, snapshot hosting info
@@ -611,3 +610,93 @@ Verdict: **NOT PORTABLE**. The 16.0 owner (`SBMainDisplaySceneManager`) calls it
 `SBSystemShellExternalDisplaySceneManager` has no keyboard path at all. A port would be (a) a new `SBMedusaHostedKeyboardWindowController` class (~250 lines: copy of the 16.0 scene manager methods parametrised by window scene), (b) per-scene storage through an associated
 object on `SBWindowSceneContext` (ivar impossible), (c) forwarding the 16.0 scene manager callbacks, (d) re-pointing all observers. The window-level changes alone (notifications + deactivate handlers + `invalidate`) are PORTABLE
 (`%hook SBMedusaHostedKeyboardWindow`, three ObjC methods plus `%new`) but have no effect while only one such window exists, so they are not drafted. Open question: with ExtendedDisplayEnabler on 16.0, does an app on the external display get its keyboard from the iPad's window (16.0 behaviour) — needs a device.
+
+## 5. SBFluidSwitcherGestureManager, SBWindowScenePIPManager, status bar, per-scene managers
+
+**5.1 SBFluidSwitcherGestureManager (2 logic changes + renames; NOT PORTABLE here, belongs to the strip/tongue work of group 1/2).** `updateForChamoisWindowingUIEnabled:` (16.0 0x1c643f408, 16.2 0x1c78f0fe8) and
+`_configureChamoisGestureRecognizersIfNeeded` (0x1c643eea4 / 0x1c78f0c08): the indirect pan "reveal Continuous Expose strips" recognizer (`indirectRevealContinuousExposeStripsGestureRecognizer`) is deleted; a pointer
+"grabber tongue" replaces it: `continuousExposeStripRevealGrabberTongue` (`SBGrabberTongue`, exists in 16.0) is `installInView:withColorStyle:` when Stage Manager turns on and `uninstall`ed when it turns off,
+and the edge-pull recognizer (`indirectEdgePullGestureRecognizer`) is made to require the other recognizers to fail. Delegate gains `fluidSwitcherGestureManager:tapReceivedForGrabberTongueAtEdge:`,
+`...clickReceivedForHomeGrabberView:`, `didBeginGesture/didUpdateGesture/didEndGesture`, `...didBeginDraggingWindowWithSceneIdentifier:` etc. (implemented by `SBSwitcherController`, 0x1c76070cc..0x1c7607330), the
+`_shouldProtectEdgeLocation:` method gains an `edge:` argument, and `_areContinuousExposeStripsAvailableWithReason:`/`...OccludedOrHiddenWithOutReason:` add reasons. Method renames Reveal* -> ContinuousExposeStrip*. 16.2 also adds the `SBContinuousExposeStripTongueView` UI. Verdict: user-visible
+(pointer tongue at the strip edge), not decoded further here (LOW), NOT PORTABLE (whole strip-reveal gesture family).
+
+**5.2 SBWindowScenePIPManager (3 logic changes), user-visible on external displays, NOT PORTABLE.** Layout: ivars `_stashTabSuppressionGestureManager` (new, +0x40) and the shifted `_windowScene` (+0x50) / `_pipController` (+0x48).
+* `windowSceneDidConnect:` (16.0 0x1c5eca974 / 16.2 0x1c733e170) now also creates `_SBPIPEndStashTabSuppressionGestureManager` (new class; ivars `_targets`, `_singleTapRecognizer`, `_doubleTapRecognizer`, `_systemGestureManager`) from `[scene systemGestureManager]`,
+  and registers `-_windowManagementStyleDidChange:` for the style notification (object = `scene.switcherController`) in addition to the three 16.0 observers (the 16.0 ones were registered only for the main display; in 16.2 only the notification block is outside the `isMainDisplay` test).
+* `windowSceneDidDisconnect:` releases the gesture manager; `.cxx_destruct` adds the ivar.
+* `-addStashTabSuppressionTarget:action:` / `-removeStashTabSuppressionTarget:action:` (0x1c733f9c4 / 0x1c733f9cc) forward to the gesture manager; its two system tap recognizers (`pip.stashtab.endsuppression.tap` / `.doubletap`, delays/cancels touches, allowed touch types set) call the targets so the PiP **stash tab can be un-suppressed by a tap on that display**.
+  Used by `SBPIPStashTabSuppressionPolicyProvider setStashTabCanBeHidden:` (16.0 has the class but its own recognizers).
+* `-_windowManagementStyleDidChange:` (0x1c73400a4): `[pipController _enumerateControllersByDescendingPriority:^(c){ [c setEnhancedWindowingModeEnabled:switcherController.isChamoisWindowingUIEnabled windowScene:scene]; }]`
+  where `-[SBPIPController setEnhancedWindowingModeEnabled:windowScene:]` (0x1c792c2ec) is new (forwards to the delegate `pipController:didUpdateEnhancedWindowingModeEnabled:windowScene:` if it responds). PiP also gains `SBPIPController createAndRegisterPictureInPictureMorphAnimatorControllerWith...appLayout:layoutRole:appLayoutBoundingBox:...` (morph animation takes the app layout box).
+Verdict: needs 5 new 16.2 methods in PiP code that 16.0 lacks; the visible result is PiP behaving correctly per display and when Stage Manager toggles. NOT PORTABLE (use the 16.0 main-display behaviour). Confidence HIGH on structure, LOW on the end-user symptom.
+
+**5.3 Status bar (SBWindowSceneStatusBarManager 2, AssertionManager 1, LayoutManager 0, SettingsAssertion 0): refactor + UIKit API rename, NOT PORTABLE / not needed.**
+`setAvoidanceFrame:reason:statusBar:animationSettings:isInteractive:` -> `...options:(unsigned long long)` (16.0 0x1c5ef7994, 16.2 0x1c736bd6c); the 4-argument convenience (0x1c5ef798c / 0x1c736bd64) just passes `options:0`.
+`_applyAvoidanceFrameToStatusBar:withGlobalAvoidanceFrame:animationSettings:reason:options:` (0x1c736c3d4) calls `[statusBar setAvoidanceFrame:animationSettings:options:]` when the status bar responds to it
+(UIKit 16.2 `_UIStatusBar`; 16.0 UIKit only has `setAvoidanceFrame:animationSettings:isInteractive:`, verified) and tells the delegate `statusBarManager:didUpdateAvoidanceFrameForStatusBar:withAnimationSettings:` without the interactive flag.
+`SBSystemApertureViewController _updateStatusBarAvoidanceFrameWithAnimationSettings:options:` is the producer of non-zero options (16.0 has no caller of the `options:` variant). The init block (`-[SBWindowSceneStatusBarManager initWithScene:]` block) is a relocation.
+`SBWindowSceneStatusBarAssertionManager(FrontmostStatusBarVisibility) isFrontmostStatusBarPartHidden:` (16.0 0x1c63f8584 / 16.2 0x1c78a5064): per-display fix: the Stage-Manager-related branches used `[SBMainSwitcherControllerCoordinator sharedInstance]` (the coordinator) for
+`layoutState.appLayout.configuration` and `unlockedEnvironmentMode`; 16.2 uses the window scene's own `switcherController` (`layoutState`, `unlockedEnvironmentMode`). Everything else is register renaming. Effect: the status bar of an external display no longer follows the iPad's layout state
+(HIGH for mechanism). Portable as a hook only by re-implementing the 192-instruction method; **NOT PORTABLE** (hook cost vs benefit; the coordinator calls are on 16.0 classes, so a patch of "which controller" is not possible without re-implementation).
+
+**5.4 SBWindowSceneContext (2 logic, 52 offset-only) and SBWindowScene.** 16.2 re-orders the context ivars (all 52 accessor changes are offset deltas) and adds `lockedPointerManager`, `recordingIndicatorManager`, `transientUIInteractionManager`, `medusaHostedKeyboardWindowController`
+(`SBWindowScene` forwards the same four to its context; `-_sbWindowSceneContext` removed). `-[SBWindowSceneContext sceneManager]` (16.0 0x1c6500ad4 / 16.2 0x1c79bdacc) changes from a lookup
+(`[[SBSceneManagerCoordinator sharedInstance] sceneManagerForDisplayIdentity:[_sbWindowScene _fbsDisplayIdentity]]`) to
+`[[[[_sbWindowScene _FBSScene] settings] transientLocalSettings] objectForSetting:<key>]`; the key is stored by the display controller when it creates the scene (`SBSystemShellEmbeddedDisplayController _createSystemShellSceneWithOrientation:` block: `[scene.transientLocalSettings setObject:_sbSceneManager forSetting:key]`,
+new ivar `_sbSceneManager` +0x18; the external controller does the same). Behaviourally equal while a display's scene manager is unique. Replaced 16.0 globals: `SpringBoard lockedPointerManager`, `recordingIndicatorManagerForMainDisplay`, `systemTransientUIInteractionManager`
+(`SBTransientUIInteractionManager initWithWindow:` -> `initWithSystemGestureManager:`, which now takes the scene's `SBSystemGestureManager` instead of a window; same three weak hash-table observers).
+Portability: new properties = **PORTABLE** as `%new` methods on `SBWindowSceneContext` backed by associated objects (the context is an NSObject; 16.0 has no ivar for them), forwarded from `SBWindowScene`; but the 16.0 consumers read the SpringBoard globals, so the properties are only the vehicle for group 4's per-scene pointer lock (see group4 spec) and section 4.
+Drafted: none (nothing consumes them on 16.0; would be dead code). Scene-manager transient-setting lookup: **NOT PORTABLE / unnecessary**.
+
+**5.5 SBWindowSceneManager (2).** `activeDisplayWindowScene` and the new `activeDisplayWindowSceneFollowingKeyboard/FollowingUserInteraction`, `_validateSuggestedActiveWindowScene:usingMethodology:`, `userInteractionCoordinator`, `keyboardFocusTracker` are fully specified in `group4-disconnect-focus-pointer.md` (do not repeat). `-init` -> `-initWithUserInteractionCoordinator:` and the 3-insn `.cxx_destruct` growth are the ivars of that design.
+
+## 6. Embedded display controller, boot orientation, privacy preflight, traits roles
+
+**6.1 SBSystemShellEmbeddedDisplayController (5 logic changes; user-visible, small, PORTABLE).** 16.2 keeps the SystemApp scene's `enhancedWindowingEnabled` setting in sync with the Stage Manager default:
+* `_createSystemShellSceneWithOrientation:` block (16.0 0x1c6122ac0 / 16.2 0x1c75ace88): after configuring the scene settings it additionally does `settings.enhancedWindowingEnabled = [_appSwitcherDefaults chamoisWindowingEnabled]` (`setEnhancedWindowingEnabled:` exists on `UIMutableApplicationSceneSettings` in 16.0 UIKit: verified) and `[scene.transientLocalSettings setObject:_sbSceneManager forSetting:key]`.
+* new `-_updateSceneSettings` (0x1c75ad1c0): `BOOL e = [_appSwitcherDefaults chamoisWindowingEnabled]; [_scene updateSettingsWithBlock:^(FBSMutableSceneSettings *s){ s.enhancedWindowingEnabled = e; }];`
+* the observer block registered in `initWithAppSwitcherDefaults:sceneManager:initialOrientation:` (16.0 0x1c6122348 / 16.2 0x1c75ac6f0) now calls `_updateSceneSettings` after `_updateDisplayAssertionPreferences` (so the flag follows the Stage Manager toggle at runtime).
+* `connectToDisplayIdentity:configuration:displayManager:sceneManager:caDisplayQueue:assertion:` (16.0 0x1c6122438 / 16.2 0x1c75ac7ec) stores the passed `SBSceneManager` (arg 5) in the new ivar `_sbSceneManager` (+0x18); `_updateDisplayAssertionPreferences` reads `_displayConfiguration` at its shifted offset; `.cxx_destruct` releases the new ivar.
+Effect (MEDIUM): UIKit inside SpringBoard's own scene (`UIWindowScene` enhanced windowing flag, e.g. for menu/keyboard behaviours of SpringBoard windows) matches Stage Manager state instead of being fixed at creation. Port: hooks.m `G3_Embedded` (`_createSystemShellSceneWithOrientation:` post-hook + style-change observer). `_sbSceneManager` ivar and the transient setting are NOT ported.
+
+**6.2 `-[SpringBoard _bootOrientation]` (new, 0x1c734a544).** `switch (MGGetSInt32Answer("DisplayBootRotation", -1)) { 0: 1 (portrait); 90: 3; 180: 2; 270: 4; default 0 }`. Used by `-[SpringBoard startupInterfaceOrientation]` (16.2 0x1c734a2d4: `o = _bootOrientation; if (o == 0) o = BKHIDServicesGetNonFlatDeviceOrientation();` then the unchanged idiom handling)
+and `SBTraitsEmbeddedDisplayPipelineManager setupDefaultPipelineForArbiter:` (0x1c75b55c4). 16.0 `startupInterfaceOrientation` (0x1c5ed5ba0) instead read `[[BKSDisplayRenderOverlay existingOverlayForDisplay:[CADisplay mainDisplay]] interfaceOrientation]` (a valid overlay orientation wins, else `BKHIDServicesGetNonFlatDeviceOrientation`).
+Effect (MEDIUM): the SpringBoard UI starts in the panel's boot rotation instead of a stale boot-progress overlay orientation. PARTIAL / OPT-IN in hooks.m (`Backport162.on.g3bootorient`): the trait pipeline use of `_bootOrientation` is not ported and the change only matters at respring.
+
+**6.3 SBPrivacyPreflightController / SBApplicationPrivacyPreflightController (new).** Before an app scene update/launch, `SBApplicationSceneUpdateTransaction _willBegin` calls `[[SpringBoard privacyPreflightController] preflightLaunchForApplication:sceneIdentifier:withCompletionHandler:]` and
+`requiresPreflightForApplication:` is asked by `SBToAppsWorkspaceTransaction _willBegin`, `SBApplicationSceneUpdateTransaction initWith...` and `SBMainWorkspaceLayoutStateContingencyPlan`; the controller creates one `SBApplicationPrivacyPreflightController` per `LSApplicationIdentity` over a `PDCPreflightManager` (`initWithTargetQueue:`), queues the completion per scene id, and completes all pending ones in `notePreflightFinishedWithResult:`.
+It is the app-launch privacy disclosure gate. `PDCPreflightManager` does not exist in the 16.0 cache (only referenced from Intents/LinkServices strings in 16.2). **NOT PORTABLE**; unrelated to windowing, listed for completeness.
+
+**6.4 SBTraitsExternalDisplayRolesAndDefaultPoliciesProvider `orientationStageRoles` block (1) and `SBExternalDisplayWindowSceneDelegate +_individuallyManagedRoles` block (1): refactor + new roles.** The role arrays gain the 16.2-only roles `AXAssistiveTouchUI`, `AXFullKeyboardUI`, `AXVoiceControlUI`, `AXUIServer` (replacing `AccessibilityDaemonUI`), `EyedropperUI`, `MomentsUI`
+(12 -> 17 roles for the individually managed set; 43 -> 48 in the stage roles). The constants and the scenes that use them (`SBEyedropperUISceneController`, `SBMomentsUISceneController`, AX daemon changes) do not exist in 16.0. **NOT PORTABLE, no 16.0 consumer.**
+
+## 7. SpringBoard app delegate (CLASS_DELTA_NAMES.txt) and what was verified as rename-only
+
+* `_handleToggleMaximizationKeyShortcut:` (16.0 0x1c5ee5a54) -> `_handleEnterFullScreenKeyShortcut:` (16.2 0x1c7359b1c): identical body (`[[activeDisplayWindowScene switcherController] performKeyboardShortcutAction:0x11 forBundleIdentifier:nil]`). **rename only.**
+* `_handleNavigateAppWindowInSpaceKeyShortcut:` (0x1c5ee5750) -> `_handleNavigateAppWindowKeyShortcut:` (0x1c7359818): identical (action 4, flipped by the Shift modifier mask 0x20000). **rename only.**
+* `_handleNavigateAppWindowsInStripKeyShortcut:` (0x1c5ee5bb0, action 0x15) is deleted in 16.2; its key command is gone with `SBFluidSwitcherViewController performKeyboardShortcutAction:` being rewritten (group 1/2).
+* `_enableSessions:`/`_shouldEnableSessions` -> `_enableActivities:`/`_shouldEnableActivities`: rename (Live Activities, unrelated). `respondsToSelector:` override removed, `sendEvent:` added (group 4: multi-display coordinator).
+* `_windowScene` (0x1c73b2588): `[[SBApp windowSceneManager] windowSceneForDisplayIdentity:[[SBSceneManagerCoordinator mainDisplaySceneManager] displayIdentity]]`, i.e. the main display window scene; `_switcherController` (0x1c73b2618) = `[_windowScene switcherController]`. These replace 16.0 uses of `[SBMainSwitcherControllerCoordinator sharedInstance]`-style globals in the key-shortcut handlers; trivial `%new` helpers, no behaviour.
+* `displayManager`, `externalDisplayService`, `multiDisplayUserInteractionCoordinator`, `privacyPreflightController` are ivar accessors for 16.2-only objects; `lockedPointerManager`, `systemTransientUIInteractionManager`, `recordingIndicatorManagerForMainDisplay` and `_startRecordingIndicatorForMainDisplayWindowScene:` are removed in favour of the per-scene managers (5.4). `_bootOrientation`: 6.2.
+
+## 8. SBMedusaSettings (280 "changed") and SBMedusa1oSettings (17): prototype-settings plumbing, no change (HIGH)
+
+Checks performed: (1) method sets are identical in both builds (class dump diff is empty for both classes); (2) the structural body diff (`bodydiff3`: mnemonics + resolved callee names + resolved selectors + immediate constants) classifies 280 of 281 methods of `SBMedusaSettings` and 17 of 18 of `SBMedusa1oSettings` as "same";
+the one exception in each is `+settingsControllerModule` (PTSettings UI row construction, 2552 / 188 insns, same length, constant-only); (3) because pool-loaded floating-point defaults are invisible to that diff, `-setDefaultValues` was re-dumped for both builds (SBMedusaSettings 16.0 0x1c62c3c9c / 16.2 0x1c775ecac, 865 lines, 227 setter calls; SBMedusa1oSettings 16.0 0x1c62c8fac / 16.2 0x1c7763fbc, 32 lines) with every `ldr dN,[literal]` resolved to its value, and compared after stripping pool offsets:
+**all default values are identical** (e.g. 0.9962, 0.2721, 140.0, 0.15, 1.05 ... in both; SBMedusa1oSettings: `debugRotationCenter NO, debugColorRotationRegions NO, clipRotationRegions NO, zoomOutRotationFactor 1.0, rotationSlowdownFactor 1.0, fencesRotation YES, gapSwipeBuffer 40.0` in both).
+The 280-method count in the worklist is address relocation only. **Verdict: refactor / prototype only. Nothing to port, no default to change.**
+
+## SUMMARY
+
+**Portable vs not.**
+* PORTABLE or PARTIAL with real code in `group3-plumbing.hooks.m` (7 groups, each behind `Backport162.off.<name>`): scene-handle orientation state in the scene data store + user-resize orientation hooks (`g3handle`, inert until something sets the value), snapshot hosting-info refresh on `didMoveToWindow` (`g3snapshot`, fixes stale hosting context after moving a scene view to another window), top-affordance highlight with several displays + refresh on Stage Manager toggle (`g3topaff`),
+  coordinator "will change window management style" gesture cancel + style-change notification poster (`g3switcher`), canvas-size-change relayout (`g3canvas`, the one most relevant to external displays: pairs with group 4's scale feature), SystemApp scene `enhancedWindowingEnabled` sync (`g3embedded`), opt-in boot orientation (`g3bootorient`).
+* NOT PORTABLE: the iPhone-app window-shape orientation feature as a whole (content/container orientation split in SBDeviceApplicationSceneView/SBSceneViewController, orthogonal fixed-aspect grids fed by SBSwitcherChamoisSettings, SBSwitcherTraitsAssistant guiding participants, new overlay classes, portaled live overlay), the per-scene hosted keyboard window controller, PiP per-display plumbing, strip-reveal tongue, privacy preflight (framework missing), status bar `options:` (UIKit), `screenBoundsIgnoresSceneOrientation` (UIKit), new traits roles.
+* Pure refactor / nothing to do: SBDisplayItem, SBLayoutState / SBMainDisplayLayoutState conversions, SBSceneLayoutWorkspaceTransaction, SBDeviceApplicationSceneEntity shims, SBWindowSceneContext offsets, SBMedusaSettings, SBMedusa1oSettings (defaults identical), key-shortcut renames.
+
+**Confidence.** HIGH for every address, selector and control flow quoted (annotated disassembly read twice; ivar names resolved from the cache); MEDIUM for the user-facing symptom attached to a change (no device observation); LOW where marked (top-affordance menu action cases, WillHide handler, fixed-grid candidate set).
+
+**Open questions.** (1) Does 16.0 already refresh the top affordance when Stage Manager toggles, making 2.1 redundant? (2) With ExtendedDisplayEnabler on 16.0, where does the keyboard of an app on the external display come from (section 4)? (3) Is `windowScene:didUpdateCoordinateSpace:...` really not implemented anywhere in the 16.0 delegate chain (the class dump says so; check subclasses SBEmbedded/SBExternalDisplayWindowSceneDelegate on device)? (4) Which top-affordance menu item each action case (9..17) is. (5) The exact key string values of the new `_SBSceneDataKey*` constants are irrelevant to the port but unread. (6) The hooks file was translated by Logos successfully but not compiled against an SDK.
+
+**Install order (when combined with the other groups).** group 4 (`active display`, `scale`, disconnect, pointer) first; then this file's `g3switcher` (poster) before `g3topaff` and `g3embedded` (consumers of the notification); `g3canvas` after group 4's `scale`; `g3handle`/`g3snapshot` have no ordering constraints. None of these depend on group 1/2 hooks; the user-resize orientation chain (needs `SBSetInterfaceOrientationFromUserResizingEventResponse` etc.) would have to come after group 1/2.

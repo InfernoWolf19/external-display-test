@@ -7,7 +7,7 @@
 // Every piece is tagged  // PORTABLE,  // PARTIAL: <why>  or  // NOT PORTABLE: <why>.
 //
 // Integration with Tweak.x (do not paste blindly):
-//   1. Feature switches (<jbroot>/tmp/Backport162.off.<name> turns one off): "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas",
+//   1. Feature switches (<jbroot>/tmp/Backport162.off.<name> turns one off): "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas", "g3embedded"; opt-in (Backport162.on.<name>): "g3bootorient",
 //      "g3embedded", "g3pip", "g3kbwindow", "g3statusbar", "g3preflight" ... see BP_G3_On() below (names are strings, no enum edit needed).
 //   2. Call BP_G3_Setup() from the %ctor after the build check; it %init()s every group at the end of this file.
 //   3. Compile with ARC (-fobjc-arc), like Tweak.x.
@@ -17,6 +17,7 @@
 // respondsToSelector:, nil is never passed to objc_setAssociatedObject as an object, hooks are no-ops when their switch is off.
 
 #import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
@@ -74,9 +75,15 @@ static BOOL BP_G3_On(const char *name) {
 - (id)sceneHandle;                                              // SBDeviceApplicationSceneView
 @end
 
+// Classes we hook (declaration only; no @implementation, nothing is registered with the runtime).
 @interface SBDeviceApplicationSceneHandle : NSObject @end
 @interface SBDeviceApplicationSceneView : UIView @end
 @interface SBTraitsSceneParticipantDelegate : NSObject @end
+@interface SBMedusaDecoratedDeviceApplicationSceneViewController : UIViewController @end
+@interface SBSwitcherController : NSObject @end
+@interface SBAbstractWindowSceneDelegate : NSObject @end
+@interface SBSystemShellEmbeddedDisplayController : NSObject @end
+@interface SpringBoard : UIApplication @end
 
 // ------------------------------------------------------------------------------------------------ helpers
 static id BP_G3_Ivar(id obj, const char *name) {
@@ -455,11 +462,69 @@ static CGSize BP_G3_CanvasSize(long long orientation, id coordinateSpace) {     
 
 %end // G3_Switcher
 
+// ================================================================================================ SECTION 6: embedded display controller, boot orientation
+@interface NSObject (BPG3Embedded)
+- (BOOL)chamoisWindowingEnabled;                    // SBAppSwitcherDefaults
+- (void)updateSettingsWithBlock:(id)block;          // FBScene
+- (id)settings;
+- (BOOL)enhancedWindowingEnabled;
+- (void)setEnhancedWindowingEnabled:(BOOL)e;
+- (void)_bpUpdateSceneSettings;
+@end
+
+static void BP_G3_ApplyEnhancedWindowing(id controller, id scene) {
+    if (!scene) return;
+    id defaults = BP_G3_Ivar(controller, "_appSwitcherDefaults");
+    if (![defaults respondsToSelector:@selector(chamoisWindowingEnabled)]) return;
+    BOOL e = [defaults chamoisWindowingEnabled];
+    id cur = [scene respondsToSelector:@selector(settings)] ? [scene settings] : nil;
+    if (![cur respondsToSelector:@selector(enhancedWindowingEnabled)] || [cur enhancedWindowingEnabled] == e) return;   // already in sync
+    if (![scene respondsToSelector:@selector(updateSettingsWithBlock:)]) return;
+    [scene updateSettingsWithBlock:^(id s) { if ([s respondsToSelector:@selector(setEnhancedWindowingEnabled:)]) [s setEnhancedWindowingEnabled:e]; }];
+}
+
+%group G3_Embedded
+%hook SBSystemShellEmbeddedDisplayController
+
+// PORTABLE, section 6.1 (16.2 block 0x1c75ace88)
+- (id)_createSystemShellSceneWithOrientation:(long long)o {
+    id scene = %orig;
+    if (BP_G3_On("g3embedded")) BP_G3_ApplyEnhancedWindowing(self, scene);
+    return scene;
+}
+// PORTABLE, section 6.1: follow Stage Manager toggles (16.2 _updateSceneSettings 0x1c75ad1c0, called from the defaults observer block)
+- (void)connectToDisplayIdentity:(id)identity configuration:(id)cfg displayManager:(id)dm sceneManager:(id)sm caDisplayQueue:(id)q assertion:(id)a {
+    %orig;
+    if (BP_G3_On("g3embedded"))
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_bpUpdateSceneSettings) name:kBPG3WMStyleNote object:nil];
+}
+%new
+- (void)_bpUpdateSceneSettings { if (BP_G3_On("g3embedded")) BP_G3_ApplyEnhancedWindowing(self, BP_G3_Ivar(self, "_scene")); }
+%end
+
+// PARTIAL, OPT-IN (Backport162.on.g3bootorient), section 6.2: SpringBoard starts in the panel's boot rotation.
+%hook SpringBoard
+- (long long)startupInterfaceOrientation {
+    if (BP_G3_OptIn("g3bootorient")) {
+        static int32_t (*mg)(CFStringRef, int32_t); static dispatch_once_t once;
+        dispatch_once(&once, ^{ mg = (int32_t (*)(CFStringRef, int32_t))dlsym(RTLD_DEFAULT, "MGGetSInt32Answer"); });
+        if (mg) {
+            switch (mg(CFSTR("DisplayBootRotation"), -1)) {   // 16.2 -[SpringBoard _bootOrientation] 0x1c734a544
+                case 0: return 1; case 90: return 3; case 180: return 2; case 270: return 4; default: break;
+            }
+        }
+    }
+    return %orig;
+}
+%end
+%end // G3_Embedded
+
 // ==== SETUP BEGIN
 void BP_G3_Setup(void) {
     %init(G3_Handle);
     %init(G3_Snapshot);
     %init(G3_DecoratedVC);
     %init(G3_Switcher);
+    %init(G3_Embedded);
 }
 // ==== SETUP END
