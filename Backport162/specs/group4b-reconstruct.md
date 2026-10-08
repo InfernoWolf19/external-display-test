@@ -409,3 +409,141 @@ Feature switch `deferact` (ON by default). If it ever shows a connect regression
 (d) `SBFluidSwitcherItemContainer` hooks only matter in Stage Manager layouts and are in the same group; if `setSelectable:` is inlined elsewhere the flag may not propagate (cosmetic).
 
 ---------------------------------------------------------------------------------------------------
+
+## 6. Windows migrating to the iPad on unplug, and per-display keyboard-focus lock reasons
+
+### 6a. `-[SBMainSwitcherControllerCoordinator windowSceneDidDisconnect:]` (16.0 0x1c62359ec / 16.2 0x1c76c85e0, 106 -> 275 insns)   [DONE; UNSURE only on the transition request]
+
+16.0 body (unchanged tail, decoded for comparison): cast to `SBWindowScene`; `switcher = [self switcherControllerForWindowScene:ws]`; invalidate and drop the two per-scene dictionary entries (`_switcherControllers[...]`, `_gestureManagers[...]`), invalidate the content view controller, unparent
+the switcher view controller and hide its window, `removeObserver:` from the layout state transition coordinator (twice), `removeObjectForKey` on the two maps, `[appInteractionEventSource removeObserver:]`, `_notifySwitcherControllersAppLayoutsDidChange`.
+16.2 prepends (all decoded):
+```objc
+if (![ws isExternalDisplayWindowScene] ...) skip;                                            // the tail still runs for every scene
+if ([ws isExternalDisplayWindowScene] && [[ws _fbsDisplayIdentity] sb_displayWindowingMode] == 1 /* Stage Manager / windowed */) {
+    SBMainDisplaySceneManager *embeddedSM = SBSafeCast([[[SBApp windowSceneManager] embeddedDisplayWindowScene] sceneManager], [SBMainDisplaySceneManager class]);
+    BOOL moved = NO;
+    for (SBAppLayout *l in [self appLayoutsForSwitcherController:switcher])
+        for (SBDisplayItem *item in [l allItems]) {
+            SBDeviceApplicationSceneHandle *h = [self _deviceApplicationSceneHandleForDisplayItem:item];     // via _switcherControllerForDisplayItem:
+            FBScene *scene = [h sceneIfExists];
+            if (scene) { [embeddedSM takeScene:scene fromSceneManager:[[sourceSwitcher windowScene] sceneManager]]; moved = YES; }
+        }
+    if (moved) [[SBMainWorkspace mainWorkspace] requestTransitionWithOptions:0 builder:<global block> validator:^BOOL(request){      // block 0x1c76c8b2c
+        [request modifyApplicationContext:^(ctx){                                                                                     // block 0x1c76c8bbc
+            SBLayoutState *ls = [embeddedSM currentLayoutState];
+            if (_SBLayoutRoleIsValid(ls.windowPickerRole)) [ctx setRequestedWindowPickerRole:ls.windowPickerRole];
+            if (ls.unlockedEnvironmentMode == 2) [ctx setRequestedUnlockedEnvironmentMode:2];
+        }];
+        return YES; }];
+}
+/* then the 16.0 tail */
+```
+`-[SBSceneManager takeScene:fromSceneManager:]` (16.0 0x1c5f72cf4, 16.2 0x1c73e9a3c): the 16.0 body (`_sceneWillMoveToSceneManager:`, `safeUpdateScene:withDisplayConfiguration:[FBDisplayManager configurationForIdentity:]`, `_addScene:`) already moves a scene between managers;
+16.2 additionally runs an observer callout block before and, afterwards, `[oldHandle _noteReplacedWithSceneHandle:newHandle]` when the handle objects differ (`existingSceneHandleForScene:` before / after). The second part is needed so that a layout referencing the old handle is rewired.
+Port (`G4B_Migrate`): hook the coordinator method (prelude + `%orig`); hook `takeScene:fromSceneManager:` to add the `_noteReplacedWithSceneHandle:` step when the selector exists (guarded; otherwise the 16.0 behaviour); the transition request uses the 16.0 signature
+`requestTransitionWithOptions:builder:validator:` (SBMainWorkspace, 16.0 dump line 73685), with the application-context mutation placed in the BUILDER block (which receives the request) and a nil validator (16.2 puts the capturing block in the validator slot; the semantics "mutate the context, accept" are the same; order of the two block slots is the one thing
+to check on device if the transition does not carry the picker role). Effect: unplugging the monitor in Stage Manager moves its apps to the iPad screen instead of closing them. It needs the Stage Manager layout plumbing of the other groups to *show* them nicely; without it the apps still land in the iPad's scene manager and appear as ordinary windows.
+Tag: DONE (code complete); UNSURE: builder/validator slot order; `windowingMode == 1` value for external displays when the display has already lost its configuration (the hook logs `migrate: n scenes`).
+
+### 6b. Per-display keyboard-focus lock reasons (`SBWorkspaceKeyboardFocusController`)   [DONE as an ObjC-level reconstruction; UNSURE: see end]
+
+16.2 facts (decoded, addresses 16.2):
+* `-lockFocusToSpringBoardWindowScene:forReason:` (0x1c77c19f0, 223 insns): validates `scene isKindOfClass:SBWindowScene`, `reason isKindOfClass:NSString` (bs_assert), lazily creates `_springBoardFocusLockAssertions` (`BSCompoundAssertion`, id "springBoardFocusLockAssertions", log SBLogKeyboardFocus) and the NEW `_windowSceneForSpringBoardFocusLockReasonMap` (`strongToWeakObjectsMapTable`, ivar 0xb8), stores `map[reason] = scene`, returns `[assertions acquireForReason:reason withContext:scene]`.
+  16.0 (0x1c6321c94): single `_springBoardFocusLockWindowScene` (weak, 0xa0) = last scene; `acquireForReason:`.
+* `_keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget:` (direct method, 0x1c77c58c8): the set of "SpringBoard UI wants focus" reasons (systemModalAlert, modalBanner, screenIsDim, spotlightVisible, coverSheetHostingApp, controlCenter, springBoardWindowStealingFocus ...) is built as in 16.0, but lock reasons now count only when
+  `appScene = [windowSceneManager windowSceneForDisplayIdentity:[[appFocusTarget settings] sb_displayIdentityForSceneManagers]]`, `active = [windowSceneManager activeDisplayWindowSceneFollowingUserInteraction]` and `map[reason] == appScene || map[reason] == active` (code 0x1c77c5b44..0x1c77c5bd0). A focus-stealing SpringBoard window
+  (`_recentlyUsedScenes`-adjacent ivar 0x118 / `springBoardWindowStealingFocus`) counts only if its client pid is SpringBoard or the app-focus display equals the active display (0x1c77c5f34..0x1c77c60a0).
+* `_applyDeferringRulesForPolicy:` (direct, 0x1c77c6994) derives `preferredSBFocusWindowScene` from the contexts of the qualifying locks (`orderedContext.lastObject._sbWindowScene`) instead of the single scene.
+* Effect: a Spotlight / Control Center / alert lock held on display A no longer takes the hardware keyboard away from an app focused on display B (unless B is the display the user is interacting with).
+
+Port design (the two big methods are `objc_direct`, and rewriting 1800 instructions as a function hook would be both huge and fragile, see REVIEW F2): move the per-display decision in FRONT of the unchanged 16.0 machinery.
+`G4B_FocusLock` keeps its own ordered list of lock requests (reason, weak window scene, proxy token). The 16.0 kfc is only ever given the requests that qualify (same rule as 16.2); the others stay pending and are re-evaluated (`-_bp_reconcile`) whenever
+the inputs change: new/released request, `keyboardFocusController:didUpdateWindowSceneWithFocusFrom:to:` and `externalSceneDidAcquireFocus:` (via `addKeyboardFocusObserver:`), `updateKeyboardFocusDeferringRules`, `removeKeyboardFocusFromScene:`, and the active-display observer of the Group4Focus coordinator
+(`multiDisplayUserInteractionCoordinator:updatedActiveWindowScene:`, 16.2 0x1c77c56d8, which re-evaluates only while a lock is held). "Qualifies" = the request's scene equals the display scene of `_externalSceneWithFocus` or the active display scene (`activeDisplayWindowSceneFollowingUserInteraction` when present, else `activeDisplayWindowScene`);
+when neither can be determined everything qualifies (16.0 behaviour). The same filter is applied to `requestFocusStealingForSpringBoardWindow:forReason:` through the window's `_sbWindowScene`.
+The proxy token returned to callers invalidates the pending request and the real assertion; the real assertions are acquired by calling the original method (guarded by a re-entrancy flag).
+Equivalences/deviations: (1) a real lock that qualifies is acquired with `acquireForReason:` (16.0), not `withContext:`; the "preferred window scene" is therefore the 16.0 "last locked scene" rather than the 16.2 contexts' last object (identical when one display holds the locks, which is the common case); (2) the evaluation happens on the main queue just after the triggering event instead of inside the policy computation, so there is a one-runloop-turn window in which the unfiltered state can be visible.
+Tag: DONE (code); UNSURE: whether the kfc observer callbacks fire for every focus change on 16.0 (check the `focuslock:` debug lines while tapping between displays); a direct-method port (MSHookFunction on both methods) stays the alternative if the wrapper proves too coarse.
+
+---------------------------------------------------------------------------------------------------
+
+## 7. `activeDisplayTrackingMethodology`, `SBDisplayArrangementItem`, `preferredArrangementOfDisplay:relativeTo:`   [DONE]
+
+### 7.1 Methodology setting and its consumers
+
+* `SBExternalDisplaySettings` (PTSettings root `[SBExternalDisplaySettingsDomain rootSettings]`): new `long long activeDisplayTrackingMethodology` (ivar 0x40); `-setDefaultValues` (16.0 0x1c5fab324 / 16.2 0x1c74235f4) ends with `setActiveDisplayTrackingMethodology:1` (0x1c742368c); the internal-UI row "Active Display Tracking" uses `possibleValues:{0,1}` / `titles:{keyboard, touch + pointer}`
+  (strings via `_SBStringForActiveDisplayTrackingMethodology` 0x1c74241b8: 0 -> "keyboard", 1 -> "touch + pointer"). Nothing but `setDefaultValues` writes it on a customer device, so the effective value is 1.
+* Consumers (all of them): (1) `-[SBWindowSceneManager activeDisplayWindowScene]` (0x1c74bf1c4): `0 -> activeDisplayWindowSceneFollowingKeyboard`, `1 -> activeDisplayWindowSceneFollowingUserInteraction`, other -> undefined (nil); (2) `SBWorkspaceKeyboardFocusController _initWithWorkspace:...` (adds itself as active-window-scene observer of the coordinator only when the value is 1) and its
+  `settings:changedValueForKey:` (0x1c77c5724: add/remove that observer on change, then re-evaluate); (3) `-[SBWorkspaceKeyboardFocusController multiDisplayUserInteractionCoordinator:updatedActiveWindowScene:]` (6b above).
+* Port (`G4B_Arrange`): `%new` getter/setter on `SBExternalDisplaySettings` backed by an associated number (default 1; `setDefaultValues` hook re-asserts 1 after `%orig`); the setter posts `BP162ActiveDisplayTrackingMethodologyChanged`. Hook of `activeDisplayWindowScene` implementing the 16.2 switch on top of the
+  `...FollowingKeyboard` / `...FollowingUserInteraction` methods that Group4Focus.x already adds (if they are missing the hook falls back to `%orig`, i.e. the 16.0 keyboard behaviour). The kfc observer registration of 6b is made conditional on value 1 as in 16.2; a runtime change takes effect after the next window scene connect (the PTSettings key observer is not reconstructed, PTSettings archiving of the new key is not available on a plain `%new` property: the value is session-only, default 1).
+  Because REVIEW-0.5.0 F5 showed methodology 1 is only as good as the pointer sniffer, creating the file `<jbroot>/tmp/Backport162.on.methodology0` makes the getter return 0 (keyboard following, the 16.0 behaviour) without touching the feature switches.
+
+### 7.2 Arrangement item class and the relative arrangement
+
+* 16.2 `SBDisplayArrangementItem : NSObject <BSDescriptionStreamable>` is the old `SBExternalDisplayArrangementItem` renamed to the base (identical ivars `_edge` 8, `_displayIdentity` 0x10, `_relativeDisplayIdentity` 0x18, `_offset` 0x20; `isEqual:`/`hash` over the four, `appendDescriptionToFormatter:`/`description`);
+  `SBExternalDisplayArrangementItem` becomes an empty subclass. Port: since the 16.0 class cannot be re-parented, register `SBDisplayArrangementItem` as a runtime SUBCLASS of the 16.0 `SBExternalDisplayArrangementItem` (same layout, inherited `init...`, `isEqual:`, `hash`) and add `appendDescriptionToFormatter:`/`description`. Code that asks for either name gets a working class and
+  `isKindOfClass:` works both ways that matter for the 16.0 consumers (`SBDisplayManager` builds `BKSDisplayArrangementItem` from `displayIdentity/relativeDisplayIdentity/edge/offset`).
+* `-[SBExternalDisplayService preferredArrangementOfExternalDisplay:]` (0x1c77d5510) = the 16.0 `preferredArrangementOfDisplay:` body (NSAssert display; `windowingMode == 1` -> `SBExternalDisplayArrangementItem(display, relative:[displayManager mainIdentity], edge:[defaults arrangementEdge], offset:[defaults arrangementOffset])`, else nil): `%new`, forwarding to the 16.0 method.
+* `-preferredArrangementOfDisplay:relativeTo:` (0x1c77d5620): NSAssert both non-nil; both `sb_displayWindowingMode == 1` required; `if (relativeTo.isMainDisplay) return [self preferredArrangementOfExternalDisplay:display];  if (display.isMainDisplay) { ext = [self preferredArrangementOfExternalDisplay:relativeTo]; return [[SBDisplayArrangementItem alloc] initWithDisplayIdentity:display relativeDisplayIdentity:relativeTo edge:opposite[ext.edge] offset:-ext.offset]; }  return nil;`
+  with `opposite = {2, 3, 0, 1}` (table at 0x1c7a92d90, indexed by edge, 0 for edge > 3). Consumer: `-[SBFluidSwitcherViewController pointerDidMoveToFromWindowScene:toWindowScene:]` (0x1c745f938, Stage Manager pointer hand-off; belongs to group 2b/3b) - exposed here as `%new` on the 16.0 service.
+  The 16.0 `preferredArrangementOfDisplay:` is kept (it is what `SBDisplayManager` still calls).
+* Tag DONE. UNSURE: the register assignment of the two `isMainDisplay` tests in 0x1c77d5620 (decoded as above; the alternative reading would swap display/relativeTo); verify with a log of both arrangement directions when a second use of this API is wired.
+
+---------------------------------------------------------------------------------------------------
+
+## 8. Display-mode side: do 6K / higher-resolution external modes need anything else on 16.0?   [FACTS]
+
+Method: exported-symbol diff and per-function size diff of the 16.0 vs 16.2 caches (`IOMobileFramebuffer`, `QuartzCore`), class dump diff of BackBoardServices/FrontBoardServices, and a look at the 16.0 `backboardd` binary.
+* **IOMobileFramebuffer**: 325 functions in both, zero symbols added or removed; only 10 functions changed size, by 4 bytes each (`_kern_GetDisplaySize` 180->184, `_kern_SetDigitalOutMode` 184->188, `_kern_SetTVOutMode`, `_kern_SetDisplayDevice`, `_virt_SetDigitalOutMode`, `_virt_EnableStatistics` 20->24, `_IOMobileFramebufferGetBrightnessControlInfo` -4, `PowerNotifyFunc` +4,
+  `_ioMobileFramebufferAlloc` +28, `_IOMobileFramebufferOpenByName` +44). These are call-site/PAC/logging deltas of a clang rebuild; there is no new mode, timing or size-limit entry point. The mode set a display offers comes from the display's own firmware (EDID/DisplayPort through the IOMFB kernel driver), not from this userland library.
+* **CoreDisplay**: not a dyld-cache image on iOS (the dumps are empty); nothing to compare.
+* **QuartzCore (the display server code that runs INSIDE backboardd, loaded from the cache)**: no new exported or ObjC display-mode API. Changed, relevant to external displays: `CA::WindowServer::Display::set_mode` (140 -> 88 bytes: 16.0 bumps a counter and schedules a delayed `post_display_changed` after `now + const`; 16.2 calls `post_display_changed` directly, which itself grew 104 -> 140),
+  `Display::update_clones` (580 -> 380), `IOMFBDisplay::clone_update`, `IOMFBDisplay::set_mode` (544 -> 492), `Display::update_geometry`/`update_actual_bounds`/`set_logical_bounds`. These reorder when `displayDidChange` is posted and shrink the clone bookkeeping; none contains a resolution constant or a mode filter. They live in the system cache, so a 16.0 backboardd keeps the 16.0 versions; they cannot (and need not) be hooked from SpringBoard.
+* **backboardd 16.0** (strings of `bbd/backboardd`): the only mode-related defaults are `disableCAOverscan`, `disableCAYUV`, `disableCAScaling`, `steveNoteOverscanEnabled`, `disableExtendedDisplayByDefault`, `allowWirelessExtendedDisplay` (identical property lists in the BackBoardServices dumps of both builds, see `BKSDefaults` above); no resolution cap and no 4K/5K/6K literal (`6016`, `3384`, `5120`, `4096`) was found in its strings. `BKTVOutController` (item 1) is mode-agnostic: it only decides clone or not, never picks a mode.
+* **SpringBoard** is the only place that chooses a mode: the 16.2 `SBSceneHostingDisplayController transformDisplayConfiguration:` / `displayPreferencesForDisplayController:` pair (`[CADisplay preferredModeWithCriteria:]`, per-axis clamp of the logical scale to `[minimumLogicalScale, maximumLogicalScale]`, `_copyWithOverrideSize:scale:`, optional retention of the other modes) is already ported in `Tweak.x` (`scale`). That is the whole behavioural difference between 16.0 and 16.2 for large external modes.
+* Conclusion: nothing in IOMobileFramebuffer, CoreDisplay or backboardd changed in a way that gates 6K or other high-resolution modes; a 16.0 device exposes whatever the panel/driver offers. If a 6K display still lands in a lower mode, the cause is the SpringBoard mode choice (already ported) or the device's DisplayPort bandwidth/capability, not a missing framework API.
+  Open point worth one device log: `ipsw`-less check = read the available `CADisplay availableModes` on the 6K display with the debug file present (the `scale` feature already logs the chosen mode).
+
+---------------------------------------------------------------------------------------------------
+
+## SUMMARY
+
+### What is complete
+
+| # | piece | status | confidence | where |
+|---|---|---|---|---|
+| 1 | clone mirroring: BKS destination-API client (request FIFO + token), `cloneMirroringMode` on the assertion preferences, per-display delta in `SBDisplayManager`, backboardd counterpart (per-display override of `BKTVOutController updateClone`) | DONE code / UNSURE behaviour | medium (client side high, daemon hook medium, "does stock 16.0 clone an extended display at all" unknown) | hooks `G4B_Clone`, `group4b-backboardd.x` |
+| 2 | education: defaults key shim `SBExternalDisplayEducationReasons`, new observer, `SBExternalDisplayEducationSession`, `SBExternalDisplayEducationPillViewController`, protocols, passive notification producer, native fallback alert | DONE code / UNSURE remote content | medium-high for logic (every branch decoded), medium for the SpringBoardEducation service accepting `EducationType 1` | `G4B_Edu` |
+| 3 | `boundPointerUIScenes` subset + policy `updatePresentation...` rewrite | DONE | medium-high | `G4B_PreSubset` |
+| 4 | 100 ms deferred activation of external-display assertions (`_activated` as associated flag, `activateAssertionsForDisplay:` on stack and coordinator) | DONE | high for mechanism, benefit unknown | `G4B_DeferAct` |
+| 5 | per-window-scene `SBLockedPointerManager`, `_UIPointerUnlockAction`, suppress-preferred-status (manager + switcher + container), display scoping | DONE code / UNSURE trigger paths | medium | `G4B_LockedPtr` |
+| 6a | windows migrate to the iPad on unplug (`takeScene:fromSceneManager:` loop + transition request) | DONE code | medium (transition block slot order) | `G4B_Migrate` |
+| 6b | per-display focus-lock reasons | DONE as ObjC-level wrapper (not a function port of the two direct methods) | medium | `G4B_FocusLock` |
+| 7 | `activeDisplayTrackingMethodology`, `SBDisplayArrangementItem`, `preferredArrangementOfDisplay:relativeTo:` | DONE | high / medium for the relative-to register reading | `G4B_Arrange` |
+| 8 | display-mode facts (6K) | FACTS | high that nothing in IOMobileFramebuffer / backboardd gates it | md section 8 |
+
+### Install order and integration (nothing in the existing sources was edited)
+
+1. Copy `group4b-reconstruct.hooks.m` to `Backport162/Group4bReconstruct.x`, add it to `Backport162_FILES`, add `UIKit` to `Backport162_FRAMEWORKS` (the education pill / native alert use UIKit); keep `-fobjc-arc`.
+2. In `Tweak.x`: declare `void G4B_Setup(void);` and call it at the end of the `%ctor`, after `BP_G4_Setup()`.
+3. Group install order inside `G4B_Setup` (already coded): `arrange` -> `deferact` -> `clonemirror` -> `presubset` -> `edu` -> `lockedptr2` -> `migrate` -> `focuslock`. Hard dependencies: `lockedptr2` and `focuslock` read the Group4Focus.x coordinator when present (`activedisplay`); `arrange` overrides `activeDisplayWindowScene` using the Group4Focus.x `...FollowingKeyboard/UserInteraction` methods (falls back to `%orig` if absent); `edu` needs `ExtendedDisplayEnabler` (or the group 4 `autoext`) for the mirror/extend DECISION, it only adds the education and observes.
+4. Remove from Group4Focus.x the 0.5.0 `lockedptr` hook of `BKSMousePointerService` (decision in 5.2: embedded stays `nil`, external scenes get the hardware id) and the `Backport162.on.lockedptr` key; `lockedptr2` replaces it.
+5. backboardd tweak: build `Backport162BBD` as a SECOND Theos target (Filter `backboardd`, `arm64e`, Makefile fragment and plist text at the top of `group4b-backboardd.x`); install, reboot userspace. Optional: without it item 1 degrades to the global BKS call (or nothing).
+6. Switches (all default ON except where noted): `<jbroot>/tmp/Backport162.off.<name>` for `clonemirror edu presubset deferact lockedptr2 migrate focuslock arrange`; opt-in files `Backport162.on.edunative` (native alert instead of the SpringBoardEducation remote alert) and `Backport162.on.methodology0` (keyboard-following active display). Logging: the existing `Backport162.debug` file; daemon log lines are prefixed `g4b-bbd`.
+
+### Build status
+
+`logos.pl` parses the file (generated 1.9k lines) and the Logos-hostile constructs found by that pass were fixed (`{ %orig(x); return; }` on one line, missing explicit `%ctor`). It was NOT compiled against the iOS SDK (not available here); the private selectors are declared in one `NSObject (G4BPrivate)` category at the top and all `@selector` names were cross-checked against it. The daemon file was written against the Theos `substrate.h` API and never built. Expect a first CI round of small fixes.
+
+### Open questions / things to check on the device (priority order)
+
+1. backboardd: with the monitor plugged in and the extended display on, does the stock 16.0 daemon log `Add display clone` / `Display is already cloned` for it (`log stream --predicate 'subsystem == "com.apple.BackBoard"'`)? If never, item 1 is a harmless no-op; if yes, the `g4b-bbd set <uuid> mode 2` line should be followed by `Removing clone`.
+2. `FBSDisplayConfiguration.hardwareIdentifier` equals `CAWindowServerDisplay.uniqueId`? (the hook logs the uuid sent, the daemon logs the one compared; the daemon already resolves UUIDs with `displayWithUniqueId:`).
+3. Education: does the remote alert appear with `EducationType = 1`? If not, `touch <jbroot>/tmp/Backport162.on.edunative`. English strings of the pill are guesses unless the SpringBoard strings table has the three keys.
+4. Lock manager: game on the monitor locks the pointer (`lockedptr2: client prefers`), iPad lock still works, unlock gesture then click to re-lock.
+5. Unplug in Stage Manager: `migrate: moved N scenes` and the apps appear on the iPad.
+6. Per-display focus: Spotlight opened on display A while typing in an app on display B keeps B's keyboard (`focuslock: deferring ...`).
+
+### Not done on purpose
+`autoext` / `mirrorsvc` (ExtendedDisplayEnabler provides them); the PTSettings key observer for a live methodology change and PTSettings persistence of the new key (needs the PT archiving of an ivar that a `%new` property cannot provide); the 16.2 `SBSystemPointerInteractionManager` delegate-API change (all registering views would have to adopt it, belongs with groups 2b/3b); the non-interactive policy's presentation update (unchanged in 16.2).

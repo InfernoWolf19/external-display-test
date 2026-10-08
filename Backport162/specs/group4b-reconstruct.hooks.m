@@ -149,7 +149,112 @@ static const void *kG4BKeyB = &kG4BKeyB;
 static const void *kG4BKeyC = &kG4BKeyC;
 static const void *kG4BKeyD = &kG4BKeyD;
 
-// @@PRIVATE_DECLS@@
+// Informal declarations so that messages to `id` compile without private headers (every selector below exists in the 16.0
+// binaries, or is added by a %new method / class in this file).
+@interface NSObject (G4BPrivate)
++ (id)sharedInstance;
++ (id)localDefaults;
++ (id)rootSettings;
++ (id)mainWorkspace;
++ (id)uniqueIdentificationForPresentable:(id)p;
+- (BOOL)isRootIdentity;
+- (BOOL)isMainDisplay;
+- (BOOL)isExternal;
+- (id)rootIdentity;
+- (id)hardwareIdentifier;
+- (id)configurationForIdentity:(id)identity;
+- (BOOL)extendedDisplayEverEnabledWithHardwareReqsSatisfied;
+- (BOOL)extendedDisplayEverEnabledWithoutHardwareReqsSatisfied;
+- (id)externalDisplayDefaults;
+- (void)setMirroringEnabled:(BOOL)enabled;
+- (id)bannerManager;
+- (id)initWithBannerPoster:(id)poster;
+- (BOOL)_areRuntimeAvailabilityRequirementsMet;
+- (unsigned long long)cloneMirroringMode;
+- (void)setCloneMirroringMode:(unsigned long long)mode;
+- (unsigned long long)bp_cloneMirroringMode;
+- (void)_setCloneMirroringMode:(unsigned long long)mode forDisplay:(id)display;
+- (void)activateAssertionsForDisplay:(id)display;
+- (void)_evalAndApplyOldPreferences:(id)old newPreferences:(id)new_;
+- (id)windowSceneManager;
+- (id)embeddedDisplayWindowScene;
+- (id)activeDisplayWindowScene;
+- (id)sceneManager;
+- (id)_layoutStateTransitionCoordinator;
+- (id)currentLayoutState;
+- (id)settings;
+- (id)clientSettings;
+- (id)identifier;
+- (id)windowScene;
+- (id)_windowScene;
+- (id)_sbWindowScene;
+- (id)_fbsDisplayIdentity;
+- (id)_fbsDisplayConfiguration;
+- (id)allScenes;
+- (void)removeObserver:(id)observer;
+- (void)addObserver:(id)observer;
+- (id)lockedPointerManager;
+- (id)initWithWindowScene:(id)ws;
+- (void)clientWithSceneIdentifier:(id)sid prefersPointerLockStatus:(long long)status;
+- (void)clientWithSceneIdentifier:(id)sid suppressPreferredLockStatus:(BOOL)suppress;
+- (void)clientWithSceneIdentifier:(id)sid suppressPreferredPointerLockStatusUpdated:(BOOL)updated;
+- (void)_notInvalidated_updateLockForLayoutState:(id)state;
+- (void)_updateLockForLayoutState:(id)state;
+- (id)_possibleSceneHandleForLockingPointerFromLayoutState:(id)state;
+- (BOOL)_queue_prefersLockForSceneIdentifier:(id)sid;
+- (BOOL)_shouldAllowPointerLockedForScene:(id)handle;
+- (void)_queue_lockPointerForSceneIdentifier:(id)sid;
+- (void)_queue_unlockPointer;
+- (void)_setPointerLockStatus:(long long)status forSceneWithIdentifier:(id)sid;
+- (id)sceneIdentifier;
+- (id)sceneIfExists;
+- (BOOL)isEffectivelyForeground;
+- (BOOL)isUISubclass;
+- (long long)deactivationReasons;
+- (id)_controlCenterWindow;
+- (BOOL)isPresented;
+- (id)boundPointerUIScenes;
+- (id)switcherController;
+- (id)contentViewController;
+- (id)liveOverlayForSceneIdentifier:(id)sid;
+- (id)_itemContainerForAppLayoutIfExists:(id)layout;
+- (id)appLayout;
+- (id)itemForLayoutRole:(long long)role;
+- (id)uniqueIdentifier;
+- (BOOL)isPreferredPointerLockStatusSuppressed;
+- (void)setPreferredPointerLockStatusSuppressed:(BOOL)suppressed;
+- (BOOL)contentViewBlocksTouches;
+- (void)setContentViewBlocksTouches:(BOOL)blocks;
+- (BOOL)isSelectable;
+- (void)setSelectable:(BOOL)selectable;
+- (BOOL)isExternalDisplayWindowScene;
+- (id)switcherControllerForWindowScene:(id)ws;
+- (id)appLayoutsForSwitcherController:(id)controller;
+- (id)allItems;
+- (id)_deviceApplicationSceneHandleForDisplayItem:(id)item;
+- (id)addKeyboardFocusObserver:(id)observer;
+- (void)addActiveDisplayWindowSceneObserver:(id)observer;
+- (id)requestFocusStealingForSpringBoardWindow:(id)window forReason:(id)reason;
+- (id)lockFocusToSpringBoardWindowScene:(id)scene forReason:(id)reason;
+- (unsigned int)edge;
+- (double)offset;
+- (id)displayIdentity;
+- (id)relativeDisplayIdentity;
+- (long long)activeDisplayTrackingMethodology;
+- (void)setActiveDisplayTrackingMethodology:(long long)m;
+- (id)preferredArrangementOfExternalDisplay:(id)display;
+- (id)multiDisplayUserInteractionCoordinator;
+- (BOOL)_handleAction:(id)action forScene:(id)scene;
+- (void)_presentBanner;
+- (id)_endpoint;
+- (id)error;
+- (id)info;
+- (id)initWithSceneManager:(id)sm;
+- (id)windowSceneForDisplayIdentity:(id)identity;
+- (void)addPointerUISceneToPresentationBinder:(id)scene;
+- (void)removePointerUISceneFromPresentationBinder:(id)scene;
+@end
+
 
 @protocol G4BInvalidatable <NSObject>
 - (void)invalidate;
@@ -1212,7 +1317,10 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
             id ws = G4B_LPMScene(self);
             id sm = [ws respondsToSelector:@selector(sceneManager)] ? G4B_Obj(ws, @selector(sceneManager)) : nil;
             id own = [sm respondsToSelector:@selector(currentLayoutState)] ? G4B_Obj(sm, @selector(currentLayoutState)) : nil;
-            if (own) { %orig(own); return; }
+            if (own) {
+                %orig(own);
+                return;
+            }
         }
     }
     %orig;
@@ -1393,3 +1501,381 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
 %end // G4B_LockedPtr
 
 // ----- (item 5 ends)
+
+// ================================================================================================================
+// 6a. WINDOWS MIGRATE TO THE iPAD ON UNPLUG                                                            [DONE]
+// ================================================================================================================
+%group G4B_Migrate
+
+%hook SBMainSwitcherControllerCoordinator
+- (void)windowSceneDidDisconnect:(id)scene {
+    Class wsc = NSClassFromString(@"SBWindowScene");
+    if (G4B_On("migrate") && wsc && [scene isKindOfClass:wsc] && [scene respondsToSelector:@selector(isExternalDisplayWindowScene)] && G4B_Bool(scene, @selector(isExternalDisplayWindowScene))) {
+        id ident = [scene respondsToSelector:@selector(_fbsDisplayIdentity)] ? G4B_Obj(scene, @selector(_fbsDisplayIdentity)) : nil;
+        SEL wm = NSSelectorFromString(@"sb_displayWindowingMode");
+        long long mode = [ident respondsToSelector:wm] ? G4B_LL(ident, wm) : 0;
+        if (mode == 1) {
+            id wsm = [[UIApplication sharedApplication] respondsToSelector:@selector(windowSceneManager)] ? G4B_Obj([UIApplication sharedApplication], @selector(windowSceneManager)) : nil;
+            id emb = [wsm respondsToSelector:@selector(embeddedDisplayWindowScene)] ? G4B_Obj(wsm, @selector(embeddedDisplayWindowScene)) : nil;
+            id embSM = [emb respondsToSelector:@selector(sceneManager)] ? G4B_Obj(emb, @selector(sceneManager)) : nil;
+            Class mdc = NSClassFromString(@"SBMainDisplaySceneManager");
+            id switcher = [self respondsToSelector:@selector(switcherControllerForWindowScene:)] ? G4B_Obj1(self, @selector(switcherControllerForWindowScene:), scene) : nil;
+            SEL take = NSSelectorFromString(@"takeScene:fromSceneManager:");
+            if (switcher && embSM && mdc && [embSM isKindOfClass:mdc] && [embSM respondsToSelector:take] && [self respondsToSelector:@selector(appLayoutsForSwitcherController:)]) {
+                BOOL moved = NO;
+                NSUInteger n = 0;
+                id srcSM = [scene respondsToSelector:@selector(sceneManager)] ? G4B_Obj(scene, @selector(sceneManager)) : nil;
+                for (id layout in (id<NSFastEnumeration>)G4B_Obj1(self, @selector(appLayoutsForSwitcherController:), switcher)) {
+                    id items = [layout respondsToSelector:@selector(allItems)] ? G4B_Obj(layout, @selector(allItems)) : nil;
+                    for (id item in (id<NSFastEnumeration>)items) {
+                        SEL hs = @selector(_deviceApplicationSceneHandleForDisplayItem:);
+                        id h = [self respondsToSelector:hs] ? G4B_Obj1(self, hs, item) : nil;
+                        id sc = [h respondsToSelector:@selector(sceneIfExists)] ? G4B_Obj(h, @selector(sceneIfExists)) : nil;
+                        if (!sc || !srcSM) continue;
+                        ((void (*)(id, SEL, id, id))objc_msgSend)(embSM, take, sc, srcSM);
+                        moved = YES; n++;
+                    }
+                }
+                BP_Log(@"migrate: moved %lu scenes to the embedded scene manager", (unsigned long)n);
+                if (moved) {
+                    Class mw = NSClassFromString(@"SBMainWorkspace");
+                    id ws2 = [(id)mw respondsToSelector:@selector(mainWorkspace)] ? G4B_Obj((id)mw, @selector(mainWorkspace)) : nil;
+                    SEL rq = NSSelectorFromString(@"requestTransitionWithOptions:builder:validator:");
+                    if ([ws2 respondsToSelector:rq]) {
+                        __weak id wEmb = embSM;
+                        void (^builder)(id) = ^(id request) {
+                            SEL mac = NSSelectorFromString(@"modifyApplicationContext:");
+                            if (![request respondsToSelector:mac]) return;
+                            void (^mod)(id) = ^(id ctx) {
+                                id ls = [wEmb respondsToSelector:@selector(currentLayoutState)] ? G4B_Obj(wEmb, @selector(currentLayoutState)) : nil;
+                                SEL wpr = NSSelectorFromString(@"windowPickerRole"), uem = NSSelectorFromString(@"unlockedEnvironmentMode");
+                                long long role = [ls respondsToSelector:wpr] ? G4B_LL(ls, wpr) : 0;
+                                typedef BOOL (*ValidFn)(long long);
+                                ValidFn valid = (ValidFn)dlsym(RTLD_DEFAULT, "SBLayoutRoleIsValid");
+                                if (role && (!valid || valid(role)) && [ctx respondsToSelector:NSSelectorFromString(@"setRequestedWindowPickerRole:")])
+                                    ((void (*)(id, SEL, long long))objc_msgSend)(ctx, NSSelectorFromString(@"setRequestedWindowPickerRole:"), role);
+                                if ([ls respondsToSelector:uem] && G4B_LL(ls, uem) == 2 && [ctx respondsToSelector:NSSelectorFromString(@"setRequestedUnlockedEnvironmentMode:")])
+                                    ((void (*)(id, SEL, long long))objc_msgSend)(ctx, NSSelectorFromString(@"setRequestedUnlockedEnvironmentMode:"), 2);
+                            };
+                            ((void (*)(id, SEL, id))objc_msgSend)(request, mac, mod);
+                        };
+                        ((BOOL (*)(id, SEL, unsigned long long, id, id))objc_msgSend)(ws2, rq, 0, builder, nil);
+                    }
+                }
+            }
+        }
+    }
+    %orig;
+}
+%end
+
+%hook SBSceneManager
+// 16.2 adds [oldHandle _noteReplacedWithSceneHandle:newHandle] after the move (0x1c73e9ba8)
+- (void)takeScene:(id)scene fromSceneManager:(id)other {
+    SEL ex = NSSelectorFromString(@"existingSceneHandleForScene:"), note = NSSelectorFromString(@"_noteReplacedWithSceneHandle:");
+    id oldH = ([self respondsToSelector:ex] && scene && G4B_On("migrate")) ? G4B_Obj1(other ?: self, ex, scene) : nil;
+    %orig;
+    if (!oldH || ![oldH respondsToSelector:note]) return;
+    id newH = G4B_Obj1(self, ex, scene);
+    if (newH && newH != oldH) ((void (*)(id, SEL, id))objc_msgSend)(oldH, note, newH);
+}
+%end
+
+%end // G4B_Migrate
+
+// ================================================================================================================
+// 6b. PER-DISPLAY KEYBOARD-FOCUS LOCK REASONS                                                            [DONE, UNSURE md 6b]
+// ================================================================================================================
+@interface G4BFocusReq : NSObject {
+@public
+    NSString *reason;
+    __weak id scene;          // SBWindowScene (lock) or the window's scene (steal)
+    __weak id window;
+    BOOL steal;
+    id real;                  // the real 16.0 BSInvalidatable while the request qualifies
+    BOOL dead;
+}
+@end
+@implementation G4BFocusReq
+@end
+
+@interface G4BFocusToken : NSObject <G4BInvalidatable>
+- (instancetype)initWithKFC:(id)kfc request:(G4BFocusReq *)r;
+@end
+
+static BOOL gG4BInReconcile;
+static const void *kFocusList = &kFocusList;
+static const void *kFocusObs  = &kFocusObs;
+
+@interface G4BFocusObserver : NSObject
+@property (nonatomic, weak) id kfc;
+@end
+
+static id G4B_WindowSceneManager(void) {
+    return [[UIApplication sharedApplication] respondsToSelector:@selector(windowSceneManager)] ? G4B_Obj([UIApplication sharedApplication], @selector(windowSceneManager)) : nil;
+}
+static id G4B_SceneDisplayWindowScene(id fbScene) {
+    id settings = [fbScene respondsToSelector:@selector(settings)] ? G4B_Obj(fbScene, @selector(settings)) : nil;
+    SEL ds = NSSelectorFromString(@"sb_displayIdentityForSceneManagers");
+    id ident = [settings respondsToSelector:ds] ? G4B_Obj(settings, ds) : nil;
+    id wsm = G4B_WindowSceneManager();
+    return (ident && [wsm respondsToSelector:@selector(windowSceneForDisplayIdentity:)]) ? G4B_Obj1(wsm, @selector(windowSceneForDisplayIdentity:), ident) : nil;
+}
+static void G4B_FocusReconcile(id kfc);
+
+@implementation G4BFocusToken {
+    __weak id _kfc;
+    G4BFocusReq *_req;
+}
+- (instancetype)initWithKFC:(id)kfc request:(G4BFocusReq *)r {
+    if ((self = [super init])) { _kfc = kfc; _req = r; }
+    return self;
+}
+- (void)invalidate {
+    G4BFocusReq *r = _req; _req = nil;
+    if (!r || r->dead) return;
+    r->dead = YES;
+    id real = r->real; r->real = nil;
+    if ([real respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)real invalidate];
+    id kfc = _kfc;
+    NSMutableArray *list = objc_getAssociatedObject(kfc, kFocusList);
+    [list removeObject:r];
+    if (kfc) G4B_FocusReconcile(kfc);
+}
+- (void)dealloc { [self invalidate]; }
+@end
+
+@implementation G4BFocusObserver
+- (void)keyboardFocusController:(id)c externalSceneDidAcquireFocus:(id)f { id k = self.kfc; if (k) G4B_FocusReconcile(k); }
+- (void)keyboardFocusController:(id)c didUpdateWindowSceneWithFocusFrom:(id)from to:(id)to { id k = self.kfc; if (k) G4B_FocusReconcile(k); }
+- (void)multiDisplayUserInteractionCoordinator:(id)c updatedActiveWindowScene:(id)ws { id k = self.kfc; if (k) G4B_FocusReconcile(k); }
+@end
+
+static void G4B_FocusReconcileNow(id kfc) {
+    NSMutableArray<G4BFocusReq *> *list = objc_getAssociatedObject(kfc, kFocusList);
+    if (!list.count || gG4BInReconcile) return;
+    id wsm = G4B_WindowSceneManager();
+    id appScene = G4B_SceneDisplayWindowScene(G4B_Ivar(kfc, "_externalSceneWithFocus"));
+    SEL fu = NSSelectorFromString(@"activeDisplayWindowSceneFollowingUserInteraction");
+    id active = [wsm respondsToSelector:fu] ? G4B_Obj(wsm, fu) : ([wsm respondsToSelector:@selector(activeDisplayWindowScene)] ? G4B_Obj(wsm, @selector(activeDisplayWindowScene)) : nil);
+    gG4BInReconcile = YES;
+    for (G4BFocusReq *r in [list copy]) {
+        if (r->dead) continue;
+        id sc = r->scene;
+        BOOL want = (!appScene && !active) || (sc && (sc == appScene || sc == active));
+        if (want && !r->real) {
+            id real = nil;
+            if (r->steal) {
+                real = ((id (*)(id, SEL, id, id))objc_msgSend)(kfc, @selector(requestFocusStealingForSpringBoardWindow:forReason:), r->window, r->reason);
+            } else {
+                real = ((id (*)(id, SEL, id, id))objc_msgSend)(kfc, @selector(lockFocusToSpringBoardWindowScene:forReason:), sc, r->reason);
+            }
+            r->real = real;
+            BP_Log(@"focuslock: activating %@ (%@)", r->reason, r->steal ? @"steal" : @"lock");
+        } else if (!want && r->real) {
+            id real = r->real; r->real = nil;
+            if ([real respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)real invalidate];
+            BP_Log(@"focuslock: deferring %@ (scene not on app-focus/active display)", r->reason);
+        }
+    }
+    gG4BInReconcile = NO;
+}
+static void G4B_FocusReconcile(id kfc) {
+    __weak id w = kfc;
+    dispatch_async(dispatch_get_main_queue(), ^{ id k = w; if (k) G4B_FocusReconcileNow(k); });
+}
+
+%group G4B_FocusLock
+
+%hook SBWorkspaceKeyboardFocusController
+- (id)lockFocusToSpringBoardWindowScene:(id)scene forReason:(id)reason {
+    if (gG4BInReconcile || !G4B_On("focuslock") || !scene || ![reason isKindOfClass:[NSString class]]) return %orig;
+    G4BFocusReq *r = [G4BFocusReq new];
+    r->reason = reason; r->scene = scene;
+    NSMutableArray *list = objc_getAssociatedObject(self, kFocusList);
+    if (!list) { list = [NSMutableArray array]; objc_setAssociatedObject(self, kFocusList, list, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    [list addObject:r];
+    G4B_FocusReconcileNow(self);
+    return [[G4BFocusToken alloc] initWithKFC:self request:r];
+}
+- (id)requestFocusStealingForSpringBoardWindow:(id)window forReason:(id)reason {
+    if (gG4BInReconcile || !G4B_On("focuslock") || !window || ![reason isKindOfClass:[NSString class]]) return %orig;
+    G4BFocusReq *r = [G4BFocusReq new];
+    r->reason = reason; r->window = window; r->steal = YES;
+    r->scene = [window respondsToSelector:@selector(_sbWindowScene)] ? G4B_Obj(window, @selector(_sbWindowScene)) : nil;
+    NSMutableArray *list = objc_getAssociatedObject(self, kFocusList);
+    if (!list) { list = [NSMutableArray array]; objc_setAssociatedObject(self, kFocusList, list, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    [list addObject:r];
+    G4B_FocusReconcileNow(self);
+    return [[G4BFocusToken alloc] initWithKFC:self request:r];
+}
+- (void)updateKeyboardFocusDeferringRules {
+    %orig;
+    if (G4B_On("focuslock")) G4B_FocusReconcile(self);
+}
+- (void)removeKeyboardFocusFromScene:(id)scene {
+    %orig;
+    if (G4B_On("focuslock")) G4B_FocusReconcile(self);
+}
+- (void)windowSceneDidConnect:(id)ws {
+    %orig;
+    if (!G4B_On("focuslock") || objc_getAssociatedObject(self, kFocusObs)) return;
+    G4BFocusObserver *o = [G4BFocusObserver new];
+    o.kfc = self;
+    if ([self respondsToSelector:@selector(addKeyboardFocusObserver:)]) {
+        id tok = G4B_Obj1(self, @selector(addKeyboardFocusObserver:), o);
+        objc_setAssociatedObject(self, kFocusObs, @[o, tok ?: [NSNull null]], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    id sb = [UIApplication sharedApplication];
+    SEL mc = NSSelectorFromString(@"multiDisplayUserInteractionCoordinator");     // provided by Group4Focus.x
+    id coord = [sb respondsToSelector:mc] ? G4B_Obj(sb, mc) : nil;
+    if ([coord respondsToSelector:@selector(addActiveDisplayWindowSceneObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(coord, @selector(addActiveDisplayWindowSceneObserver:), o);
+}
+%end
+
+%end // G4B_FocusLock
+
+// ----- (item 6 ends)
+
+// ================================================================================================================
+// 7. ACTIVE-DISPLAY TRACKING METHODOLOGY, DISPLAY ARRANGEMENT ITEM                                       [DONE]
+// ================================================================================================================
+static NSString *const kG4BMethodologyChanged = @"BP162ActiveDisplayTrackingMethodologyChanged";
+static const void *kMethKey = &kMethKey;
+
+static long long G4B_Methodology(void) {
+    if (G4B_OptIn("methodology0")) return 0;                       // <jbroot>/tmp/Backport162.on.methodology0 : keyboard following (16.0 behaviour)
+    Class dom = NSClassFromString(@"SBExternalDisplaySettingsDomain");
+    id root = [(id)dom respondsToSelector:@selector(rootSettings)] ? G4B_Obj((id)dom, @selector(rootSettings)) : nil;
+    return [root respondsToSelector:@selector(activeDisplayTrackingMethodology)] ? G4B_LL(root, @selector(activeDisplayTrackingMethodology)) : 1;
+}
+// 16.2 _SBStringForActiveDisplayTrackingMethodology (0x1c74241b8)
+static NSString *G4B_StringForMethodology(long long m) { return m == 0 ? @"keyboard" : (m == 1 ? @"touch + pointer" : [NSString stringWithFormat:@"<unknown:%lld>", m]); }
+
+%group G4B_Arrange
+
+%hook SBExternalDisplaySettings
+%new
+- (long long)activeDisplayTrackingMethodology {
+    NSNumber *n = objc_getAssociatedObject(self, kMethKey);
+    return n ? n.longLongValue : 1;
+}
+%new
+- (void)setActiveDisplayTrackingMethodology:(long long)m {
+    objc_setAssociatedObject(self, kMethKey, @(m), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [[NSNotificationCenter defaultCenter] postNotificationName:kG4BMethodologyChanged object:self];
+}
+- (void)setDefaultValues {
+    %orig;
+    [self setActiveDisplayTrackingMethodology:1];                    // 16.2 0x1c742368c
+}
+%end
+
+%hook SBWindowSceneManager
+- (id)activeDisplayWindowScene {                                     // 16.2 0x1c74bf1c4
+    SEL kb = NSSelectorFromString(@"activeDisplayWindowSceneFollowingKeyboard"), ui = NSSelectorFromString(@"activeDisplayWindowSceneFollowingUserInteraction");
+    if (G4B_On("arrange") && [self respondsToSelector:kb] && [self respondsToSelector:ui]) {
+        long long m = G4B_Methodology();
+        if (m == 0) return G4B_Obj(self, kb);
+        if (m == 1) return G4B_Obj(self, ui);
+        BP_Log(@"arrange: undefined methodology %@", G4B_StringForMethodology(m));
+        return nil;
+    }
+    return %orig;
+}
+%end
+
+%hook SBExternalDisplayService
+// 16.2 0x1c77d5510: the 16.0 preferredArrangementOfDisplay: body under its new name
+%new
+- (id)preferredArrangementOfExternalDisplay:(id)display {
+    SEL old = NSSelectorFromString(@"preferredArrangementOfDisplay:");
+    return (display && [self respondsToSelector:old]) ? G4B_Obj1(self, old, display) : nil;
+}
+// 16.2 0x1c77d5620
+%new
+- (id)preferredArrangementOfDisplay:(id)display relativeTo:(id)to {
+    if (!display || !to) return nil;                                 // 16.2 NSAssert
+    SEL wm = NSSelectorFromString(@"sb_displayWindowingMode");
+    if (![display respondsToSelector:wm] || G4B_LL(display, wm) != 1 || G4B_LL(to, wm) != 1) return nil;
+    SEL mainS = @selector(isMainDisplay);
+    if ([to respondsToSelector:mainS] && G4B_Bool(to, mainS)) return [self preferredArrangementOfExternalDisplay:display];
+    if ([display respondsToSelector:mainS] && G4B_Bool(display, mainS)) {
+        id ext = [self preferredArrangementOfExternalDisplay:to];
+        if (!ext) return nil;
+        static const unsigned int opposite[4] = { 2, 3, 0, 1 };      // table at 0x1c7a92d90
+        unsigned int e = ((unsigned int (*)(id, SEL))objc_msgSend)(ext, @selector(edge));
+        double off = ((double (*)(id, SEL))objc_msgSend)(ext, @selector(offset));
+        Class ic = NSClassFromString(@"SBDisplayArrangementItem") ?: NSClassFromString(@"SBExternalDisplayArrangementItem");
+        SEL ini = NSSelectorFromString(@"initWithDisplayIdentity:relativeDisplayIdentity:edge:offset:");
+        if (!ic || ![ic instancesRespondToSelector:ini]) return nil;
+        return ((id (*)(id, SEL, id, id, unsigned int, double))objc_msgSend)([ic alloc], ini, display, to, e > 3 ? 0 : opposite[e], -off);
+    }
+    return nil;
+}
+%end
+
+%end // G4B_Arrange
+
+// SBDisplayArrangementItem as a runtime subclass of the 16.0 SBExternalDisplayArrangementItem (md 7.2)
+static NSString *G4B_ArrangementItemDescription(id self_, SEL _cmd) {
+    SEL e = @selector(edge), o = @selector(offset), d = @selector(displayIdentity), r = @selector(relativeDisplayIdentity);
+    return [NSString stringWithFormat:@"<%@: %p display=%@ relativeTo=%@ edge=%u offset=%g>", NSStringFromClass(object_getClass(self_)), self_,
+            G4B_Obj(self_, d), G4B_Obj(self_, r), ((unsigned int (*)(id, SEL))objc_msgSend)(self_, e), ((double (*)(id, SEL))objc_msgSend)(self_, o)];
+}
+static void G4B_RegisterArrangementItem(void) {
+    if (NSClassFromString(@"SBDisplayArrangementItem")) return;
+    Class base = NSClassFromString(@"SBExternalDisplayArrangementItem");
+    if (!base) return;
+    Class c = objc_allocateClassPair(base, "SBDisplayArrangementItem", 0);
+    if (!c) return;
+    class_addMethod(c, @selector(description), (IMP)G4B_ArrangementItemDescription, "@@:");
+    objc_registerClassPair(c);
+}
+
+// ----- (item 7 ends)
+
+// ================================================================================================================
+// SETUP
+// ================================================================================================================
+static BOOL G4B_BuildMatches(void) {
+#ifdef BP_G4B_STANDALONE
+    return YES;
+#else
+    char buf[64] = {0};
+    size_t n = sizeof buf;
+    if (sysctlbyname("kern.osversion", buf, &n, NULL, 0) != 0) return NO;
+    return strcmp(buf, "20A8372") == 0;
+#endif
+}
+
+// Attach the BannerKit protocols (not linkable at build time) to the pill view controller.
+static void G4B_AttachBannerProtocols(void) {
+    Class pill = [SBExternalDisplayEducationPillViewController class];
+    for (NSString *n in @[@"BNPresentableIdentifying", @"BNPresentableObserving", @"BNPresentableObservable", @"BNPresentable"]) {
+        Protocol *p = NSProtocolFromString(n);
+        if (p && !class_conformsToProtocol(pill, p)) class_addProtocol(pill, p);
+    }
+}
+
+// Install order = the order of the md SUMMARY. Each group is installed only if its switch is on at launch (the hooks also
+// re-check at call time, so a later "off" file still takes effect).
+// Call from Tweak.x's %ctor after BP_BuildMatches() and the existing %init / BP_G4_Setup().
+void G4B_Setup(void) {
+    if (!G4B_BuildMatches()) return;
+    G4B_RegisterArrangementItem();
+    G4B_AttachBannerProtocols();
+    if (G4B_On("arrange"))   { %init(G4B_Arrange); }
+    if (G4B_On("deferact"))  { %init(G4B_DeferAct); }
+    if (G4B_On("clonemirror")) { %init(G4B_Clone); }
+    if (G4B_On("presubset")) { %init(G4B_PreSubset); }
+    if (G4B_On("edu"))       { %init(G4B_Edu); }
+    if (G4B_On("lockedptr2")) { %init(G4B_LockedPtr); }
+    if (G4B_On("migrate"))   { %init(G4B_Migrate); }
+    if (G4B_On("focuslock")) { %init(G4B_FocusLock); }
+    BP_Log(@"group4b installed");
+}
+
+%ctor {
+    // intentionally empty: Logos needs an explicit constructor when a file has several groups; G4B_Setup() is called by Tweak.x
+}
