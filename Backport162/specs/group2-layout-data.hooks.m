@@ -1531,6 +1531,133 @@ static void BP_G2_SetupLayoutData(void) {
 }
 
 // =================================================================================================================
+// PART B. SBFluidSwitcherViewController / SBFluidSwitcherItemContainer (md B1/B2 row numbers in the comments)
+// =================================================================================================================
+
+// ---- A2.2 / row 7: the two 16.2 identifier lists --------------------------------------------------------------------------
+// Switcher list: 162 0x1c7811880 (fully decoded; the "previous" argument is unused there).
+static NSArray *BP_G2_ComputeSwitcherIds(id vc, id stageLayout, NSArray *strip) {
+    NSMutableArray *r = [NSMutableArray new];
+    NSString *stageId = BP_G2_Obj(stageLayout, sel_registerName("continuousExposeIdentifier"));
+    if (stageId && ![strip containsObject:stageId]) [r insertObject:stageId atIndex:0];
+    [r addObjectsFromArray:strip ?: @[]];
+    NSArray *layouts = BP_G2_Obj(vc, sel_registerName("appLayouts"));
+    SEL sContain = sel_registerName("appLayoutContainingAppLayout:");
+    for (id l in layouts) {
+        id c = [vc respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(vc, sContain, l) : l;
+        NSString *i = BP_G2_Obj(c, sel_registerName("continuousExposeIdentifier"));
+        if (!i) continue;
+        if (stageId && [i isEqualToString:stageId]) continue;       // BSEqualStrings(i, stageId)
+        if (![r containsObject:i]) [r addObject:i];
+    }
+    return r;
+}
+
+// Strip list: 162 0x1c7811a50. UNSURE: the final merge with `prev` (swap-in-place of removed/added ids, remaining ids at the front) was only
+// partially decoded (up to 0x1c7811e54); the first half (collection + cap + stage handling) is verified.
+static NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger cap) {
+    SEL sContain = sel_registerName("appLayoutContainingAppLayout:"), sAny = sel_registerName("containsAnyItemFromAppLayout:");
+    SEL sGroup = sel_registerName("appLayoutsForContinuousExposeIdentifier:"), sIsOr = sel_registerName("isOrContainsAppLayout:");
+    NSMutableOrderedSet *res = [NSMutableOrderedSet new];
+    NSString *stageId = BP_G2_Obj(stageLayout, sel_registerName("continuousExposeIdentifier"));
+    for (id l in (BP_G2_Obj(vc, sel_registerName("appLayouts")) ?: @[])) {
+        id c = [vc respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(vc, sContain, l) : l;
+        if (stageLayout && [stageLayout respondsToSelector:sAny] && ((BOOL (*)(id, SEL, id))objc_msgSend)(stageLayout, sAny, c)) continue;
+        NSString *i = BP_G2_Obj(c, sel_registerName("continuousExposeIdentifier"));
+        if (i) [res addObject:i];
+        if (cap && res.count == cap) break;
+    }
+    if (stageId && ![res containsObject:stageId]) {
+        NSArray *g = [vc respondsToSelector:sGroup] ? ((id (*)(id, SEL, id))objc_msgSend)(vc, sGroup, stageId) : nil;
+        BOOL skip = NO;
+        if (g.count == 0) skip = YES;
+        else if (g.count == 1 && stageLayout && [stageLayout respondsToSelector:sIsOr]) {
+            id first = g.firstObject;
+            skip = ((BOOL (*)(id, SEL, id))objc_msgSend)(stageLayout, sIsOr, first) || ((BOOL (*)(id, SEL, id))objc_msgSend)(first, sIsOr, stageLayout);
+        }
+        if (!skip) { if (cap && res.count == cap) [res removeObject:res.lastObject]; [res insertObject:stageId atIndex:0]; }
+    }
+    // merge with the previous order: keep the previous relative order, put new ids where removed ones were (UNSURE, see above)
+    NSMutableArray *out = [(prev.count > cap && cap ? [prev subarrayWithRange:NSMakeRange(0, cap)] : prev ?: @[]) mutableCopy];
+    NSMutableArray *added = [NSMutableArray new], *gone = [NSMutableArray new];
+    for (id i in res) if (![out containsObject:i]) [added addObject:i];
+    for (id i in out) if (![res containsObject:i]) [gone addObject:i];
+    while (added.count && gone.count) {
+        NSUInteger idx = [out indexOfObject:gone.firstObject];
+        if (idx != NSNotFound) out[idx] = added.firstObject;
+        [added removeObjectAtIndex:0]; [gone removeObjectAtIndex:0];
+    }
+    [out removeObjectsInArray:gone];
+    for (id i in [added reverseObjectEnumerator]) [out insertObject:i atIndex:0];
+    return out;
+}
+
+%group G2B
+
+%hook SBFluidSwitcherViewController
+
+// B1 row 2. 160 returns nil, 162 returns an empty array (callers treat both as empty). PORTABLE.
+- (id)appLayoutsToEnsureExistForMainTransitionEvent:(id)event {
+    id r = %orig;
+    return r ?: @[];
+}
+
+// B1 row 7 / A2.2. PARTIAL: the 16.0 pipeline runs unchanged; afterwards the 16.2 lists are derived so that ported modifiers can read
+// -continuousExposeIdentifiersInStrip / InSwitcher / GenerationCount.
+- (void)_updateContinuousExposeIdentifiersTransitioningFromAppLayout:(id)from toAppLayout:(id)to animated:(BOOL)animated {
+    %orig;
+    BOOL enabled = BP_G2_Bool(self, sel_registerName("isChamoisWindowingUIEnabled"));
+    if (!enabled) return;
+    BP162VCState *st = BP_G2_VCStateFor(self);
+    if (!st) return;
+    id root = BP_G2_GetIvarObj(self, "_rootModifier");
+    id stage = BP_G2_Obj(root, sel_registerName("appLayoutOnContinuousExposeStage"));     // answered by the (ported) CE root modifier; nil otherwise
+    id attrs = BP_G2_Obj(self, sel_registerName("chamoisLayoutAttributes"));
+    SEL sRows = sel_registerName("numberOfRowsWhileInApp");
+    NSUInteger cap = (attrs && [attrs respondsToSelector:sRows]) ? ((NSUInteger (*)(id, SEL))objc_msgSend)(attrs, sRows) : 0;
+    NSArray *strip = BP_G2_ComputeStripIds(self, stage, st.idsInStrip, cap);
+    NSArray *sw = BP_G2_ComputeSwitcherIds(self, stage, strip);
+    st.idsInStrip = strip;
+    st.idsInSwitcher = sw;
+    st.idsGeneration += 1;
+}
+
+// B1 row 1. PARTIAL: uses the model-based query when the (extended-protocol) root modifier answers it; otherwise the 16.0 progress test.
+- (BOOL)_areContinuousExposeStripsUnoccluded {
+    id root = BP_G2_GetIvarObj(self, "_rootModifier");
+    SEL s = sel_registerName("isContinuousExposeStripVisible");
+    if (root && [root respondsToSelector:s]) return ((BOOL (*)(id, SEL))objc_msgSend)(root, s);
+    return %orig;
+}
+
+// B1 row 23. PARTIAL: modifier query `wantsContinuousExposeHoverGesture` (default YES when nobody answers).
+- (void)handleContinuousExposeHoverGesture:(id)gesture {
+    id root = BP_G2_GetIvarObj(self, "_rootModifier");
+    SEL s = sel_registerName("wantsContinuousExposeHoverGesture");
+    if (root && [root respondsToSelector:s] && !((BOOL (*)(id, SEL))objc_msgSend)(root, s)) return;
+    %orig;
+}
+
+%end // SBFluidSwitcherViewController
+
+// B2. Item container renames (same BOOL ivar). PORTABLE.
+%hook SBFluidSwitcherItemContainer
+%new
+- (void)setOccludedInContinuousExposeStage:(BOOL)occluded {
+    SEL s = sel_registerName("setOccludedInCenterStage:");
+    if ([self respondsToSelector:s]) ((void (*)(id, SEL, BOOL))objc_msgSend)(self, s, occluded);
+}
+%new
+- (BOOL)isOccludedInContinuousExposeStage { return BP_G2_Bool(self, sel_registerName("isOccludedInCenterStage")); }
+%end
+
+%end // G2B
+
+static void BP_G2_SetupViewController(void) {
+    %init(G2B);
+}
+
+// =================================================================================================================
 // Entry points
 // =================================================================================================================
 
@@ -1545,6 +1672,7 @@ static void BP_G2_Setup(void) {
     BP_G2_InstallContextForwardersIfMissing();      // no-op when the extended protocols produced the trampolines
     BP_G2_SetupModel();                              // A3
     BP_G2_SetupLayoutData();                         // A5, A6, A8
+    BP_G2_SetupViewController();                     // B (+ A2.2 list builders)
 }
 
-// ===== END OF PART A1 (more sections are appended below as the analysis proceeds) =====
+// ===== END OF FILE. Install order: BP_G2_Early() first in %ctor (protocol hooks), BP_G2_Setup() after the existing %init. =====

@@ -57,7 +57,7 @@ the selector's index in that selector list. Consequences for the backport:
    * (B) Cheap: `%new` methods with the new names on `SBSwitcherModifier` that go to the root modifier's `delegate` (the VC) directly
      (`BP_RootContextProvider`) and ignore chain overrides. Good enough for pure reads like `continuousExposeStripProgress`; WRONG for
      selectors that child modifiers override (stage layout, strip progress in FullScreen/WindowDrag/RevealStrips, identifiers override).
-   The draft code implements (B) and the extended-protocol builder for (A) (`BP_G2_ExtendedProtocols`), switchable with one macro.
+   The draft code implements the extended-protocol builder for (A) (`BP_G2_BuildExtendedProtocol`, hooks on `+contextProtocol`/`+queryProtocol`) and the root-provider fallback for (B) (`BP_G2_InstallContextForwardersIfMissing`, installed only for selectors that (A) did not give a trampoline).
 
 16.2 protocol deltas (from `SBSwitcherContextProviding` etc. in the class dumps):
 
@@ -975,3 +975,45 @@ PORT = portable as hook/%new; PART = partial; NOP = behaviour-neutral refactor, 
 * `_addPageView`: the page view hit-test padding no longer reads `chamoisSettings.layoutAttributes.stageInterItemSpacing` itself (set later by the VC `_applyStyle` block, row 12).
 * Layer: `-[SBFluidSwitcherItemContainerLayer setTransform:]` (160 0x1c615e2ac / 162 0x1c75e5304): two `BSFloatEqualToFloat` checks added (skip the counter-rotation bookkeeping when the transform's translation did not change): NOP.
 * Footer: `_handleTapGestureRecognizer:` uses `convertPoint:fromView:` + `pointInside:withEvent:` hit test of each title instead of inset frames from `switcherShelfSplitViewIconInset` (and then `itemContainerFooterView:didSelectTitleItem:`): fixes taps on small titles; `iconHitTestOutset` (new property 0x1c7588640). PART: skip (cosmetic).
+
+---------------------------------------------------------------------------------------------------
+
+# SUMMARY
+
+## Portable vs not (data / layout layer)
+| piece | verdict | confidence in the spec | how |
+|---|---|---|---|
+| Framework: new query/context selectors (section 0) | PARTIAL | medium (mechanism read in `+_initalizeIMPCaching`; the final context link root->VC not traced) | hooks on `+contextProtocol` / `+queryProtocol` return extended protocols; fallback root-provider forwarders |
+| A1 layout cache + 5-arg token | PORTABLE | high | `%new rebuildIfNecessaryForValidityToken:` / `validityToken` on the 16.0 cache; new token class; delegate implements both `buildLayoutCalculations` and `...ForCache:` |
+| A2 context-provider selectors on the VC | PORTABLE (stage/drag/tongue stubs NOT PORTABLE) | high for the reads, medium for list builders | `%new` on VC, state in associated object |
+| A3 SBChamoisOverlappingModel (+Mutable) | PORTABLE | high | associated extras + `class_addMethod`, `mutableCopyWithZone:` hook |
+| A4 SBChamoisOverlappingController | PORTABLE as a NEW class | medium-high (7 spots flagged UNSURE: `_snap` break/continue, anchor join thresholds, dodge branch order, region sentinel, stage-resize x-shift, ...) | `BP162ChamoisOverlappingController`; needs CoreGraphics `CGRegion*` SPI (dlsym) |
+| A5 SBSwitcherChamoisLayoutAttributes | PARTIAL | high | associated dictionary + accessors, copy/isEqual hooks |
+| A6 SBSwitcherChamoisSettings | PARTIAL | medium (builder constants for padding/icon length not diffed against 160) | wrap the 9-arg builder, `%new` 4-arg entry and constants |
+| A7.1 SBDisplayItemLayoutAttributes (attributed size / normalized center) | NOT PORTABLE (emulate with 16.0 absolute geometry) | high | persisted schema + ~40 consumers |
+| A7.2 Calculator auto-layout | PARTIAL, hook body not written | medium | integration point `BP_G2_ResolveModel`; must be written against 160 0x1c611a81c |
+| A8 SBAppLayout (`continuousExposeIdentifier`, `zOrderedLeafAppLayouts`) | PORTABLE | high | hook / `%new` |
+| A8 cache key (+floatingDockHeight) | PARTIAL | high | associated dock height + `isEqual:` |
+| B VC: identifiers pipeline, strip-visible query, hover gate, ensure-exist | PARTIAL/PORTABLE | medium | hooks in group G2B |
+| B VC: `_layoutAppLayout` block (clipping frame, group opacity, accessory scale) | NOT PORTABLE inline (post-layout fixer needed) | high that the three additions exist | see B1 row 11 |
+| B VC: keyboard navigation, shift-select, gesture-manager API, system aperture, per-display suspend/keyboard, item container pointer-edge resize | NOT PORTABLE here | high | other groups / new classes |
+| B item container renames | PORTABLE | high | `%new` aliases |
+
+## Order in which the pieces must be installed
+1. `BP_G2_Early()`: `%init(G2)` = the `+contextProtocol/+queryProtocol` hooks. MUST be before any message to `SBSwitcherModifier` / any modifier class (before the switcher is created). Extra requirement: the Group-4/other tweak code must not touch modifier classes in its own `%ctor` before this.
+2. A3 model extras and A5 attribute extras (`BP_G2_SetupModel`, `BP_G2_SetupAttributes`): data classes first, no dependencies.
+3. A6 settings wrapper, A8 `SBAppLayout`/cache key hooks (`BP_G2_SetupLayoutData`).
+4. A4 controller class (static, available at load); A7.2 calculator hook (TODO) switches the layout to it - only after 2 and 3.
+5. A2 VC context selectors (`%init(G2VC)`) and `BP_G2_InstallContextForwardersIfMissing`.
+6. Part B hooks (`%init(G2B)`), then the modifier-layer classes from the Strip / FullScreen specs (new `SBStripContinuousExposeSwitcherModifier` etc.) which depend on all of the above.
+(`BP_G2_Setup()` performs 2-6 in that order.)
+
+## Open questions / things to verify on device
+1. Does the context chain end in plain `objc_msgSend(delegate, sel)` for selectors added through the extended protocol? (section 0). If not, the root-provider fallback (B) covers only the six reads installed by `BP_G2_InstallContextForwardersIfMissing`.
+2. Are the CoreGraphics `CGRegion*` functions resolvable by `dlsym(RTLD_DEFAULT)` inside SpringBoard 16.0 (the 160 controller does not use them)? If not, A4 must use a small rect-set implementation (only axis-aligned rect union/difference/intersection are used).
+3. A4 UNSURE spots (listed in the md): `_snap` break vs continue, the `join` thresholds in `_overlappingScaleAnchorCenters`, the dodge candidate selection order, the stage-for-resizing x shift, `UIRectRoundToScale` argument order, `_itemsSortedByX` pinning wiring when `allow == NO`.
+4. A6: `screenEdgePadding`, `stripIconLength`, `_minimumDefaultWindowSize...:stripWidth:` and `_stripWidth/_stripCardScale` 162 formulas were not compared to the 160 builder (160 0x1c6413524); if they differ the strip metrics on device will differ slightly.
+5. A7.2: the calculator hook (`_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:...`) is not written; it needs the 160 body (0x1c611a81c) read and the attributed-size emulation; without it the ported controller is never invoked and only the data/provider pieces are live.
+6. B1 row 11: the three additions inside the `_layoutAppLayout` block (clipping frame / group opacity / accessory scale) and the removal of the frame offset are required for the ported strip modifier's frames; verify on device and write the post-layout fixer.
+7. `SBAppLayout continuousExposeIdentifier` changes group identity for split-view pairs: check that no persisted state (e.g. `SBRecentAppLayouts`/Stage Manager restore data) keys on the old identifier string.
+8. The 16.2 `isInsetForHomeAffordance` Stage-Manager gate (A8) has an undecoded idiom comparison direction.
