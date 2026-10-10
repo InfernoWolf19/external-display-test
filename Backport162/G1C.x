@@ -867,7 +867,7 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     }
     if (doComplete && [self respondsToSelector:complete]) {
         id c = ((id (*)(id, SEL, BOOL))objc_msgSend)(self, complete, YES);
-        r = G1B_Append(c, r);
+        r = G1B_AppendTo(c, r);
     }
     return r;
 }
@@ -2362,7 +2362,8 @@ static BOOL G1C_Wd_AnyExceeds(id self, SEL _cmd) {
 }
 static BOOL G1C_Wd_AnyProposedHasQ(id self, SEL _cmd) { return G1C_Wd_AnyProposedHas(self); }
 static double G1C_Wd_StripProgress(id self, SEL _cmd) {
-    double v = G1B_SUPER(double, gWdGrand, self, _cmd, (struct objc_super *, SEL));
+    // 16.0 has no continuousExposeStripProgress anywhere in the chain; the trampoline exists only when the group 2b extended protocol is active
+    double v = G1B_HasSuper(gWdGrand, _cmd) ? G1B_SUPER(double, gWdGrand, self, _cmd, (struct objc_super *, SEL)) : 0.0;
     if (G1C_Wd_AnyExceeds(self, 0)) {
         id sel = G1C_Wd_Sel(self);
         if (!G1C_LayoutHas(G1C_Wd_Proposed(self), sel) && G1C_LayoutHas(G1C_Wd_Init0(self), sel)) v = 1.0;

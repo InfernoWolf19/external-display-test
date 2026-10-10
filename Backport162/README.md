@@ -117,3 +117,10 @@ Needs ExtendedDisplayEnabler for the external display features.
 
 An independent review of 0.5.0 (`specs/REVIEW-0.5.0.md`) found and 0.5.1 fixes: the wake gesture was never armed (16.0's external-display gesture manager refused type 0x42), `nilock` lacked a required delegate method, the pointer sniffer ignored real mouse touches, a cancelled pointer touch left `gesturegate` stuck, `directhook` now patches after the PC-relative `cbz` and signs the trampoline pointer for arm64e, and the `lockedptr` hook was deleted (a no-op on 16.0 and not thread-safe).
 Still unverified without a device: whether backboardd 16.0 blanks an external display through `BKSDisplayServicesSetDisplayBlanked`, and the hooking library's behaviour for `directhook`. If either misbehaves create `Backport162.off.nowindow` / `Backport162.off.directhook` (the latter needs a respring).
+
+
+## 0.6.1 baseline (device report: empty app switcher, apps not dismissing, app crash on open)
+The three whole-method replacements of the 16.0 switcher data flow are OPT-IN until they are device-verified:
+`group1c` (Root factories, identifiers update, peek/drag families), `group2` (layout cache, overlapping model, list builders) and
+`g2blayout` (`_layoutAppLayout:roleMask:completion:` and the calculator) and `g2bkeys` (container tap/return path, replaces `didSelectContainer:`). Enable one at a time with an empty file
+`/var/jb/tmp/Backport162.on.<name>` and respring.
