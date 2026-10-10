@@ -124,13 +124,13 @@ static void G1B_Filtering_DidMove(id self, SEL _cmd, id parent) {
     if (pass && [pass respondsToSelector:@selector(delegate)] && G1B_Send0(pass, @selector(delegate))) {
         G1B_SendV1(pass, @selector(setDelegate:), nil);
         ((void (*)(id, SEL, id, long long, id))objc_msgSend)(self, @selector(addChildModifier:atLevel:key:), pass, 1, nil);
-        if ([self respondsToSelector:@selector(newAppLayoutsGenCount)]) G1B_Send0(self, @selector(newAppLayoutsGenCount));
+        if ([self respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(self, @selector(newAppLayoutsGenCount));
     }
 }
 
 static void G1B_Filtering_SetState(id self, SEL _cmd, long long state) {
     long long old = G1B_SendLL0(self, @selector(state));
-    if (state == 1 && old != 1 && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) G1B_Send0(self, @selector(newAppLayoutsGenCount));
+    if (state == 1 && old != 1 && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(self, @selector(newAppLayoutsGenCount));
     G1B_SUPER(void, gFilteringSuper, self, _cmd, (struct objc_super *, SEL, long long), state);
 }
 
@@ -244,12 +244,12 @@ static id G1B_OverrideIds_Init(id self, SEL _cmd, id sw, id strip) {
 static void G1B_OverrideIds_DidMove(id self, SEL _cmd, id parent) {
     G1B_SUPER(void, gOverrideIdsSuper, self, _cmd, (struct objc_super *, SEL, id), parent);
     // 16.2: [self newContinuousExposeIdentifiersGenerationCount]. 16.0 has no such selector: invalidate through the closest equivalent.
-    if (parent && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) G1B_Send0(self, @selector(newAppLayoutsGenCount));
+    if (parent && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(self, @selector(newAppLayoutsGenCount));
 }
 static void G1B_OverrideIds_SetState(id self, SEL _cmd, long long state) {
     if (state == 1 && G1B_SendLL0(self, @selector(state)) != 1) {
         id parent = G1B_Send0(self, @selector(parentModifier)), del = G1B_Send0(self, @selector(delegate));
-        if ((parent || del) && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) G1B_Send0(self, @selector(newAppLayoutsGenCount));
+        if ((parent || del) && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(self, @selector(newAppLayoutsGenCount));
     }
     G1B_SUPER(void, gOverrideIdsSuper, self, _cmd, (struct objc_super *, SEL, long long), state);
 }

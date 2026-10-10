@@ -1653,7 +1653,7 @@ static long long G1C_PK_Cfg(id s, SEL c) { return gPeekCfgOff < 0 ? 0 : *(long l
 static id G1C_PK_DebugChildren(id s, SEL c) { id m = G1B_GET(s, kPkContent); return m ? @[ m ] : @[]; }
 static id G1C_PK_Ensure(id s, SEL c, id e) { return @[]; }
 static void G1C_PK_SetState(id self, SEL _cmd, long long st) {
-    if (st == 1 && G1B_SendLL0(self, @selector(state)) != 1 && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) G1B_Send0(self, @selector(newAppLayoutsGenCount));
+    if (st == 1 && G1B_SendLL0(self, @selector(state)) != 1 && [self respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(self, @selector(newAppLayoutsGenCount));
     G1B_SUPER(void, gPeekSuper, self, _cmd, (struct objc_super *, SEL, long long), st);
 }
 static id G1C_NewInvalidateAdjusted(void) {
