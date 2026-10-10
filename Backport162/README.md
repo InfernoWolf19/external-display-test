@@ -39,7 +39,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 | feature | what it ports | switch |
 |---|---|---|
 | group1c | AppSwitcher / InlineAppExpose / HomeScreen Continuous Expose modifiers, window drag (+ destination, root), Root floor / gesture factories, peek family, app drag-and-drop gesture family, grid swipe-up / slide / cycle / strip reveal and overflow transactions, ToHome and AppToApp / SwitcherToApp transitions, grabber and orientation producers | `group1c` |
-| g1c_piles | the pile layout of the app switcher (card frames / scales / fitted size as in 16.2, spec marks the arithmetic UNSURE); off = the 16.0 layout maths | `g1c_piles` |
+| g1c_piles | OPT-IN (create `Backport162.on.g1c_piles`): the pile layout of the app switcher. Incomplete (role frames not ported), so it is off by default | `g1c_piles` |
 
 ### Group 2: layout data [G2.x, G2B.m]
 

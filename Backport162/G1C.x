@@ -2945,7 +2945,7 @@ static id G1C_NewHomeModifier(void) {
 static Class gAsParent, gAsCls;
 static char kAsCalc, kAsToken;
 
-static BOOL G1C_PilesOn(void) { return G1C_ON() && BP_On(F_G1C_PILES); }     // INTEGRATION: runtime switch, on by default (user directive); the spec's compile-time default was 0
+static BOOL G1C_PilesOn(void) { return G1C_ON() && BP_On(F_G1C_PILES); }     // opt-in (Backport162.on.g1c_piles): review B2 - the 16.0 role frames (frameForLayoutRole:...withBounds:) are not ported, so windows land off their cards
 static BOOL G1C_As_Handles(id self, const char *iv) {
     Ivar v = class_getInstanceVariable(object_getClass(self), iv);
     return v ? G1C_IvarBool(self, iv) : YES;
@@ -3095,7 +3095,7 @@ static id G1C_As_Tap(id self, SEL _cmd, id event) {                             
     return G1B_AppendTo(p, r);
 }
 static id G1C_As_HeaderTap(id self, SEL _cmd, id event) {                        // 0x1c780fa84
-    id r = G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL, id), event);
+    id r = G1B_HasSuper(gAsParent, _cmd) ? G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL, id), event) : nil;   // not in 16.0
     if (!G1C_ON() || !event || !G1C_IvarBool(self, "_bp_handlesHeaderTap") || (G1C_Resp(event, @selector(isHandled)) && G1B_SendB0(event, @selector(isHandled)))) return r;
     id layout = G1B_Send0(event, @selector(appLayout));
     id item = (layout && G1C_Resp(layout, @selector(itemForLayoutRole:))) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), G1B_SendLL0(event, @selector(layoutRole))) : nil;
@@ -3269,7 +3269,10 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
         }
         case 3: {
             if (!exposeID) {
-                if (floor && [floor isKindOfClass:fsC] && toAL && G1C_Resp(floor, @selector(fullScreenAppLayout)) && [G1B_Send0(floor, @selector(fullScreenAppLayout)) isEqual:toAL]) return floor;
+                NSString *amb = G1C_Resp(event, @selector(ambiguouslyLaunchedBundleIDIfAny)) ? G1B_Send0(event, @selector(ambiguouslyLaunchedBundleIDIfAny)) : nil;
+                NSString *pile = (floor && G1C_Resp(floor, @selector(appPileBundleIDToBringForwardIfAny))) ? G1B_Send0(floor, @selector(appPileBundleIDToBringForwardIfAny)) : nil;
+                if (floor && [floor isKindOfClass:fsC] && toAL && G1C_Resp(floor, @selector(fullScreenAppLayout)) && [G1B_Send0(floor, @selector(fullScreenAppLayout)) isEqual:toAL]
+                    && (pile == amb || [pile isEqualToString:amb])) return floor;
                 id fs = toAL ? G1C_NewFullScreenModifier(toAL) : nil;
                 if (!fs) return %orig;
                 if (floor && [floor isKindOfClass:fsC]) {                                                  // carry the highlight sets
@@ -3278,6 +3281,9 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
                     if (t && [fs respondsToSelector:@selector(setHighlightedByTouchAppLayouts:)]) G1B_SendV1(fs, @selector(setHighlightedByTouchAppLayouts:), t);
                     if (h && [fs respondsToSelector:@selector(setHighlightedByHoverAppLayouts:)]) G1B_SendV1(fs, @selector(setHighlightedByHoverAppLayouts:), h);
                 }
+                if ([fs respondsToSelector:@selector(setAppPileBundleIDToBringForwardIfAny:)]) G1B_SendV1(fs, @selector(setAppPileBundleIDToBringForwardIfAny:), amb);
+                if (floor && [fs respondsToSelector:@selector(setFullScreenAppDisplacementState:)] && G1C_Resp(floor, @selector(fullScreenAppDisplacementState)))
+                    G1B_SendVLL(fs, @selector(setFullScreenAppDisplacementState:), G1B_SendLL0(floor, @selector(fullScreenAppDisplacementState)));
                 return fs;
             }
             Class inl = gInlCls ?: gInlParent;
@@ -3337,8 +3343,7 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     id r = %orig;
     if (G1C_ON() && event && G1C_Resp(event, @selector(isContinuousExposeWindowDragEvent)) && G1B_SendB0(event, @selector(isContinuousExposeWindowDragEvent))
         && G1B_SendLL0(event, @selector(phase)) != 1 && [self respondsToSelector:@selector(_updateFloorModifierWithGestureEvent:)]) {
-        id extra = G1B_Send1(self, @selector(_updateFloorModifierWithGestureEvent:), event);
-        if (extra && [extra isKindOfClass:NSClassFromString(@"SBSwitcherModifierEventResponse")]) r = G1B_AppendTo(extra, r);
+        G1B_SendV1(self, @selector(_updateFloorModifierWithGestureEvent:), event);       // void in 16.0
     }
     return r;
 }
@@ -3415,8 +3420,9 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     id orig = %orig;
     if (!G1C_ON() || !event) return orig;
     if (G1C_Resp(event, @selector(isiPadOSWindowingModeChangeEvent)) && G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent))) return nil;    // the iPadOS platform modifier handles it
-    if (!orig || !G1B_SendB0(event, @selector(isAnimated)) || (G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated)))) return orig;
+    if (!G1B_SendB0(event, @selector(isAnimated)) || (G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated)))) return orig;
     long long f = G1B_SendLL0(event, @selector(fromEnvironmentMode)), t = G1B_SendLL0(event, @selector(toEnvironmentMode));
+    if (!orig && !(f == 2 && t == 1)) return orig;      // 16.0 returns nil only for animated non-gesture 2->1 (the SwitcherDismissFix case): fill just that one
     id tid = G1C_Resp(event, @selector(transitionID)) ? G1B_Send0(event, @selector(transitionID)) : nil;
     id n = nil;
     if (f == 2 && t == 3) n = G1C_NewSwitcherToApp(tid, 0);

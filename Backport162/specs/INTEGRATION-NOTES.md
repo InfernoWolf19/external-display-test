@@ -47,3 +47,8 @@ Order in the %ctor: BP2B_Early, %init (group 4 scale/autohost/blank), BP4_Instal
 * Backport162 0.6.0: GitHub Actions run 38035131269 green, artifact `Backport162-146ae50` (commit 146ae50).
 * Backport162BBD 0.6.0: run 38034809865 green, artifact `Backport162BBD-4521d91`.
 * The temporary all-errors diagnostic workflow (`diag-backport162.yml`, `make -k`) was used during integration and has been removed.
+
+
+## Review 0.6.0 corrections
+* G1C and SwitcherDismissFix use different class names (SDF... vs SB...), they coexist. With the B3 fix the Root hook now fills the 2->1 nil case itself, so SwitcherDismissFix may be removed; keeping it is harmless.
+* `g1c_piles` is now opt-in (review B2). See specs/REVIEW-0.6.0-{A,B,C}.md.

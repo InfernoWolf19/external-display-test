@@ -135,3 +135,66 @@ Other gesture types: 1, 10, 11, 12 -> `%orig`; 7 -> DnD root, 9 -> BP162 window 
 
 ### B7. MINOR - `_updateFloorModifierWithGestureEvent:` is void in 160
 160 0x1c61e8e1c ends with `ldr x0,[sp,#8]; b _objc_release` (returns whatever x0 holds, the floor). G1C.x:3340 does `id extra = G1B_Send1(...)` (ARC retains it) and then `isKindOfClass:` on it; with the observed code x0 is the live floor modifier, so it is ignored. Fragile; use a `void` cast and drop the append. Also confirmed: stock `SBFluidSwitcherRootSwitcherModifier handleGestureEvent:` calls it only at phase 1 (0x1c61e7afc), so the phase!=1 call added by G1C is NOT a double application. 70%.
+
+---------------------------------------------------------------------------------------------------
+
+## Checklist 5: `g1c_piles`   (B2)
+
+### B2. WRONG-BEHAVIOUR, default ON - pile layout is internally inconsistent and mostly in the wrong place
+What is overridden (G1C.x:3033-3070, 3196): `frameForIndex:`, `scaleForIndex:`, `_fittedContentSize`, `_indexOfAppLayoutInItsPile:`, `opacityForLayoutRole:...`, `_defaultCardScale`, `snapshotScaleForAppLayout:` (all gated by `G1C_PilesOn()`; with piles off every one is `[super]`, so the switch is an exact pass-through for these). What is NOT overridden:
+1. `frameForLayoutRole:inAppLayout:withBounds:`. 160 (0x1c636a5a8) takes `[super frame]` and then shifts every window by `((containerBounds.w - boundingBox.w)/2, containerBounds.h - boundingBox.h)` (0x1c636a72c-0x1c636a758), i.e. it positions windows on a CONTAINER-SIZED canvas. 162 (0x1c780fe84) instead places each window at `compactedCenterForItem - compactedBoundingBox.origin` with `sizeForItem:` (card canvas = compacted bounding box). G1C makes the card canvas the compacted box (G1C.x:3003-3007: `sz = compactedBoundingBox.size`) but keeps the 160 role frames, so windows are displaced by up to (cb - bb) toward the right/bottom of a smaller card (partially outside, overlapping neighbours; clipping depends on the item container). 70%.
+2. 160 private geometry that other 160 methods still use: `_frameForIndex:ignoringScrollOffset:` (0x1c636c5b0) calls `_fittedContentSize`, `_scaledCardSize`, `_horizontalSpacing`, `_contentSize`; `visibleAppLayouts`/`_isIndexVisible:`/`contentOffsetForIndex:alignment:`/`visibleSpaceRangeForContentOffset:` use those, not the pile frames. A different fitted size + different card positions means the visible set and scroll limits are computed for the OLD layout: cards missing (blank) or unreachable by scrolling.
+3. `frameForIndex:` scroll handling is right (160 0x1c636a55c passes the flag that subtracts `scrollViewContentOffset`, 162 0x1c780fe78 does the same), so no double scroll. PASS.
+Where the pile modifier is used (see checklist 1): only the swipe-up gesture root (G1C.x:3324), the peek content (:1554) and DnD content (:2134). The real switcher floor is the stock modifier from `multitaskingModifierForEvent:`, so with piles ON the swipe-up-from-switcher transition starts from a pile layout while the screen shows the stock grid: a visible jump at gesture end. Piles never appear in the persistent switcher at all.
+Degenerate inputs (no crash found): empty id list -> `frames` empty -> `[super]` frames but `fitted = (2*hEdge, h)` (G1C.x:3017-3022) which the 160 math then uses; `compactedBoundingBox` zero (model not produced by the ported controller) -> every card `continue`s (G1C.x:3003) with the same tiny fitted size; division guarded (`sz.height <= 0`, `rows >= 1`, `b.size.height == 0`); negative `cardH` when `switcherViewBounds` is zero gives negative scales but no NaN. `ids` from `continuousExposeIdentifiersInSwitcher` must be NSArray/NSOrderedSet (an NSSet would raise unrecognized `array`).
+Recommended safe default: make `g1c_piles` opt-in (needs `Backport162.on.g1c_piles`), and port item 1 before turning it on.
+```diff
+--- a/Backport162/Tweak.x
+ static const BOOL kOptIn[F_COUNT] = {
+-    [F_G1B_APPTOAPP] = YES, [F_G3BOOTORIENT] = YES, ...
++    [F_G1B_APPTOAPP] = YES, [F_G1C_PILES] = YES, [F_G3BOOTORIENT] = YES, ...
+```
+and add to the BP162 AppSwitcher method table an override equivalent to 162 0x1c780fe84 (when `G1C_PilesOn()`): `center = [model compactedCenterForItem:item] - [model compactedBoundingBox].origin; size = [model sizeForItem:item]; return UIRectCenteredAboutPointScale(SBRectWithSize(size), center, screenScale)`.
+
+## Checklist 6: stacked hooks   (PASS with notes)
+
+Stacked on the same method (install order = Setup order: G4 -> G1B -> G2 -> G2B -> G1C -> G3 -> G3B -> G4B; the LAST installed is outermost):
+* VC `_updateContinuousExposeIdentifiersTransitioningFromAppLayout:toAppLayout:animated:`: G2B hook (`%orig` then derive lists) is inner, G1C hook is outer and never calls `%orig` when active (G1C.x:781-818); when inactive it calls `%orig` = G2B -> stock. No double application. G1C replacement dispatches the ids event ALWAYS (160 only when animated, 0x1c5fde244); the only 160 handlers are the Root (replaced), Cycle (hooked, checks `isAnimated`), Slide (160 class no longer created), base. PASS.
+* VC `_performEventResponse:`: G1B_VC, G1B_VCInvalidate (+ any later) are independent %orig chains. PASS.
+* `SBItemResizeGestureSwitcherModifier _responseForSceneSizeUpdateToSize:...`: G1C adds a child orientation response (type 38 class `SBSetInterfaceOrientationFromUserResizing...`), G3B wraps. Both reach the delegate `setInterfaceOrientationFromUserResizing:forDisplayItem:` with the same orientation: idempotent, extra work only. MINOR.
+* Root `transitionModifierForMainTransitionEvent:` (G1C) over SDF's hooks on the superclass: see B3. PASS (no recursion).
+* Root `handleEvent:` hook adds a Root override of `SBChainableModifier -handleEvent:` (inherited); MSHookMessageEx adds the method and returns the super IMP as `%orig`. PASS.
+* `Reveal*` methods replaced by `class_replaceMethod` (B8) are not stackable with `%orig`, but nobody else hooks that class.
+
+## Checklist 7: SwitcherDismissFix 0.3.0   (B3, B9)
+
+SDF hooks `SBFullScreenFluidSwitcherRootSwitcherModifier` and `SBMainSwitcherRootSwitcherModifier`, fills a nil `orig` for animated, non-gesture 2->1, wraps in `SDFContinuousExposeToHomeSwitcherModifier` (different class name from G1C's `SBContinuousExposeToHomeSwitcherModifier`, so `G1B_MakeClass`'s existing-class shortcut never triggers; INTEGRATION-NOTES is wrong, B9). Order on the CE root: G1C hook -> CE root original -> `[super transitionModifierForMainTransitionEvent:]` (0x1c637159x tail) -> SDF hook -> SDF wrapper -> back in G1C: non-nil, animated, non-gesture, 2->1 -> replaced by G1C's own wrapper. SDF's object is created (incl. `[[root multitaskingModifier] copy]`, one child) and dropped: wasted work, no crash, no double effect. Without SDF, 2->1 gets NO animation (B3). Recommendation: keep SDF installed until B3 is fixed; document it.
+
+## Checklist 8: threading / ARC / lifetimes / nil guards / off switches   (PASS with notes)
+
+* All modifier code runs on the main thread (SpringBoard switcher). `BP_On` takes a mutex and a `clock_gettime` per call; it is called from per-index queries (frameForIndex, scaleForIndex, opacity ... x layouts x frames): small constant cost, no deadlock (no re-entrancy into BP_On under the lock). MINOR perf only.
+* Associated objects use RETAIN_NONATOMIC and are released with the owner; keys are file-static chars. Runtime scalar ivars are plain memory in the instance. `[ce copy]` / `copyWithZone:` of runtime classes: the base copy is `alloc/init` so per-instance state (associated objects, ivars) is NOT copied; BP162 AppSwitcher flags are reset by its own `init` (YES), ToHome/AppToApp etc. are never copied. `G1B_HeaderEv_Copy`/Tongue copy are dead.
+* Init functions that return nil after `alloc` without calling `[super init]` (e.g. `G1C_A2A_Init`, `G1B_Filtering_Init`): ARC releases an uninitialised `SBChainableModifier`, whose `dealloc`/`.cxx_destruct` only touch nil ivars (`_queryCache` nil). PASS.
+* No `@try`; all private selectors are guarded by `respondsToSelector:` / `class_getInstanceMethod` EXCEPT the three unguarded `[super]` cases (B1 context for 10 query selectors, B5).
+* Off switches: `BP_On` is evaluated per call. `Backport162.off` (global) and `off.group1b` make every G1B hook a pass-through (checked: all hooks begin with `G1B_ON()` or equivalent; class building and `class_addMethod` of the event-flag setters still happen but are inert). `off.group1c`: every Root/VC/Cycle/Txn hook checks `G1C_ON()`; the exception is B8. `off.g1c_piles`: exact pass-through for the overridden pile methods. BP162 run-time classes remain registered but are only reachable through G1C factories, which are all inside gated hooks (G1C_ON() false -> `%orig` -> stock classes). `shouldUseWallpaperGradientTreatment` hook returns YES, identical to 160 (0x1c637277c `mov w0,#1`). PASS.
+* A toggle of an off file takes effect mid-session (1 s cache): a gesture started with G1C on and finished with it off mixes classes; not a crash.
+
+### B5. MINOR (latent CRASH) - unguarded `[super handleTapAppLayoutHeaderEvent:]`
+G1C.x:3097 `G1C_As_HeaderTap` -> `G1B_SUPER(..., gAsParent, self, _cmd, ...)`. `SBSwitcherModifier` has no `handleTapAppLayoutHeaderEvent:` in 160 (162 added it, sb162_objc `SBSwitcherModifier - handleTapAppLayoutHeaderEvent:`), and G1B adds none. It would be reached by `_handleEvent:` type 37, which nothing emits today. Patch: `id r = G1B_HasSuper(gAsParent, _cmd) ? G1B_SUPER(...) : nil;` (same as G1B_Pulse_HandleHeader).
+
+### B8. MINOR - replaced Reveal methods ignore the off switch
+G1C.x:1060-1070: `G1C_AddLike(c, "handleGestureEvent:", ..., YES)` (replace) plus added `handleTransitionEvent:`, `cornerRadiiForIndex:`, `shadowOpacityForLayoutRole:atIndex:`, `animationAttributesForLayoutElement:` on `SBRevealContinuousExposeStripsGestureModifier` run unconditionally, so `Backport162.off.group1c` does not restore the 160 strip-reveal pan (threshold 0.5 of 100 pt, `setState:1` at end). Patch: capture the old IMP with `class_replaceMethod` and have each new IMP call it when `!G1C_ON()`.
+
+### B9. MINOR - documentation
+INTEGRATION-NOTES says G1C and SwitcherDismissFix share `SBContinuousExposeToHomeSwitcherModifier`; SDF names its class `SDFContinuousExposeToHomeSwitcherModifier`. Also "remove SwitcherDismissFix" must wait for B3.
+
+---------------------------------------------------------------------------------------------------
+
+## Final ranking
+
+1. B1 CRASH (65%): the ten 16.2-only query selectors have no implementer in 160; G1C's ids hook and several G2/G2B call sites send them through the chain whenever the extended protocol is active (default). Fix before shipping; cheapest safe mitigation: treat `respondsToSelector:` as insufficient and check for a real overrider, or add default IMPs to the stock leaf classes.
+2. B2 WRONG-BEHAVIOUR (70%): set `g1c_piles` opt-in until `frameForLayoutRole:` is ported; the pile modifier is not even used by the real switcher.
+3. B3 WRONG-BEHAVIOUR (90%): ToHome never fills nil; keep SDF or fix the hook.
+4. B4 WRONG-BEHAVIOUR (85%): FullScreen floor loses pile bring-forward/displacement state.
+5. B6 (40%), B7 (70%), B8 (90%), B5 (95%, latent), B9.
+Cross-checks that PASSED: class creation order, ivar alignment and ARC handling of parent ivars, `_handleEvent:` and `_performEventResponse:` out-of-range handling, Routing delegate completeness, all `%hook` targets exist in 160, VC ids hook equals stock when Stage Manager is off, `_effectiveEnvironmentMode` fix matches 162 (0x1c7819cb8 vs 160 0x1c6372a88), `floorModifierForGestureEvent:` pass-through equals 160 (`b floorModifier`).
