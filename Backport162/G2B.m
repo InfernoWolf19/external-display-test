@@ -2324,8 +2324,9 @@ static void BP2B_InstallQueryDefaults(void) {
     BP2B_DEF("canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
     BP2B_DEF("activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
     BP2B_DEF("inactiveAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
-    BP2B_DEF("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16", ^id(id me, id a) { return a; });
-    BP2B_DEF("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24", ^id(id me, id a, id b) { return a; });
+    // nil = "nobody computes the list": callers (G1C_AskRootIds) then fall back to the group 2 list builders. Returning the previous list here froze the strip/switcher empty (0.6.1 device report).
+    BP2B_DEF("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16", ^id(id me, id a) { return nil; });
+    BP2B_DEF("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24", ^id(id me, id a, id b) { return nil; });
 #undef BP2B_DEF
 }
 
