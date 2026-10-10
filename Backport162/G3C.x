@@ -89,6 +89,8 @@ static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
     if (!prev || ![prev respondsToSelector:polS]) return attrs;
     long long newPolicy = ((long long (*)(id, SEL))objc_msgSend)(attrs, polS);
     long long prevPolicy = ((long long (*)(id, SEL))objc_msgSend)(prev, polS);
+    { CGSize sn = CGSizeZero; BOOL okn = G3C_ReadSize(attrs, &sn);
+      BP_Log(@"[g3c] setRequestedLayoutAttributes while armed: prevPolicy %lld newPolicy %lld size %s{%g, %g} fullSize %d", prevPolicy, newPolicy, okn ? "" : "(unreadable) ", sn.width, sn.height, G3C_IsFullSize(attrs)); }
     // leaving maximized / zoomed-to-fill for snap-to-grid (policy 0) while the stored size is still the whole container
     if (newPolicy != 0 || prevPolicy == 0 || !G3C_IsFullSize(attrs)) return attrs;
     id out = ((id (*)(id, SEL, CGSize))objc_msgSend)(attrs, modS, CGSizeZero);   // == SBDisplayItemAttributedSizeUnspecified() in the 16.0 model
@@ -106,6 +108,7 @@ static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
 
 // 16.0 0x1c632ba50 / 16.2 0x1c77ccb6c; action type 9 = the "Zoom" (maximization) item (UIAction block 0x1c645abb8 sends 9).
 - (void)_topAffordanceViewController:(id)vc handleActionType:(long long)type transitionSource:(long long)source {
+    if (type == 9) BP_Log(@"[g3c] handleActionType 9 (Zoom) seen, switch %d", G3C_On());
     if (type == 9 && G3C_On()) gG3CArmedUntil = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + kG3CWindowNs;
     %orig(vc, type, source);
 }
