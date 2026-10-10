@@ -73,8 +73,8 @@ static BOOL G4B_OptIn(const char *name) { return BP_OptInName(name); }
 // `type`, `count` ... are declared with different return types in Foundation: message explicitly when needed.
 static inline long long G4B_LL(id obj, SEL sel) { return ((long long (*)(id, SEL))objc_msgSend)(obj, sel); }
 static inline BOOL G4B_Bool(id obj, SEL sel) { return ((BOOL (*)(id, SEL))objc_msgSend)(obj, sel); }
-static inline id G4B_Obj(id obj, SEL sel) { return ((id (*)(id, SEL))objc_msgSend)(obj, sel); }
-static inline id G4B_Obj1(id obj, SEL sel, id a) { return ((id (*)(id, SEL, id))objc_msgSend)(obj, sel, a); }
+static inline id G4B_Obj(id obj, SEL sel) { return (obj && [obj respondsToSelector:sel]) ? ((id (*)(id, SEL))objc_msgSend)(obj, sel) : nil; }
+static inline id G4B_Obj1(id obj, SEL sel, id a) { return (obj && [obj respondsToSelector:sel]) ? ((id (*)(id, SEL, id))objc_msgSend)(obj, sel, a) : nil; }
 
 // Object ivar by name (never an offset). nil if absent or not an object.
 static id G4B_Ivar(id obj, const char *name) {

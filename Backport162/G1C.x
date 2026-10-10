@@ -3386,8 +3386,11 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     if (!G1C_ON() || !event || !rootC || !gSlideCls) return %orig;
     id r = G1B_SUPER(id, class_getSuperclass(rootC), self, _cmd, (struct objc_super *, SEL, id), event);
     long long mode = G1C_Resp(self, @selector(_effectiveEnvironmentMode)) ? G1B_SendLL0(self, @selector(_effectiveEnvironmentMode)) : 0;
-    id from = G1B_Send0(event, @selector(fromAppLayout)), to = G1B_Send0(event, @selector(toAppLayout));
-    if (!G1B_SendB0(event, @selector(isAnimated)) || mode != 3 || !from || !to) return r;
+    // the identifiers-changed event names them transitioningFrom/ToAppLayout (it has no fromAppLayout/toAppLayout: the crash seen on 0.6.0 at launch)
+    if (!G1C_Resp(event, @selector(transitioningFromAppLayout)) || !G1C_Resp(event, @selector(transitioningToAppLayout))) return r;
+    id from = G1B_Send0(event, @selector(transitioningFromAppLayout)), to = G1B_Send0(event, @selector(transitioningToAppLayout));
+    BOOL animated = G1C_Resp(event, @selector(isAnimated)) ? G1B_SendB0(event, @selector(isAnimated)) : YES;
+    if (!animated || mode != 3 || !from || !to) return r;
     NSArray *prevSw = G1C_ArrayOf(G1C_Resp(event, @selector(previousContinuousExposeIdentifiersInSwitcher)) ? G1B_Send0(event, @selector(previousContinuousExposeIdentifiersInSwitcher)) : nil);
     NSArray *prevStrip = G1C_ArrayOf(G1C_Resp(event, @selector(previousContinuousExposeIdentifiersInStrip)) ? G1B_Send0(event, @selector(previousContinuousExposeIdentifiersInStrip)) : nil);
     NSArray *curStrip = G1C_ArrayOf(G1C_Resp(self, @selector(continuousExposeIdentifiersInStrip)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInStrip)) : nil);

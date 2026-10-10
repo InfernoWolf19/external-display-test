@@ -91,14 +91,15 @@ static ptrdiff_t G1B_IvarOffset(Class cls, const char *name) {
 #define G1B_GET(obj, key)      objc_getAssociatedObject((obj), &(key))
 #define G1B_SET(obj, key, val) objc_setAssociatedObject((obj), &(key), (val), OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
-// Typed message helpers (all guarded by the caller with respondsToSelector:).
-static inline id G1B_Send0(id o, SEL s)                       { return ((id (*)(id, SEL))objc_msgSend)(o, s); }
-static inline id G1B_Send1(id o, SEL s, id a)                 { return ((id (*)(id, SEL, id))objc_msgSend)(o, s, a); }
-static inline long long G1B_SendLL0(id o, SEL s)              { return ((long long (*)(id, SEL))objc_msgSend)(o, s); }
-static inline BOOL G1B_SendB0(id o, SEL s)                    { return ((BOOL (*)(id, SEL))objc_msgSend)(o, s); }
-static inline BOOL G1B_SendB1(id o, SEL s, id a)              { return ((BOOL (*)(id, SEL, id))objc_msgSend)(o, s, a); }
-static inline void G1B_SendV1(id o, SEL s, id a)              { ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
-static inline void G1B_SendVLL(id o, SEL s, long long a)      { ((void (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
+// Typed message helpers. Safe by construction: an object that does not respond to the selector yields nil / 0 / NO instead of an
+// "unrecognized selector" exception (a SpringBoard crash seen on 0.6.0 came from exactly such a send on a 16.0 event class).
+static inline id G1B_Send0(id o, SEL s)                       { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
+static inline id G1B_Send1(id o, SEL s, id a)                 { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
+static inline long long G1B_SendLL0(id o, SEL s)              { return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL))objc_msgSend)(o, s) : 0; }
+static inline BOOL G1B_SendB0(id o, SEL s)                    { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
+static inline BOOL G1B_SendB1(id o, SEL s, id a)              { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, s, a) : NO; }
+static inline void G1B_SendV1(id o, SEL s, id a)              { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
+static inline void G1B_SendVLL(id o, SEL s, long long a)      { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
 
 // SBAppendSwitcherModifierResponse(new, existing): exported by the 16.0 SpringBoard binary (nm: _SBAppendSwitcherModifierResponse).
 typedef id (*G1BAppendFn)(id newResponse, id existing);
