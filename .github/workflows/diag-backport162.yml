@@ -1,0 +1,17 @@
+name: Diag Backport162 (temporary, all compiler errors)
+on:
+  push:
+    paths: ["Backport162/**", ".github/workflows/diag-backport162.yml"]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Theos and ldid
+        run: |
+          brew install ldid dpkg
+          git clone --recursive https://github.com/theos/theos.git "$HOME/theos"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+      - name: Compile everything, keep going
+        working-directory: Backport162
+        run: make -k -j4 FINALPACKAGE=1 ARCHS=arm64e || true

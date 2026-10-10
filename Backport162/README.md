@@ -7,28 +7,110 @@ Needs ExtendedDisplayEnabler for the external display features.
 - `CLASS_DELTA_NAMES.txt`: classes/methods added or removed in 16.2.
 - `specs/`: reconstructed 16.2 behaviour per class, and findings per group.
 
-## Features in this build (0.5.1, group 4 / external display) — everything is on by default
+## Features in this build (0.6.0) — everything is on by default
 
-| feature | what it ports |
-|---|---|
-| `scale` | per-axis clamp of the external display's logical scale to the monitor's supported range |
-| `autohost` | keyboard arbiter scene is not auto-hosted on the external display when the input system UI is off |
-| `blank` | with the iPad screen off, the external display is also really blanked (monitor can sleep); a mouse click on it wakes the iPad. The 16.0 black window stays as a fallback |
-| `provmap` | (Group4Connect.m) on disconnect the display provider drops its controller entry, so a quick unplug/replug does not trip the "one controller per physical display" assertion |
-| `disconnect` | (Group4Focus.x) unplug handling like 16.2: window scene gets an invalidating/invalidated state, keyboard focus is not re-evaluated mid-teardown (needs `on.directhook` for the full effect), the focus controller really handles `windowSceneDidDisconnect:`, the cover sheet observer is released, and the active display falls back to the iPad's scene while a display is going away |
+0.6.0 integrates the reconstruction packages (groups 1b, 1c, 2, 2b, 3, 3b, 4b) on top of the 0.5.x external-display work. A feature is switched off with the file `<jbroot>/tmp/Backport162.off.<switch>`; everything with `<jbroot>/tmp/Backport162.off`. Features marked **opt-in** are off until `<jbroot>/tmp/Backport162.on.<switch>` exists (only diagnostics and pieces the specs mark as conflicting). The tweak does nothing on any build but 20A8372. Source file in brackets.
 
-Nothing is opt-in: every feature below is on unless its `Backport162.off.<name>` file exists. Extra features beyond the table: `nowindow` (no black blanking window, like 16.2), `activedisplay` (active display follows touch/pointer instead of the keyboard), `gesturegate` (Control Center / switcher gestures that began on another display are rejected), `discswitch` (call the switcher coordinator on unplug even when the display configuration is already gone), `directhook` (hook the focus controller's private re-evaluation function so suppression really freezes focus changes; verified against the 20A8372 prologue bytes before patching), `nilock`, `discguard`, `covernote` (Group4Connect.m).
-ExtendedDisplayEnabler already provides the 16.2 extended-versus-mirror decision on connect and the mirroring toggle fix. Group4Connect.m contains ports of both (`autoext`, `mirrorsvc`) but they are deliberately NOT installed: they would override the choice ExtendedDisplayEnabler saves.
+### Group 4: external display (0.5.x) [Tweak.x, Group4Connect.m, Group4Focus.x]
+
+| feature | what it ports | switch |
+|---|---|---|
+| scale | per-axis clamp of the external display's logical scale to the monitor's supported range | `scale` |
+| autohost | keyboard arbiter scene is not auto-hosted on the external display when the input system UI is off | `autohost` |
+| blank | with the iPad screen off the external display is really blanked (monitor can sleep); a click wakes the iPad | `blank` |
+| nowindow | no black blanking window, like 16.2 (`off.nowindow` brings the 16.0 window back as a fallback) | `nowindow` |
+| provmap | display provider drops its controller entry on disconnect (quick unplug/replug) | `provmap` |
+| disconnect | 16.2 unplug handling in the focus controller / cover sheet observer | `disconnect` |
+| discswitch | switcher coordinator is called on unplug even when the configuration is already gone | `discswitch` |
+| activedisplay | active display follows touch/pointer instead of the keyboard | `activedisplay` |
+| gesturegate | Control Center / switcher gestures that began on another display are rejected | `gesturegate` |
+| directhook | hook of the focus controller's private re-evaluation function (needs a respring after creating its off file) | `directhook` |
+| nilock, discguard, covernote | Group4Connect.m extras | `nilock` `discguard` `covernote` |
+
+### Group 1b: Stage Manager modifier / event / response classes [G1B.x, G1BKit.h]
+
+| feature | what it ports | switch |
+|---|---|---|
+| group1b | event types 36/37/38 dispatch, Filtering / OverrideContinuousExposeIdentifiers / Pulse modifiers, tap-header / pointer-crossed / strip-tongue events, edge-protect grabber and invalidate-identifiers responses, FullScreenToStrip + Crossblur transitions, iPadOS window mode change, drag-and-drop-to-app transition, Root `_effectiveEnvironmentMode` | `group1b` |
+| group1b.apptoapp | **opt-in**: the 4.8 AppToApp transition hook (group 1c's Root replaces that class, so it stays off) | `group1b.apptoapp` |
+
+### Group 1c: 16.2 rewrites of the Stage Manager modifiers [G1C.x]
+
+| feature | what it ports | switch |
+|---|---|---|
+| group1c | AppSwitcher / InlineAppExpose / HomeScreen Continuous Expose modifiers, window drag (+ destination, root), Root floor / gesture factories, peek family, app drag-and-drop gesture family, grid swipe-up / slide / cycle / strip reveal and overflow transactions, ToHome and AppToApp / SwitcherToApp transitions, grabber and orientation producers | `group1c` |
+
+### Group 2: layout data [G2.x, G2B.m]
+
+| feature | what it ports | switch |
+|---|---|---|
+| group2 | SBSwitcherLayoutCalculationsCache 16.2 API and 5-argument token, VC context selectors (identifiers in strip / switcher, generation count, layout restriction info), SBChamoisOverlappingModel extras, `BP162ChamoisOverlappingController`, Chamois attributes / settings, SBAppLayout `continuousExposeIdentifier`, container renames | `group2` |
+| g2b | umbrella of group 2b: attributed size / normalized center emulation, 16.2 `_layoutAppLayout:roleMask:completion:`, calculator hook + post-layout fixer, tap event, shift-select, gesture-manager renames, tongue view | `g2b` |
+| g2bproto | verified extended switcher-modifier protocols (`BP2B_Early`, crash-loop breadcrumb; auto-disables itself after a crash) | `g2bproto` |
+| g2blayout | `_layoutAppLayout` replacement and calculator hook | `g2blayout` |
+| g2bkeys | keyboard navigation and selection | `g2bkeys` |
+| g2baperture | system aperture suppression | `g2baperture` |
+| g2btongue | strip tongue view hosting | `g2btongue` |
+| cgregion | use CoreGraphics `CGRegion*` SPI (off: the built-in region fallback) | `cgregion` |
+
+### Group 3: scene / window plumbing [G3.x]
+
+| feature | what it ports | switch |
+|---|---|---|
+| g3handle | scene-handle orientation state, user-resize orientation hooks | `g3handle` |
+| g3snapshot | snapshot hosting-info refresh when a scene view moves to another window | `g3snapshot` |
+| g3topaff | top-affordance highlight with several displays, refresh on Stage Manager toggle | `g3topaff` |
+| g3switcher | "will change window management style" gesture cancel and notification | `g3switcher` |
+| g3canvas | relayout on canvas size change (pairs with `scale`) | `g3canvas` |
+| g3embedded | SystemApp scene `enhancedWindowingEnabled` sync | `g3embedded` |
+| g3bootorient | **opt-in**: SpringBoard starts in the panel's boot rotation | `g3bootorient` |
+
+### Group 3b: reconstruction of the non-portable plumbing [G3B.x]
+
+| feature | what it ports | switch |
+|---|---|---|
+| g3b_banner | system banner types 2/3, action 0x15 | `g3b_banner` |
+| g3b_menu | top-affordance menu changes | `g3b_menu` |
+| g3b_pip | PiP per display, stash-tab suppression | `g3b_pip` |
+| g3b_kbwindow | per-scene hosted keyboard window controller | `g3b_kbwindow` |
+| g3b_statusbar | status bar `options:`, per-display frontmost status bar | `g3b_statusbar` |
+| g3b_orient | user-resize orientation chain, content / container orientation, overlay classes | `g3b_orient` |
+| g3b_grid | orthogonal fixed-aspect grids | `g3b_grid` |
+| g3b_guide | SBSwitcherTraitsAssistant guide | `g3b_guide` |
+| g3b_split | split-view orientation | `g3b_split` |
+| g3b_preflightlog | **opt-in**: log of the privacy-preflight decision (the PDCPreflightManager gate itself does not exist in 16.0) | `g3b_preflightlog` |
+| g3b_axroles | **opt-in**: AX / Eyedropper / Moments traits roles | `g3b_axroles` |
+
+### Group 4b: reconstruction of external-display extras [G4B.x, Backport162BBD/]
+
+| feature | what it ports | switch |
+|---|---|---|
+| clonemirror | per-display clone mirroring mode (client side; the daemon side is the optional Backport162BBD package) | `clonemirror` |
+| edu | external-display education session / pill / observer | `edu` |
+| edunative | **opt-in**: native alert instead of the SpringBoardEducation remote alert | `edunative` |
+| presubset | `boundPointerUIScenes` subset + policy presentation update | `presubset` |
+| deferact | 100 ms deferred activation of external-display assertions | `deferact` |
+| lockedptr2 | per-window-scene SBLockedPointerManager, `_UIPointerUnlockAction` (replaces the removed 0.5.0 `lockedptr`) | `lockedptr2` |
+| migrate | windows move to the iPad on unplug | `migrate` |
+| focuslock | per-display focus-lock reasons | `focuslock` |
+| arrange | `activeDisplayTrackingMethodology`, display arrangement item, `preferredArrangementOfDisplay:relativeTo:` | `arrange` |
+| methodology0 | **opt-in**: keyboard-following active display instead of the pointer-following default | `methodology0` |
+
+### Backport162BBD (second package)
+
+`Backport162BBD/` is a separate tweak that runs inside backboardd (filter `backboardd`, arm64e): the daemon side of `clonemirror` (new MIG routines on the BackBoard display service and a per-display override in `updateClone`). Optional; reboot userspace after installing. Log lines are prefixed `g4b-bbd`.
+
+### Notes
+
+* SwitcherDismissFix 0.3.0 ports one class that group 1c also builds (`SBContinuousExposeToHomeSwitcherModifier`); whichever loads first creates it. Remove SwitcherDismissFix when you test this build.
+* ExtendedDisplayEnabler already provides the 16.2 extended-versus-mirror decision on connect and the mirroring toggle fix. Group4Connect.m contains ports of both (`autoext`, `mirrorsvc`) but they are deliberately NOT installed.
+* A switch for a sub-piece can be created while running (hooks re-check once a second); pieces that are installed at launch (class creation, `directhook`, `g2bproto`) need a respring.
 
 ## Switches (under the jailbreak root, i.e. `/var/jb/tmp/...`)
 
-- `Backport162.off` disables everything; `Backport162.off.<feature>` disables one feature (`scale autohost blank disconnect discswitch activedisplay gesturegate lockedptr nowindow directhook` and, from Group4Connect.m, `provmap nilock discguard covernote`). Hook behaviour is checked at most once a second, no respring needed; `nilock` and `directhook` are installed at launch, so those two need a respring after creating their `.off` file.
+- `Backport162.off` disables everything; `Backport162.off.<feature>` disables one feature (names in the tables above). Hook behaviour is checked at most once a second, no respring needed; `nilock` and `directhook` are installed at launch, so those two need a respring after creating their `.off` file.
 - `Backport162.debug` turns logging on (`Backport162.log`, rotated at 256 KiB). Logging is off by default.
 - The tweak does nothing on any build other than 20A8372.
-
-## Tweaks to remove once the Stage Manager groups ship
-
-SwitcherDismissFix overlaps with the Stage Manager group (the same 16.2 class). Keep it installed until a Backport162 build says otherwise.
 
 ## Review notes (0.5.1)
 
