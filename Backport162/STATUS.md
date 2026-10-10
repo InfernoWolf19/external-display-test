@@ -45,3 +45,6 @@ Nothing in group 4 has been run on a device yet. Next: tell the user group 4 is 
 * SwitcherDismissFix 0.3.0 already ports one 16.2 Stage Manager class (SBContinuousExposeToHomeSwitcherModifier); remove it once the Stage Manager group ships.
 * Tools and how to rebuild the caches: `tools/README.md`. Worklist of changed methods: `WORKLIST.md`. Class-level delta: `CLASS_DELTA_NAMES.txt`.
 * CI: `.github/workflows/build-backport162.yml`, artifact `Backport162-<short sha>`.
+
+## 0.6.0 state (latest)
+All seven packages are integrated (see specs/INTEGRATION-NOTES.md). CI green: Backport162 `Backport162-a23405d`, BBD `Backport162BBD-4521d91`. Independent adversarial review launched in three areas (A launch/layout core, B G1B/G1C, C G3/G3B/G4B/BBD); reports go to specs/REVIEW-0.6.0-{A,B,C}.md. Next: fix confirmed CRASH/WRONG-BEHAVIOUR findings, rebuild on CI, hand over with UNSURE list; tell user to remove SwitcherDismissFix when testing 0.6.0.
