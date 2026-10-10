@@ -42,25 +42,35 @@
 
 #import "BP.h"
 
-static const char *const kFeatureNames[F_COUNT] = { "scale", "autohost", "blank", "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr", "nowindow", "directhook" };
-// Nothing is opt-in any more: every feature is on unless its .off file exists. (Kept as a table so one can be gated again.)
-static const BOOL kOptIn[F_COUNT] = { NO, NO, NO, NO, NO, NO, NO, NO, NO, NO };
+static const char *const kFeatureNames[F_COUNT] = {
+    "scale", "autohost", "blank", "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr", "nowindow", "directhook",
+    "group1b", "group1b.apptoapp", "group1c", "group2", "g2b", "g2bproto", "g2blayout", "g2bkeys", "g2baperture", "g2btongue", "cgregion",
+    "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas", "g3embedded", "g3bootorient",
+    "g3b_banner", "g3b_menu", "g3b_pip", "g3b_kbwindow", "g3b_statusbar", "g3b_orient", "g3b_grid", "g3b_guide", "g3b_split", "g3b_preflightlog", "g3b_axroles",
+    "clonemirror", "edu", "edunative", "presubset", "deferact", "lockedptr2", "migrate", "focuslock", "arrange", "methodology0",
+};
+// Opt-in features (need Backport162.on.<name>): the user directive is "everything on", so only features that the specs mark as
+// behaviour-neutral (diagnostic) or mutually conflicting stay opt-in.
+//   group1b.apptoapp  conflicts with group1c's replacement of the same Root class
+//   g3bootorient      boot-orientation tweak, behaviour-neutral unless asked for
+//   g3b_preflightlog, g3b_axroles   diagnostics / role registration of accessibility tools
+//   edunative         alternative native alert instead of the SpringBoardEducation remote alert
+//   methodology0      keyboard-following active display instead of the 16.2 pointer-following default
+static const BOOL kOptIn[F_COUNT] = {
+    [F_G1B_APPTOAPP] = YES, [F_G3BOOTORIENT] = YES, [F_G3B_PREFLIGHTLOG] = YES, [F_G3B_AXROLES] = YES, [F_EDUNATIVE] = YES, [F_METHODOLOGY0] = YES,
+};
 
-static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030];
-static char gFeatureOffPath[F_COUNT][1100], gFeatureOnPath[F_COUNT][1100];
-static pthread_mutex_t gMu = PTHREAD_MUTEX_INITIALIZER;
+static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030], gTmpDir[900];
+static pthread_mutex_t gMu = PTHREAD_MUTEX_INITIALIZER, gSlotMu = PTHREAD_MUTEX_INITIALIZER;
 
 static void BP_InitPaths(void) {
     NSString *tmp = ROOT_PATH_NS(@"/tmp");
     const char *t = tmp.fileSystemRepresentation;
+    snprintf(gTmpDir, sizeof gTmpDir, "%s", t);
     snprintf(gOffPath, sizeof gOffPath, "%s/Backport162.off", t);
     snprintf(gDebugPath, sizeof gDebugPath, "%s/Backport162.debug", t);
     snprintf(gLogPath, sizeof gLogPath, "%s/Backport162.log", t);
     snprintf(gLogOldPath, sizeof gLogOldPath, "%s.1", gLogPath);
-    for (int i = 0; i < F_COUNT; i++) {
-        snprintf(gFeatureOffPath[i], sizeof gFeatureOffPath[i], "%s/Backport162.off.%s", t, kFeatureNames[i]);
-        snprintf(gFeatureOnPath[i], sizeof gFeatureOnPath[i], "%s/Backport162.on.%s", t, kFeatureNames[i]);
-    }
 }
 
 // A file test, cached for one second.
@@ -73,15 +83,66 @@ static BOOL BP_FileFlag(const char *path, uint64_t *next, BOOL *last) {
 }
 static BOOL BP_Killed(void)  { static uint64_t n; static BOOL l; return BP_FileFlag(gOffPath, &n, &l); }
 static BOOL BP_Logging(void) { static uint64_t n; static BOOL l; return BP_FileFlag(gDebugPath, &n, &l); }
-static BOOL BP_FeatureOff(int f) {
-    static uint64_t n[F_COUNT]; static BOOL l[F_COUNT];
-    return BP_FileFlag(gFeatureOffPath[f], &n[f], &l[f]);
+
+// Per-name switch state, cached one second. The first F_COUNT slots belong to the enum features, further slots are made
+// on demand for sub-switches that packages check by name (a name that is also in kFeatureNames shares that slot).
+typedef struct { char name[40]; uint64_t nextOff, nextOn; BOOL off, on; } BPSlot;
+enum { kSlotMax = 160 };
+static BPSlot gSlots[kSlotMax];
+static int gSlotCount;
+
+static int BP_SlotFor(const char *name) {         // gMu held
+    if (gSlotCount == 0) {
+        for (int i = 0; i < F_COUNT; i++) snprintf(gSlots[i].name, sizeof gSlots[i].name, "%s", kFeatureNames[i] ? kFeatureNames[i] : "");
+        gSlotCount = F_COUNT;
+    }
+    for (int i = 0; i < gSlotCount; i++) if (strcmp(gSlots[i].name, name) == 0) return i;
+    if (gSlotCount >= kSlotMax) return -1;
+    snprintf(gSlots[gSlotCount].name, sizeof gSlots[0].name, "%s", name);
+    return gSlotCount++;
 }
-static BOOL BP_FeatureOn(int f) {
-    static uint64_t n[F_COUNT]; static BOOL l[F_COUNT];
-    return BP_FileFlag(gFeatureOnPath[f], &n[f], &l[f]);
+static BOOL BP_SlotOn(int i, BOOL wantOnFile) {   // gMu held; killed was checked by the caller
+    BPSlot *s = &gSlots[i];
+    uint64_t t = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    char p[1200];
+    if (t >= s->nextOff) {
+        s->nextOff = t + 1000000000ull;
+        snprintf(p, sizeof p, "%s/Backport162.off.%s", gTmpDir, s->name);
+        s->off = gTmpDir[0] && access(p, F_OK) == 0;
+    }
+    if (s->off) return NO;
+    if (!wantOnFile) return YES;
+    if (t >= s->nextOn) {
+        s->nextOn = t + 1000000000ull;
+        snprintf(p, sizeof p, "%s/Backport162.on.%s", gTmpDir, s->name);
+        s->on = gTmpDir[0] && access(p, F_OK) == 0;
+    }
+    return s->on;
 }
-BOOL BP_On(int f) { return !BP_Killed() && !BP_FeatureOff(f) && (!kOptIn[f] || BP_FeatureOn(f)); }
+BOOL BP_OnName(const char *name) {
+    if (BP_Killed()) return NO;
+    pthread_mutex_lock(&gSlotMu);
+    int i = BP_SlotFor(name);
+    BOOL r = i >= 0 ? BP_SlotOn(i, NO) : YES;
+    pthread_mutex_unlock(&gSlotMu);
+    return r;
+}
+BOOL BP_OptInName(const char *name) {
+    if (BP_Killed()) return NO;
+    pthread_mutex_lock(&gSlotMu);
+    int i = BP_SlotFor(name);
+    BOOL r = i >= 0 ? BP_SlotOn(i, YES) : NO;
+    pthread_mutex_unlock(&gSlotMu);
+    return r;
+}
+BOOL BP_On(int f) {
+    if (f < 0 || f >= F_COUNT || BP_Killed()) return NO;
+    pthread_mutex_lock(&gSlotMu);
+    if (gSlotCount == 0) (void)BP_SlotFor(kFeatureNames[0]);
+    BOOL r = BP_SlotOn(f, kOptIn[f]);
+    pthread_mutex_unlock(&gSlotMu);
+    return r;
+}
 
 void BP_Log(NSString *fmt, ...) {
     if (!BP_Logging()) return;
@@ -341,6 +402,14 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
 
 void BP4_InstallIfSupported(void);     // Group4Connect.m
 void BP_G4_Setup(void);                // Group4Focus.x
+void BP2B_Early(void);                 // G2B.x   (protocol hooks: before any message to a modifier class)
+void G1B_Setup(void);                  // G1B.x
+void BP_G2_Setup(void);                // G2.x
+void BP2B_Setup(void);                 // G2B.x
+void G1C_Setup(void);                  // G1C.x
+void BP_G3_Setup(void);                // G3.x
+void BP_G3B_Setup(void);               // G3B.x
+void G4B_Setup(void);                  // G4B.x
 
 // ---------------------------------------------------------------- entry
 
@@ -348,9 +417,19 @@ void BP_G4_Setup(void);                // Group4Focus.x
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
-        BP_Log(@"Backport162 0.5.1 loaded");
+        BP_Log(@"Backport162 0.6.0 loaded");
+        // BP2B_Early() must run before any message reaches a modifier class (+initialize of SBSwitcherModifier builds the
+        // protocol tables); nothing above this line touches those classes.
+        BP2B_Early();
         %init;
         BP4_InstallIfSupported();
-        BP_G4_Setup();
+        BP_G4_Setup();                 // group 4: external display
+        G1B_Setup();                   // group 1b: modifier/event/response classes
+        BP_G2_Setup();                 // group 2: layout data
+        BP2B_Setup();                  // group 2b: switcher view
+        G1C_Setup();                   // group 1c: modifier rewrites (its %init(G1C_VCIds) is last, after group 2b)
+        BP_G3_Setup();                 // group 3: plumbing
+        BP_G3B_Setup();                // group 3b
+        G4B_Setup();                   // group 4b
     }
 }
