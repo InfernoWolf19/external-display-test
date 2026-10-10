@@ -1094,6 +1094,23 @@ static void G1B_BuildFullScreenToStrip(void) {
 // ---- end 2.1 / 2.2
 
 // ============================================================================================================
+// Stock assertion removed: "Can't handle an event that has already been handled." (NSInternalInconsistencyException).
+// With the ported modifiers more than one modifier of the chain can see the same event (device crash: highlight event reaching
+// SBFullScreenContinuousExposeSwitcherModifier after another modifier handled it, hover/three-dots menu). A second handling is ignored.
+// ============================================================================================================
+%group G1B_Handled
+%hook SBChainableModifierEvent
+- (void)handleWithReason:(id)reason {
+    if ([self respondsToSelector:@selector(isHandled)] && ((BOOL (*)(id, SEL))objc_msgSend)(self, @selector(isHandled))) {
+        BP_Log(@"event %@ already handled, ignoring second handleWithReason:%@", NSStringFromClass([self class]), reason);
+        return;
+    }
+    %orig;
+}
+%end
+%end
+
+// ============================================================================================================
 // 2.4  SBiPadOSWindowModeChangeTransitionModifier  (PORTABLE: new class + creator hook; needs 2.0 flags)
 // ============================================================================================================
 static Class gWinModeCls;
@@ -1249,6 +1266,7 @@ void G1B_Setup(void) {
     G1B_BuildWindowModeChange();
     G1B_BuildDndToApp();
     G1B_InstallTransitionEventFlags();
+    %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
     %init(G1B_VCInvalidate);                 // 1.3 consumer
