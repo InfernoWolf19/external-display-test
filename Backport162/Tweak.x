@@ -48,6 +48,7 @@ static const char *const kFeatureNames[F_COUNT] = {
     "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas", "g3embedded", "g3bootorient",
     "g3b_banner", "g3b_menu", "g3b_pip", "g3b_kbwindow", "g3b_statusbar", "g3b_orient", "g3b_grid", "g3b_guide", "g3b_split", "g3b_preflightlog", "g3b_axroles",
     "clonemirror", "edu", "edunative", "presubset", "deferact", "lockedptr2", "migrate", "focuslock", "arrange", "methodology0",
+    "g3c",
 };
 // Opt-in features (need Backport162.on.<name>): the user directive is "everything on", so only features that the specs mark as
 // behaviour-neutral (diagnostic) or mutually conflicting stay opt-in.
@@ -410,6 +411,7 @@ void BP2B_Setup(void);                 // G2B.x
 void G1C_Setup(void);                  // G1C.x
 void BP_G3_Setup(void);                // G3.x
 void BP_G3B_Setup(void);               // G3B.x
+void G3C_Setup(void);                  // G3C.x
 void G4B_Setup(void);                  // G4B.x
 
 // ---------------------------------------------------------------- entry
@@ -432,6 +434,7 @@ void G4B_Setup(void);                  // G4B.x
         G1C_Setup();                   // group 1c: modifier rewrites (its %init(G1C_VCIds) is last, after group 2b)
         BP_G3_Setup();                 // group 3: plumbing
         BP_G3B_Setup();                // group 3b
+        G3C_Setup();                   // group 3c: Zoom on a full-screen app
         G4B_Setup();                   // group 4b
     }
 }

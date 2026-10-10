@@ -82,6 +82,12 @@ Needs ExtendedDisplayEnabler for the external display features.
 | g3b_preflightlog | **opt-in**: log of the privacy-preflight decision (the PDCPreflightManager gate itself does not exist in 16.0) | `g3b_preflightlog` |
 | g3b_axroles | **opt-in**: AX / Eyedropper / Moments traits roles | `g3b_axroles` |
 
+### Group 3c: top-affordance Zoom [G3C.x]
+
+| feature | what it ports | switch |
+|---|---|---|
+| g3c | "Zoom" on a full-screen Stage Manager app returns it to a window of the live default window size (16.2 Unspecified-size primitive); a window the user resized keeps its size | `g3c` |
+
 ### Group 4b: reconstruction of external-display extras [G4B.x, Backport162BBD/]
 
 | feature | what it ports | switch |
