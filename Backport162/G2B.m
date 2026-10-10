@@ -2296,9 +2296,32 @@ static id BP2B_ContextProviderFor(id modifier) {
     return BP2B_Obj(m, sel_registerName("delegate"));
 }
 
+// The 10 extended QUERY selectors get trampolines on SBSwitcherModifier (BP2B_Early) but 20A8372 has no terminal implementer for
+// them (16.2 keeps them in SBDefaultImplementationsSwitcherModifier / SBRoutingSwitcherModifier). Without defaults every call that
+// reaches the end of the chain dies with "unrecognized selector" / "couldn't find implementor". The subclass inherits the trampoline
+// methods, so class_addMethod directly (BP2B_AddIfMissing would see the inherited method and skip).
+static void BP2B_InstallQueryDefaults(void) {
+    if (!gBP2B_ProtoOK) return;
+    Class d = objc_getClass("SBDefaultImplementationsSwitcherModifier");
+    if (!d) { BP_Log(@"G2B: no SBDefaultImplementationsSwitcherModifier, query defaults not installed"); return; }
+#define BP2B_DEF(sel, types, blk) class_addMethod(d, sel_registerName(sel), imp_implementationWithBlock(blk), types)
+    BP2B_DEF("wantsContinuousExposeHoverGesture", "B16@0:8", ^BOOL(id me) { return YES; });   // 16.2 default NO; YES keeps 16.0 hover
+    BP2B_DEF("isContinuousExposeStripVisible", "B16@0:8", ^BOOL(id me) { return BP2B_Dbl(me, sel_registerName("continuousExposeStripProgress")) > 0.0; });
+    BP2B_DEF("proposedAppLayoutForContinuousExposeWindowDrag", "@16@0:8", ^id(id me) { return nil; });
+    BP2B_DEF("spaceAccessoryViewIconHitTestOutsetForAppLayout:", "d24@0:8@16", ^double(id me, id l) { return 0.0; });
+    BP2B_DEF("shouldAllowGroupOpacityForAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return YES; });   // 16.2 default NO; YES = untouched 16.0
+    BP2B_DEF("canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
+    BP2B_DEF("activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
+    BP2B_DEF("inactiveAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
+    BP2B_DEF("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16", ^id(id me, id a) { return a; });
+    BP2B_DEF("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24", ^id(id me, id a, id b) { return a; });
+#undef BP2B_DEF
+}
+
 // ---------------------------------------------------------------------------------------------- entry point
 // Call order (from the tweak %ctor):  BP2B_Early();  <group2 setup that adds %new methods to the VC / models>;  BP2B_Setup();
 void BP2B_Setup(void) {
+    BP2B_InstallQueryDefaults();   // independent of the g2b switch: the trampolines exist whenever the protocol extension is on
     if (!BP2B_Enabled("g2b")) return;
     BP2B_SetupProtocolFallbacks();
     BP2B_SetupAttributes();
