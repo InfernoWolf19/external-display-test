@@ -654,7 +654,7 @@ static NSString *const kBPG3BWMStyleNote = @"SBSwitcherControllerWindowManagemen
         %orig;
         return;
     }
-    objc_setAssociatedObject(p, &kBPG3BPipManagerOfProvider, pipMgr, OBJC_ASSOCIATION_ASSIGN);   // 16.2 +0x48 weak _pipManager
+    BP_G3B_SetWeak(p, &kBPG3BPipManagerOfProvider, pipMgr);   // 16.2 +0x48 weak _pipManager
     BP_G3B_SetIvar(self, "_stashTabVisibilityPolicyProvider", p);
 }
 %end
@@ -662,7 +662,7 @@ static NSString *const kBPG3BWMStyleNote = @"SBSwitcherControllerWindowManagemen
 %hook SBPIPStashTabSuppressionPolicyProvider
 // 16.2 0x1c7802b6c: the tap target is registered on the PiP manager of the provider's scene (16.0: the global singleton)
 - (void)setStashTabCanBeHidden:(BOOL)canBeHidden {
-    id pipMgr = BP_G3B_On("g3b_pip") ? objc_getAssociatedObject(self, &kBPG3BPipManagerOfProvider) : nil;
+    id pipMgr = BP_G3B_On("g3b_pip") ? BP_G3B_GetWeak(self, &kBPG3BPipManagerOfProvider) : nil;
     long long cur = 0;
     if (!pipMgr || !BP_G3B_ScalarIvar(self, "_stashTabCanBeHidden", &cur)) {
         %orig;

@@ -1744,10 +1744,12 @@ static NSString *G4B_StringForMethodology(long long m) { return m == 0 ? @"keybo
     SEL kb = NSSelectorFromString(@"activeDisplayWindowSceneFollowingKeyboard"), ui = NSSelectorFromString(@"activeDisplayWindowSceneFollowingUserInteraction");
     if (G4B_On("arrange") && [self respondsToSelector:kb] && [self respondsToSelector:ui]) {
         long long m = G4B_Methodology();
-        if (m == 0) return G4B_Obj(self, kb);
-        if (m == 1) return G4B_Obj(self, ui);
-        BP_Log(@"arrange: undefined methodology %@", G4B_StringForMethodology(m));
-        return nil;
+        id r = nil;
+        if (m == 0) r = G4B_Obj(self, kb);
+        else if (m == 1) r = G4B_Obj(self, ui);
+        else BP_Log(@"arrange: undefined methodology %@", G4B_StringForMethodology(m));
+        // stock 16.0 never returns nil (about 60 callers rely on it): the following-user-interaction scene is nil until the first touch
+        if (r) return r;
     }
     return %orig;
 }

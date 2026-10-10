@@ -261,6 +261,7 @@ static void BP_G3_StoreSet(id handle, NSString *key, NSNumber *val) {
 - (void)didMoveToWindow {
     %orig;
     if (!BP_G3_On("g3snapshot")) return;
+    if (![self window]) return;   // 16.2 0x1c76b7acc: nothing to report once the view left its window (would write context id 0)
     id host = BP_G3_GetWeak(self, &kBPG3HostView);
     id h = [self respondsToSelector:@selector(sceneHandle)] ? [self sceneHandle] : nil;
     if (host && [h respondsToSelector:@selector(_updateSceneHostingInfoForSnapshottingWithView:)])
