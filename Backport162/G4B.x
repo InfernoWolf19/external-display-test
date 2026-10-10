@@ -815,9 +815,11 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     _bannerGeneration++;                                         // invalidates the dismiss timer
     [self _dismissBanner:@"User Interaction"];
     NSURL *url = [NSURL URLWithString:@"prefs:root=DISPLAY&path=DISPLAY_ARRANGEMENT"];
-    typedef void (*ActFn)(NSURL *, id);
+    // 16.0 signature (0x1c5efa490): (NSURL *url, BOOL flag, id completion). The 16.2 two-argument call left x2 uninitialised: the
+    // function called garbage as the completion (device crash when tapping the Extended Display pill).
+    typedef void (*ActFn)(NSURL *, BOOL, id);
     ActFn act = (ActFn)dlsym(RTLD_DEFAULT, "SBWorkspaceActivateApplicationFromURL");
-    if (act) act(url, nil);
+    if (act) act(url, NO, nil);
     else [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
 }
 @end
