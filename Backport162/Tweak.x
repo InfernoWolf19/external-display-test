@@ -57,7 +57,7 @@ static const char *const kFeatureNames[F_COUNT] = {
 //   edunative         alternative native alert instead of the SpringBoardEducation remote alert
 //   methodology0      keyboard-following active display instead of the 16.2 pointer-following default
 static const BOOL kOptIn[F_COUNT] = {
-    [F_G1B_APPTOAPP] = YES, [F_G1C] = YES, [F_G1C_PILES] = YES, [F_G2] = YES, [F_G2BLAYOUT] = YES, [F_G2BKEYS] = YES, [F_G3BOOTORIENT] = YES, [F_G3B_PREFLIGHTLOG] = YES, [F_G3B_AXROLES] = YES, [F_EDUNATIVE] = YES, [F_METHODOLOGY0] = YES,
+    [F_G1B_APPTOAPP] = YES, [F_G1C_PILES] = YES, [F_G3BOOTORIENT] = YES, [F_G3B_PREFLIGHTLOG] = YES, [F_G3B_AXROLES] = YES, [F_EDUNATIVE] = YES, [F_METHODOLOGY0] = YES,
 };
 
 static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030], gTmpDir[900];

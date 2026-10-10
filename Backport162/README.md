@@ -119,8 +119,6 @@ An independent review of 0.5.0 (`specs/REVIEW-0.5.0.md`) found and 0.5.1 fixes: 
 Still unverified without a device: whether backboardd 16.0 blanks an external display through `BKSDisplayServicesSetDisplayBlanked`, and the hooking library's behaviour for `directhook`. If either misbehaves create `Backport162.off.nowindow` / `Backport162.off.directhook` (the latter needs a respring).
 
 
-## 0.6.1 baseline (device report: empty app switcher, apps not dismissing, app crash on open)
-The three whole-method replacements of the 16.0 switcher data flow are OPT-IN until they are device-verified:
-`group1c` (Root factories, identifiers update, peek/drag families), `group2` (layout cache, overlapping model, list builders) and
-`g2blayout` (`_layoutAppLayout:roleMask:completion:` and the calculator) and `g2bkeys` (container tap/return path, replaces `didSelectContainer:`). Enable one at a time with an empty file
-`/var/jb/tmp/Backport162.on.<name>` and respring.
+## Debugging 0.6.x
+Everything except the opt-in list in Tweak.x is on. To bisect a misbehaviour, disable one feature at a time with an empty file
+`/var/jb/tmp/Backport162.off.<name>` (names in the table above) and respring; `Backport162.off` disables the whole tweak.
