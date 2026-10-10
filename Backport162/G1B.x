@@ -1101,8 +1101,9 @@ static void G1B_BuildFullScreenToStrip(void) {
 %group G1B_Handled
 %hook SBChainableModifierEvent
 - (void)handleWithReason:(id)reason {
-    if ([self respondsToSelector:@selector(isHandled)] && ((BOOL (*)(id, SEL))objc_msgSend)(self, @selector(isHandled))) {
-        BP_Log(@"event %@ already handled, ignoring second handleWithReason:%@", NSStringFromClass([self class]), reason);
+    id me = (id)self;      // SBChainableModifierEvent is only forward-declared in this file
+    if ([me respondsToSelector:@selector(isHandled)] && ((BOOL (*)(id, SEL))objc_msgSend)(me, @selector(isHandled))) {
+        BP_Log(@"event %@ already handled, ignoring second handleWithReason:%@", NSStringFromClass(object_getClass(me)), reason);
         return;
     }
     %orig;
