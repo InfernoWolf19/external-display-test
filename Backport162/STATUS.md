@@ -48,3 +48,7 @@ Nothing in group 4 has been run on a device yet. Next: tell the user group 4 is 
 
 ## 0.6.0 state (latest)
 All seven packages are integrated (see specs/INTEGRATION-NOTES.md). CI green: Backport162 `Backport162-a23405d`, BBD `Backport162BBD-4521d91`. Independent adversarial review launched in three areas (A launch/layout core, B G1B/G1C, C G3/G3B/G4B/BBD); reports go to specs/REVIEW-0.6.0-{A,B,C}.md. Next: fix confirmed CRASH/WRONG-BEHAVIOUR findings, rebuild on CI, hand over with UNSURE list; tell user to remove SwitcherDismissFix when testing 0.6.0.
+
+## 0.6.0 review round done (commit 0c08a43, CI green)
+Reviews in specs/REVIEW-0.6.0-{A,B,C}.md. Fixed: query-selector defaults (A F1/B1), activeDisplayWindowScene never nil (C1), snapshot window guard, weak PiP manager, ToHome nil fill, FullScreen pile state, header-tap super guard, void floor update, g1c_piles now opt-in, attribute leak, dodge loop bound, breadcrumb write check.
+Open (not fixed yet): BBD tweak hooks the wrong MIG path (C2, inert but harmless), A F3 (didSelectContainer bypass in classic mode), A F7/F8/F9, B6/B8, C5/C6/C8-C10. Nothing device-tested; the user reported an instant SpringBoard crash on the pre-review build.
