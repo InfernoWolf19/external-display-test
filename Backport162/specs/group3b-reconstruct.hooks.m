@@ -1155,6 +1155,584 @@ static __thread __unsafe_unretained id gBPG3BSwitcherOverride;
 
 %end // G3B_StatusBar
 
+// ================================================================================================================
+// ITEM 1: the user-resize orientation chain (spec section 1)
+//   1.1 consumer  : SBMainSwitcherControllerCoordinator -switcherContentController:setInterfaceOrientationFromUserResizing:forDisplayItem:   DONE
+//   1.2 producer  : SBItemResizeGestureSwitcherModifier -_responseForSceneSizeUpdateToSize:center:sceneUpdatesOnly:                        DONE
+//   1.3 grids     : orthogonal fixed-aspect grid (transposed candidate sizes)                                                           DONE (UNSURE:sort key/candidate set)
+//   1.4 traits    : BPG3BTraitsGuide = SBSwitcherTraitsAssistant guiding participants (portrait-only / landscape-only)                  DONE (UNSURE:live-overlay policy interplay)
+//   1.5 handle    : orientation selection without the 16.0 phone-on-pad special case                                                    DONE
+//   1.6 split     : content vs container orientation API on the scene view controllers (adapter)                                        DONE as adapter, UNSURE:rendering
+//   1.7 overlays  : SBDeviceApplicationSceneOverlayBasicWrapperView(+ViewController), SBFluidSwitcherPortaledSceneLiveContentOverlay    DONE as classes; no creator (cross-display drag) -> UNSURE
+// Prerequisites (other packages): group1b (response class type 38 + _performEventResponse: branch), group2 (-layoutRestrictionInfoForItem: and
+// -supportedContentInterfaceOrientationsForItem: %new on SBSwitcherModifier), group3 G3_Handle (the handle's -_interfaceOrientationFromUserResizing accessors).
+// ================================================================================================================
+#define BPS(n) NSSelectorFromString(@n)
+
+@interface SBItemResizeGestureSwitcherModifier : NSObject @end
+@interface SBDisplayItemLayoutGrid : NSObject @end
+@interface _SBDisplayItemFixedAspectGrid : NSObject @end
+@interface SBDeviceApplicationSceneHandle : NSObject @end
+@interface SBSceneHandle : NSObject @end
+@interface SBApplication : NSObject @end
+
+// thread-local state (all hooks run on the main thread, TLS only scopes the dynamic extent of one call)
+static __thread int tBPOrthDepth;     // > 0 inside a user-resize modifier method whose item may use orthogonal sizes
+static __thread int tBPOrthBuild;     // > 0 while an orthogonal fixed grid is being created
+static __thread int tBPOrthMerge;     // > 0 while the transposed build is running (re-entrancy guard)
+static __thread int tBPNoPhoneOnPad;  // > 0 while classicAppPhoneAppRunningOnPad must answer NO (16.2 launch semantics)
+
+static BOOL BPG3BO_Bool0(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
+static unsigned long long BPG3BO_ULL0(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((unsigned long long (*)(id, SEL))objc_msgSend)(o, s) : 0; }
+static id BPG3BO_Obj1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
+static unsigned long long BPG3BO_ULL1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((unsigned long long (*)(id, SEL, id))objc_msgSend)(o, s, a) : 0; }
+
+// ---------------------------------------------------------------------------------------------- 1.4 traits guide
+// 16.2 SBSwitcherTraitsAssistant (guiding part only). Two extra participants with role SwitcherLiveOverlay whose only preference is a
+// supported-orientation mask (portrait 0x6 / landscape 0x18). Element participants of "guided" windows are given an orientation resolution policy
+// "follow the guiding participant" (SBFTraitsOrientationResolutionPolicyInfo resolutionPolicyInfoForAssociatedParticipantWithUniqueID:), so the
+// arbiter resolves the app's orientation from the window shape instead of the device.
+// Guide selection (16.2 -_setupGuidingRelationshipIfNeededForParticipant:withSceneHandle: 0x1c74d71ac, decoded):
+//   medusa-capable app                       -> no guide
+//   phone app on pad                         -> portrait guide; landscape guide if (handle supports old-style mixed orientation && prefers landscape)
+//   other classic app on an external display -> portrait guide if contentContainerAspectRatio <= 1 else landscape guide
+//   else                                     -> none
+//   then, for non-medusa apps: Stage Manager on: userResizing 3/4 -> landscape guide, 1/2 -> portrait guide (wins over the above)
+//                              Stage Manager off: handle.userResizing = participant.currentOrientation
+//   (scene-orientation-request guide: left on the 16.0 AlterEgo path, UNSURE)
+static char kBPG3BGuideKey;
+
+@interface BPG3BTraitsGuide : NSObject
+@property (nonatomic, weak) id switcher;
+@property (nonatomic, strong) id portrait;
+@property (nonatomic, strong) id landscape;
+@property (nonatomic, strong) id policySpecifier;
+@property (nonatomic, strong) NSMutableDictionary *assoc;      // element participant uniqueIdentifier -> guide participant uniqueIdentifier
+@property (nonatomic, strong) NSMutableSet *touched;           // element participants we set a policy on
+@property (nonatomic, strong) NSMutableArray *tokens;
+- (void)install;
+- (void)refresh:(NSString *)reason;
+@end
+
+@implementation BPG3BTraitsGuide
+- (instancetype)init {
+    if ((self = [super init])) { _assoc = [NSMutableDictionary new]; _touched = [NSMutableSet new]; _tokens = [NSMutableArray new]; }
+    return self;
+}
+- (void)dealloc {
+    for (id t in _tokens) [[NSNotificationCenter defaultCenter] removeObserver:t];
+    for (id p in @[ _portrait ?: [NSNull null], _landscape ?: [NSNull null], _policySpecifier ?: [NSNull null] ])
+        if ([p respondsToSelector:@selector(invalidate)]) ((void (*)(id, SEL))objc_msgSend)(p, @selector(invalidate));
+}
+- (id)acquireWithMask:(BOOL)isLandscape {
+    id sc = self.switcher;
+    id arbiter = BP_G3B_Send0(sc, BPS("traitsArbiter"));
+    SEL s = BPS("acquireParticipantWithRole:delegate:");
+    if (!arbiter || ![arbiter respondsToSelector:s]) return nil;
+    NSString *role = @"SBTraitsParticipantRoleSwitcherLiveOverlay";
+    void *sym = dlsym(RTLD_DEFAULT, "SBTraitsParticipantRoleSwitcherLiveOverlay");
+    if (sym) { NSString *v = *(__unsafe_unretained NSString **)sym; if ([v isKindOfClass:[NSString class]]) role = v; }
+    id p = ((id (*)(id, SEL, id, id))objc_msgSend)(arbiter, s, role, self);
+    if (p && [p respondsToSelector:BPS("setNeedsUpdatePreferencesWithReason:")])
+        ((void (*)(id, SEL, id))objc_msgSend)(p, BPS("setNeedsUpdatePreferencesWithReason:"), isLandscape ? @"BPG3B landscape guide" : @"BPG3B portrait guide");
+    return p;
+}
+- (id)portraitGuide  { if (!_portrait)  _portrait  = [self acquireWithMask:NO];  return _portrait; }
+- (id)landscapeGuide { if (!_landscape) _landscape = [self acquireWithMask:YES]; return _landscape; }
+
+// SBFTraitsParticipantDelegate (16.2 0x1c74d6f68 / 0x1c74d71a8)
+- (void)updatePreferencesForParticipant:(id)participant updater:(id)updater {
+    unsigned long long mask = (participant == _landscape) ? 0x18 : (participant == _portrait ? 0x6 : 0);
+    if (!mask || ![updater respondsToSelector:BPS("updateOrientationPreferencesWithBlock:")]) return;
+    void (^blk)(id) = ^(id prefs) {
+        if ([prefs respondsToSelector:BPS("setSupportedOrientations:")])
+            ((void (*)(id, SEL, unsigned long long))objc_msgSend)(prefs, BPS("setSupportedOrientations:"), mask);
+    };
+    ((void (*)(id, SEL, id))objc_msgSend)(updater, BPS("updateOrientationPreferencesWithBlock:"), blk);
+}
+- (void)didChangeSettingsForParticipant:(id)participant context:(id)context {}
+
+- (BOOL)aspectIsPortrait {      // 16.2 _isContentContainerAspectRatioPortrait: contentContainerAspectRatio <= 1 (UNSURE: the compared constant is 1.0; ratio taken as width/height of the window scene)
+    id ws = BP_G3B_Send0(self.switcher, BPS("windowScene"));
+    CGRect b = CGRectZero;
+    id cs = BP_G3B_Send0(ws, BPS("coordinateSpace"));
+    if ([cs respondsToSelector:@selector(bounds)]) b = ((CGRect (*)(id, SEL))objc_msgSend)(cs, @selector(bounds));
+    return b.size.height <= 0 || (b.size.width / b.size.height) <= 1.0;
+}
+
+- (id)guideForParticipant:(id)p handle:(id)h {
+    id app = BP_G3B_Send0(h, BPS("application"));
+    if (!app || BPG3BO_Bool0(app, BPS("isMedusaCapable"))) return nil;
+    id sc = self.switcher;
+    BOOL chamois = BPG3BO_Bool0(sc, BPS("isChamoisWindowingUIEnabled"));
+    id g = nil;
+    if (BPG3BO_Bool0(app, BPS("classicAppPhoneAppRunningOnPad"))) {
+        g = [self portraitGuide];
+        if (BPG3BO_Bool0(h, BPS("_classicAppPhoneOnPadSupportsOldStyleMixedOrientation")) && BPG3BO_Bool0(h, BPS("_classicAppPhoneOnPadPrefersLandscape")))
+            g = [self landscapeGuide];
+    } else if (BPG3BO_Bool0(BP_G3B_Send0(sc, BPS("windowScene")), BPS("isExternalDisplayWindowScene"))) {
+        g = [self aspectIsPortrait] ? [self portraitGuide] : [self landscapeGuide];
+    }
+    if (chamois) {
+        long long u = BP_G3B_SendLL(h, BPS("_interfaceOrientationFromUserResizing"));
+        if (u) g = (u == 3 || u == 4) ? [self landscapeGuide] : [self portraitGuide];
+    } else {
+        long long cur = BP_G3B_SendLL(p, BPS("currentOrientation"));
+        if (cur && [h respondsToSelector:BPS("_setInterfaceOrientationFromUserResizing:")])
+            ((void (*)(id, SEL, long long))objc_msgSend)(h, BPS("_setInterfaceOrientationFromUserResizing:"), cur);
+    }
+    return g;
+}
+
+- (void)recompute {
+    id sc = self.switcher;
+    NSDictionary *parts = BP_G3B_Ivar(sc, "_traitsParticipantsByElementIdentifier");
+    NSDictionary *dels = BP_G3B_Ivar(sc, "_traitsDelegateByParticipant");
+    if (![parts isKindOfClass:[NSDictionary class]] || ![dels isKindOfClass:[NSDictionary class]]) return;
+    [self.assoc removeAllObjects];
+    for (id p in [parts allValues]) {
+        id del = [dels objectForKey:p];
+        id h = BP_G3B_Send0(del, BPS("sceneHandle"));
+        if (!h) continue;
+        id g = [self guideForParticipant:p handle:h];
+        id uid = BP_G3B_Send0(p, BPS("uniqueIdentifier")), gid = BP_G3B_Send0(g, BPS("uniqueIdentifier"));
+        if (uid && gid) self.assoc[uid] = gid;
+    }
+}
+
+// 16.2 -_updateAcquiredParticipantsPolicies: 0x1c74d80d0 (called from the block policy specifier, once per arbitration)
+- (void)applyToParticipants:(id)participants {
+    Class infoCls = NSClassFromString(@"SBFTraitsOrientationResolutionPolicyInfo");
+    SEL mk = BPS("resolutionPolicyInfoForAssociatedParticipantWithUniqueID:");
+    if (!infoCls || ![infoCls respondsToSelector:mk] || ![participants conformsToProtocol:@protocol(NSFastEnumeration)]) return;
+    [self recompute];
+    for (id p in participants) {
+        if (![p respondsToSelector:BPS("setOrientationResolutionPolicyInfo:")]) continue;
+        id uid = BP_G3B_Send0(p, BPS("uniqueIdentifier"));
+        id gid = uid ? self.assoc[uid] : nil;
+        if (gid) {
+            id info = ((id (*)(id, SEL, id))objc_msgSend)(infoCls, mk, gid);
+            ((void (*)(id, SEL, id))objc_msgSend)(p, BPS("setOrientationResolutionPolicyInfo:"), info);
+            [self.touched addObject:uid];
+        } else if (uid && [self.touched containsObject:uid]) {          // we set it before: take it back (16.2 never clears; 16.0 needs it because guides can disappear)
+            ((void (*)(id, SEL, id))objc_msgSend)(p, BPS("setOrientationResolutionPolicyInfo:"), nil);
+            [self.touched removeObject:uid];
+        }
+    }
+}
+
+- (void)install {
+    id sc = self.switcher;
+    if (!sc || self.policySpecifier) return;
+    id arbiter = BP_G3B_Send0(sc, BPS("traitsArbiter"));
+    Class psc = NSClassFromString(@"SBTraitsPipelineBlockBasedPolicySpecifier");
+    SEL isel = BPS("initWithPolicySpecifierBlock:specifierDescription:componentOrder:arbiter:");
+    if (!arbiter || !psc || ![psc instancesRespondToSelector:isel]) return;
+    __weak BPG3BTraitsGuide *w = self;
+    id blk = ^(id participants) { [w applyToParticipants:participants]; };           // block argument: the acquired participants (UNSURE:exact type, guarded)
+    id spec = ((id (*)(id, SEL, id, id, id, id))objc_msgSend)([psc alloc], isel, blk, @"Switcher Traits Assistant", @6, arbiter);
+    self.policySpecifier = spec;
+    for (NSString *n in @[ @"SBClassicPhoneSceneOrientationPreferenceChanged", @"SBSceneGeometryOrientationRequestChanged" ]) {
+        id t = [[NSNotificationCenter defaultCenter] addObserverForName:n object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+            [w refresh:note.name];
+        }];
+        [self.tokens addObject:t];
+    }
+}
+
+// 16.2 -_handleUpdateRequest: -> setNeedsUpdateArbitrationWithContext:(reason, forceOrientationResolution)
+- (void)refresh:(NSString *)reason {
+    id sc = self.switcher;
+    id arbiter = BP_G3B_Send0(sc, BPS("traitsArbiter"));
+    Class cc = NSClassFromString(@"SBFTraitsArbiterUpdateContext");
+    SEL ns = BPS("setNeedsUpdateArbitrationWithContext:"), ib = BPS("initWithBuilder:");
+    [self recompute];
+    if (arbiter && cc && [arbiter respondsToSelector:ns] && [cc instancesRespondToSelector:ib]) {
+        void (^builder)(id) = ^(id b) {
+            if ([b respondsToSelector:BPS("setReason:")]) ((void (*)(id, SEL, id))objc_msgSend)(b, BPS("setReason:"), reason ?: @"BPG3B");
+            if ([b respondsToSelector:BPS("setForceOrientationResolution:")]) ((void (*)(id, SEL, BOOL))objc_msgSend)(b, BPS("setForceOrientationResolution:"), YES);
+        };
+        id ctx = ((id (*)(id, SEL, id))objc_msgSend)([cc alloc], ib, builder);
+        if (ctx) { ((void (*)(id, SEL, id))objc_msgSend)(arbiter, ns, ctx); return; }
+    }
+    id part = BP_G3B_Ivar(sc, "_traitsParticipant");        // fallback: poke the switcher's own participant (UNSURE)
+    if ([part respondsToSelector:BPS("setNeedsUpdatePreferencesWithReason:")])
+        ((void (*)(id, SEL, id))objc_msgSend)(part, BPS("setNeedsUpdatePreferencesWithReason:"), reason ?: @"BPG3B");
+}
+@end
+
+// ---------------------------------------------------------------------------------------------- 1.7 overlay classes (new in 16.2)
+// SBDeviceApplicationSceneOverlayBasicWrapperView (16.2 0x1c7951818..0x1c7951858, all trivial) and ...ViewController (0x1c7951424..0x1c79517c4).
+@interface SBDeviceApplicationSceneOverlayBasicWrapperView : UIView
+@property (nonatomic) long long hostOrientation;
+@property (nonatomic) BOOL shouldLayoutOverlayImmediatelyForContainerGeometryChange;
+@property (nonatomic, readonly) BOOL needsCounterRotation;
+- (void)addObserver:(id)observer;
+- (void)removeObserver:(id)observer;
+@end
+@implementation SBDeviceApplicationSceneOverlayBasicWrapperView
+- (BOOL)needsCounterRotation { return NO; }
+- (void)addObserver:(id)observer {}
+- (void)removeObserver:(id)observer {}
+@end
+
+@interface SBDeviceApplicationSceneOverlayBasicWrapperViewController : UIViewController
+- (instancetype)initWithContentViewController:(UIViewController *)controller;
+- (UIView *)overlayView;
+@end
+@implementation SBDeviceApplicationSceneOverlayBasicWrapperViewController {
+    UIViewController *_contentViewController;
+    SBDeviceApplicationSceneOverlayBasicWrapperView *_contentWrapperView;
+}
+- (instancetype)initWithContentViewController:(UIViewController *)controller {
+    if ((self = [super initWithNibName:nil bundle:nil])) _contentViewController = controller;
+    return self;
+}
+- (void)loadView {
+    _contentWrapperView = [[SBDeviceApplicationSceneOverlayBasicWrapperView alloc] initWithFrame:CGRectZero];
+    self.view = _contentWrapperView;
+}
+- (UIView *)overlayView { [self loadViewIfNeeded]; return _contentWrapperView; }
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    UIView *cv = _contentViewController.view;
+    [_contentViewController beginAppearanceTransition:YES animated:animated];
+    [self addChildViewController:_contentViewController];
+    [_contentWrapperView addSubview:cv];
+    [_contentViewController didMoveToParentViewController:self];
+}
+- (void)viewDidAppear:(BOOL)animated { [super viewDidAppear:animated]; [_contentViewController endAppearanceTransition]; }
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [_contentViewController beginAppearanceTransition:NO animated:animated];
+    [_contentViewController willMoveToParentViewController:nil];
+}
+- (void)viewDidDisappear:(BOOL)animated {
+    [super viewDidDisappear:animated];
+    [_contentViewController.view removeFromSuperview];
+    [_contentViewController removeFromParentViewController];
+    [_contentViewController endAppearanceTransition];
+}
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    _contentViewController.view.frame = _contentWrapperView.bounds;
+}
+@end
+
+// SBFluidSwitcherPortaledSceneLiveContentOverlay (16.2 0x1c78a6520..0x1c78a6880). Used by the cross-display window drag: a portal onto another
+// display's live scene view. The creator (SBFullScreenSwitcherLiveContentOverlayCoordinator -_updatePortaledSceneLiveContentOverlays 0x1c74ce070)
+// needs enumerateSwitcherControllersWithBlock: / convertAppLayout:fromSwitcherController: which are cross-display-drag plumbing: NOT in this package (UNSURE).
+@interface SBFluidSwitcherPortaledSceneLiveContentOverlay : NSObject
+@property (nonatomic) BOOL wantsEnhancedWindowingEnabled;
+@property (nonatomic) BOOL resizesHostedContext;
+@property (nonatomic, weak) id delegate;
+@property (nonatomic, readonly) id sceneHandle;
+@property (nonatomic, readonly) long long contentOrientation;
+@property (nonatomic, readonly) long long containerOrientation;
+@property (nonatomic, readonly) UIView *livePortalView;
+@property (nonatomic, readonly) UIView *sizeObservingView;
+@property (nonatomic, readonly) UIView *sceneView;
+@property (nonatomic, readonly) CGSize referenceSize;
+- (instancetype)initWithSceneHandle:(id)handle referenceSize:(CGSize)size contentOrientation:(long long)c containerOrientation:(long long)k livePortalView:(UIView *)portal isInsetForHomeAffordance:(BOOL)inset;
+@end
+@implementation SBFluidSwitcherPortaledSceneLiveContentOverlay
+- (instancetype)initWithSceneHandle:(id)handle referenceSize:(CGSize)size contentOrientation:(long long)c containerOrientation:(long long)k livePortalView:(UIView *)portal isInsetForHomeAffordance:(BOOL)inset {
+    if ((self = [super init])) {
+        _sceneHandle = handle; _referenceSize = size; _contentOrientation = c; _containerOrientation = k; _livePortalView = portal;
+        SEL n16_2 = BPS("newSceneViewWithReferenceSize:contentOrientation:containerOrientation:hostRequester:");
+        SEL n16_0 = BPS("newSceneViewWithReferenceSize:orientation:hostRequester:");
+        void *raw = NULL;
+        if ([handle respondsToSelector:n16_2]) raw = ((void *(*)(id, SEL, CGSize, long long, long long, id))objc_msgSend)(handle, n16_2, size, c, k, self);
+        else if ([handle respondsToSelector:n16_0]) raw = ((void *(*)(id, SEL, CGSize, long long, id))objc_msgSend)(handle, n16_0, size, c, self);
+        _sceneView = raw ? (__bridge_transfer UIView *)raw : nil;                       // newXxx returns +1
+        if ([_sceneView respondsToSelector:BPS("setInsetForHomeAffordance:")]) ((void (*)(id, SEL, BOOL))objc_msgSend)(_sceneView, BPS("setInsetForHomeAffordance:"), inset);
+        if ([_sceneView respondsToSelector:BPS("setCustomContentView:")]) ((void (*)(id, SEL, id))objc_msgSend)(_sceneView, BPS("setCustomContentView:"), portal);
+        if ([_sceneView respondsToSelector:BPS("setDisplayMode:animationFactory:completion:")])
+            ((void (*)(id, SEL, long long, id, id))objc_msgSend)(_sceneView, BPS("setDisplayMode:animationFactory:completion:"), 1, nil, nil);
+        Class sov = NSClassFromString(@"SBUISizeObservingView");
+        UIView *v = sov ? [[sov alloc] initWithFrame:(CGRect){ CGPointZero, size }] : [[UIView alloc] initWithFrame:(CGRect){ CGPointZero, size }];
+        _sizeObservingView = v;
+        if ([v respondsToSelector:BPS("setDelegate:")]) ((void (*)(id, SEL, id))objc_msgSend)(v, BPS("setDelegate:"), self);
+        if (portal) [v addSubview:portal];
+        [self sizeObservingView:v didChangeSize:v.bounds.size];
+    }
+    return self;
+}
+- (void)sizeObservingView:(id)view didChangeSize:(CGSize)size { if (view == _sizeObservingView) _livePortalView.frame = _sizeObservingView.bounds; }
+- (NSString *)sceneViewPresentationIdentifier:(id)i { return NSStringFromClass([self class]); }
+- (long long)sceneViewPresentationPriority:(id)p { return -1; }
+- (id)contentOverlayView { return _sizeObservingView; }
+- (void)setStatusBarHidden:(BOOL)h nubViewHidden:(BOOL)n animator:(id)a {}
+- (void)setDimmed:(BOOL)d {}
+- (void)setMatchMovedToScene:(BOOL)m {}
+- (BOOL)isContentUpdating { return NO; }
+- (BOOL)isInsetForHomeAffordance { return BPG3BO_Bool0(_sceneView, BPS("isInsetForHomeAffordance")); }
+- (void)setInsetForHomeAffordance:(BOOL)i { if ([_sceneView respondsToSelector:BPS("setInsetForHomeAffordance:")]) ((void (*)(id, SEL, BOOL))objc_msgSend)(_sceneView, BPS("setInsetForHomeAffordance:"), i); }
+- (void)setUsesBrightSceneViewBackgroundMaterial:(BOOL)b {}
+- (void)noteKeyboardFocusDidChangeToSceneID:(id)i {}
+- (void)setBlurViewIconScale:(double)s {}
+- (BOOL)isAsyncRenderingEnabled { return NO; }
+- (void)setAsyncRenderingEnabled:(BOOL)e withMinificationFilterEnabled:(BOOL)m {}
+- (void)disableAsynchronousRenderingForNextCommit {}
+- (BOOL)requiresLegacyRotationSupport { return NO; }
+- (long long)touchBehavior { return 0; }
+- (void)setTouchBehavior:(long long)b {}
+- (long long)preferredInterfaceOrientation { return 0; }
+- (unsigned long long)supportedInterfaceOrientations { return 0x1e; }
+- (id)prepareOverlayForContentRotation { return nil; }
+- (long long)leadingStatusBarStyle { return 0; }
+- (long long)trailingStatusBarStyle { return 0; }
+- (unsigned long long)styleOverridesToSuppress { return 0; }
+- (double)currentStatusBarHeight { return 0; }                                  // UNSURE: 16.2 loads a global constant here
+- (id)liveSceneIdentityToken { return nil; }
+- (id)overlaySceneHandle { return nil; }
+- (void)setDisplayLayoutElementActive:(BOOL)a {}
+- (BOOL)isDisplayLayoutElementActive { return NO; }
+- (long long)overlayType { return 4; }
+- (id)contentViewController { return nil; }
+- (void)configureWithWorkspaceEntity:(id)e referenceFrame:(CGRect)f contentOrientation:(long long)c containerOrientation:(long long)k layoutRole:(long long)r spaceConfiguration:(long long)s floatingConfiguration:(long long)fc hasClassicAppOrientationMismatch:(BOOL)m {}
+- (void)invalidate {}
+@end
+
+// ---------------------------------------------------------------------------------------------- 1.6 content / container orientation adapter
+// 16.2 SBSceneViewController -setContentReferenceSize:withContentOrientation:andContainerOrientation: (0x1c7964bc0) still forwards only the CONTENT orientation to
+// the scene view (-_updateReferenceSize:andOrientation:); the container orientation is just a new stored ivar read by SBAppContainerViewController /
+// transient overlays. 16.0 already has the content/container transform split in SBOrientationTransformWrapperView, so the adapter stores the container
+// orientation per object (associated object) and forwards the content orientation to the 16.0 selector. Container orientation defaults to the content one.
+static char kBPG3BContainerOri;
+static long long BPG3BO_ContentOri(id self, SEL _cmd) { return BP_G3B_SendLL(self, BPS("contentInterfaceOrientation")); }
+static long long BPG3BO_ContainerOri(id self, SEL _cmd) {
+    NSNumber *n = objc_getAssociatedObject(self, &kBPG3BContainerOri);
+    return n ? n.longLongValue : BP_G3B_SendLL(self, BPS("contentInterfaceOrientation"));
+}
+static void BPG3BO_SetRefSize(id self, SEL _cmd, CGSize size, long long content, long long container) {
+    objc_setAssociatedObject(self, &kBPG3BContainerOri, @(container), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    SEL old = BPS("setContentReferenceSize:withInterfaceOrientation:");
+    if ([self respondsToSelector:old]) ((void (*)(id, SEL, CGSize, long long))objc_msgSend)(self, old, size, content);
+}
+// handle: newSceneViewWithReferenceSize:contentOrientation:containerOrientation:hostRequester:  (+1 return, so NS_RETURNS_RETAINED)
+static __attribute__((ns_returns_retained)) id BPG3BO_NewSceneView(id self, SEL _cmd, CGSize size, long long content, long long container, id requester) {
+    SEL old = BPS("newSceneViewWithReferenceSize:orientation:hostRequester:");
+    if (![self respondsToSelector:old]) return nil;
+    void *raw = ((void *(*)(id, SEL, CGSize, long long, id))objc_msgSend)(self, old, size, content, requester);
+    if (raw) { id v = (__bridge id)raw; objc_setAssociatedObject(v, &kBPG3BContainerOri, @(container), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    return raw ? (__bridge_transfer id)raw : nil;
+}
+static void BPG3BO_AddAdapter(const char *cls) {
+    Class c = objc_getClass(cls);
+    if (!c) return;
+    if (![c instancesRespondToSelector:BPS("contentOrientation")]) class_addMethod(c, BPS("contentOrientation"), (IMP)BPG3BO_ContentOri, "q16@0:8");
+    if (![c instancesRespondToSelector:BPS("containerOrientation")]) class_addMethod(c, BPS("containerOrientation"), (IMP)BPG3BO_ContainerOri, "q16@0:8");
+    if (![c instancesRespondToSelector:BPS("setContentReferenceSize:withContentOrientation:andContainerOrientation:")])
+        class_addMethod(c, BPS("setContentReferenceSize:withContentOrientation:andContainerOrientation:"), (IMP)BPG3BO_SetRefSize, "v48@0:8{CGSize=dd}16q32q40");
+}
+
+// ---------------------------------------------------------------------------------------------- groups
+static char kBPG3BOrthCache;
+
+static id BPG3BO_ModifierItem(id mod) {
+    id layout = BP_G3B_Ivar(mod, "_currentAppLayout");
+    long long role = 0;
+    if (!layout || !BP_G3B_ScalarIvar(mod, "_selectedLayoutRole", &role)) return nil;
+    SEL s = BPS("itemForLayoutRole:");
+    return [layout respondsToSelector:s] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, s, role) : nil;
+}
+// 16.2 SBItemResizeGestureSwitcherModifier -layoutRestrictionInfoForItem: (0x1c76bf73c): restrictions & 0xA (fixed) && content orientations contain
+// both portrait (0x6) and landscape (0x18) -> clear the "no orthogonal sizes" bit 0x8. In 16.0's mask encoding (2 = fixed) this reads: fixed && both.
+static BOOL BPG3BO_ItemAllowsOrthogonal(id mod, id item) {
+    if (!mod || !item || !BP_G3B_On("g3b_orient")) return NO;
+    id calc = BP_G3B_Send0(mod, BPS("displayItemLayoutAttributesCalculator"));
+    id info = BPG3BO_Obj1(calc, BPS("layoutRestrictionInfoForItem:"), item);
+    if (!info || BPG3BO_ULL0(info, BPS("layoutRestrictions")) != 2) return NO;
+    unsigned long long sup = BPG3BO_ULL1(mod, BPS("supportedContentInterfaceOrientationsForItem:"), item);     // group2 %new
+    return (sup & 0x6) && (sup & 0x18);
+}
+
+// find the NSArray ivar of a grid by NAME suffix (16.0 _SBDisplayItemFlexibleGrid has _widths/_heights; checked by name, not by offset)
+static Ivar BPG3BO_ArrayIvar(id obj, const char *name) {
+    for (Class c = [obj class]; c; c = class_getSuperclass(c)) {
+        Ivar iv = class_getInstanceVariable(c, name);
+        if (iv) { const char *e = ivar_getTypeEncoding(iv); return (e && e[0] == '@') ? iv : NULL; }
+    }
+    return NULL;
+}
+static void BPG3BO_MergeTransposed(id grid, double scale) {
+    Ivar fs = class_getInstanceVariable([grid class], "_fixedSize");
+    Ivar wi = BPG3BO_ArrayIvar(grid, "_widths"), hi = BPG3BO_ArrayIvar(grid, "_heights");
+    SEL build = BPS("_buildFixedGridWithScreenScale:");
+    if (!fs || !wi || !hi || ![grid respondsToSelector:build]) return;
+    NSArray *w0 = [object_getIvar(grid, wi) copy], *h0 = [object_getIvar(grid, hi) copy];
+    if (![w0 isKindOfClass:[NSArray class]] || w0.count == 0 || w0.count != h0.count) return;
+    CGSize *p = (CGSize *)((char *)(__bridge void *)grid + ivar_getOffset(fs));
+    CGSize orig = *p;
+    *p = CGSizeMake(orig.height, orig.width);
+    tBPOrthMerge++;
+    ((void (*)(id, SEL, double))objc_msgSend)(grid, build, scale);
+    tBPOrthMerge--;
+    *p = orig;
+    NSArray *w1 = [object_getIvar(grid, wi) copy], *h1 = [object_getIvar(grid, hi) copy];
+    if (![w1 isKindOfClass:[NSArray class]] || w1.count != h1.count) { object_setIvar(grid, wi, w0); object_setIvar(grid, hi, h0); return; }
+    NSMutableArray *pairs = [NSMutableArray new];
+    void (^add)(NSArray *, NSArray *) = ^(NSArray *ws, NSArray *hs) {
+        for (NSUInteger i = 0; i < ws.count; i++) {
+            double w = [ws[i] doubleValue], h = [hs[i] doubleValue];
+            BOOL dup = NO;
+            for (NSArray *q in pairs) if (fabs([q[0] doubleValue] - w) < 0.5 && fabs([q[1] doubleValue] - h) < 0.5) { dup = YES; break; }
+            if (!dup) [pairs addObject:@[ @(w), @(h) ]];
+        }
+    };
+    add(w0, h0); add(w1, h1);
+    [pairs sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {      // UNSURE: 16.2 sorts with sortUsingComparator:; key assumed (width, then height)
+        NSComparisonResult r = [a[0] compare:b[0]];
+        return r != NSOrderedSame ? r : [a[1] compare:b[1]];
+    }];
+    NSMutableArray *mw = [NSMutableArray new], *mh = [NSMutableArray new];
+    for (NSArray *q in pairs) { [mw addObject:q[0]]; [mh addObject:q[1]]; }
+    object_setIvar(grid, wi, [mw copy]);
+    object_setIvar(grid, hi, [mh copy]);
+}
+
+%group G3B_Orient
+
+// 1.1 consumer (16.2 0x1c76d71d0)
+%hook SBMainSwitcherControllerCoordinator
+%new
+- (void)switcherContentController:(id)controller setInterfaceOrientationFromUserResizing:(long long)o forDisplayItem:(id)item {
+    if (!controller || !item || !BP_G3B_On("g3b_orient")) return;
+    SEL hs = BPS("switcherContentController:deviceApplicationSceneHandleForDisplayItem:");
+    id handle = [self respondsToSelector:hs] ? ((id (*)(id, SEL, id, id))objc_msgSend)(self, hs, controller, item) : nil;
+    SEL setter = BPS("_setInterfaceOrientationFromUserResizing:");
+    if (!handle || ![handle respondsToSelector:setter]) return;
+    id app = BP_G3B_Send0(handle, BPS("application"));
+    if (BPG3BO_Bool0(app, BPS("isMedusaCapable"))) return;                         // only classic apps follow the window shape
+    id sc = BPG3BO_Obj1(self, BPS("_switcherControllerForContentViewController:"), controller);
+    if (!BPG3BO_Bool0(app, BPS("classicAppPhoneAppRunningOnPad"))) {
+        id ws = BP_G3B_Send0(sc, BPS("windowScene"));
+        if (!BPG3BO_Bool0(ws, BPS("isExternalDisplayWindowScene")) && BP_G3B_SendLL(controller, BPS("contentOrientation")) == o) o = 0;
+    }
+    ((void (*)(id, SEL, long long))objc_msgSend)(handle, setter, o);
+    BPG3BTraitsGuide *g = objc_getAssociatedObject(sc, &kBPG3BGuideKey);
+    [g refresh:@"UserResizeOrientation"];
+}
+%end
+
+// 1.2 producer: wrap the usual response (16.2 0x1c76bed98 ... 0x1c76bf0c8)
+%hook SBItemResizeGestureSwitcherModifier
+- (id)handleGestureEvent:(id)event {
+    BOOL orth = BPG3BO_ItemAllowsOrthogonal(self, BPG3BO_ModifierItem(self));
+    if (orth) tBPOrthDepth++;
+    id r = %orig;
+    if (orth) tBPOrthDepth--;
+    return r;
+}
+- (id)_responseForGestureUpdateAtGestureEnd:(BOOL)end {
+    BOOL orth = BPG3BO_ItemAllowsOrthogonal(self, BPG3BO_ModifierItem(self));
+    if (orth) tBPOrthDepth++;
+    id r = %orig;
+    if (orth) tBPOrthDepth--;
+    return r;
+}
+- (id)_responseForSceneSizeUpdateToSize:(CGSize)size center:(CGPoint)center sceneUpdatesOnly:(BOOL)only {
+    id item = BPG3BO_ModifierItem(self);
+    BOOL orth = BPG3BO_ItemAllowsOrthogonal(self, item);
+    if (orth) tBPOrthDepth++;
+    id resp = %orig;
+    if (orth) tBPOrthDepth--;
+    Class rc = NSClassFromString(@"SBSetInterfaceOrientationFromUserResizingEventResponse");     // defined by group1b
+    if (!orth || !resp || !rc) return resp;
+    long long o = size.width > size.height ? 3 : 1;                                                // UIInterfaceOrientationLandscapeRight : Portrait
+    id r = ((id (*)(id, SEL, id, long long))objc_msgSend)([rc alloc], BPS("initWithDisplayItem:desiredContentOrientation:"), item, o);
+    if (!r || ![r respondsToSelector:BPS("addChildResponse:")]) return resp;
+    ((void (*)(id, SEL, id))objc_msgSend)(r, BPS("addChildResponse:"), resp);
+    return r;
+}
+%end
+
+// 1.3 orthogonal grids: the grid cache is keyed without the orthogonal bit in 16.0, so orthogonal grids live in a private cache
+%hook SBDisplayItemLayoutGrid
+- (id)_gridForBounds:(CGRect)b contentOrientation:(long long)o layoutRestrictionInfo:(id)info screenScale:(double)s chamoisLayoutAttributes:(id)attrs {
+    Ivar iv = class_getInstanceVariable([self class], "_gridCache");
+    if (tBPOrthDepth <= 0 || !iv || BPG3BO_ULL0(info, BPS("layoutRestrictions")) != 2 || !BP_G3B_On("g3b_grid")) {
+        return %orig;
+    }
+    id saved = object_getIvar(self, iv);
+    NSMutableDictionary *oc = objc_getAssociatedObject(self, &kBPG3BOrthCache);
+    if (!oc) { oc = [NSMutableDictionary new]; objc_setAssociatedObject(self, &kBPG3BOrthCache, oc, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    object_setIvar(self, iv, oc);
+    tBPOrthBuild++;
+    id g = %orig;
+    tBPOrthBuild--;
+    object_setIvar(self, iv, saved);
+    return g;
+}
+- (void)clearCachedGrids {
+    %orig;
+    [(NSMutableDictionary *)objc_getAssociatedObject(self, &kBPG3BOrthCache) removeAllObjects];
+}
+%end
+
+%hook _SBDisplayItemFixedAspectGrid
+- (void)_buildFixedGridWithScreenScale:(double)scale {
+    %orig;
+    if (tBPOrthBuild > 0 && tBPOrthMerge == 0) BPG3BO_MergeTransposed(self, scale);
+}
+%end
+
+// 1.4 install the guide when the switcher controller sets up its traits participants
+%hook SBSwitcherController
+- (void)_setupSwitcherTraitsParticipantAndPolicySpecifiers {
+    %orig;
+    if (!BP_G3B_On("g3b_guide") || objc_getAssociatedObject(self, &kBPG3BGuideKey)) return;
+    BPG3BTraitsGuide *g = [BPG3BTraitsGuide new];
+    g.switcher = self;
+    objc_setAssociatedObject(self, &kBPG3BGuideKey, g, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [g install];
+}
+%end
+
+// 1.5 handle: 16.2 launch/supported orientation semantics for Medusa-capable apps (the 16.0 "phone app on pad in Stage Manager is portrait" special case is gone)
+%hook SBApplication
+- (BOOL)classicAppPhoneAppRunningOnPad {
+    if (tBPNoPhoneOnPad > 0) return NO;
+    return %orig;
+}
+%end
+
+%hook SBDeviceApplicationSceneHandle
+- (long long)_launchingInterfaceOrientationForOrientation:(long long)o {
+    id app = BP_G3B_Send0(self, BPS("application"));
+    BOOL med = BP_G3B_On("g3b_orient") && BPG3BO_Bool0(app, BPS("isMedusaCapable"));
+    if (med) tBPNoPhoneOnPad++;
+    long long r = %orig;
+    if (med) tBPNoPhoneOnPad--;
+    return r;
+}
+- (unsigned long long)_mainSceneSupportedInterfaceOrientations {
+    id app = BP_G3B_Send0(self, BPS("application"));
+    if (BP_G3B_On("g3b_orient") && BPG3BO_Bool0(app, BPS("isMedusaCapable"))) return 0x1e;      // 16.2 0x1c72aa11c
+    return %orig;
+}
+%end
+
+%end // G3B_Orient
+
+static void BPG3BO_InstallAdapters(void) {
+    if (!BP_G3B_On("g3b_split")) return;
+    BPG3BO_AddAdapter("SBSceneViewController");
+    BPG3BO_AddAdapter("SBAppContainerViewController");
+    BPG3BO_AddAdapter("SBMedusaDecoratedDeviceApplicationSceneViewController");
+    {
+        Class sh = objc_getClass("SBSceneHandle");
+        SEL ns = BPS("newSceneViewWithReferenceSize:contentOrientation:containerOrientation:hostRequester:");
+        if (sh && ![sh instancesRespondToSelector:ns]) class_addMethod(sh, ns, (IMP)BPG3BO_NewSceneView, "@56@0:8{CGSize=dd}16q32q40@48");
+    }
+    // overlay classes conform to the 16.2 overlay protocols when 16.0 has them
+    Protocol *pv = NSProtocolFromString(@"SBDeviceApplicationSceneOverlayView"), *pc = NSProtocolFromString(@"SBDeviceApplicationSceneOverlayViewController");
+    if (pv) class_addProtocol([SBDeviceApplicationSceneOverlayBasicWrapperView class], pv);
+    if (pc) class_addProtocol([SBDeviceApplicationSceneOverlayBasicWrapperViewController class], pc);
+}
+
+
 // ==== SETUP BEGIN
 void BP_G3B_Setup(void) {
     %init(G3B_Banner);
@@ -1164,6 +1742,8 @@ void BP_G3B_Setup(void) {
     %init(G3B_KbWindow);
     %init(G3B_StatusBar);
     %init(G3B_AXRoles);
+    %init(G3B_Orient);
+    BPG3BO_InstallAdapters();
 }
 // ==== SETUP END
 #pragma clang diagnostic pop
