@@ -1,7 +1,7 @@
 name: Build Backport162
 on:
   push:
-    paths: ["Backport162/**", ".github/workflows/build-backport162.yml"]
+    paths: ["Backport162/**", "Backport162BBD/**", ".github/workflows/build-backport162.yml"]
   workflow_dispatch:
 jobs:
   build:
@@ -35,3 +35,10 @@ jobs:
         with:
           name: Backport162-${{ steps.info.outputs.short }}
           path: Backport162/packages/*.deb
+      - name: Build the backboardd companion tweak
+        working-directory: Backport162BBD
+        run: make package FINALPACKAGE=1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Backport162BBD-${{ steps.info.outputs.short }}
+          path: Backport162BBD/packages/*.deb
