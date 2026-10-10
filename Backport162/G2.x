@@ -710,6 +710,19 @@ static CGRect RectRoundToScale(CGRect r, double scale) {                        
 
 @implementation BP162ChamoisOverlappingController
 
+// The 16.0 calculator code (SBDisplayItemLayoutAttributesCalculator, reached whenever our replacement falls back to the 16.0 body) still
+// sends the 16.0 selectors (modelForPreferredModel:initialStageFrame:layoutAttributes:draggingItem:modelBeforeDragging: ...) to whatever
+// _chamoisOverlappingControllerCache returns, which is this class. Anything this class does not implement is answered by a stock
+// SBChamoisOverlappingController (device crash: unrecognized selector modelForPreferredModel:... on BP162ChamoisOverlappingController).
+- (id)forwardingTargetForSelector:(SEL)sel {
+    static id stock; static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        Class k = NSClassFromString(@"SBChamoisOverlappingController");
+        if (k) stock = [k new];
+    });
+    return (stock && [stock respondsToSelector:sel]) ? stock : [super forwardingTargetForSelector:sel];
+}
+
 // 162 0x1c73c9b2c
 - (id)modelByPerformingAutoLayoutForModel:(id)model chamoisLayoutAttributes:(id)attrs draggingItem:(id)dragging modelBeforeDragging:(id)before
                        floatingDockHeight:(double)dockH bounds:(CGRect)bounds screenScale:(double)scale
