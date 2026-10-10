@@ -733,6 +733,9 @@ static IMP gOrigAutoLayout;
 // The full 162 algorithm.  Returns nil to make the caller fall back to the original 16.0 implementation.
 static id BP2B_AutoLayout(id calc, id layout, long long orient, id attrs, double dockH, double scale, id dragging, id before, CGRect bounds, BOOL ps, BOOL pd) {
     if (!calc || !layout || !attrs || bounds.size.width <= 0 || bounds.size.height <= 0) return nil;
+    // the attributesByModifying{AttributedSize,AttributedUserSizeBeforeOverlapping,NormalizedCenter,UnoccludedPeekingCenter}: selectors sent below
+    // exist only when BP2B_SetupAttributes succeeded (gBP2B_Init16 is NULL when it bailed out): then the 16.0 implementation runs
+    if (!gBP2B_Init16 || !gBP2B_AttrClass) return nil;
     id controller = BP2B_PortedController(calc);
     Class keyClass = NSClassFromString(@"SBAppLayoutOverlappingModelCacheKey");
     Class modelClass = NSClassFromString(@"SBChamoisOverlappingModel");
@@ -1337,7 +1340,8 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                 if ([kbSettings respondsToSelector:@selector(setDampingRatio:)]) ((void (*)(id, SEL, double))objc_msgSend)(kbSettings, @selector(setDampingRatio:), 1.0);
             });
             BP2B_Animate(kbSettings, 3, ^{
-                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null])
+                // 16.0: only SBFluidSwitcherSpaceUnderlayAccessoryView has setKeyboardHeight: (the overlay view does not: unrecognized selector)
+                for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null] && [v respondsToSelector:sel_registerName("setKeyboardHeight:")])
                     BP2B_S1(void, v, "setKeyboardHeight:", (double)(BP2B_Dbl(vc, sel_registerName("keyboardHeight"))));
             }, (void (^)(BOOL, BOOL))make(@"accessory keyboard height"));
         }
