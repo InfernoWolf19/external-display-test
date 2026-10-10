@@ -1112,6 +1112,31 @@ static void G1B_BuildFullScreenToStrip(void) {
 %end
 
 // ============================================================================================================
+// SBWindowDeleteSwitcherModifier -transitionDidEnd (16.2 0x1c78e702c, new): un-blur the deleted window's container.
+// 16.0 -transitionWillUpdate (0x1c6435b6c) blurs the container of _centerWindowAppLayout (SBBlurItemContainerSwitcherEventResponse, shouldBlur YES, mode 3,
+// a gaussianBlur CAFilter + rasterization on the container layer) and 16.0 has NO transitionDidEnd: it relies on -_removeVisibleItemContainerForAppLayout:
+// (0x1c5e70268) un-blurring the container when it leaves the visible set. With the ported Stage Manager model the closed window's container stays alive
+// (it can be reused for the same app layout), so the blur stayed and the app opened again from the same scene was completely blurred (touches worked).
+// 16.2 sends shouldBlur NO, mode 2 at the end of the transition (transitionDidEnd 0x1c78e702c, same ivar _centerWindowAppLayout).
+// ============================================================================================================
+%group G1B_WindowDelete
+%hook SBWindowDeleteSwitcherModifier
+- (id)transitionDidEnd {
+    id r = %orig;
+    if (!G1B_ON()) return r;
+    id me = (id)self;
+    Ivar iv = class_getInstanceVariable(object_getClass(me), "_centerWindowAppLayout");
+    id layout = iv ? object_getIvar(me, iv) : nil;
+    Class rc = NSClassFromString(@"SBBlurItemContainerSwitcherEventResponse");
+    SEL ini = @selector(initWithAppLayout:shouldBlur:animationUpdateMode:);
+    if (!layout || !rc || ![rc instancesRespondToSelector:ini]) return r;
+    id unblur = ((id (*)(id, SEL, id, BOOL, long long))objc_msgSend)([rc alloc], ini, layout, NO, 2);
+    return G1B_AppendTo(unblur, r);
+}
+%end
+%end
+
+// ============================================================================================================
 // 2.4  SBiPadOSWindowModeChangeTransitionModifier  (PORTABLE: new class + creator hook; needs 2.0 flags)
 // ============================================================================================================
 static Class gWinModeCls;
@@ -1268,6 +1293,7 @@ void G1B_Setup(void) {
     G1B_BuildDndToApp();
     G1B_InstallTransitionEventFlags();
     %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
+    %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
     %init(G1B_VCInvalidate);                 // 1.3 consumer

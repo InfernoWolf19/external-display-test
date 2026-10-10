@@ -1167,7 +1167,10 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             id cv = BP2B_Obj(c, sel_registerName("contentView"));
             if ([cv respondsToSelector:sel_registerName("setShouldStretchToBounds:")]) BP2B_S1(void, cv, "setShouldStretchToBounds:", (BOOL)(contentFill));
             if ([cv respondsToSelector:sel_registerName("setUsesNonuniformScaling:")]) BP2B_S1(void, cv, "setUsesNonuniformScaling:", (BOOL)(nonuniform));
-            BOOL liveBlur = blurred && live != nil && blurTarget == 1;
+            // 160 0x1c5fcb770 (cmp x21,#1; cset w19,ne) and 162 0x1c74444fc (cmp x25,#1; cset w27,ne): the live-content overlay is blurred when the
+            // preference is NOT 1 (1 = blur the item container, used by the card drag-and-drop modifiers). This was inverted (== 1), which put the
+            // container (snapshot) blur on every blurred Stage Manager window instead of the live-content blur.
+            BOOL liveBlur = blurred && live != nil && blurTarget != 1;
             BP2B_S1(void, c, "setDraggable:", (BOOL)(draggable));
             BP2B_S1(void, c, "setSupportsSwitcherDragAndDrop:", (BOOL)(canDnD));
             Class blurEv = NSClassFromString(@"SBBlurProgressSwitcherModifierEvent");
@@ -1702,6 +1705,17 @@ static void BP2B_SetupContainerPointer(void) {
     oReuse = BP2B_Replace(ic, "prepareForReuse", imp_implementationWithBlock(^(id me) {
         if (oReuse) ((void (*)(id, SEL))oReuse)(me, @selector(prepareForReuse));
         objc_setAssociatedObject(me, kBP2B_CSuppressed, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        // A recycled container must not carry the layer blur of a closed window (160 0x1c5fc6858 -_blurItemContainer:... installs a "gaussianBlur"
+        // CAFilter + rasterization on the container layer; the matching unblur only runs from an animation completion / a response that can be
+        // lost, and 160 / 162 prepareForReuse do not reset it). Relaunching the app into the reused container showed a fully blurred window.
+        CALayer *lay = [me respondsToSelector:@selector(layer)] ? (CALayer *)((id (*)(id, SEL))objc_msgSend)(me, @selector(layer)) : nil;
+        NSArray *fs = lay ? lay.filters : nil;
+        BOOL hasBlur = NO;
+        for (id f in fs) {
+            id n = [f respondsToSelector:@selector(name)] ? ((id (*)(id, SEL))objc_msgSend)(f, @selector(name)) : nil;
+            if ([n isKindOfClass:[NSString class]] && [(NSString *)n isEqualToString:@"gaussianBlur"]) { hasBlur = YES; break; }
+        }
+        if (hasBlur) { lay.filters = nil; lay.shouldRasterize = NO; }
     }));
     // windowScene argument of the 162 initialiser
     BP2B_AddIfMissing(ic, "initWithFrame:appLayout:delegate:active:windowScene:", imp_implementationWithBlock(^id(id me, CGRect f, id layout, id delegate, BOOL active, id scene) {
