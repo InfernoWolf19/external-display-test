@@ -34,6 +34,17 @@
 #import "BP.h"
 #import "BPShared.h"
 
+// INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
+@interface SBSwitcherLayoutCalculationsCache : NSObject @end
+@interface SBFluidSwitcherViewController : UIViewController @end
+@interface SBChamoisOverlappingModel : NSObject @end
+@interface SBSwitcherChamoisLayoutAttributes : NSObject @end
+@interface SBSwitcherChamoisSettings : NSObject @end
+@interface SBAppLayout : NSObject @end
+@interface SBAppLayoutOverlappingModelCacheKey : NSObject @end
+@interface SBFluidSwitcherItemContainer : NSObject @end
+// END INTEGRATION interfaces
+
 // ------------------------------------------------------------------------------------------------ small runtime helpers
 
 // Read an object ivar by NAME (never by offset). Returns nil if the class has no such ivar or it is not an object.
@@ -1458,7 +1469,9 @@ static id BP_G2_NewCacheKey(Class kc, id layout, CGRect bounds, long long o, dou
     NSNumber *a = objc_getAssociatedObject(self, kBP_G2_KeyDock), *b = objc_getAssociatedObject(other, kBP_G2_KeyDock);
     return (a == b) || [a isEqual:b];
 }
-- (NSUInteger)hash { return %orig; }          // equal keys keep equal hashes (dock height only refines isEqual:)
+- (NSUInteger)hash {
+    return %orig;          // equal keys keep equal hashes (dock height only refines isEqual:)
+}
 %end
 %end // G2CacheKey
 

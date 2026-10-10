@@ -152,7 +152,7 @@ static void BPD_Reapply(void) {
     id c = BPD_Controller();
     if (!c || !fn_reapply) return;
     Ivar iv = class_getInstanceVariable(object_getClass(c), "_workQueue");
-    dispatch_queue_t q = iv ? (__bridge dispatch_queue_t)object_getIvar(c, iv) : nil;
+    dispatch_queue_t q = iv ? (dispatch_queue_t)object_getIvar(c, iv) : nil;
     if (!q) { BPD_Log(@"no _workQueue, cannot reapply"); return; }
     dispatch_async(q, ^{ fn_reapply(c); });          // same queue the stock mirroring-mode block (0x10004ecb4) runs on
 }

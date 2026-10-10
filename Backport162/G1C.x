@@ -34,6 +34,18 @@
 #import "G1BKit.h"
 #import "BPShared.h"
 
+// INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
+@interface SBFluidSwitcherGestureManager : NSObject @end
+@interface SBFluidSwitcherViewController : UIViewController @end
+@interface SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier : NSObject @end
+@interface SBRevealContinuousExposeStripOverflowRootSwitcherModifier : NSObject @end
+@interface SBContinuousExposeWindowDragModifierEvent : NSObject @end
+@interface SBFluidSwitcherGestureWorkspaceTransaction : NSObject @end
+@interface SBContinuousExposeRootSwitcherModifier : NSObject @end
+@interface SBFullScreenContinuousExposeSwitcherModifier : NSObject @end
+@interface SBItemResizeGestureSwitcherModifier : NSObject @end
+// END INTEGRATION interfaces
+
 extern Class gFilteringCls, gOverrideIdsCls, gOverrideIdsSuper, gGrabberRespCls, gOrientRespCls, gInvalidateRespCls, gF2SCls, gXBCls, gDndToAppCls;     // G1B.x
 
 #pragma clang diagnostic push
@@ -1035,7 +1047,7 @@ static id G1C_Rv_AnimAttrs(id self, SEL _cmd, id element) {
     if (!a || ![element respondsToSelector:@selector(switcherLayoutElementType)] || G1B_SendLL0(element, @selector(switcherLayoutElementType)) != 0) return a;
     Class fc = NSClassFromString(@"SBFFluidBehaviorSettings");
     if (!fc || ![fc instancesRespondToSelector:@selector(initWithDefaultValues)]) return a;
-    id s = [[fc alloc] initWithDefaultValues];
+    id s = G1B_Send0([fc alloc], @selector(initWithDefaultValues));
     if (!s) return a;
     G1C_SendVD(s, @selector(setTrackingResponse:), 0.15);
     G1C_SendVD(s, @selector(setTrackingDampingRatio:), 0.85);
@@ -1127,7 +1139,7 @@ static id G1C_A2A_WillBegin(id self, SEL _cmd) {                                
 static id G1C_NewFluid(double response, double damping) {
     Class fc = NSClassFromString(@"SBFFluidBehaviorSettings");
     if (!fc || ![fc instancesRespondToSelector:@selector(initWithDefaultValues)]) return nil;
-    id s = [[fc alloc] initWithDefaultValues];
+    id s = G1B_Send0([fc alloc], @selector(initWithDefaultValues));
     if (!s) return nil;
     if ([s respondsToSelector:@selector(setResponse:)]) G1C_SendVD(s, @selector(setResponse:), response);
     if ([s respondsToSelector:@selector(setDampingRatio:)]) G1C_SendVD(s, @selector(setDampingRatio:), damping);
@@ -1426,7 +1438,7 @@ static int G1C_PT_Pick(id self, id layout) {
 static CGRect G1C_PT_Frame(id self, SEL _cmd, unsigned long long i) {
     int p = G1C_PT_Pick(self, G1C_PT_Layout(self, i));
     if (p) {
-        id fs = G1B_GET(self, p == 1 ? kPtFromFS : kPtToFS);
+        id fs = objc_getAssociatedObject(self, p == 1 ? &kPtFromFS : &kPtToFS);
         __block CGRect r = CGRectZero; __block BOOL got = NO;
         G1C_PT_With(self, fs, ^{ r = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(fs, @selector(frameForIndex:), i); got = YES; });
         if (got) return r;
@@ -1436,7 +1448,7 @@ static CGRect G1C_PT_Frame(id self, SEL _cmd, unsigned long long i) {
 static double G1C_PT_Scale(id self, SEL _cmd, unsigned long long i) {
     int p = G1C_PT_Pick(self, G1C_PT_Layout(self, i));
     if (p) {
-        id fs = G1B_GET(self, p == 1 ? kPtFromFS : kPtToFS);
+        id fs = objc_getAssociatedObject(self, p == 1 ? &kPtFromFS : &kPtToFS);
         __block double r = 1; __block BOOL got = NO;
         G1C_PT_With(self, fs, ^{ r = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(fs, @selector(scaleForIndex:), i); got = YES; });
         if (got) return r;
@@ -3246,7 +3258,11 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
             return h ?: %orig;
         }
         case 2: {
-            if (!exposeID) { id m = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil; return m ?: %orig; }
+            if (!exposeID) {
+                id m = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
+                if (m) return m;
+                return %orig;
+            }
             if (floor && [floor isKindOfClass:expC] && [G1C_StrProp(floor, @selector(bundleIdentifier)) isEqualToString:exposeID]) return floor;
             SEL ii = @selector(initWithBundleIdentifier:);
             return [expC instancesRespondToSelector:ii] ? G1B_Send1([expC alloc], ii, exposeID) : %orig;

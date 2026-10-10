@@ -45,6 +45,15 @@
 
 #include "G1BKit.h"
 
+// INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
+@interface SBSwitcherModifier : NSObject @end
+@interface SBFluidSwitcherViewController : UIViewController @end
+@interface SBMainSwitcherControllerCoordinator : NSObject @end
+@interface SBiPadOSPlatformSwitcherModifier : NSObject @end
+@interface SBContinuousExposeRootSwitcherModifier : NSObject @end
+@interface SBContinuousExposeAppToAppModifier : NSObject @end
+// END INTEGRATION interfaces
+
 // ============================================================================================================
 // 0.1  event types 36 / 37 / 38 reach 16.0 modifiers  (PORTABLE)
 // ============================================================================================================
@@ -544,13 +553,22 @@ static void G1B_BuildEventsAndResponses(void) {
     BOOL handled = G1B_ON() && gHeaderEventCls && fs && [fs instancesRespondToSelector:@selector(handleTapAppLayoutHeaderEvent:)]
                    && [self respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled))
                    && [self respondsToSelector:@selector(_dispatchEventAndHandleAction:)];
-    if (!handled) { %orig; return; }
+    if (!handled) {
+        %orig;
+        return;
+    }
     Ivar iv = class_getInstanceVariable([self class], "_visibleOverlayAccessoryViews");
     NSDictionary *map = iv ? object_getIvar(self, iv) : nil;
     id layout = [map isKindOfClass:[NSDictionary class]] ? [[map allKeysForObject:view] firstObject] : nil;
-    if (!layout) { %orig; return; }
+    if (!layout) {
+        %orig;
+        return;
+    }
     id ev = ((id (*)(id, SEL, id, long long))objc_msgSend)([gHeaderEventCls alloc], @selector(initWithAppLayout:layoutRole:), layout, role);
-    if (!ev) { %orig; return; }
+    if (!ev) {
+        %orig;
+        return;
+    }
     G1B_SendV1(self, @selector(_dispatchEventAndHandleAction:), ev);
 }
 %end

@@ -28,6 +28,21 @@
 
 #import "BP.h"
 
+// INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
+@interface UIMenu : NSObject @end
+@interface SBFullKeyboardAccessUISceneController : NSObject @end
+@interface SBVoiceControlUISceneController : NSObject @end
+@interface SBAssistiveTouchUISceneController : NSObject @end
+@interface SBAccessibilityUIServerUISceneController : NSObject @end
+@interface SBExternalDisplayWindowSceneDelegate : NSObject @end
+@interface SBEmbeddedDisplayWindowSceneDelegate : NSObject @end
+@interface SBTraitsExternalDisplayRolesAndDefaultPoliciesProvider : NSObject @end
+@interface SBTraitsEmbeddedDisplayRolesAndDefaultPoliciesProvider : NSObject @end
+@interface SBMainDisplaySceneManager : NSObject @end
+@interface SBSystemShellExternalDisplaySceneManager : NSObject @end
+@interface SBMedusaHostedKeyboardWindow : NSObject @end
+// END INTEGRATION interfaces
+
 // per-piece switch: on by default, off when <jbroot>/tmp/Backport162.off or Backport162.off.<name> exists
 static BOOL BP_G3B_On(const char *name) { return BP_OnName(name); }     // INTEGRATION: shared switches (BP.h)
 

@@ -32,6 +32,9 @@
 
 #import "BP.h"
 
+// INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
+// END INTEGRATION interfaces
+
 // Per-feature switch, on by default, off when <jbroot>/tmp/Backport162.off(.<name>) exists. Checked at most once a second.
 static BOOL BP_G3_On(const char *name) { return BP_OnName(name); }     // INTEGRATION: shared switches (BP.h)
 

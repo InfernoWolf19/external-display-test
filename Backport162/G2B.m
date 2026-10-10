@@ -1111,7 +1111,8 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
 
         // ---- (2) per leaf (162 0x1c74439b8..0x1c7445228) ---------------------------------------------------------------------------
         for (id leaf in leafs) {
-            id item0 = [[BP2B_Obj(leaf, sel_registerName("allItems")) ?: @[] ] firstObject];
+            NSArray *items0 = BP2B_Obj(leaf, sel_registerName("allItems"));
+            id item0 = items0.firstObject;
             long long role = ((long long (*)(id, SEL, id))objc_msgSend)(appLayout, sel_registerName("layoutRoleForItem:"), item0);
             if (!BP2B_RoleMaskContains(roleMask, role)) continue;
             id c = BP2B_Obj1(vc, sel_registerName("_itemContainerForAppLayoutIfExists:"), leaf);
@@ -1330,7 +1331,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             static dispatch_once_t okb; static id kbSettings;
             dispatch_once(&okb, ^{                                                              // block_2: response 0.25, damping 1.0, frame rate range
                 Class bs = NSClassFromString(@"SBFluidBehaviorSettings");
-                kbSettings = [[bs alloc] initWithDefaultValues];
+                kbSettings = ((id (*)(id, SEL))objc_msgSend)([bs alloc], sel_registerName("initWithDefaultValues"));
                 if ([kbSettings respondsToSelector:@selector(setResponse:)]) ((void (*)(id, SEL, double))objc_msgSend)(kbSettings, @selector(setResponse:), 0.25);
                 if ([kbSettings respondsToSelector:@selector(setDampingRatio:)]) ((void (*)(id, SEL, double))objc_msgSend)(kbSettings, @selector(setDampingRatio:), 1.0);
             });

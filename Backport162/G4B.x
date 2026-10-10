@@ -37,6 +37,32 @@
 #import <sys/sysctl.h>
 #import "BP.h"
 
+// INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
+@interface SBDisplayAssertionPreferences : NSObject @end
+@interface SBSystemShellExtendedDisplayControllerPolicy : NSObject @end
+@interface SBNonInteractiveDisplayControllerPolicy : NSObject @end
+@interface SBSceneHostingDisplayController : NSObject @end
+@interface SBDisplayManager : NSObject @end
+@interface SBExternalDisplayDefaults : NSObject @end
+@interface SBExternalDisplayEducationObserver : NSObject @end
+@interface SpringBoard : NSObject @end
+@interface SBSceneManager : NSObject @end
+@interface SBMousePointerManager : NSObject @end
+@interface _SBDisplayAssertionStack : NSObject @end
+@interface SBDisplayAssertionCoordinator : NSObject @end
+@interface SBWindowScene : NSObject @end
+@interface SBLockedPointerManager : NSObject @end
+@interface SBSystemShellExternalDisplaySceneManager : NSObject @end
+@interface SBAbstractWindowSceneDelegate : NSObject @end
+@interface SBFluidSwitcherViewController : UIViewController @end
+@interface SBFluidSwitcherItemContainer : NSObject @end
+@interface SBMainSwitcherControllerCoordinator : NSObject @end
+@interface SBWorkspaceKeyboardFocusController : NSObject @end
+@interface SBExternalDisplaySettings : NSObject @end
+@interface SBWindowSceneManager : NSObject @end
+@interface SBExternalDisplayService : NSObject @end
+// END INTEGRATION interfaces
+
 // default-on switch with off files (Backport162.off, Backport162.off.<name>), cached one second per name
 static BOOL G4B_On(const char *name) { return BP_OnName(name); }     // INTEGRATION: shared switches (BP.h)
 
@@ -356,7 +382,8 @@ static void G4B_InvalidateCloneRequest(G4BCloneRequest *req) {   // block 0x18e4
     return r;
 }
 - (unsigned long long)hash {
-    return %orig ^ ([self cloneMirroringMode] * 0x9e3779b97f4a7c15ull);
+    unsigned long long h = %orig;
+    return h ^ ([self cloneMirroringMode] * 0x9e3779b97f4a7c15ull);
 }
 %end
 
@@ -1006,7 +1033,12 @@ static NSHashTable *G4B_PointerScenes(id sceneManager, BOOL create) {
     if (scenes.count == 0) {
         NSSet *all = [sm respondsToSelector:@selector(allScenes)] ? G4B_Obj(sm, @selector(allScenes)) : nil;
         static BOOL fell;                                           // safety net: one 16.0-style pass if the producer never fired
-        if (all.count && !fell) { fell = YES; BP_Log(@"presubset: empty subset, falling back once"); %orig; return; }
+        if (all.count && !fell) {
+            fell = YES;
+            BP_Log(@"presubset: empty subset, falling back once");
+            %orig;
+            return;
+        }
         if (completion) completion();
         return;
     }
@@ -1277,7 +1309,10 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
 
 // ----- 16.2 _queue_updateLockForLayoutState: (0x1c76ba124), whole method
 - (void)_queue_updateLockForLayoutState:(id)state {
-    if (!G4B_On("lockedptr2") || !G4B_LPMScene(self)) { %orig; return; }
+    if (!G4B_On("lockedptr2") || !G4B_LPMScene(self)) {
+        %orig;
+        return;
+    }
     if (G4B_LPMInvOnQueue(self)) { BP_Log(@"lockedptr2: ignoring update, invalidated"); return; }
     id h = [self _possibleSceneHandleForLockingPointerFromLayoutState:state];
     NSString *sid = [h respondsToSelector:@selector(sceneIdentifier)] ? G4B_Obj(h, @selector(sceneIdentifier)) : nil;
@@ -1291,7 +1326,10 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
 }
 // ----- 16.2 _queue_lockPointerForSceneIdentifier: (0x1c76ba3dc), whole method; display scoping decided in md 5.2
 - (void)_queue_lockPointerForSceneIdentifier:(NSString *)sid {
-    if (!G4B_On("lockedptr2") || !G4B_LPMScene(self) || !sid) { %orig; return; }
+    if (!G4B_On("lockedptr2") || !G4B_LPMScene(self) || !sid) {
+        %orig;
+        return;
+    }
     NSString *cur = G4B_Ivar(self, "_queue_sceneIdentifierThatHasLockedPointer");
     if (cur) [self _setPointerLockStatus:0 forSceneWithIdentifier:cur];
     NSString *reason = [NSString stringWithFormat:@"Scene %@ requested locked pointer", sid];
