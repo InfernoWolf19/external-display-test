@@ -530,7 +530,7 @@ static void G1B_BuildEventsAndResponses(void) {
             BOOL initial = ((BOOL (*)(id, SEL))objc_msgSend)(response, @selector(isInitialPresentation));
             SEL s = initial ? NSSelectorFromString(@"presentContinuousExposeStripRevealGrabberTongueImmediately")
                             : NSSelectorFromString(@"tickleContinuousExposeStripRevealGrabberTongueIfVisible");
-            if (sc && [sc respondsToSelector:s]) G1B_Send0(sc, s);           // 16.0 has neither: no-op until the strip-reveal grabber is ported
+            if (sc && [sc respondsToSelector:s]) G1B_SendV0(sc, s);          // void selectors (16.0 has neither: no-op until the strip-reveal grabber is ported)
         } else if (t == G1BRespSetInterfaceOrientationFromUserResizing && [response respondsToSelector:@selector(displayItem)]) {
             id item = G1B_Send0(response, @selector(displayItem));
             long long o = G1B_SendLL0(response, @selector(desiredOrientation));

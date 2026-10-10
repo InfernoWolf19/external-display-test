@@ -2868,12 +2868,13 @@ static id G1C_Inl_Highlight(id self, SEL _cmd, id event) {
 }
 
 // ---- HomeScreen ----
+static char kHsStrip;       // retained by the object (the run-time ivar "_stripModifier" below is unretained: object_setIvar on a class_addIvar'ed ivar has no ARC layout)
 static id G1C_Hs_Init(id self, SEL _cmd) {
     id me = G1B_SUPER(id, gHsParent, self, _cmd, (struct objc_super *, SEL));
     Class sc = NSClassFromString(@"SBStripContinuousExposeSwitcherModifier");        // the ported / real strip modifier (FullScreen-Strip package)
     if (me && sc && [me respondsToSelector:@selector(addChildModifier:)]) {
         id strip = [[sc alloc] init];
-        if (strip) { G1C_SetIvarObj(me, "_stripModifier", strip); G1B_SendV1(me, @selector(addChildModifier:), strip); }
+        if (strip) { G1B_SET(me, kHsStrip, strip); G1B_SendV1(me, @selector(addChildModifier:), strip); }
     }
     return me;
 }

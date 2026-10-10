@@ -29,6 +29,9 @@
 // ----------------------------------------------------------------------------------------------- tiny helpers
 static inline id BP2B_Obj(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
 static inline id BP2B_Obj1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
+// For selectors that return VOID: never send them through BP2B_Obj/BP2B_Obj1 (ARC would retain/autorelease the stale x0 the callee leaves behind).
+static inline void BP2B_Void0(id o, SEL s) { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL))objc_msgSend)(o, s); }
+static inline void BP2B_Void1(id o, SEL s, id a) { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
 static inline BOOL BP2B_Bool(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
 static inline BOOL BP2B_Bool1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, s, a) : NO; }
 static inline double BP2B_Dbl(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((double (*)(id, SEL))objc_msgSend)(o, s) : 0.0; }
@@ -1168,8 +1171,8 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             BP2B_S1(void, c, "setDraggable:", (BOOL)(draggable));
             BP2B_S1(void, c, "setSupportsSwitcherDragAndDrop:", (BOOL)(canDnD));
             Class blurEv = NSClassFromString(@"SBBlurProgressSwitcherModifierEvent");
-            void (^began)(void) = ^{ id e = [blurEv alloc]; e = ((id (*)(id, SEL, double))objc_msgSend)(e, sel_registerName("initWithProgress:"), 0.0); BP2B_Obj1(vc, sel_registerName("_dispatchEventAndHandleAction:"), e); };
-            void (^done)(void) = ^{ id e = [blurEv alloc]; e = ((id (*)(id, SEL, double))objc_msgSend)(e, sel_registerName("initWithProgress:"), 1.0); BP2B_Obj1(vc, sel_registerName("_dispatchEventAndHandleAction:"), e); };
+            void (^began)(void) = ^{ id e = [blurEv alloc]; e = ((id (*)(id, SEL, double))objc_msgSend)(e, sel_registerName("initWithProgress:"), 0.0); BP2B_Void1(vc, sel_registerName("_dispatchEventAndHandleAction:"), e); };
+            void (^done)(void) = ^{ id e = [blurEv alloc]; e = ((id (*)(id, SEL, double))objc_msgSend)(e, sel_registerName("initWithProgress:"), 1.0); BP2B_Void1(vc, sel_registerName("_dispatchEventAndHandleAction:"), e); };
             SEL liveBlurS = sel_registerName("setLiveContentBlurEnabled:duration:blurDelay:iconViewScale:began:completion:");
             if (live && [live respondsToSelector:liveBlurS])
                 ((void (*)(id, SEL, BOOL, double, double, double, void (^)(void), void (^)(void)))objc_msgSend)(live, liveBlurS, liveBlur, 0.25, blurDelay, blurIcon, began, done);
@@ -1228,7 +1231,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                     BP2B_S1(void, c, "setPageViewOffset:", (CGPoint)(pageOffset));
                     BP2B_S1(void, c, "setSizeForContainingSpace:", (CGSize)(frame.size));
                     BP2B_S1(void, c, "setMinimumTranslationForKillingContainer:", (double)(minKill));
-                    BP2B_Obj(c, @selector(layoutIfNeeded));
+                    BP2B_Void0(c, @selector(layoutIfNeeded));
                     BP2B_SetProp(resizeProp, 1.0);
                 }, BP2B_CompletionFor(resizeProp, mk));
             };
@@ -1241,7 +1244,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                 BP2BDone mkClip = make(@"clipping");
                 BP2B_Animate(clippingSettings, clippingMode, ^{
                     BP2B_S2(void, c, "setContentClippingFrame:cornerRadii:", (CGRect)(clip), (BP2BRadii)(rr));
-                    BP2B_Obj(c, @selector(layoutIfNeeded));
+                    BP2B_Void0(c, @selector(layoutIfNeeded));
                 }, ^(BOOL f, BOOL r) {
                     BP2B_S1(void, vc, "_noteItemContainerDidUpdateContentClippingWithMode:", (long long)(clippingMode));
                     if (mkClip) mkClip(f, r);
@@ -1297,21 +1300,21 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                     BP2B_S1(void, overlay, "setMultiWindowIndicatorRoleMask:", (unsigned long long)(multiMask));
                     BP2B_S1(void, overlay, "setBounds:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height)));
                     BP2B_S1(void, overlay, "setContentViewOffset:", (CGPoint)(accOffset));
-                    BP2B_Obj(overlay, @selector(layoutIfNeeded));
+                    BP2B_Void0(overlay, @selector(layoutIfNeeded));
                 }
                 if (underlay) {
                     BP2B_S1(void, underlay, "setBounds:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height)));
                     BP2B_S1(void, underlay, "setContentViewOffset:", (CGPoint)(accOffset));
                     BP2B_S1(void, underlay, "setResizeGrabberBounds:", (CGRect)(BP2B_RectWithSize(grabberRect.size.width, grabberRect.size.height)));
                     BP2B_S1(void, underlay, "setResizeGrabberCenter:", (CGPoint)(CGPointMake(CGRectGetMidX(grabberRect), CGRectGetMidY(grabberRect))));
-                    BP2B_Obj(underlay, @selector(layoutIfNeeded));
+                    BP2B_Void0(underlay, @selector(layoutIfNeeded));
                 }
             }, (void (^)(BOOL, BOOL))make(@"accessory bounds"));
             for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) BP2B_S1(void, v, "setContentClippingEnabled:", (BOOL)(clips));
             BP2B_Animate(clippingSettings, clippingMode, ^{
                 for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) {
                     BP2B_S2(void, v, "setContentClippingFrame:cornerRadii:", (CGRect)(clipIdx), (BP2BRadii)(radii));
-                    BP2B_Obj(v, @selector(layoutIfNeeded));
+                    BP2B_Void0(v, @selector(layoutIfNeeded));
                 }
             }, (void (^)(BOOL, BOOL))make(@"accessory clipping"));
             BP2B_Animate(scaleSettings, scaleMode, ^{
@@ -1328,7 +1331,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                         if (hg) { BP2B_S1(void, hg, "setTransform3D:", (CATransform3D)(homeT)); BP2B_S1(void, hg, "setFrame:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height))); }
                     }
                     BP2B_S1(void, v, "setContentScale:", (double)(accPageScale));
-                    BP2B_Obj(v, @selector(layoutIfNeeded));
+                    BP2B_Void0(v, @selector(layoutIfNeeded));
                 }
             }, (void (^)(BOOL, BOOL))make(@"accessory transform and content page view scale"));
             static dispatch_once_t okb; static id kbSettings;
@@ -1421,7 +1424,7 @@ static void BP2B_DispatchTap(id vc, id layout, long long role, long long flags, 
     if (withSource && [ev respondsToSelector:s4]) ev = ((id (*)(id, SEL, id, long long, long long, long long))objc_msgSend)(ev, s4, layout, role, flags, source);
     else if ([ev respondsToSelector:s3]) ev = ((id (*)(id, SEL, id, long long, long long))objc_msgSend)(ev, s3, layout, role, flags);
     else ev = ((id (*)(id, SEL, id, long long))objc_msgSend)(ev, sel_registerName("initWithAppLayout:layoutRole:"), layout, role);
-    BP2B_Obj1(vc, sel_registerName("_dispatchEventAndHandleAction:"), ev);
+    BP2B_Void1(vc, sel_registerName("_dispatchEventAndHandleAction:"), ev);
 }
 static void BP2B_DidSelectContainer(id vc, id container, long long flags) {
     id leaf = BP2B_Obj(container, @selector(appLayout));
@@ -1835,7 +1838,7 @@ static void BP2B_UpdateTonguePresence(id vc) {
             Class le = NSClassFromString(@"SBSwitcherLayoutElement");                                                                // class at 0x1db40b9f0; type 6 = tongue backdrop capture element
             id el = le ? ((id (*)(id, SEL, long long))objc_msgSend)([le alloc], sel_registerName("initWithType:"), 6) : nil;
             if (el) objc_setAssociatedObject(vc, kBP2B_TongueElement, el, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            BP2B_Obj(vc, sel_registerName("_ensureSubviewOrdering"));
+            BP2B_Void0(vc, sel_registerName("_ensureSubviewOrdering"));
             BP2B_LayoutTongue(vc, NO, nil);
             BP2BTongueAttrs hidden = { 1, a.direction };
             [t setAttributes:hidden animated:NO];
@@ -1847,7 +1850,7 @@ static void BP2B_UpdateTonguePresence(id vc) {
         [(UIView *)objc_getAssociatedObject(vc, kBP2B_TongueBackdrop) removeFromSuperview];
         objc_setAssociatedObject(vc, kBP2B_TongueBackdrop, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(vc, kBP2B_TongueElement, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        BP2B_Obj(vc, sel_registerName("_ensureSubviewOrdering"));
+        BP2B_Void0(vc, sel_registerName("_ensureSubviewOrdering"));
     }
 }
 static void BP2B_SetupTongue(void) {
@@ -1862,17 +1865,19 @@ static void BP2B_SetupTongue(void) {
             objc_setAssociatedObject(me, kBP2B_StripOpts, @(o | 1), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             Class rc = NSClassFromString(@"SBUpdateLayoutSwitcherEventResponse");
             id r = rc ? ((id (*)(id, SEL, unsigned long long, long long))objc_msgSend)([rc alloc], sel_registerName("initWithOptions:updateMode:"), 0x1eull, 3ll) : nil;
-            if (r) BP2B_Obj1(me, sel_registerName("_handleEventResponse:"), r);
+            if (r) BP2B_Void1(me, sel_registerName("_handleEventResponse:"), r);
         }
-        if ([me respondsToSelector:sel_registerName("dismissContinuousExposeStripEdgeProtectTongue")]) BP2B_Obj(me, sel_registerName("dismissContinuousExposeStripEdgeProtectTongue"));
+        if ([me respondsToSelector:sel_registerName("dismissContinuousExposeStripEdgeProtectTongue")]) BP2B_Void0(me, sel_registerName("dismissContinuousExposeStripEdgeProtectTongue"));
         BP2B_UpdateTonguePresence(me);
     }), "v24@0:8@16");
     // post-event / post-layout / ordering hooks (162 calls these from _updateImplicitModifierStackInvalidatables / _updateLayoutWithCompletion: / _ensureSubviewOrdering)
     static IMP oDisp, oLayout, oOrder;
-    oDisp = BP2B_Replace(vc, "_dispatchEventAndHandleAction:", imp_implementationWithBlock(^id(id me, id ev) {
-        id r = oDisp ? ((id (*)(id, SEL, id))oDisp)(me, sel_registerName("_dispatchEventAndHandleAction:"), ev) : nil;
+    // -_dispatchEventAndHandleAction: is VOID in 16.0. This block used to be declared `id` and called the original through an `id (*)` cast: ARC then
+    // retained whatever the original left in x0 (the last object it released, usually just deallocated) and autoreleased it into the caller's pool,
+    // where the pool pop over-released freed memory (EXC_BAD_ACCESS in objc_release <- AutoreleasePoolPage::releaseUntil <- __processEventQueue).
+    oDisp = BP2B_Replace(vc, "_dispatchEventAndHandleAction:", imp_implementationWithBlock(^(id me, id ev) {
+        if (oDisp) ((void (*)(id, SEL, id))oDisp)(me, sel_registerName("_dispatchEventAndHandleAction:"), ev);
         if (BP2B_Enabled("g2btongue") && BP2B_Chamois(me)) BP2B_UpdateTonguePresence(me);
-        return r;
     }));
     oLayout = BP2B_Replace(vc, "_updateLayoutWithCompletion:", imp_implementationWithBlock(^(id me, id completion) {
         if (oLayout) ((void (*)(id, SEL, id))oLayout)(me, sel_registerName("_updateLayoutWithCompletion:"), completion);

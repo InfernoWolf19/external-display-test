@@ -98,6 +98,7 @@ static inline id G1B_Send1(id o, SEL s, id a)                 { return (o && [o 
 static inline long long G1B_SendLL0(id o, SEL s)              { return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL))objc_msgSend)(o, s) : 0; }
 static inline BOOL G1B_SendB0(id o, SEL s)                    { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
 static inline BOOL G1B_SendB1(id o, SEL s, id a)              { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, s, a) : NO; }
+static inline void G1B_SendV0(id o, SEL s)                   { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL))objc_msgSend)(o, s); }   // for VOID selectors (G1B_Send0 would retain the stale x0)
 static inline void G1B_SendV1(id o, SEL s, id a)              { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
 static inline void G1B_SendVLL(id o, SEL s, long long a)      { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
 
