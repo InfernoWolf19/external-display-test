@@ -16,7 +16,10 @@ Work packages (agents write `specs/<name>.md` + `.hooks.m` incrementally; resume
 Agent ids (resume with SendMessage if cut off): group2b a429570bcb4f60426, group1c a1fab4de4cbfe1956, group3b a51222a0d2202015e, group4b a29e1330130784ea5. Earlier specs: group2 aa7b76ea027637814, group1b af3169f0011ca87d2, group3 addbdad828a0d1005 (all complete).
 Then: integrate ALL drafts (groups 1b, 1c, 2, 2b, 3, 3b, 4b) in each spec's install order, one source file per group, compile on CI, independent reviewer, fix, rebuild, hand over.
 
-## STATE (10 Oct): ALL RECONSTRUCTION PACKAGES COMPLETE
+## STATE (10 Oct, later): 0.6.0 INTEGRATED AND COMPILING
+All seven packages are integrated (G1B.x, G1C.x, G2.x, G2B.m, G3.x, G3B.x, G4B.x) and the backboardd tweak is `Backport162BBD/`; both build green on CI (artifacts Backport162-146ae50, Backport162BBD-4521d91). Details, deviations and overlaps: specs/INTEGRATION-NOTES.md. NEXT: independent adversarial review, fix confirmed findings, hand over. Nothing has run on a device.
+
+## (earlier) STATE (10 Oct): ALL RECONSTRUCTION PACKAGES COMPLETE
 Specs + hook drafts complete for groups 1b, 1c, 2, 2b, 3, 3b, 4b (specs/*.md each end with a SUMMARY: status table, install order, UNSURE list). Group 4 itself is built and shipped (0.5.1). NEXT (in progress, integrator agent id af068c96d1ab3b38c; it keeps specs/INTEGRATION-NOTES.md current; resume it with SendMessage if cut off): integrate all drafts into the tweak, compile on CI, independent adversarial review (like specs/REVIEW-0.5.0.md), fix confirmed findings, hand over. Cross-package rules from the summaries: BP2B_Early() first; group2's own section-0 +contextProtocol/+queryProtocol hooks and its scale entry in kBPG2NewQuery must be DELETED (2b replaces them, the old builder would crash SpringBoard); do not enable group1b `group1b.apptoapp` (1c Root replaces it); order G4 -> G1B -> G2/G2B -> G1C (with %init(G1C_VCIds) last after %init(G2B)) -> G3 -> G3B; backboardd tweak is a separate target (specs/group4b-backboardd.x).
 
 ## Resume plan (written for a session that may be cut off by the user's usage limit)

@@ -44,3 +44,6 @@ Order in the %ctor: BP2B_Early, %init (group 4 scale/autohost/blank), BP4_Instal
 * `BP2B_Early()` forces `+initialize` of SBSwitcherModifier under a crash breadcrumb; it auto-writes `Backport162.off.g2bproto` if the previous launch died inside it.
 
 ## CI
+* Backport162 0.6.0: GitHub Actions run 38035131269 green, artifact `Backport162-146ae50` (commit 146ae50).
+* Backport162BBD 0.6.0: run 38034809865 green, artifact `Backport162BBD-4521d91`.
+* The temporary all-errors diagnostic workflow (`diag-backport162.yml`, `make -k`) was used during integration and has been removed.
