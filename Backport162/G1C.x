@@ -2945,7 +2945,7 @@ static id G1C_NewHomeModifier(void) {
 static Class gAsParent, gAsCls;
 static char kAsCalc, kAsToken;
 
-static BOOL G1C_PilesOn(void) { return G1C_ON() && G1C_PILES_DEFAULT; }
+static BOOL G1C_PilesOn(void) { return G1C_ON() && BP_On(F_G1C_PILES); }     // INTEGRATION: runtime switch, on by default (user directive); the spec's compile-time default was 0
 static BOOL G1C_As_Handles(id self, const char *iv) {
     Ivar v = class_getInstanceVariable(object_getClass(self), iv);
     return v ? G1C_IvarBool(self, iv) : YES;

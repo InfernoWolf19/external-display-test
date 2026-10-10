@@ -44,7 +44,7 @@
 
 static const char *const kFeatureNames[F_COUNT] = {
     "scale", "autohost", "blank", "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr", "nowindow", "directhook",
-    "group1b", "group1b.apptoapp", "group1c", "group2", "g2b", "g2bproto", "g2blayout", "g2bkeys", "g2baperture", "g2btongue", "cgregion",
+    "group1b", "group1b.apptoapp", "group1c", "g1c_piles", "group2", "g2b", "g2bproto", "g2blayout", "g2bkeys", "g2baperture", "g2btongue", "cgregion",
     "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas", "g3embedded", "g3bootorient",
     "g3b_banner", "g3b_menu", "g3b_pip", "g3b_kbwindow", "g3b_statusbar", "g3b_orient", "g3b_grid", "g3b_guide", "g3b_split", "g3b_preflightlog", "g3b_axroles",
     "clonemirror", "edu", "edunative", "presubset", "deferact", "lockedptr2", "migrate", "focuslock", "arrange", "methodology0",

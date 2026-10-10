@@ -552,6 +552,7 @@ static void BP_G2_AddIfMissing(Class c, const char *sel, IMP imp, const char *ty
 // 162 0x1c797a72c: the mutable copy carries the extras. (16.0 body: alloc_init SBMutableChamoisOverlappingModel + setters.)
 - (id)mutableCopyWithZone:(NSZone *)zone {
     id copy = %orig;
+    if (!BP_On(F_G2)) return copy;
     BP162OverlapExtras *e = objc_getAssociatedObject(self, kBP_G2_OverlapExtras);
     if (copy && e) objc_setAssociatedObject(copy, kBP_G2_OverlapExtras, [e deepCopy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return copy;
@@ -1342,6 +1343,7 @@ static void BP_G2_SetupAttributes(void) {
 // 162 0x1c78c39e0: the copy carries the extras
 - (id)copyWithZone:(NSZone *)zone {
     id c = %orig;
+    if (!BP_On(F_G2)) return c;
     NSMutableDictionary *d = BP_G2_AttrX(self, NO);
     if (c && d.count) objc_setAssociatedObject(c, kBP_G2_AttrExtras, [d mutableCopy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return c;
@@ -1349,6 +1351,7 @@ static void BP_G2_SetupAttributes(void) {
 // 162 0x1c78c3384: isEqual also compares the new fields
 - (BOOL)isEqual:(id)other {
     BOOL r = %orig;
+    if (!BP_On(F_G2)) return r;
     if (!r || other == self) return r;
     NSDictionary *a = BP_G2_AttrX(self, NO), *b = BP_G2_AttrX(other, NO);
     if (!a && !b) return r;
@@ -1366,7 +1369,7 @@ static void BP_G2_SetupAttributes(void) {
                       floatingDockHeight:(double)dockH statusBarHeight:(double)statusBarH requiresFullScreen:(BOOL)rfs
                       prefersStripHidden:(BOOL)ps prefersDockHidden:(BOOL)pd isEmbeddedDisplay:(BOOL)embedded {
     id attrs = %orig;
-    if (!attrs) return attrs;
+    if (!attrs || !BP_On(F_G2)) return attrs;
     double W = bounds.size.width, H = bounds.size.height;
     if (H <= 0) return attrs;
     NSMutableDictionary *x = BP_G2_AttrX(attrs, YES);
@@ -1427,6 +1430,7 @@ static void BP_G2_SetupAttributes(void) {
 // 162 0x1c77265c4: identity = unique bundle identifiers of ALL items joined with "&" (160: split-view roles only, layout order). PORTABLE.
 // Sorted for determinism (162 uses NSSet order).
 - (id)continuousExposeIdentifier {
+    if (!BP_On(F_G2)) return %orig;
     NSMutableSet *set = [NSMutableSet set];
     SEL sAll = sel_registerName("allItems");
     NSArray *items = [self respondsToSelector:sAll] ? ((NSArray *(*)(id, SEL))objc_msgSend)(self, sAll) : nil;
@@ -1465,6 +1469,7 @@ static id BP_G2_NewCacheKey(Class kc, id layout, CGRect bounds, long long o, dou
 %hook SBAppLayoutOverlappingModelCacheKey
 - (BOOL)isEqual:(id)other {
     BOOL r = %orig;
+    if (!BP_On(F_G2)) return r;
     if (!r || other == self) return r;
     NSNumber *a = objc_getAssociatedObject(self, kBP_G2_KeyDock), *b = objc_getAssociatedObject(other, kBP_G2_KeyDock);
     return (a == b) || [a isEqual:b];
@@ -1575,6 +1580,7 @@ NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger 
 // B1 row 2. 160 returns nil, 162 returns an empty array (callers treat both as empty). PORTABLE.
 - (id)appLayoutsToEnsureExistForMainTransitionEvent:(id)event {
     id r = %orig;
+    if (!BP_On(F_G2)) return r;
     return r ?: @[];
 }
 
@@ -1582,7 +1588,7 @@ NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger 
 // -continuousExposeIdentifiersInStrip / InSwitcher / GenerationCount.
 - (void)_updateContinuousExposeIdentifiersTransitioningFromAppLayout:(id)from toAppLayout:(id)to animated:(BOOL)animated {
     %orig;
-    BOOL enabled = BP_G2_Bool(self, sel_registerName("isChamoisWindowingUIEnabled"));
+    BOOL enabled = BP_On(F_G2) && BP_G2_Bool(self, sel_registerName("isChamoisWindowingUIEnabled"));
     if (!enabled) return;
     BP162VCState *st = BP_G2_VCStateFor(self);
     if (!st) return;
@@ -1602,7 +1608,7 @@ NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger 
 - (BOOL)_areContinuousExposeStripsUnoccluded {
     id root = BP_G2_GetIvarObj(self, "_rootModifier");
     SEL s = sel_registerName("isContinuousExposeStripVisible");
-    if (root && [root respondsToSelector:s]) return ((BOOL (*)(id, SEL))objc_msgSend)(root, s);
+    if (BP_On(F_G2) && root && [root respondsToSelector:s]) return ((BOOL (*)(id, SEL))objc_msgSend)(root, s);
     return %orig;
 }
 
@@ -1610,7 +1616,7 @@ NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger 
 - (void)handleContinuousExposeHoverGesture:(id)gesture {
     id root = BP_G2_GetIvarObj(self, "_rootModifier");
     SEL s = sel_registerName("wantsContinuousExposeHoverGesture");
-    if (root && [root respondsToSelector:s] && !((BOOL (*)(id, SEL))objc_msgSend)(root, s)) return;
+    if (BP_On(F_G2) && root && [root respondsToSelector:s] && !((BOOL (*)(id, SEL))objc_msgSend)(root, s)) return;
     %orig;
 }
 

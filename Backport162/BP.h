@@ -9,7 +9,7 @@ enum {
     // group 4 (0.5.x)
     F_SCALE, F_AUTOHOST, F_BLANK, F_DISCONNECT, F_DISCSWITCH, F_ACTIVEDISPLAY, F_GESTUREGATE, F_LOCKEDPTR, F_NOWINDOW, F_DIRECTHOOK,
     // group 1b (modifier / event / response classes), group 1c (16.2 modifier rewrites), group 2 (layout data), group 2b (switcher view)
-    F_G1B, F_G1B_APPTOAPP, F_G1C, F_G2, F_G2B, F_G2BPROTO, F_G2BLAYOUT, F_G2BKEYS, F_G2BAPERTURE, F_G2BTONGUE, F_CGREGION,
+    F_G1B, F_G1B_APPTOAPP, F_G1C, F_G1C_PILES, F_G2, F_G2B, F_G2BPROTO, F_G2BLAYOUT, F_G2BKEYS, F_G2BAPERTURE, F_G2BTONGUE, F_CGREGION,
     // group 3 (plumbing)
     F_G3HANDLE, F_G3SNAPSHOT, F_G3TOPAFF, F_G3SWITCHER, F_G3CANVAS, F_G3EMBEDDED, F_G3BOOTORIENT,
     // group 3b (reconstruction)
