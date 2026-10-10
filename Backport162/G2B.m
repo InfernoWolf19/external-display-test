@@ -441,7 +441,7 @@ static Class gBP2B_AttrClass;
 
 static id BP2B_Make(BP2BAttrFields f, BP2BAttrExtras *e) {
     if (!gBP2B_AttrClass || !gBP2B_Init16) return nil;
-    id o = ((id (*)(Class, SEL))objc_msgSend)(gBP2B_AttrClass, @selector(alloc));
+    id o = [gBP2B_AttrClass alloc];                       // ObjC syntax: ARC knows alloc returns +1 (the raw msgSend cast leaked one object per call)
     o = gBP2B_Init16(o, sel_registerName("initWithContentOrientation:lastInteractionTime:sizingPolicy:size:center:occlusionState:userConfiguredSizeBeforeOverlapping:fullyOccludedPeekingCenter:"),
                      f.orient, f.time, f.policy, f.size, f.center, f.occlusion, f.user, f.peek);
     if (o && !BP2B_ExtrasDefault(e)) BP2B_SetExtras(o, e);
@@ -623,8 +623,9 @@ static void BP2B_SetupAttributes(void) {
         BP2BAttrFields f; if (!BP2B_ReadFields(me, &f)) return me;
         f.time = v; return BP2B_Make(f, BP2B_Extras(me)) ?: me; }));
     BP2B_Replace(c, "copyWithZone:", imp_implementationWithBlock(^id(id me, void *zone) {
-        BP2BAttrFields f; if (!BP2B_ReadFields(me, &f)) return me;
-        return BP2B_Make(f, BP2B_Extras(me)) ?: me; }));
+        BP2BAttrFields f; id r = BP2B_ReadFields(me, &f) ? BP2B_Make(f, BP2B_Extras(me)) : nil;
+        r = r ?: me;
+        return (__bridge_transfer id)(__bridge_retained void *)r; }));   // copy returns +1
 
     // --- equality (extras participate, like 16.2's field-by-field isEqual:) ------------------------------------------------------
     SEL isEq = @selector(isEqual:);
@@ -2276,7 +2277,13 @@ void BP2B_Early(void) {
         return gBP2B_ExtQry ?: orig;
     }), tq);
     // Force the stock initialisation NOW (deterministic order) under the breadcrumb.
-    [@"1" writeToFile:BP2B_CrumbPath() atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    if (![@"1" writeToFile:BP2B_CrumbPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
+        // no crash guard possible: do not take the risk
+        BP_Log(@"G2B: cannot write the crash breadcrumb, protocol extension not installed");
+        class_replaceMethod(meta, sel_registerName("contextProtocol"), gBP2B_OrigCtxProto, tc);
+        class_replaceMethod(meta, sel_registerName("queryProtocol"), gBP2B_OrigQryProto, tq);
+        return;
+    }
     ((id (*)(id, SEL))objc_msgSend)((id)sm, sel_registerName("class"));      // +class on a class object runs +initialize first
     gBP2B_ProtoOK = BP2B_VerifyProtocols(sm);
     [fm removeItemAtPath:BP2B_CrumbPath() error:nil];

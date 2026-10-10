@@ -1240,17 +1240,18 @@ static NSArray *BP_G2_SortAxis(id m, NSArray *items, id before, id dragging, int
         }
         double hw = s.width * 0.5, hh = s.height * 0.5;
         BPG2Region vis = NULL;
+        int guardN = 0;     // review F4: the dodge loops must terminate for peekLen <= 0 / NaN rects
         double xL = c.x;
         do { xL -= peekLen; vis = RgnDiff(RgnR(CGRectMake(xL - hw, c.y - hh, s.width, s.height)), occ); }
-        while (occ && (!vis || gRgn.isEmpty(vis) || FLT(gRgn.bbox(vis).size.width, peekLen)));
+        while (occ && ++guardN < 128 && (!vis || gRgn.isEmpty(vis) || FLT(gRgn.bbox(vis).size.width, peekLen)));
         double leftScore = xL + (vis ? gRgn.bbox(vis).size.width : 0) - peekLen;
-        double xR = c.x;
+        double xR = c.x; guardN = 0;
         do { xR += peekLen; vis = RgnDiff(RgnR(CGRectMake(xR - hw, c.y - hh, s.width, s.height)), occ); }
-        while (occ && (!vis || gRgn.isEmpty(vis) || FLT(gRgn.bbox(vis).size.width, peekLen)));
+        while (occ && ++guardN < 128 && (!vis || gRgn.isEmpty(vis) || FLT(gRgn.bbox(vis).size.width, peekLen)));
         double rightScore = xR - (vis ? gRgn.bbox(vis).size.width : 0) + peekLen;
-        double yD = c.y;
+        double yD = c.y; guardN = 0;
         do { yD += peekLen * 0.5; vis = RgnDiff(RgnR(CGRectMake(c.x - hw, yD - hh, s.width, s.height)), occ); }
-        while (occ && (!vis || gRgn.isEmpty(vis) || FLE(gRgn.bbox(vis).size.height, pad * 0.5)));
+        while (occ && ++guardN < 128 && (!vis || gRgn.isEmpty(vis) || FLE(gRgn.bbox(vis).size.height, pad * 0.5)));
         double visH = vis ? gRgn.bbox(vis).size.height : 0;
         double kk = 1 - pk;
         double cxL = MAX((gap + leftScore) - kk * pad, pad * 0.5 + pk * pad);
