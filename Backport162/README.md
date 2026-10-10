@@ -122,3 +122,7 @@ Still unverified without a device: whether backboardd 16.0 blanks an external di
 ## Debugging 0.6.x
 Everything except the opt-in list in Tweak.x is on. To bisect a misbehaviour, disable one feature at a time with an empty file
 `/var/jb/tmp/Backport162.off.<name>` (names in the table above) and respring; `Backport162.off` disables the whole tweak.
+
+## Crash recorder
+The tweak writes its own crash report to `/var/jb/tmp/Backport162.crash` (signal, fault address, registers, backtrace as `image+offset`;
+uncaught Objective-C exceptions with reason). Use it when ReportCrash produces no `.ips`.

@@ -63,6 +63,7 @@ static const BOOL kOptIn[F_COUNT] = {
 static char gOffPath[1024], gDebugPath[1024], gLogPath[1024], gLogOldPath[1030], gTmpDir[900];
 static pthread_mutex_t gMu = PTHREAD_MUTEX_INITIALIZER, gSlotMu = PTHREAD_MUTEX_INITIALIZER;
 
+extern void BP_InstallCrashRecorder(const char *tmpDir);
 static void BP_InitPaths(void) {
     NSString *tmp = ROOT_PATH_NS(@"/tmp");
     const char *t = tmp.fileSystemRepresentation;
@@ -417,6 +418,7 @@ void G4B_Setup(void);                  // G4B.x
     @autoreleasepool {
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
+        BP_InstallCrashRecorder(gTmpDir);   // own crash report: <jbroot>/tmp/Backport162.crash (ReportCrash writes nothing for some of these crashes)
         BP_Log(@"Backport162 0.6.0 loaded");
         // BP2B_Early() must run before any message reaches a modifier class (+initialize of SBSwitcherModifier builds the
         // protocol tables); nothing above this line touches those classes.
