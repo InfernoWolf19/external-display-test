@@ -58,6 +58,14 @@ static BOOL BP_G3_On(const char *name) { return BP_OnName(name); }     // INTEGR
 - (void)_setInterfaceOrientationFromUserResizing:(long long)o;  // %new below
 - (void)_updateSceneHostingInfoForSnapshottingWithView:(id)v;   // SBDeviceApplicationSceneHandle (16.0)
 - (id)sceneHandle;                                              // SBDeviceApplicationSceneView
+// INTEGRATION: selectors the draft sends to its own %new methods / to private classes
+- (void)_setClassicAppPhoneOnPadPrefersLandscape:(BOOL)v;
+- (void)_setSettingUpSceneOrientationRequest:(BOOL)v;
+- (void)_setInitialDeviceOrientationFromSceneOrientationRequestSetup:(long long)o;
+- (void)_setSupportedInterfaceOrientationsFromSceneOrientationRequestSetup:(unsigned long long)m;
+- (void)_resetSceneOrientationRequestState;
+- (id)uiClientSettings;
++ (id)mainWorkspace;
 @end
 
 // Classes we hook (declaration only; no @implementation, nothing is registered with the runtime).

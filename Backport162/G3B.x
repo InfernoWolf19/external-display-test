@@ -29,7 +29,6 @@
 #import "BP.h"
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
-@interface UIMenu : NSObject @end
 @interface SBFullKeyboardAccessUISceneController : NSObject @end
 @interface SBVoiceControlUISceneController : NSObject @end
 @interface SBAssistiveTouchUISceneController : NSObject @end
