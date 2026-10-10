@@ -410,7 +410,8 @@ static id G1B_HeaderEv_Init(id self, SEL _cmd, id appLayout, long long role) {
 static long long G1B_HeaderEv_Type(id self, SEL _cmd) { return G1BEventTapAppLayoutHeader; }
 static id G1B_HeaderEv_AppLayout(id self, SEL _cmd) { return G1B_GET(self, kEvAppLayout); }
 static long long G1B_HeaderEv_Role(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kEvRole) longLongValue]; }
-static id G1B_HeaderEv_Copy(id self, SEL _cmd, NSZone *z) {
+// copy-family IMP: must return +1 (ARC does not know that for a plain C function)
+static __attribute__((ns_returns_retained)) id G1B_HeaderEv_Copy(id self, SEL _cmd, NSZone *z) {
     id n = [gHeaderEventCls alloc];
     return ((id (*)(id, SEL, id, long long))objc_msgSend)(n, @selector(initWithAppLayout:layoutRole:), G1B_GET(self, kEvAppLayout), G1B_HeaderEv_Role(self, 0));
 }
@@ -439,7 +440,7 @@ static id G1B_TongueEv_Init(id self, SEL _cmd, BOOL presented) {
 }
 static long long G1B_TongueEv_Type(id self, SEL _cmd) { return G1BEventStripEdgeProtectTongue; }
 static BOOL G1B_TongueEv_Presented(id self, SEL _cmd) { return gTongueFlagOff >= 0 && *(BOOL *)((uint8_t *)(__bridge void *)self + gTongueFlagOff); }
-static id G1B_TongueEv_Copy(id self, SEL _cmd, NSZone *z) {
+static __attribute__((ns_returns_retained)) id G1B_TongueEv_Copy(id self, SEL _cmd, NSZone *z) {
     return ((id (*)(id, SEL, BOOL))objc_msgSend)([gTongueEventCls alloc], @selector(initWithTonguePresented:), G1B_TongueEv_Presented(self, 0));
 }
 

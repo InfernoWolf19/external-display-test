@@ -622,10 +622,9 @@ static void BP2B_SetupAttributes(void) {
     BP2B_Replace(c, "attributesByModifyingLastInteractionTime:", imp_implementationWithBlock(^id(id me, long long v) {
         BP2BAttrFields f; if (!BP2B_ReadFields(me, &f)) return me;
         f.time = v; return BP2B_Make(f, BP2B_Extras(me)) ?: me; }));
-    BP2B_Replace(c, "copyWithZone:", imp_implementationWithBlock(^id(id me, void *zone) {
+    BP2B_Replace(c, "copyWithZone:", imp_implementationWithBlock(^id __attribute__((ns_returns_retained))(id me, void *zone) {      // copy returns +1
         BP2BAttrFields f; id r = BP2B_ReadFields(me, &f) ? BP2B_Make(f, BP2B_Extras(me)) : nil;
-        r = r ?: me;
-        return (__bridge_transfer id)(__bridge_retained void *)r; }));   // copy returns +1
+        return r ?: me; }));
 
     // --- equality (extras participate, like 16.2's field-by-field isEqual:) ------------------------------------------------------
     SEL isEq = @selector(isEqual:);

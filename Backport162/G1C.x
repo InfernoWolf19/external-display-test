@@ -486,7 +486,8 @@ static id G1C_IdsEv_PrevStrip(id self, SEL _cmd) { return G1B_GET(self, kIdsPrev
 static BOOL G1C_IdsEv_Animated(id self, SEL _cmd) { return [G1B_GET(self, kIdsAnimated) boolValue]; }
 static unsigned long long G1C_IdsEv_Gen(id self, SEL _cmd) { return [G1B_GET(self, kIdsGen) unsignedLongLongValue]; }
 static void G1C_IdsEv_SetGen(id self, SEL _cmd, unsigned long long g) { G1B_SET(self, kIdsGen, @(g)); }
-static id G1C_IdsEv_Copy(id self, SEL _cmd, NSZone *z) {
+// copy-family IMP: must return +1 (ARC does not know that for a plain C function; the missing retain over-released the event, crash in autorelease pool pop)
+static __attribute__((ns_returns_retained)) id G1C_IdsEv_Copy(id self, SEL _cmd, NSZone *z) {
     id from = G1B_Send0(self, @selector(transitioningFromAppLayout)), to = G1B_Send0(self, @selector(transitioningToAppLayout));
     return ((id (*)(id, SEL, id, id, id, id, BOOL))objc_msgSend)([object_getClass(self) alloc],
         @selector(initWithPreviousContinuousExposeIdentifiersInSwitcher:previousContinuousExposeIdentifiersInStrip:transitioningFromAppLayout:transitioningToAppLayout:animated:),
