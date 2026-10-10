@@ -35,6 +35,7 @@
 #import <string.h>
 #import <unistd.h>
 #import <sys/sysctl.h>
+#import <UIKit/UIKit.h>
 #import "BP.h"
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
@@ -736,7 +737,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     if (!defC || !cfgC || !handleC || !actC || !actionC || !respC) { _isPresenting = NO; complete(0); return; }
     _listener = [NSXPCListener anonymousListener];
     _listener.delegate = self;
-    [_listener activate];
+    [_listener resume];     // INTEGRATION: -activate is not in the iOS SDK headers; -resume is the 16.0 API
     id def = ((id (*)(id, SEL, id, id))objc_msgSend)([defC alloc], NSSelectorFromString(@"initWithServiceName:viewControllerClassName:"), @"com.apple.SpringBoardEducation", @"SBERemoteViewController");
     ((void (*)(id, SEL, BOOL))objc_msgSend)(def, NSSelectorFromString(@"setPrefersEmbeddedDisplayPresentation:"), YES);
     id cfg = [[cfgC alloc] init];
