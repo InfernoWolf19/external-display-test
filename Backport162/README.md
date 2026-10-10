@@ -87,6 +87,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 | feature | what it ports | switch |
 |---|---|---|
 | g3c | "Zoom" on a full-screen Stage Manager app returns it to a window of the live default window size (16.2 Unspecified-size primitive); a window the user resized keeps its size | `g3c` |
+| addwinnet | safety net: the stock assertion "The appLayouts array MUST contain the app layout we're transitioning to." at the end of a transition (seen after three-dots > Add Another Window) is repaired (model add, else the array is patched) instead of crashing SpringBoard; see specs/AUDIT-ADDWINDOW-0.6.4.md | `addwinnet` |
 
 ### Group 4b: reconstruction of external-display extras [G4B.x, Backport162BBD/]
 

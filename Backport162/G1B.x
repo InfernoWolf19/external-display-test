@@ -1112,6 +1112,124 @@ static void G1B_BuildFullScreenToStrip(void) {
 %end
 
 // ============================================================================================================
+// Safety net for the stock assertion "The appLayouts array MUST contain the app layout we're transitioning to." (device crash after
+// "Add Another Window" in the three-dots menu; specs/AUDIT-ADDWINDOW-0.6.4.md has the whole analysis).
+//   16.0 -[SBMainSwitcherControllerCoordinator layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:] 0x1c6237d6c:
+//     if (![ctx isInterrupted]) { st = [ctx error] ? [ctx fromLayoutState] : [ctx toLayoutState];          // [sp,#0x60]
+//       if ([st unlockedEnvironmentMode] == 3) { N = [st appLayout];                                         // x28
+//         ... [self _addAppLayoutToFront:removeAppLayout:] (0x1c62384d8, when shouldAddAppLayoutToFront says so) ...
+//         if ([[st elements] count]) NSAssert([self->_appLayouts containsObject:N], ...) } }                 // 0x1c62384e0..0x1c62388d4, line 0x42b
+//   After the failure branch the code falls through to 0x1c6238510 (the NSAssert macro does not abort), so a handler that returns lets the
+//   rest of the method (floating layout, medusa snapshots, _updateHomeScreenDisplayLayoutElement..., _endDisplayLayoutTransition...) run.
+//   _appLayouts (ivar +0x18) is written in exactly one place, -_buildAppLayoutCache 0x1c6245ff0 (store at 0x1c6246660).
+// What this does: remember (thread-local) the coordinator and N for the duration of that method; when the NSAssert fires for exactly that
+// object, repair the state the stock code expected (model add through -_addAppLayoutToFront:, else prepend N to the ivar array) and return
+// from the assertion handler instead of raising. A raised exception (handler not reached) is caught and repaired the same way. Everything
+// else (other assertions, other coordinators, other methods) behaves exactly as before. Gate: the global kill switch (BP_OnName "addwinnet").
+// ============================================================================================================
+static __thread __unsafe_unretained id tAWCoordinator;      // coordinator inside the end-of-transition handler (nil outside)
+static __thread __unsafe_unretained id tAWLayout;           // N: the app layout that handler asserts on (nil when the assertion cannot run)
+
+static BOOL G1B_AW_Contains(id coord, id layout) {
+    Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
+    id arr = iv ? object_getIvar(coord, iv) : nil;
+    return [arr isKindOfClass:[NSArray class]] && [arr containsObject:layout];
+}
+
+// N exactly as the stock code computes it, nil when the assertion path is not taken (interrupted, not mode 3, no app layout, no elements).
+static id G1B_AW_Layout(id coord, id ctx, BOOL *notInList) {
+    *notInList = NO;
+    if (!coord || !ctx || G1B_SendB0(ctx, NSSelectorFromString(@"isInterrupted"))) return nil;
+    BOOL failed = G1B_Send0(ctx, NSSelectorFromString(@"error")) != nil;
+    id st = G1B_Send0(ctx, NSSelectorFromString(failed ? @"fromLayoutState" : @"toLayoutState"));
+    if (!st || G1B_SendLL0(st, NSSelectorFromString(@"unlockedEnvironmentMode")) != 3) return nil;
+    id layout = G1B_Send0(st, @selector(appLayout));
+    id elems = G1B_Send0(st, NSSelectorFromString(@"elements"));
+    if (!layout || G1B_SendLL0(elems, @selector(count)) == 0) return nil;
+    *notInList = !G1B_AW_Contains(coord, layout);
+    id req = G1B_Send0(G1B_Send0(ctx, NSSelectorFromString(@"applicationTransitionContext")), NSSelectorFromString(@"request"));
+    id from = G1B_Send0(ctx, NSSelectorFromString(@"fromLayoutState")), to = G1B_Send0(ctx, NSSelectorFromString(@"toLayoutState"));
+    SEL sMode = NSSelectorFromString(@"unlockedEnvironmentMode"), sPeek = NSSelectorFromString(@"peekConfiguration");
+    BP_Log(@"addwin: transition end src=%lld error=%d modes %lld->%lld peek %lld->%lld N %@ in _appLayouts=%d",
+           G1B_SendLL0(req, @selector(source)), failed, G1B_SendLL0(from, sMode), G1B_SendLL0(to, sMode), G1B_SendLL0(from, sPeek), G1B_SendLL0(to, sPeek),
+           layout, !*notInList);
+    return layout;
+}
+
+// Make _appLayouts contain N. First the official way (model add + rebuild, what the stock code should have done), else the ivar.
+static void G1B_AW_Repair(id coord, id layout, const char *how) {
+    if (!coord || !layout || G1B_AW_Contains(coord, layout)) return;
+    SEL add = NSSelectorFromString(@"_addAppLayoutToFront:");
+    if ([coord respondsToSelector:add]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(coord, add, layout);
+        if (G1B_AW_Contains(coord, layout)) {
+            BP_Log(@"addwin net (%s): _addAppLayoutToFront: made _appLayouts contain %@", how, layout);
+            return;
+        }
+    }
+    Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
+    id cur = iv ? object_getIvar(coord, iv) : nil;
+    if (!iv || (cur && ![cur isKindOfClass:[NSArray class]])) {
+        BP_Log(@"addwin net (%s): cannot repair (ivar %p)", how, (void *)iv);
+        return;
+    }
+    NSMutableArray *fixed = [NSMutableArray arrayWithObject:layout];
+    if (cur) [fixed addObjectsFromArray:cur];
+    object_setIvar(coord, iv, [fixed copy]);
+    BP_Log(@"addwin net (%s): _appLayouts patched, %lu -> %lu layouts, added %@", how, (unsigned long)G1B_SendLL0(cur, @selector(count)), (unsigned long)fixed.count, layout);
+}
+
+%group G1B_AddWin
+%hook SBMainSwitcherControllerCoordinator
+- (void)layoutStateTransitionCoordinator:(id)coordinator transitionDidEndWithTransitionContext:(id)context {
+    if (!BP_OnName("addwinnet")) {
+        %orig;
+        return;
+    }
+    BOOL missing = NO;
+    id layout = G1B_AW_Layout(self, context, &missing);
+    id savedC = tAWCoordinator, savedL = tAWLayout;
+    tAWCoordinator = self;
+    tAWLayout = layout;
+    @try {
+        %orig;
+    } @catch (NSException *e) {
+        tAWCoordinator = savedC;
+        tAWLayout = savedL;
+        if (!layout || ![e.name isEqualToString:NSInternalInconsistencyException] || [e.reason rangeOfString:@"appLayouts array MUST contain"].location == NSNotFound) @throw;
+        BP_Log(@"addwin net: assertion exception caught, N was %@ in the list at entry", missing ? @"NOT" : @"already");
+        G1B_AW_Repair(self, layout, "exception");
+        return;
+    }
+    tAWCoordinator = savedC;
+    tAWLayout = savedL;
+}
+%end
+
+// NSAssert in the method above ends in -[NSAssertionHandler handleFailureInMethod:object:file:lineNumber:description:], which raises. For that one
+// assertion, on that one object, repair and return (the stock code continues exactly as if the condition had held). Every other failure is
+// forwarded to the original with the message formatted here (the variadic arguments cannot be forwarded from a hook).
+%hook NSAssertionHandler
+- (void)handleFailureInMethod:(SEL)selector object:(id)object file:(NSString *)fileName lineNumber:(NSInteger)line description:(NSString *)format, ... {
+    if (!format) {
+        %orig;
+        return;
+    }
+    if (tAWLayout && object == tAWCoordinator && [format hasPrefix:@"The appLayouts array MUST contain"]) {
+        BP_Log(@"addwin net: stock assertion intercepted (%@:%ld), N %@", fileName, (long)line, tAWLayout);
+        G1B_AW_Repair(tAWCoordinator, tAWLayout, "assert");
+        return;
+    }
+    va_list ap;
+    va_start(ap, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:ap];
+    va_end(ap);
+    %orig(selector, object, fileName, line, @"%@", message);
+}
+%end
+%end
+
+// ============================================================================================================
 // SBWindowDeleteSwitcherModifier -transitionDidEnd (16.2 0x1c78e702c, new): un-blur the deleted window's container.
 // 16.0 -transitionWillUpdate (0x1c6435b6c) blurs the container of _centerWindowAppLayout (SBBlurItemContainerSwitcherEventResponse, shouldBlur YES, mode 3,
 // a gaussianBlur CAFilter + rasterization on the container layer) and 16.0 has NO transitionDidEnd: it relies on -_removeVisibleItemContainerForAppLayout:
@@ -1293,6 +1411,7 @@ void G1B_Setup(void) {
     G1B_BuildDndToApp();
     G1B_InstallTransitionEventFlags();
     %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
+    if (BP_OnName("addwinnet")) %init(G1B_AddWin);   // stock "appLayouts array MUST contain" assertion at the end of a transition: repair instead of crash
     %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
