@@ -1730,12 +1730,8 @@ static void G4B_FocusReconcile(id kfc) {
 static NSString *const kG4BMethodologyChanged = @"BP162ActiveDisplayTrackingMethodologyChanged";
 static const void *kMethKey = &kMethKey;
 
-static long long G4B_Methodology(void) {
-    if (G4B_OptIn("methodology0")) return 0;                       // <jbroot>/tmp/Backport162.on.methodology0 : keyboard following (16.0 behaviour)
-    Class dom = NSClassFromString(@"SBExternalDisplaySettingsDomain");
-    id root = [(id)dom respondsToSelector:@selector(rootSettings)] ? G4B_Obj((id)dom, @selector(rootSettings)) : nil;
-    return [root respondsToSelector:@selector(activeDisplayTrackingMethodology)] ? G4B_LL(root, @selector(activeDisplayTrackingMethodology)) : 1;
-}
+long long BP_G4_ActiveMethodology(void);                       // Group4Focus.x: `methodology0` opt-in (keyboard following, 16.0) or the 16.2 setting
+static long long G4B_Methodology(void) { return BP_G4_ActiveMethodology(); }
 // 16.2 _SBStringForActiveDisplayTrackingMethodology (0x1c74241b8)
 static NSString *G4B_StringForMethodology(long long m) { return m == 0 ? @"keyboard" : (m == 1 ? @"touch + pointer" : [NSString stringWithFormat:@"<unknown:%lld>", m]); }
 
@@ -1758,21 +1754,8 @@ static NSString *G4B_StringForMethodology(long long m) { return m == 0 ? @"keybo
 }
 %end
 
-%hook SBWindowSceneManager
-- (id)activeDisplayWindowScene {                                     // 16.2 0x1c74bf1c4
-    SEL kb = NSSelectorFromString(@"activeDisplayWindowSceneFollowingKeyboard"), ui = NSSelectorFromString(@"activeDisplayWindowSceneFollowingUserInteraction");
-    if (G4B_On("arrange") && [self respondsToSelector:kb] && [self respondsToSelector:ui]) {
-        long long m = G4B_Methodology();
-        id r = nil;
-        if (m == 0) r = G4B_Obj(self, kb);
-        else if (m == 1) r = G4B_Obj(self, ui);
-        else BP_Log(@"arrange: undefined methodology %@", G4B_StringForMethodology(m));
-        // stock 16.0 never returns nil (about 60 callers rely on it): the following-user-interaction scene is nil until the first touch
-        if (r) return r;
-    }
-    return %orig;
-}
-%end
+// -[SBWindowSceneManager activeDisplayWindowScene] (16.2 0x1c74bf1c4) is ported in Group4Focus.x (one implementation,
+// shared with the coordinator it reads); it consults G4B_Methodology() through BP_G4_ActiveMethodology().
 
 %hook SBExternalDisplayService
 // 16.2 0x1c77d5510: the 16.0 preferredArrangementOfDisplay: body under its new name

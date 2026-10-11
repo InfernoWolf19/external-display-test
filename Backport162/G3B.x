@@ -40,6 +40,7 @@
 @interface SBMainDisplaySceneManager : NSObject @end
 @interface SBSystemShellExternalDisplaySceneManager : NSObject @end
 @interface SBMedusaHostedKeyboardWindow : NSObject @end
+@interface SBWorkspaceKeyboardFocusController : NSObject @end
 // END INTEGRATION interfaces
 
 // per-piece switch: on by default, off when <jbroot>/tmp/Backport162.off or Backport162.off.<name> exists
@@ -1090,6 +1091,24 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
 }
 %end
 
+// 16.2 -[SBWorkspaceKeyboardFocusController shouldKeyboardBeWindowSizedForHostWithIdentity:] (0x1c77c5580, _UIKeyboardArbiterOmniscientDelegate): asserts it is not
+// on the main queue, dispatch_syncs to the main queue and asks the hosted-keyboard controller of the window scene WITH FOCUS.  The 16.0 arbiter protocol does
+// not contain the method (no 16.0 caller, see PORT-G3-0.7.0.md), it is provided so that a 16.2-style caller finds the real implementation.
+%hook SBWorkspaceKeyboardFocusController
+%new
+- (BOOL)shouldKeyboardBeWindowSizedForHostWithIdentity:(id)identity {
+    __block BOOL r = NO;
+    __unsafe_unretained id me = self;
+    void (^work)(void) = ^{
+        id ws = BP_G3B_Send0(me, NSSelectorFromString(@"windowSceneWithFocus"));
+        BPMedusaHostedKeyboardWindowController *c = BPKB_ControllerForWindowScene(ws);
+        r = [c shouldKeyboardBeWindowSizedForHostWithIdentity:identity];
+    };
+    if ([NSThread isMainThread]) work(); else dispatch_sync(dispatch_get_main_queue(), work);
+    return r;
+}
+%end
+
 %end // G3B_KbWindow
 
 
@@ -1262,12 +1281,13 @@ static char kBPG3BGuideKey;
 }
 - (void)didChangeSettingsForParticipant:(id)participant context:(id)context {}
 
-- (BOOL)aspectIsPortrait {      // 16.2 _isContentContainerAspectRatioPortrait: contentContainerAspectRatio <= 1 (UNSURE: the compared constant is 1.0; ratio taken as width/height of the window scene)
-    id ws = BP_G3B_Send0(self.switcher, BPS("windowScene"));
-    CGRect b = CGRectZero;
-    id cs = BP_G3B_Send0(ws, BPS("coordinateSpace"));
-    if ([cs respondsToSelector:@selector(bounds)]) b = ((CGRect (*)(id, SEL))objc_msgSend)(cs, @selector(bounds));
-    return b.size.height <= 0 || (b.size.width / b.size.height) <= 1.0;
+- (BOOL)aspectIsPortrait {      // 16.2 -[SBSwitcherTraitsAssistant _isContentContainerAspectRatioPortrait] 0x1c74d76ac
+    // = BSFloatLessThanOrEqualToFloat([switcher contentContainerAspectRatio], 1.0); contentContainerAspectRatio (0x1c7601870) = [contentViewController contentAspectRatio];
+    // -[SBFluidSwitcherViewController contentAspectRatio] (0x1c7439b4c) = viewIfLoaded ? bounds.width / bounds.height : 0.
+    id vc = BP_G3B_Send0(self.switcher, BPS("contentViewController"));
+    UIView *v = [vc respondsToSelector:@selector(viewIfLoaded)] ? [vc viewIfLoaded] : nil;
+    double ratio = (v && v.bounds.size.height != 0) ? v.bounds.size.width / v.bounds.size.height : 0;
+    return ratio < 1.0 || fabs(ratio - 1.0) < 0.0001;      // BSFloatLessThanOrEqualToFloat (epsilon compare)
 }
 
 - (id)guideForParticipant:(id)p handle:(id)h {
@@ -1582,19 +1602,15 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     *p = orig;
     NSArray *w1 = [object_getIvar(grid, wi) copy], *h1 = [object_getIvar(grid, hi) copy];
     if (![w1 isKindOfClass:[NSArray class]] || w1.count != h1.count) { object_setIvar(grid, wi, w0); object_setIvar(grid, hi, h0); return; }
+    // 16.2 _buildFixedGridWithScreenScale: (0x1c791ed14) runs the per-orientation loop for the fixed size and, when supportsOrthogonalSizes, for the transposed
+    // size; every candidate size is appended to ONE array (block 0x1c791f5b8, no de-duplication) which is sorted with the global comparator block 0x1c791f640:
+    // BSCompareFloats(area(a), area(b)), i.e. ascending by width*height; then widths and heights are split into the two NSNumber arrays.
     NSMutableArray *pairs = [NSMutableArray new];
-    void (^add)(NSArray *, NSArray *) = ^(NSArray *ws, NSArray *hs) {
-        for (NSUInteger i = 0; i < ws.count; i++) {
-            double w = [ws[i] doubleValue], h = [hs[i] doubleValue];
-            BOOL dup = NO;
-            for (NSArray *q in pairs) if (fabs([q[0] doubleValue] - w) < 0.5 && fabs([q[1] doubleValue] - h) < 0.5) { dup = YES; break; }
-            if (!dup) [pairs addObject:@[ @(w), @(h) ]];
-        }
-    };
-    add(w0, h0); add(w1, h1);
-    [pairs sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {      // UNSURE: 16.2 sorts with sortUsingComparator:; key assumed (width, then height)
-        NSComparisonResult r = [a[0] compare:b[0]];
-        return r != NSOrderedSame ? r : [a[1] compare:b[1]];
+    for (NSUInteger i = 0; i < w0.count; i++) [pairs addObject:@[ w0[i], h0[i] ]];
+    for (NSUInteger i = 0; i < w1.count; i++) [pairs addObject:@[ w1[i], h1[i] ]];
+    [pairs sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {
+        double aa = [a[0] doubleValue] * [a[1] doubleValue], ab = [b[0] doubleValue] * [b[1] doubleValue];
+        return aa < ab ? NSOrderedAscending : (aa > ab ? NSOrderedDescending : NSOrderedSame);
     }];
     NSMutableArray *mw = [NSMutableArray new], *mh = [NSMutableArray new];
     for (NSArray *q in pairs) { [mw addObject:q[0]]; [mh addObject:q[1]]; }

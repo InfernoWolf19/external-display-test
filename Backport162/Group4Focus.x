@@ -191,8 +191,8 @@ static id BP_KeyboardFocusController(void) {
 // PARTIAL: stands in for SBMultiDisplayUserInteractionCoordinator (+ its three event sniffers), 16.2 section 5.3.
 // Not a subclass of anything private and deliberately NOT named like the 16.2 class (a duplicate class name would
 // misbehave if the dylib were ever loaded into a 16.2 SpringBoard).
-// PARTIAL because the pointer-interaction qualifying test is decoded literally from 16.2 (`[touch type] == 0` for a
-// pointer touch) and has not been observed on a device; touch-driven tracking does not depend on it.
+// The sniffer tests are the literal 16.2 ones (checked against 0x1c795eb54 / 0x1c795ed7c / 0x1c795ef94 in 0.7.0), including
+// `[touch type] == 0` for the pointer-interaction sniffer.
 
 @interface BPMultiDisplayCoordinator : NSObject
 @property (nonatomic, weak) id delegate;                    // object answering windowSceneForDisplayIdentity: (SBWindowSceneManager)
@@ -252,7 +252,7 @@ static id BP_KeyboardFocusController(void) {
     if (_activePointerWS == ws) _activePointerWS = nil;
 }
 
-// 16.2 0x1c795df4c. Deviation: falls back to the first touch's window when the HID context id cannot be resolved.
+// 16.2 0x1c795df4c (literal: HID context id -> window -> display identity -> scene; no other fallback).
 - (id)_windowSceneForEvent:(id)event {
     id window = nil;
     static void *(*getAttrs)(BPIOHIDEventRef);
@@ -268,13 +268,6 @@ static id BP_KeyboardFocusController(void) {
     id identity = [window respondsToSelector:@selector(_fbsDisplayIdentity)] ? [window _fbsDisplayIdentity] : nil;
     id d = self.delegate;
     id ws = (identity && [d respondsToSelector:@selector(windowSceneForDisplayIdentity:)]) ? [d windowSceneForDisplayIdentity:identity] : nil;
-    if (!ws && [event respondsToSelector:@selector(allTouches)]) {
-        for (id t in [event allTouches]) {
-            id w = [t respondsToSelector:@selector(window)] ? [t window] : nil;
-            ws = [w respondsToSelector:@selector(windowScene)] ? [w windowScene] : nil;
-            if (ws) break;
-        }
-    }
     return ws;
 }
 
@@ -295,7 +288,7 @@ static id BP_KeyboardFocusController(void) {
                 if (![t _isPointerTouch]) continue;
                 long long ph = [t phase];
                 if (ph == 0) [self _pointerTouchDownInScene:ws];
-                else if (ph == 3 || ph == 4) [self _pointerTouchUp];   // a cancelled touch counts as up
+                else if (ph == 3) [self _pointerTouchUp];              // 16.2 0x1c795ec6c: only UITouchPhaseEnded
                 break;
             }
         }
@@ -317,7 +310,7 @@ static id BP_KeyboardFocusController(void) {
             long long ph = [t phase];
             BOOL activePhase = (ph == 4) ? NO : (ph != 2);
             if (same || !activePhase) continue;
-            { long long pty = BP_G4_Type(t); if (pty != 0 && pty != 3) continue; }   // 16.2 tests 0; real pointer touches are UITouchTypeIndirectPointer (3), so both are accepted
+            if (BP_G4_Type(t) != 0) continue;                         // 16.2 0x1c795f0d4: `cbz type` is the qualifying case, literally
             [self _pointerMovedInScene:ws];
             break;
         }
@@ -384,14 +377,27 @@ static BPMultiDisplayCoordinator *BP_Coordinator(BOOL create) {
 }
 
 // Scene validation shared by the active-display paths: 16.2 -[SBWindowSceneManager _validateSuggestedActiveWindowScene:
-// usingMethodology:] (0x1c74bf960). Deviation: if there is no embedded scene the suggestion is returned unchanged.
+// usingMethodology:] (0x1c74bf960): an invalidating or invalidated scene, and ALSO a nil suggestion (0x1c74bfb0c `cbz x19`),
+// is replaced by the embedded scene.  So 16.2 never answers nil for the active display (about 60 callers rely on it).
 static id BP_ValidateActiveScene(id mgr, id scene, long long methodology) {
     BOOL ing = BP_IsInvalidating(scene), ed = BP_IsInvalidated(scene);
-    if (!ing && !ed) return scene;
+    if (scene && !ing && !ed) return scene;
     id embedded = [mgr respondsToSelector:@selector(embeddedDisplayWindowScene)] ? [mgr embeddedDisplayWindowScene] : nil;
-    BP_Log(@"[%@] focus scene <%p> is %s, falling back to the embedded scene <%p> as the active scene",
-           BP_MethodologyString(methodology), scene, ed ? "invalidated" : "invalidating", embedded);
-    return embedded ?: scene;
+    if (scene) BP_Log(@"[%@] focus scene <%p> is %s, falling back to the embedded scene <%p> as the active scene",
+                      BP_MethodologyString(methodology), scene, ed ? "invalidated" : "invalidating", embedded);
+    return embedded;
+}
+
+// 16.2 -[SBWindowSceneManager activeDisplayWindowScene] (0x1c74bf1c4) reads [[SBExternalDisplaySettings rootSettings]
+// activeDisplayTrackingMethodology] (default 1 = touch + pointer, 16.2 setDefaultValues).  `methodology0` is an opt-in
+// alternative that forces 0 = keyboard following, which is how 16.0 behaves.
+long long BP_G4_ActiveMethodology(void);
+long long BP_G4_ActiveMethodology(void) {
+    if (BP_OptInName("methodology0")) return 0;
+    Class dom = NSClassFromString(@"SBExternalDisplaySettingsDomain");
+    id root = [(id)dom respondsToSelector:@selector(rootSettings)] ? ((id (*)(id, SEL))objc_msgSend)((id)dom, @selector(rootSettings)) : nil;
+    SEL ms = NSSelectorFromString(@"activeDisplayTrackingMethodology");
+    return [root respondsToSelector:ms] ? ((long long (*)(id, SEL))objc_msgSend)(root, ms) : 1;
 }
 
 // ================================================================================================ direct-function hook
@@ -559,18 +565,19 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 // ---------------------------------------------------------------------------------------------- window scene manager
 %hook SBWindowSceneManager
 
-// PORTABLE (invalidation fallback) + PARTIAL (touch + pointer methodology): sections 5.3 / 5.4.
+// PORTED (0.7.0): sections 5.3 / 5.4, 16.2 0x1c74bf1c4: methodology 1 -> following user interaction, 0 -> following keyboard,
+// each validated (invalidating / invalidated / nil -> embedded scene).  Off switches (`activedisplay`, `arrange`) give the
+// stock 16.0 answer.
 - (id)activeDisplayWindowScene {
-    id keyboardScene = %orig;                                   // 16.0: kfc.windowSceneWithFocus ?: embedded
-    BOOL fix = BP_On(F_DISCONNECT), touch = BP_On(F_ACTIVEDISPLAY);
-    if (!fix && !touch) return keyboardScene;
-    id suggestion = keyboardScene;
-    long long methodology = 0;
-    if (touch) {
-        id fromUser = [BP_Coordinator(NO) activeWindowScene];
-        if (fromUser) { suggestion = fromUser; methodology = 1; }   // deviation: until the first qualifying event, keep keyboard-following
-    }
-    return BP_ValidateActiveScene(self, suggestion, methodology);
+    if (!BP_On(F_ACTIVEDISPLAY) || !BP_OnName("arrange")) return %orig;
+    long long m = BP_G4_ActiveMethodology();
+    id r = nil;
+    if (m == 0) r = [self activeDisplayWindowSceneFollowingKeyboard];
+    else if (m == 1) r = [self activeDisplayWindowSceneFollowingUserInteraction];
+    else BP_Log(@"activeDisplayWindowScene: undefined methodology <unknown:%lld>", m);
+    if (r) return r;
+    BP_Log(@"activeDisplayWindowScene: no embedded scene to answer with, using the stock answer");   // last-line guard only
+    return %orig;
 }
 
 // Fidelity helpers with the 16.2 selectors (used by other groups' hooks if any).
@@ -617,12 +624,15 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 %end
 
 // ---------------------------------------------------------------------------------------------- disconnect path
-// PARTIAL: section 2.1. Wrapper around the 16.0 method. What the wrapper reproduces: the focus-evaluation assertion
-// for the whole teardown, the invalidating flag before and the invalidated flag after, the coordinator hand-off, the
-// cover sheet controller observer removal / release. What it cannot reproduce: 16.2 calls [super sceneDidDisconnect:]
-// near the END (16.0 calls it FIRST, so in 16.0 SBWindowSceneManager._sceneDidDisconnect: removes the scene from
-// connectedWindowScenes before the external-specific teardown). The invalidating flag makes that ordering safe for
-// every consumer that goes through activeDisplayWindowScene.
+// PORTED (0.7.0): the complete 16.2 -[SBExternalDisplayWindowSceneDelegate sceneDidDisconnect:] (0x1c746826c), in the 16.2
+// order, replacing the 16.0 body (0x1c5fed4f8; it called [super sceneDidDisconnect:] FIRST, then only conditionally told the
+// switcher coordinator, and did not touch the cover sheet controller or the interaction coordinator):
+//   1 kfc suppressKeyboardFocusEvaluationForReason:"<class> - <display identity>"      2 ws.invalidating = YES
+//   3 SBMainSwitcherControllerCoordinator windowSceneDidDisconnect:ws   (16.0: only if ws.screen.displayConfiguration != nil)
+//   4 _showStatusBarAssertion invalidate + nil     5 ws.systemGestureManager invalidate
+//   6 SBAlertItemsController / SBAppInteractionEventSourceManager windowSceneDidDisconnect:ws
+//   7 multiDisplayUserInteractionCoordinator windowSceneDidDisconnect:ws     8 _coverSheetController invalidate + nil
+//   9 [super sceneDidDisconnect:]    10 assertion invalidate    11 ws invalidate    12 self.invalidated = YES
 %hook SBExternalDisplayWindowSceneDelegate
 
 // connect side of the coordinator hand-off (16.2: last statement of _configureForConnectingWindowScene:windowSceneContext:)
@@ -646,38 +656,54 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
         assertion = ((id (*)(id, SEL, id))objc_msgSend)(kfc, @selector(suppressKeyboardFocusEvaluationForReason:), reason);
     }
     if (ws && [ws respondsToSelector:@selector(setInvalidating:)]) [ws setInvalidating:YES];
-    BOOL hadDisplayConfiguration = ![[ws screen] respondsToSelector:@selector(displayConfiguration)] || [[ws screen] displayConfiguration] != nil;
-    [BP_Coordinator(NO) windowSceneDidDisconnect:ws];
 
-    %orig;
-
-    // PARTIAL (opt-in, MEDIUM confidence): 16.0 only tells the switcher coordinator when the screen still has a display
-    // configuration; 16.2 always does. If it was skipped, do it now.
-    if (!hadDisplayConfiguration && ws && BP_On(F_DISCSWITCH)) {
+    // 3: always (16.2); 16.0 skipped it when the screen had no display configuration any more
+    if (BP_OnName("discswitch")) {
         Class sc = NSClassFromString(@"SBMainSwitcherControllerCoordinator");
-        id coord = [sc respondsToSelector:@selector(sharedInstance)] ? [sc sharedInstance] : nil;
-        if ([coord respondsToSelector:@selector(windowSceneDidDisconnect:)]) {
-            BP_Log(@"disconnect: switcher coordinator was skipped by the displayConfiguration gate, calling it now");
-            [coord windowSceneDidDisconnect:scene];
-        }
-    } else if (!hadDisplayConfiguration) {
-        BP_Log(@"disconnect: display configuration was nil, 16.0 skipped the switcher coordinator (discswitch is off)");
+        id coord = [(id)sc respondsToSelector:@selector(sharedInstance)] ? [(id)sc sharedInstance] : nil;
+        if (ws && [coord respondsToSelector:@selector(windowSceneDidDisconnect:)]) [coord windowSceneDidDisconnect:ws];
     }
 
-    // 16.2 -[SBExternalDisplayCoverSheetController invalidate] (new) = removeObserver:, then the delegate drops the controller.
+    // 4
     @try {
-        id cover = [self valueForKey:@"coverSheetController"];             // ivar _coverSheetController through KVC (no offsets)
+        id sba = [self valueForKey:@"showStatusBarAssertion"];            // ivar _showStatusBarAssertion through KVC (no offsets)
+        if ([sba respondsToSelector:@selector(invalidate)]) [sba invalidate];
+        [self setValue:nil forKey:@"showStatusBarAssertion"];
+    } @catch (NSException *e) { BP_Log(@"disconnect: status bar assertion release skipped: %@", e); }
+
+    // 5
+    id sgm = [ws respondsToSelector:NSSelectorFromString(@"systemGestureManager")] ? ((id (*)(id, SEL))objc_msgSend)(ws, NSSelectorFromString(@"systemGestureManager")) : nil;
+    if ([sgm respondsToSelector:@selector(invalidate)]) [sgm invalidate];
+
+    // 6
+    for (NSString *cn in @[@"SBAlertItemsController", @"SBAppInteractionEventSourceManager"]) {
+        Class c = NSClassFromString(cn);
+        id inst = [(id)c respondsToSelector:@selector(sharedInstance)] ? [(id)c sharedInstance] : nil;
+        if (ws && [inst respondsToSelector:@selector(windowSceneDidDisconnect:)]) [inst windowSceneDidDisconnect:ws];
+    }
+
+    // 7 (16.2 also calls it from the delegate; the coordinator forgets the scene and clears the touch-down / active scene)
+    [BP_Coordinator(NO) windowSceneDidDisconnect:ws];
+
+    // 8: 16.2 -[SBExternalDisplayCoverSheetController invalidate] (new) = removeObserver:, then the delegate drops the controller
+    @try {
+        id cover = [self valueForKey:@"coverSheetController"];
         if (cover) {
             [[NSNotificationCenter defaultCenter] removeObserver:cover];
             [self setValue:nil forKey:@"coverSheetController"];
         }
-    } @catch (NSException *e) {
-        BP_Log(@"disconnect: cover sheet controller release skipped: %@", e);
+    } @catch (NSException *e) { BP_Log(@"disconnect: cover sheet controller release skipped: %@", e); }
+
+    // 9: the superclass part, now at the 16.2 position
+    Class base = NSClassFromString(@"SBAbstractWindowSceneDelegate");
+    if (base && class_getInstanceMethod(base, @selector(sceneDidDisconnect:))) {
+        struct objc_super sup = { self, base };
+        ((void (*)(struct objc_super *, SEL, id))objc_msgSendSuper)(&sup, @selector(sceneDidDisconnect:), scene);
     }
 
-    [assertion invalidate];                                                // lets the kfc re-evaluate exactly once
-    BP_SetFlag(ws, &kBPInvalidated, YES);                                  // 16.2 [ws invalidate]
-    if ([self respondsToSelector:@selector(setInvalidated:)]) [self setInvalidated:YES];
+    [assertion invalidate];                                                // 10: lets the kfc re-evaluate exactly once
+    BP_SetFlag(ws, &kBPInvalidated, YES);                                  // 11: 16.2 [ws invalidate]
+    if ([self respondsToSelector:@selector(setInvalidated:)]) [self setInvalidated:YES];   // 12
 }
 
 %end
