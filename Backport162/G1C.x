@@ -2309,7 +2309,8 @@ static id G1C_Wd_Gesture(id self, SEL _cmd, id event) {
     G1C_SetIvarPoint(self, "_location", G1C_Resp(event, @selector(locationInContainerView)) ? G1C_SendPoint0(event, @selector(locationInContainerView)) : CGPointZero);
     id dest = G1C_Wd_Dest(self), sel = G1C_Wd_Sel(self), initial = G1C_Wd_Init0(self);
     long long destProposed = dest ? G1B_SendLL0(dest, @selector(proposedDestination)) : 0;
-    G1C_SetIvarBool(self, "_gestureWasCanceled", destProposed == 0);
+    BOOL evCanceled = G1C_Resp(event, @selector(isCanceled)) && G1B_SendB0(event, @selector(isCanceled));       // 16.2 0x1c760960c: canceled = event.isCanceled || proposedDestination == 0
+    G1C_SetIvarBool(self, "_gestureWasCanceled", evCanceled || destProposed == 0);
     long long phase = G1B_SendLL0(event, @selector(phase));
     if (phase == 1) {
         id layout = G1C_Wd_LayoutContaining(self, sel);
@@ -2595,7 +2596,30 @@ static id G1C_Wdr_GestureChild(id self, SEL _cmd, id event, id activeTransition)
     if (![gFilteringCls instancesRespondToSelector:fi]) return nil;
     return G1C_Send2([gFilteringCls alloc], fi, @[ sel ], content) ;
 }
+// The 'Gesture' child of this root: 16.2 property gestureModifier (== childModifierByKey:@"Gesture", 0x1c74d3df4); 16.0 calls it _gestureModifier.
+static id G1C_Wdr_GM(id self) {
+    if (G1C_Resp(self, @selector(gestureModifier))) return G1B_Send0(self, @selector(gestureModifier));
+    if (G1C_Resp(self, @selector(_gestureModifier))) return G1B_Send0(self, @selector(_gestureModifier));
+    return G1C_Resp(self, @selector(childModifierByKey:)) ? G1B_Send1(self, @selector(childModifierByKey:), @"Gesture") : nil;
+}
 static id G1C_Wdr_Gesture(id self, SEL _cmd, id event) {
+    // 16.2 SBGestureRootSwitcherModifier -handleGestureEvent: (0x1c74d3b60, byte-identical shape in 16.0) adds the new gesture child with
+    // addChildModifier:atLevel:1 key:@"Gesture" and SBChainableModifier throws NSInternalInconsistencyException when that key is still taken.
+    // In 16.2 the previous 'Gesture' child (the SBFilteringSwitcherModifier around the drag content) is always finished before a new gesture begins:
+    // the drag's phase-3 event produces a perform-transition response, the transition's phase 1 reaches handleTransitionEvent: below
+    // (gestureModifier setState:1) and the base class removes finished children. A drag whose touch ended on another display never produced that
+    // transition here (log 10:29:39.666-10:29:45.4: touch up on the external scene, no end event, no transition), so the child was still active when
+    // the next drag began. Last-line guard (16.2 itself has none): finish and remove the stale child exactly like the base class' removal pass would.
+    if (G1C_ON() && event && G1C_Resp(event, @selector(phase)) && G1B_SendLL0(event, @selector(phase)) == 1
+        && G1C_Resp(event, @selector(gestureType)) && G1C_Resp(self, @selector(gestureType))
+        && G1B_SendLL0(event, @selector(gestureType)) == G1B_SendLL0(self, @selector(gestureType))) {
+        id stale = G1C_Wdr_GM(self);
+        if (stale) {
+            if (BP_LogEnabled()) BP_Log(@"GUARD window drag root: new gesture began while the previous 'Gesture' child %@ was still active (its drag never produced a transition) -> finishing and removing it", G1C_DbgCls(stale));
+            if (G1C_Resp(stale, @selector(setState:))) G1B_SendVLL(stale, @selector(setState:), 1);
+            if (G1C_Resp(self, @selector(removeChildModifier:))) G1B_SendV1(self, @selector(removeChildModifier:), stale);
+        }
+    }
     id r = G1B_SUPER(id, gWdrGrand, self, _cmd, (struct objc_super *, SEL, id), event);
     if (event && G1B_SendLL0(event, @selector(phase)) == 1) { id inv = G1C_NewInvalidateAdjusted(); if (inv) r = G1B_AppendTo(inv, r); }
     return r;
@@ -2612,13 +2636,13 @@ static id G1C_Wdr_Transition(id self, SEL _cmd, id event) {
     }
     G1C_SetIvarObj(self, "_initialAppLayout", to);
     long long phase = G1C_Resp(event, @selector(phase)) ? G1B_SendLL0(event, @selector(phase)) : 0;
-    if (phase == 1) { id gm = G1C_Resp(self, @selector(gestureModifier)) ? G1B_Send0(self, @selector(gestureModifier)) : nil; if (gm && G1C_Resp(gm, @selector(setState:))) G1B_SendVLL(gm, @selector(setState:), 1); }
+    if (phase == 1) { id gm = G1C_Wdr_GM(self); if (gm && G1C_Resp(gm, @selector(setState:))) G1B_SendVLL(gm, @selector(setState:), 1); }
     if (phase == 3 && G1C_Resp(self, @selector(setState:))) G1B_SendVLL(self, @selector(setState:), 1);
     return r;
 }
 static id G1C_Wdr_Anim(id self, SEL _cmd, id element) {
     id base = G1B_SUPER(id, gWdrGrand, self, _cmd, (struct objc_super *, SEL, id), element);
-    id gm = G1C_Resp(self, @selector(gestureModifier)) ? G1B_Send0(self, @selector(gestureModifier)) : nil;
+    id gm = G1C_Wdr_GM(self);
     if (!gm || !base || !element) return base;
     SEL tp = NSSelectorFromString(@"switcherLayoutElementType");
     if (!G1C_Resp(element, tp) || G1B_SendLL0(element, tp) != 0) return base;
