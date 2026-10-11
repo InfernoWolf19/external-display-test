@@ -128,6 +128,9 @@ typedef struct __IOHIDEvent *BPIOHIDEventRef;
 - (id)acquireForReason:(id)reason;                          // BSCompoundAssertion
 - (void)invalidate;                                         // BSInvalidatable
 - (void)windowSceneDidDisconnect:(id)windowScene;
+- (id)activeDisplayWindowSceneFollowingKeyboard;            // %new on SBWindowSceneManager below
+- (id)activeDisplayWindowSceneFollowingUserInteraction;     // %new on SBWindowSceneManager below
+- (id)systemGestureManager;                                 // SBWindowScene
 - (BOOL)isInvalidating;                                     // %new on SBWindowScene below
 - (BOOL)isInvalidated;                                      // %new on SBWindowScene / SBAbstractWindowSceneDelegate below
 - (void)setInvalidating:(BOOL)invalidating;                 // %new on SBWindowScene below

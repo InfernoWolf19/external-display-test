@@ -41,7 +41,6 @@ Needs ExtendedDisplayEnabler for the external display features.
 | group1c | AppSwitcher / InlineAppExpose / HomeScreen Continuous Expose modifiers, window drag (+ destination, root), Root floor / gesture factories, peek family, app drag-and-drop gesture family, grid swipe-up / slide / cycle / strip reveal and overflow transactions, ToHome and AppToApp / SwitcherToApp transitions, grabber and orientation producers | `group1c` |
 | g1c_piles | the pile layout of the app switcher | `g1c_piles` |
 | g1c_flyin | no 0.8-scale fly-in card after a home swipe that ends on the home screen (16.2 masks it under Stage Manager) | `g1c_flyin` |
-| g1c_homeflash | Hides the Stage Manager switcher cards in the end state of the switcher -> home transition (the first group otherwise lingers at the left edge for ~1 s, specs/AUDIT-HOMEFLASH-0.6.8.md) | `g1c_homeflash` |
 
 ### Group 2: layout data [G2.x, G2B.m]
 
@@ -89,14 +88,17 @@ Needs ExtendedDisplayEnabler for the external display features.
 
 | feature | what it ports | switch |
 |---|---|---|
-| g3c | "Zoom" on a full-screen Stage Manager app returns it to a window of the live default window size (16.2 Unspecified-size primitive); a window the user resized keeps its size | `g3c` |
+| g3c | Zoom (top-affordance menu item and the keyboard shortcut) builds the 16.2 request: largest sizing policy, attributed size Unspecified; 16.2 has no un-zoom through this item | `g3c` |
+| g3c_addwin | "Add Another Window" sends only the 16.2 peek request (16.0 also forced the unlocked environment mode) | `g3c_addwin` |
 | addwinnet | safety net: the stock assertion "The appLayouts array MUST contain the app layout we're transitioning to." at the end of a transition (seen after three-dots > Add Another Window) is repaired (model add, else the array is patched) instead of crashing SpringBoard; see specs/AUDIT-ADDWINDOW-0.6.4.md | `addwinnet` |
 
 ### Group 4b: reconstruction of external-display extras [G4B.x, Backport162BBD/]
 
 | feature | what it ports | switch |
 |---|---|---|
-| clonemirror | per-display clone mirroring mode (client side; the daemon side is the optional Backport162BBD package) | `clonemirror` |
+| clonemirror | per-display clone mirroring mode (needs the Backport162BBD 0.7.0 package in backboardd; userspace reboot after installing) | `clonemirror` |
+| autoext | 16.2 hardware-window auto "extended" mode on connect (ported from ExtendedDisplayEnabler, idempotent with it) | `autoext` |
+| mirrorsvc | `SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:` fix (ported from ExtendedDisplayEnabler, idempotent with it) | `mirrorsvc` |
 | edu | external-display education session / pill / observer | `edu` |
 | edunative | **opt-in**: native alert instead of the SpringBoardEducation remote alert | `edunative` |
 | presubset | `boundPointerUIScenes` subset + policy presentation update | `presubset` |

@@ -54,6 +54,7 @@
 @interface SBContinuousExposeAppToAppModifier : NSObject @end
 @interface SBFullScreenContinuousExposeSwitcherModifier : NSObject @end
 @interface SBWindowDeleteSwitcherModifier : NSObject @end
+@interface SBTransitionSwitcherModifierEvent : NSObject @end
 // END INTEGRATION interfaces
 
 // ============================================================================================================
@@ -869,6 +870,21 @@ static void G1B_InstallTransitionEventFlags(void) {
     };
     for (size_t i = 0; i < sizeof m / sizeof m[0]; i++) { SEL s = sel_registerName(m[i].s); if (!class_getInstanceMethod(ev, s)) class_addMethod(ev, s, m[i].i, m[i].t); }
 }
+// 16.2 -[SBTransitionSwitcherModifierEvent copyWithZone:] 0x1c7431d04 copies the three flags with the other BOOL fields (strb at +0x38/+0x39/+0x3a); with associated
+// objects the copy (Filtering modifier, platform modifier's _lastTransitionEvent, unhandledCopy) has to carry them over explicitly.
+%group G1B_EventCopy
+%hook SBTransitionSwitcherModifierEvent
+- (id)copyWithZone:(NSZone *)zone {
+    id c = %orig;
+    if (c && G1B_ON()) {
+        G1B_EvSetFlag(c, &kEvFlagWin, G1B_EvFlag((id)self, &kEvFlagWin));
+        G1B_EvSetFlag(c, &kEvFlagCmdTab, G1B_EvFlag((id)self, &kEvFlagCmdTab));
+        G1B_EvSetFlag(c, &kEvFlagDock, G1B_EvFlag((id)self, &kEvFlagDock));
+    }
+    return c;
+}
+%end
+%end
 // Set the flags from the transition request source (values decoded from 16.2 @0x1c76d485c..: 0x40 / 0x10 / 0x18,0x19).
 %group G1B_Coordinator
 %hook SBMainSwitcherControllerCoordinator
@@ -1543,18 +1559,82 @@ static void G1B_BuildWindowModeChange(void) {
     };
     gWinModeCls = G1B_MakeClass("SBiPadOSWindowModeChangeTransitionModifier", sup, NULL, 0, m, sizeof m / sizeof m[0], NULL, NULL);
 }
+// 16.2 +[SBMainSwitcherControllerCoordinator _filterAppLayoutForChamois:] (0x1c76db2b8, NEW; the 16.0 model did the same inside
+// -[SBRecentAppLayouts _appLayoutByAdjustingCenterRoleForContinuousExpose:] 0x1c64ef32c): turns a layout that has a center item (configuration 1 -> 3, centerItem dropped)
+// or an environment-3 (floating) layout (-> environment 1) into its Stage Manager form; nil when the layout needs no conversion.
+static id G1B_FilterAppLayoutForChamois(id cls, SEL _cmd, id l) {
+    Class ac = NSClassFromString(@"SBAppLayout");
+    SEL ini = NSSelectorFromString(@"initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:centerConfiguration:environment:hidden:preferredDisplayOrdinal:");
+    if (!l || !ac || ![ac instancesRespondToSelector:ini]) return nil;
+    id center = ((id (*)(id, SEL, long long))objc_msgSend)(l, @selector(itemForLayoutRole:), 4);
+    long long env = G1B_SendLL0(l, @selector(environment));
+    long long cfg;
+    if (center) { cfg = G1B_SendLL0(l, @selector(configuration)); if (cfg == 1) cfg = 3; }
+    else if (env == 3) { cfg = G1B_SendLL0(l, @selector(configuration)); env = 1; }
+    else return nil;
+    id floating = ((id (*)(id, SEL, long long))objc_msgSend)(l, @selector(itemForLayoutRole:), 3);
+    return ((id (*)(id, SEL, id, id, id, long long, id, long long, long long, BOOL, long long))objc_msgSend)([ac alloc], ini, G1B_Send0(l, @selector(allItems)), nil, floating, cfg,
+        G1B_Send0(l, NSSelectorFromString(@"itemsToLayoutAttributesMap")), 0, env, G1B_SendB0(l, @selector(isHidden)), G1B_SendLL0(l, NSSelectorFromString(@"preferredDisplayOrdinal")));
+}
+static void G1B_InstallChamoisFilter(void) {
+    Class co = NSClassFromString(@"SBMainSwitcherControllerCoordinator");
+    SEL f = NSSelectorFromString(@"_filterAppLayoutForChamois:");
+    if (co && !class_getClassMethod(co, f)) class_addMethod(object_getClass(co), f, (IMP)G1B_FilterAppLayoutForChamois, "@24@0:8@16");
+}
+
+// 16.2 keeps the mode of the last transition in the new ivar _currentUnlockedEnvironmentMode (+0x90, absent in 16.0): associated object here.
+static char kPlatMode;
+static long long G1B_PlatMode(id self) { return [(NSNumber *)G1B_GET(self, kPlatMode) longLongValue]; }
 %group G1B_Platform
 %hook SBiPadOSPlatformSwitcherModifier
 - (id)handleTransitionEvent:(id)event {
     id r = %orig;
-    if (!G1B_ON() || !gWinModeCls || ![event respondsToSelector:@selector(isiPadOSWindowingModeChangeEvent)] || !G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent))) return r;
-    if (G1B_SendLL0(event, @selector(phase)) != 1 || !G1B_SendB0(event, @selector(isAnimated))) return r;
-    Ivar iv = class_getInstanceVariable([self class], "_currentUnlockedEnvironmentMode");
-    if (!iv || *(long long *)((uint8_t *)(__bridge void *)self + ivar_getOffset(iv)) != 3) return r;
-    id from = G1B_Send0(event, @selector(fromAppLayout)), to = G1B_Send0(event, @selector(toAppLayout));
-    if (!from || !to || ![self respondsToSelector:@selector(addChildModifier:)]) return r;
-    id m = ((id (*)(id, SEL, id, id, id))objc_msgSend)([gWinModeCls alloc], @selector(initWithTransitionID:fromAppLayout:toAppLayout:), G1B_Send0(event, @selector(transitionID)), from, to);
-    if (m) G1B_SendV1(self, @selector(addChildModifier:), m);
+    if (!G1B_ON() || !event) return r;
+    id me = (id)self;
+    long long prev = G1B_PlatMode(me);
+    // 16.2 0x1c75a6fac: windowing-mode change event, phase 1, animated, previous mode 3, both layouts -> SBiPadOSWindowModeChangeTransitionModifier child
+    if (gWinModeCls && G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent)) && G1B_SendLL0(event, @selector(phase)) == 1 && G1B_SendB0(event, @selector(isAnimated))) {
+        id from = G1B_Send0(event, @selector(fromAppLayout)), to = G1B_Send0(event, @selector(toAppLayout));
+        if (prev == 3 && from && to && [me respondsToSelector:@selector(addChildModifier:atLevel:key:)]) {
+            id m = ((id (*)(id, SEL, id, id, id))objc_msgSend)([gWinModeCls alloc], @selector(initWithTransitionID:fromAppLayout:toAppLayout:), G1B_Send0(event, @selector(transitionID)), from, to);
+            if (m) ((void (*)(id, SEL, id, long long, id))objc_msgSend)(me, @selector(addChildModifier:atLevel:key:), m, 0, nil);
+        }
+    }
+    G1B_SET(me, kPlatMode, @(G1B_SendLL0(event, @selector(toEnvironmentMode))));                  // _currentUnlockedEnvironmentMode = event.toEnvironmentMode
+    return r;
+}
+// 16.2 0x1c75a73c4 (16.0 0x1c611d0bc): swapping the root modifier when the windowing mode changes at run time. New in 16.2: the update-layout response only when the
+// previous mode is not 3, and the re-fed last transition event has its layouts converted with +_filterAppLayoutForChamois:.
+- (id)handleUpdateWindowingModeEvent:(id)event {
+    if (!G1B_ON()) return %orig;
+    id me = (id)self;
+    Class platC = NSClassFromString(@"SBiPadOSPlatformSwitcherModifier"), sup = class_getSuperclass(platC);
+    id r = G1B_HasSuper(sup, _cmd) ? G1B_SUPER(id, sup, me, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    NSString *key = @"kiPadOSPlatformModifierChildKey";
+    id child = ((id (*)(id, SEL, id))objc_msgSend)(me, @selector(childModifierByKey:), key);
+    BOOL chamois = G1B_WD_Chamois(me);
+    Class mainRoot = NSClassFromString(@"SBMainSwitcherRootSwitcherModifier"), ceRoot = NSClassFromString(@"SBContinuousExposeRootSwitcherModifier");
+    Class old = chamois ? mainRoot : ceRoot, neu = chamois ? ceRoot : mainRoot;
+    if (!child || !old || !neu || ![child isKindOfClass:old]) return r;
+    Class ic = NSClassFromString(@"SBInvalidateAdjustedAppLayoutsSwitcherEventResponse"), sc = NSClassFromString(@"SBInvalidateSnapshotCacheSwitcherEventResponse");
+    r = G1B_AppendTo(ic ? [[ic alloc] init] : nil, r);
+    if (G1B_PlatMode(me) != 3) r = G1B_AppendTo(G1B_NewUpdateLayoutResponse(0x1e, 3), r);
+    if (sc && [sc instancesRespondToSelector:@selector(initWithDisplayItems:)]) r = G1B_AppendTo(G1B_Send1([sc alloc], @selector(initWithDisplayItems:), nil), r);
+    G1B_SendV1(me, @selector(removeChildModifier:), child);
+    id root = [[neu alloc] init];
+    ((void (*)(id, SEL, id, long long, id))objc_msgSend)(me, @selector(addChildModifier:atLevel:key:), root, 0, key);
+    Ivar iv = class_getInstanceVariable(platC, "_lastTransitionEvent");
+    id last = iv ? object_getIvar(me, iv) : nil;
+    if (last) {
+        id e = [last copy];
+        Class co = NSClassFromString(@"SBMainSwitcherControllerCoordinator");
+        SEL fsel = NSSelectorFromString(@"_filterAppLayoutForChamois:");
+        id f = (co && [co respondsToSelector:fsel]) ? G1B_Send1((id)co, fsel, G1B_Send0(e, @selector(fromAppLayout))) : nil;
+        if (f) G1B_SendV1(e, @selector(setFromAppLayout:), f);
+        id t = (co && [co respondsToSelector:fsel]) ? G1B_Send1((id)co, fsel, G1B_Send0(e, @selector(toAppLayout))) : nil;
+        if (t) G1B_SendV1(e, @selector(setToAppLayout:), t);
+        (void)G1B_Send1(root, @selector(handleEvent:), e);
+    }
     return r;
 }
 %end
@@ -1771,6 +1851,7 @@ void G1B_Setup(void) {
     G1B_BuildDndToApp();
     G1B_BuildSwitcherToAppExpose();
     G1B_BuildWindowDelete();
+    G1B_InstallChamoisFilter();
     G1B_InstallTransitionEventFlags();
     %init(G1B_IconOverlay);                  // icon-overlay response for a missing item container is ignored instead of asserting
     %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
@@ -1784,6 +1865,7 @@ void G1B_Setup(void) {
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
     %init(G1B_VCInvalidate);                 // 1.3 consumer
     %init(G1B_Header);                       // 1.5 (inert unless the FullScreen port defines handleTapAppLayoutHeaderEvent:)
+    %init(G1B_EventCopy);                    // flags survive -copy
     %init(G1B_Coordinator);                  // 2.0 transition-event flags
     %init(G1B_Platform);                     // 2.4 creator
     %init(G1B_Root);                         // 4.1 _effectiveEnvironmentMode fix

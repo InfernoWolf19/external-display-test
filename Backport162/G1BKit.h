@@ -117,15 +117,24 @@ static inline void G1B_SendV0(id o, SEL s)                   { if (o && [o respo
 static inline void G1B_SendV1(id o, SEL s, id a)              { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
 static inline void G1B_SendVLL(id o, SEL s, long long a)      { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
 
-// SBAppendSwitcherModifierResponse(new, existing): exported by the 16.0 SpringBoard binary (nm: _SBAppendSwitcherModifierResponse).
+// SBAppendSwitcherModifierResponse(new, existing): the C helper of the 16.0 SpringBoard binary (_SBAppendSwitcherModifierResponse 0x1c62a07b4). 16.2 itself also
+// calls +[SBSwitcherModifierEventResponse responseByAppendingResponse:toResponse:] (present in 16.0, e.g. 16.2 SBWindowDeleteSwitcherModifier -transitionDidEnd
+// 0x1c78e7044): the class method is the exact same operation and is used whenever the C symbol cannot be resolved by dlsym.
 typedef id (*G1BAppendFn)(id newResponse, id existing);
 static id G1B_Append(id newResponse, id existing) {
     static G1BAppendFn fn; static dispatch_once_t once;
     dispatch_once(&once, ^{ fn = (G1BAppendFn)dlsym(RTLD_DEFAULT, "SBAppendSwitcherModifierResponse"); });
-    if (!fn) return existing ?: newResponse;               // PARTIAL: without the helper the new response replaces nothing; callers check G1B_HaveAppend()
-    return fn(newResponse, existing);
+    if (fn) return fn(newResponse, existing);
+    Class rc = NSClassFromString(@"SBSwitcherModifierEventResponse");
+    SEL s = @selector(responseByAppendingResponse:toResponse:);
+    if (rc && [rc respondsToSelector:s]) return ((id (*)(id, SEL, id, id))objc_msgSend)((id)rc, s, newResponse, existing);
+    BP_Log(@"g1b: no way to append switcher responses (SBAppendSwitcherModifierResponse and +responseByAppendingResponse:toResponse: both missing)");
+    return existing ?: newResponse;
 }
-static BOOL G1B_HaveAppend(void) { return dlsym(RTLD_DEFAULT, "SBAppendSwitcherModifierResponse") != NULL; }
+static BOOL G1B_HaveAppend(void) {
+    Class rc = NSClassFromString(@"SBSwitcherModifierEventResponse");
+    return dlsym(RTLD_DEFAULT, "SBAppendSwitcherModifierResponse") != NULL || (rc && [rc respondsToSelector:@selector(responseByAppendingResponse:toResponse:)]);
+}
 
 
 static double G1B_Dbl0(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((double (*)(id, SEL))objc_msgSend)(o, s) : 0.0; }

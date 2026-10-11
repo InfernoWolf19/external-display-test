@@ -38,6 +38,7 @@ static inline double BP2B_Dbl(id o, SEL s) { return (o && [o respondsToSelector:
 static inline long long BP2B_LL(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL))objc_msgSend)(o, s) : 0; }
 static inline CGRect BP2B_Rect(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, s) : CGRectZero; }
 static inline CGSize BP2B_Size(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((CGSize (*)(id, SEL))objc_msgSend)(o, s) : CGSizeZero; }
+static inline CGSize BP2B_Size1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((CGSize (*)(id, SEL, id))objc_msgSend)(o, s, a) : CGSizeZero; }
 static inline CGPoint BP2B_Point(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((CGPoint (*)(id, SEL))objc_msgSend)(o, s) : CGPointZero; }
 
 static id BP2B_IvarObj(id obj, const char *name) {
@@ -483,6 +484,16 @@ static CGPoint BP2B_AttrsCenterInBounds(id attrs, CGRect bounds) {
     if (!BP2B_ReadFields(attrs, &f)) return CGPointZero;
     return BP2B_CenterInBounds(f.center, bounds);
 }
+// 162 -[_SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord _initWithRecordForLayoutAttributes:containerBounds:] 0x1c7789acc as a comparable value (used by the
+// group 2 cache key): attributedSize {normalizedSize, referenceBounds, semanticSizeType}, centerInBounds:, sizingPolicy, occlusionState, contentOrientation.
+NSArray *BP2B_KeyRecord(id attrs, CGRect bounds) {
+    if (!attrs) return nil;
+    BP2BAttrSize s = BP2B_GetAttributedSize(attrs);
+    CGPoint c = BP2B_AttrsCenterInBounds(attrs, bounds);
+    return @[ @(s.normalizedSize.width), @(s.normalizedSize.height), @(s.referenceBounds.origin.x), @(s.referenceBounds.origin.y), @(s.referenceBounds.size.width),
+              @(s.referenceBounds.size.height), @(s.semanticSizeType), @(c.x), @(c.y), @(BP2B_LL(attrs, sel_registerName("sizingPolicy"))),
+              @(BP2B_LL(attrs, sel_registerName("occlusionState"))), @(BP2B_LL(attrs, sel_registerName("contentOrientation"))) ];
+}
 // attributes by writing an ABSOLUTE size/center for the current container (what the 16.2 calculator does at the end of auto layout)
 static id BP2B_AttrsBySettingAbsolute(id attrs, CGSize size, CGPoint center, BOOL setCenter, CGRect bounds, CGSize defSize, double pad) {
     BP2BAttrFields f;
@@ -893,6 +904,115 @@ static id BP2B_AutoLayout(id calc, id layout, long long orient, id attrs, double
     return layout3;
 }
 
+// =================================================================================================================
+// 162 -[SBDisplayItemLayoutAttributesCalculator _frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:
+//      floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:skipAutoLayout:]   0x1c75a3614 (decoded)
+// Differences to 160 0x1c61197b8: the window size comes from the overlapping MODEL (cachedLastOverlappingModel) when not skipping the auto layout,
+// the attribute size queries pass defaultWindowSize / screenEdgePadding, policy 1 snaps (0,0) through the app's layout restriction, requiresFullScreen
+// uses defaultWindowSize, a window without a stored centre is cascaded off the top window (RTL mirrored), the grid snap ALWAYS runs and an
+// empty snap falls back to defaultWindowSize / the container.  Centre-window / floating / classic side-layout branches are identical to 160.
+// =================================================================================================================
+static IMP gOrigFrame;
+static CGRect BP2B_RectCenteredAboutPoint(CGRect r, CGPoint c, double scale) {
+    typedef CGRect (*Fn)(CGRect, CGPoint, double);
+    static Fn fn; static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (Fn)dlsym(RTLD_DEFAULT, "UIRectCenteredAboutPointScale"); });           // UIKit export, imported by SpringBoard 160 and 162
+    if (fn) return fn(r, c, scale);
+    double s = scale > 0 ? scale : 1.0;
+    r.origin.x = round((c.x - r.size.width * 0.5) * s) / s; r.origin.y = round((c.y - r.size.height * 0.5) * s) / s;
+    return r;
+}
+static CGSize BP2B_GridNearest(id grid, CGSize proposed, CGRect bounds, long long co, id info, double scale, id attrs) {
+    SEL gs = sel_registerName("nearestGridSizeForProposedSize:inBounds:contentOrientation:layoutRestrictionInfo:screenScale:chamoisLayoutAttributes:");
+    if (![grid respondsToSelector:gs]) return CGSizeZero;
+    return ((CGSize (*)(id, SEL, CGSize, CGRect, long long, id, double, id))objc_msgSend)(grid, gs, proposed, bounds, co, info, scale, attrs);
+}
+
+static CGRect BP2B_FrameForLayoutRole(id calc, long long role, id appLayout, CGRect bounds, long long orient, id attrs, double dockH, double scale,
+                                      BOOL chamois, BOOL ps, BOOL pd, BOOL skip) {
+    typedef CGRect (*F)(id, SEL, long long, id, CGRect, long long, id, double, double, BOOL, BOOL, BOOL, BOOL);
+    SEL fs = sel_registerName("_frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:skipAutoLayout:");
+    double dockEff = pd ? 0.0 : dockH;
+    id layout = appLayout;
+    if (!skip && chamois) {
+        SEL as = sel_registerName("_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:");
+        layout = ((id (*)(id, SEL, id, long long, id, double, double, id, id, CGRect, BOOL, BOOL))objc_msgSend)(calc, as, layout, orient, attrs, dockEff, scale, nil, nil, bounds, ps, pd);
+    }
+    long long env = BP2B_LL(layout, sel_registerName("environment"));
+    if (role == 4 || env == 3 || role == 3 || env == 2 || !chamois) {                  // centre window / floating / classic side layout: unchanged 160 code
+        if (!gOrigFrame) return CGRectZero;
+        return ((F)gOrigFrame)(calc, fs, role, layout, bounds, orient, attrs, dockH, scale, chamois, ps, pd, YES);
+    }
+    CGPoint bc = CGPointMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds));
+    CGPoint center = bc;
+    CGSize size = CGSizeZero;
+    id itemAttrs = nil;
+    {   // layoutAttributesForItemInRole: takes a role (integer)
+        SEL s = sel_registerName("layoutAttributesForItemInRole:");
+        itemAttrs = [layout respondsToSelector:s] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, s, role) : nil;
+    }
+    SEL itemS = sel_registerName("itemForLayoutRole:"), infoS = sel_registerName("layoutRestrictionInfoForItem:");
+    id item = [layout respondsToSelector:itemS] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, itemS, role) : nil;
+    id info = item ? BP2B_Obj1(calc, infoS, item) : nil;
+    id grid = BP2B_Obj(calc, sel_registerName("_chamoisLayoutGridCache"));
+    long long co = BP2B_LL(itemAttrs, sel_registerName("contentOrientation"));
+    CGSize def = BP2B_Size(attrs, sel_registerName("defaultWindowSize"));
+    double pad = BP2B_Dbl(attrs, sel_registerName("screenEdgePadding"));
+    CGSize snapped;
+    if (BP2B_LL(itemAttrs, @selector(sizingPolicy)) == 1) {
+        double h = CGRectInset(bounds, pad, pad).size.height;
+        snapped = BP2B_GridNearest(grid, CGSizeMake(0.0, (0.0 > h) ? h : 0.0), bounds, co, info, scale, attrs);       // 0x1c75a3918..0x1c75a396c: proposed (0, min(0, h))
+    } else {
+        if (skip) size = BP2B_AttrsSizeInBounds(itemAttrs, bounds, def, pad);
+        else {
+            id model = BP2B_Obj(layout, sel_registerName("cachedLastOverlappingModel"));
+            if (item && model) size = BP2B_Size1(model, sel_registerName("sizeForItem:"), item);
+            if (BP2B_FLE(size.width, 0.0) || BP2B_FLE(size.height, 0.0)) size = BP2B_AttrsSizeInBounds(itemAttrs, bounds, def, pad);
+        }
+        center = BP2B_AttrsCenterInBounds(itemAttrs, bounds);
+        if (BP2B_Bool(attrs, sel_registerName("requiresFullScreen"))) {
+            size = def;
+        } else if (size.width == 0 && size.height == 0) {                              // _SBDisplayItemSizeIsUnspecified
+            id handle = item ? BP2B_Obj1(calc, sel_registerName("_deviceApplicationSceneHandleForDisplayItem:"), item) : nil;
+            if (handle && BP2B_Bool(handle, sel_registerName("supportsCenterWindow"))) {
+                double p2 = BP2B_Dbl(attrs, sel_registerName("screenEdgePadding"));
+                CGRect r = CGRectMake(0, 0, bounds.size.width - 2 * p2, bounds.size.height - dockEff - 2 * p2);          // SBRectWithSize
+                CGRect cf = ((CGRect (*)(id, SEL, long long, long long, CGRect))objc_msgSend)(calc, sel_registerName("frameForCenterItemWithConfiguration:interfaceOrientation:bounds:"), 1, orient, r);
+                size = cf.size;
+                if (center.x == 0 && center.y == 0) {                                  // no stored centre: cascade off the top window (0x1c75a3cb4..0x1c75a4198)
+                    NSArray *z = BP2B_Obj(layout, sel_registerName("zOrderedItems"));
+                    id top = z.firstObject, other = top;
+                    if (top) {
+                        if ([item isEqual:top]) other = (z.count >= 2) ? z[1] : top;
+                        id oa = other ? BP2B_Obj1(layout, sel_registerName("layoutAttributesForItem:"), other) : nil;
+                        if (oa) {
+                            CGPoint c2 = BP2B_AttrsCenterInBounds(oa, bounds);
+                            double ow = BP2B_AttrsSizeInBounds(oa, bounds, def, pad).width;
+                            BOOL rtl = [UIApplication sharedApplication].userInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft;
+                            center = CGPointMake(c2.x + ow * (rtl ? -0.5 : 0.5), c2.y);
+                        }
+                    }
+                }
+            } else if (BP2B_LL(itemAttrs, @selector(sizingPolicy)) == 2) {
+                center = bc; size = bounds.size;
+            } else {
+                size = def;
+            }
+        }
+        if (size.width == 0 && size.height == 0 && BP_LogEnabled()) BP_Log(@"[g2b] frame: zero proposed size for role %lld", role);
+        snapped = BP2B_GridNearest(grid, size, bounds, co, info, scale, attrs);
+    }
+    if (snapped.width != 0 || snapped.height != 0) {
+        size = snapped;
+    } else {                                                                            // 0x1c75a3fb0: empty snap -> defaultWindowSize, else the container
+        if (BP_LogEnabled()) BP_Log(@"[g2b] frame: grid snap returned zero size for role %lld", role);
+        size = def; center = bc;
+        if (size.width == 0 && size.height == 0) size = bounds.size;
+    }
+    return BP2B_RectCenteredAboutPoint(CGRectMake(0, 0, size.width, size.height), center, scale);
+}
+
+
 static void BP2B_SetupCalculator(void) {
     Class c = objc_getClass("SBDisplayItemLayoutAttributesCalculator");
     if (!c) return;
@@ -911,32 +1031,19 @@ static void BP2B_SetupCalculator(void) {
     SEL autoSel = sel_registerName("_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:");
     Method m = class_getInstanceMethod(c, autoSel);
     if (!m) { BP_Log(@"[g2b] item3: calculator auto-layout method not found"); return; }
+    // 0.7.0: the 16.0 body (SBChamoisOverlappingController modelForPreferredModel:...) is never called any more. If a prerequisite of the port is
+    // missing the layout is returned unchanged (last-line guard, logged), exactly the 16.2 "cache hit" result shape.
     gOrigAutoLayout = BP2B_Replace(c, "_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:",
         imp_implementationWithBlock(^id(id me, id layout, long long orient, id attrs, double dockH, double scale, id dragging, id before, CGRect bounds, BOOL ps, BOOL pd) {
-            typedef id (*Orig)(id, SEL, id, long long, id, double, double, id, id, CGRect, BOOL, BOOL);
-            id r = BP2B_Enabled("g2b") ? BP2B_AutoLayout(me, layout, orient, attrs, dockH, scale, dragging, before, bounds, ps, pd) : nil;
-            if (r) return r;
-            return gOrigAutoLayout ? ((Orig)gOrigAutoLayout)(me, autoSel, layout, orient, attrs, dockH, scale, dragging, before, bounds, ps, pd) : layout;
+            id r = BP2B_AutoLayout(me, layout, orient, attrs, dockH, scale, dragging, before, bounds, ps, pd);
+            if (!r && BP_LogEnabled()) BP_Log(@"[g2b] auto layout: a prerequisite is missing, layout returned unchanged");
+            return r ?: layout;
         }));
-    // context wrapper around the 16.0 frame computation (see gBP2B_Ctx)
-    {
-        static IMP origFrame;
-        SEL fs = sel_registerName("_frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:skipAutoLayout:");
-        origFrame = BP2B_Replace(c, "_frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:skipAutoLayout:",
-            imp_implementationWithBlock(^CGRect(id me, long long role, id layout, CGRect bounds, long long orient, id attrs, double dockH, double scale, BOOL chamois, BOOL ps, BOOL pd, BOOL skip) {
-                if (!origFrame) return CGRectZero;
-                typedef CGRect (*F)(id, SEL, long long, id, CGRect, long long, id, double, double, BOOL, BOOL, BOOL, BOOL);
-                __typeof__(gBP2B_Ctx) saved = gBP2B_Ctx;
-                if (chamois && attrs && BP2B_Enabled("g2b")) {
-                    gBP2B_Ctx.on = YES;
-                    gBP2B_Ctx.def = BP2B_Size(attrs, sel_registerName("defaultWindowSize"));
-                    gBP2B_Ctx.pad = BP2B_Dbl(attrs, sel_registerName("screenEdgePadding"));
-                }
-                CGRect r = ((F)origFrame)(me, fs, role, layout, bounds, orient, attrs, dockH, scale, chamois, ps, pd, skip);
-                gBP2B_Ctx = saved;
-                return r;
-            }));
-    }
+    // 162 0x1c75a3614 -_frameForLayoutRole:... : full port of the Stage Manager branch; centre / floating / classic side branches are byte-for-byte the 16.0 body.
+    gOrigFrame = BP2B_Replace(c, "_frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:skipAutoLayout:",
+        imp_implementationWithBlock(^CGRect(id me, long long role, id layout, CGRect bounds, long long orient, id attrs, double dockH, double scale, BOOL chamois, BOOL ps, BOOL pd, BOOL skip) {
+            return BP2B_FrameForLayoutRole(me, role, layout, bounds, orient, attrs, dockH, scale, chamois, ps, pd, skip);
+        }));
     // every user of the old controller getter now gets the ported controller (the 160 controller class is never used again)
     SEL getS = sel_registerName("_chamoisOverlappingControllerCache");
     if (class_getInstanceMethod(c, getS) && NSClassFromString(@"BP162ChamoisOverlappingController"))
@@ -944,6 +1051,45 @@ static void BP2B_SetupCalculator(void) {
     BP_Log(@"[g2b] item3: calculator auto layout replaced");
 }
 
+
+// 162 -[SBFluidSwitcherViewController appLayoutContainsAnUnoccludedMaximizedDisplayItem:] 0x1c74360dc: same loop as 160 0x1c5fbdb84 but the size comes from the
+// 16.2 sizeInBounds:defaultSize:screenEdgePadding: with chamoisLayoutAttributes.defaultWindowSize / screenEdgePadding.
+static void BP2B_SetupVCQueries(void) {
+    Class vcc = objc_getClass("SBFluidSwitcherViewController");
+    if (!vcc) return;
+    // 162 -_removeVisibleItemContainerForAppLayout: 0x1c72e2f98 == 160 0x1c5e70268 plus ONE call: after prepareForReuse and before the container is put in the
+    // reuse queue it is un-blurred a second time (_unblurItemContainer:blurParameters:withAnimationUpdateMode:2 with defaultCrossblurBlurParameters), so a
+    // recycled container never keeps the gaussian layer blur of a closed window (the "stuck blur after Close / reopen").  Replaces the 0.6.3 guess that cleared
+    // the layer filters in -[SBFluidSwitcherItemContainer prepareForReuse] (16.2's prepareForReuse does not).
+    {
+        static IMP orig;
+        orig = BP2B_Replace(vcc, "_removeVisibleItemContainerForAppLayout:", imp_implementationWithBlock(^BOOL(id me, id layout) {
+            SEL ex = sel_registerName("_itemContainerForAppLayoutIfExists:");
+            id c = [me respondsToSelector:ex] ? ((id (*)(id, SEL, id))objc_msgSend)(me, ex, layout) : nil;
+            BOOL r = orig ? ((BOOL (*)(id, SEL, id))orig)(me, sel_registerName("_removeVisibleItemContainerForAppLayout:"), layout) : NO;
+            Class bp = NSClassFromString(@"SBBlurItemContainerParameters");
+            SEL ub = sel_registerName("_unblurItemContainer:blurParameters:withAnimationUpdateMode:");
+            if (c && [c respondsToSelector:sel_registerName("setHidden:")] && bp && [me respondsToSelector:ub])
+                ((void (*)(id, SEL, id, id, long long))objc_msgSend)(me, ub, c, BP2B_Obj((id)bp, sel_registerName("defaultCrossblurBlurParameters")), 2);
+            return r;
+        }));
+    }
+    BP2B_Replace(vcc, "appLayoutContainsAnUnoccludedMaximizedDisplayItem:", imp_implementationWithBlock(^BOOL(id me, id layout) {
+        id attrs = BP2B_Obj(me, sel_registerName("chamoisLayoutAttributes"));
+        for (id item in (NSArray *)BP2B_Obj(layout, sel_registerName("allItems"))) {
+            id a = BP2B_Obj1(layout, sel_registerName("layoutAttributesForItem:"), item);
+            BOOL occluded = BP2B_LL(a, sel_registerName("occlusionState")) > 1;                  // _SBDisplayItemLayoutAttributesOcclusionStateIsOccluded
+            long long policy = BP2B_LL(a, @selector(sizingPolicy));
+            CGRect b = BP2B_Rect(me, sel_registerName("containerViewBounds"));
+            CGSize sz = BP2B_AttrsSizeInBounds(a, b, BP2B_Size(attrs, sel_registerName("defaultWindowSize")), BP2B_Dbl(attrs, sel_registerName("screenEdgePadding")));
+            BOOL same = sz.width == b.size.width && sz.height == b.size.height;                 // BSSizeEqualToSize
+            BOOL stripsUnoccluded = BP2B_Bool(me, sel_registerName("_areContinuousExposeStripsUnoccluded"));
+            if (occluded || stripsUnoccluded) continue;
+            if (policy == 2 || same) return YES;
+        }
+        return NO;
+    }));
+}
 
 // =================================================================================================================
 // ITEM 2: -[SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion:] (+ its 31 blocks)
@@ -1702,17 +1848,6 @@ static void BP2B_SetupContainerPointer(void) {
     oReuse = BP2B_Replace(ic, "prepareForReuse", imp_implementationWithBlock(^(id me) {
         if (oReuse) ((void (*)(id, SEL))oReuse)(me, @selector(prepareForReuse));
         objc_setAssociatedObject(me, kBP2B_CSuppressed, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        // A recycled container must not carry the layer blur of a closed window (160 0x1c5fc6858 -_blurItemContainer:... installs a "gaussianBlur"
-        // CAFilter + rasterization on the container layer; the matching unblur only runs from an animation completion / a response that can be
-        // lost, and 160 / 162 prepareForReuse do not reset it). Relaunching the app into the reused container showed a fully blurred window.
-        CALayer *lay = [me respondsToSelector:@selector(layer)] ? (CALayer *)((id (*)(id, SEL))objc_msgSend)(me, @selector(layer)) : nil;
-        NSArray *fs = lay ? lay.filters : nil;
-        BOOL hasBlur = NO;
-        for (id f in fs) {
-            id n = [f respondsToSelector:@selector(name)] ? ((id (*)(id, SEL))objc_msgSend)(f, @selector(name)) : nil;
-            if ([n isKindOfClass:[NSString class]] && [(NSString *)n isEqualToString:@"gaussianBlur"]) { hasBlur = YES; break; }
-        }
-        if (hasBlur) { lay.filters = nil; lay.shouldRasterize = NO; }
     }));
     // windowScene argument of the 162 initialiser
     BP2B_AddIfMissing(ic, "initWithFrame:appLayout:delegate:active:windowScene:", imp_implementationWithBlock(^id(id me, CGRect f, id layout, id delegate, BOOL active, id scene) {
@@ -2322,27 +2457,109 @@ static id BP2B_ContextProviderFor(id modifier) {
     return BP2B_Obj(m, sel_registerName("delegate"));
 }
 
-// The 10 extended QUERY selectors get trampolines on SBSwitcherModifier (BP2B_Early) but 20A8372 has no terminal implementer for
-// them (16.2 keeps them in SBDefaultImplementationsSwitcherModifier / SBRoutingSwitcherModifier). Without defaults every call that
-// reaches the end of the chain dies with "unrecognized selector" / "couldn't find implementor". The subclass inherits the trampoline
-// methods, so class_addMethod directly (BP2B_AddIfMissing would see the inherited method and skip).
+// The 10 extended QUERY selectors get trampolines on SBSwitcherModifier (BP2B_Early) but 20A8372 has no implementer for them.  0.7.0: every value below
+// is read from 20C65.  Where 16.2 keeps the answer in SBDefaultImplementationsSwitcherModifier (the terminal of every chain) it is installed there; where
+// 16.2 has NO default (the queries are answered by the concrete Stage Manager / switcher modifiers) the 16.2 method is added to the 16.0 class of the same
+// name, and Default additionally gets a terminal that is only reached when no modifier in the chain implements the query (logged, last-line guard).
+// The subclass inherits the trampoline methods, so class_addMethod directly (BP2B_AddIfMissing would see the inherited method and skip).
+extern NSArray *BP_G2_AdjustedStripIds(id modifier, NSArray *prev);                              // G2.x, 162 0x1c7811a50
+extern NSArray *BP_G2_AdjustedSwitcherIds(id modifier, NSArray *prev, NSArray *strip);           // G2.x, 162 0x1c7811880
+
+#define BP2B_ADD(cls, sel, types, blk) do { if (cls) class_addMethod((cls), sel_registerName(sel), imp_implementationWithBlock(blk), (types)); } while (0)
+
+static void BP2B_GuardLog(const char *what) { if (BP_LogEnabled()) BP_Log(@"[g2b] chain terminal reached for %s (no modifier implements it)", what); }
+
+static NSArray *BP2B_StripLayoutsOf(id m) {                                           // closest equivalent of SBStrip...Modifier -_orderedVisibleAppLayoutsIgnoringProgress:YES
+    NSMutableArray *out = [NSMutableArray array];
+    for (NSString *ident in (NSArray *)BP2B_Obj(m, sel_registerName("continuousExposeIdentifiersInStrip")) ?: @[]) {
+        NSArray *g = BP2B_Obj1(m, sel_registerName("appLayoutsForContinuousExposeIdentifier:"), ident);
+        id first = g.firstObject, c = first ? BP2B_Obj1(m, sel_registerName("appLayoutContainingAppLayout:"), first) : nil;
+        if (c && ![out containsObject:c]) [out addObject:c];
+    }
+    return out;
+}
+
+static const void *kBP2B_KbdSnap = &kBP2B_KbdSnap;
 static void BP2B_InstallQueryDefaults(void) {
     if (!gBP2B_ProtoOK) return;
     Class d = objc_getClass("SBDefaultImplementationsSwitcherModifier");
     if (!d) { BP_Log(@"G2B: no SBDefaultImplementationsSwitcherModifier, query defaults not installed"); return; }
-#define BP2B_DEF(sel, types, blk) class_addMethod(d, sel_registerName(sel), imp_implementationWithBlock(blk), types)
-    BP2B_DEF("wantsContinuousExposeHoverGesture", "B16@0:8", ^BOOL(id me) { return YES; });   // 16.2 default NO; YES keeps 16.0 hover
-    BP2B_DEF("isContinuousExposeStripVisible", "B16@0:8", ^BOOL(id me) { return BP2B_Dbl(me, sel_registerName("continuousExposeStripProgress")) > 0.0; });
-    BP2B_DEF("proposedAppLayoutForContinuousExposeWindowDrag", "@16@0:8", ^id(id me) { return nil; });
-    BP2B_DEF("spaceAccessoryViewIconHitTestOutsetForAppLayout:", "d24@0:8@16", ^double(id me, id l) { return 0.0; });
-    BP2B_DEF("shouldAllowGroupOpacityForAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return YES; });   // 16.2 default NO; YES = untouched 16.0
-    BP2B_DEF("canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
-    BP2B_DEF("activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
-    BP2B_DEF("inactiveAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
-    // nil = "nobody computes the list": callers (G1C_AskRootIds) then fall back to the group 2 list builders. Returning the previous list here froze the strip/switcher empty (0.6.1 device report).
-    BP2B_DEF("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16", ^id(id me, id a) { return nil; });
-    BP2B_DEF("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24", ^id(id me, id a, id b) { return nil; });
-#undef BP2B_DEF
+    // ---- SBDefaultImplementationsSwitcherModifier, 162 0x1c788b348.. ----
+    BP2B_ADD(d, "wantsContinuousExposeHoverGesture", "B16@0:8", ^BOOL(id me) { return NO; });                                                  // 0x1c788b648
+    BP2B_ADD(d, "isContinuousExposeStripVisible", "B16@0:8", ^BOOL(id me) { return BP2B_FGT(BP2B_Dbl(me, sel_registerName("continuousExposeStripProgress")), 0.0); });   // 0x1c788b650
+    BP2B_ADD(d, "proposedAppLayoutForContinuousExposeWindowDrag", "@16@0:8", ^id(id me) { return nil; });                                       // 0x1c788b67c
+    BP2B_ADD(d, "spaceAccessoryViewIconHitTestOutsetForAppLayout:", "d24@0:8@16", ^double(id me, id l) {                                       // 0x1c788b350
+        return BP2B_Dbl(BP2B_Obj(me, sel_registerName("medusaSettings")), sel_registerName("switcherShelfIconHitTestInset"));
+    });
+    // ---- terminals for the queries 16.2 does not default (values of the 16.2 floors: empty / NO; the id lists are the AppSwitcher modifier's algorithm) ----
+    BP2B_ADD(d, "shouldAllowGroupOpacityForAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { BP2B_GuardLog("shouldAllowGroupOpacity"); return NO; });
+    BP2B_ADD(d, "canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { BP2B_GuardLog("canSelectLeaf"); return NO; });
+    BP2B_ADD(d, "activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) {
+        BP2B_GuardLog("activeLeafAppLayouts");
+        return BP2B_Obj(BP2B_Obj(me, sel_registerName("appLayoutOnContinuousExposeStage")), sel_registerName("zOrderedLeafAppLayouts")) ?: @[];
+    });
+    BP2B_ADD(d, "inactiveAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { BP2B_GuardLog("inactiveAppLayouts"); return BP2B_StripLayoutsOf(me); });
+    BP2B_ADD(d, "adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16", ^id(id me, id a) {
+        BP2B_GuardLog("adjustedIdentifiersInStrip"); return BP_G2_AdjustedStripIds(me, a); });
+    BP2B_ADD(d, "adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24", ^id(id me, id a, id b) {
+        BP2B_GuardLog("adjustedIdentifiersInSwitcher"); return BP_G2_AdjustedSwitcherIds(me, a, b); });
+
+    // ---- concrete 16.2 implementers that exist in 16.0 under the same class name ----
+    Class fs = objc_getClass("SBFullScreenContinuousExposeSwitcherModifier");                       // 0x1c75c3eec / 3f14 / 3f6c / 459c / 45ac
+    if (fs) {
+        BP2B_ADD(fs, "canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) {
+            id full = BP2B_Obj(me, sel_registerName("fullScreenAppLayout"));
+            return !BP2B_Bool1(full, sel_registerName("isOrContainsAppLayout:"), l);
+        });
+        BP2B_ADD(fs, "activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) {
+            // 16.2 returns the ivar _zOrderedLeafAppLayoutsForKeyboardNavigation, a snapshot of [_fullScreenAppLayout zOrderedLeafAppLayouts] taken by
+            // _resetKeyboardNavigationZOrder (0x1c75c5550) when the transition is not keyboard initiated.  Closest equivalent: the snapshot is taken here
+            // and renewed when the stage layout changes or its set of leaf layouts changes (keyboard cycling keeps its order meanwhile).
+            id full = BP2B_Obj(me, sel_registerName("fullScreenAppLayout"));
+            NSArray *live = BP2B_Obj(full, sel_registerName("zOrderedLeafAppLayouts")) ?: @[];
+            NSDictionary *snap = objc_getAssociatedObject(me, kBP2B_KbdSnap);
+            NSArray *z = snap[@"z"];
+            if (!z || ![snap[@"layout"] isEqual:full] || ![[NSSet setWithArray:z] isEqualToSet:[NSSet setWithArray:live]]) {
+                z = live;
+                objc_setAssociatedObject(me, kBP2B_KbdSnap, @{ @"z": z, @"layout": full ?: (id)[NSNull null] }, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            return z;
+        });
+        BP2B_ADD(fs, "shouldAllowGroupOpacityForAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
+        BP2B_ADD(fs, "spaceAccessoryViewIconHitTestOutsetForAppLayout:", "d24@0:8@16", ^double(id me, id l) { return 10.0; });
+        BP2B_ADD(fs, "wantsContinuousExposeHoverGesture", "B16@0:8", ^BOOL(id me) {                // [super wantsContinuousExposeHoverGesture] | strip reveal progress > 0
+            Class sm = objc_getClass("SBSwitcherModifier");
+            struct objc_super sup = { me, sm };
+            SEL w = sel_registerName("wantsContinuousExposeHoverGesture");
+            BOOL s = ((BOOL (*)(struct objc_super *, SEL))objc_msgSendSuper)(&sup, w);
+            double reveal = ((double (*)(struct objc_super *, SEL))objc_msgSendSuper)(&sup, sel_registerName("continuousExposeStripProgress"));      // _continuousExposeStripRevealProgress
+            return s | BP2B_FGT(reveal, 0.0);
+        });
+    }
+    Class as = objc_getClass("SBAppSwitcherContinuousExposeSwitcherModifier");                       // 0x1c7810b74 / b80 / 864 / 81c / 1880 / 1a50
+    if (as) {
+        BP2B_ADD(as, "activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
+        BP2B_ADD(as, "inactiveAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
+        BP2B_ADD(as, "canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
+        BP2B_ADD(as, "shouldAllowGroupOpacityForAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
+        BP2B_ADD(as, "adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", "@24@0:8@16", ^id(id me, id a) { return BP_G2_AdjustedStripIds(me, a); });
+        BP2B_ADD(as, "adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", "@32@0:8@16@24", ^id(id me, id a, id b) { return BP_G2_AdjustedSwitcherIds(me, a, b); });
+    }
+    Class ia = objc_getClass("SBInlineAppExposeContinuousExposeSwitcherModifier");                   // 0x1c768823c
+    BP2B_ADD(ia, "spaceAccessoryViewIconHitTestOutsetForAppLayout:", "d24@0:8@16", ^double(id me, id l) { return 10.0; });
+    // the classic floors / Deck / Shelf / MixedGrid 16.2 constants (inactive @[], active @[], canSelect NO, group opacity NO): 0x1c77b2740.. etc.
+    for (NSString *n in @[ @"SBDeckFloatingSwitcherModifier", @"SBDeckSwitcherModifier", @"SBShelfCarouselSwitcherModifier", @"_SBGridFloorSwitcherModifier", @"_SBHomeScreenFloorSwitcherModifier",
+                           @"_SBActiveAppFloorFloatingSwitcherModifier", @"_SBFullScreenAppFloorSwitcherModifier", @"SBMixedGridSwitcherModifier" ]) {
+        Class k = NSClassFromString(n);
+        if (!k) continue;
+        BOOL mixed = [n isEqualToString:@"SBMixedGridSwitcherModifier"];
+        BP2B_ADD(k, "inactiveAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
+        if (![n hasPrefix:@"_SBActiveAppFloor"] && ![n hasPrefix:@"_SBFullScreenAppFloor"])
+            BP2B_ADD(k, "activeLeafAppLayoutsReachableByKeyboardShortcut", "@16@0:8", ^id(id me) { return @[]; });
+        if (mixed) continue;
+        BP2B_ADD(k, "canSelectLeafWithModifierKeysInAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
+        BP2B_ADD(k, "shouldAllowGroupOpacityForAppLayout:", "B24@0:8@16", ^BOOL(id me, id l) { return NO; });
+    }
 }
 
 // ---------------------------------------------------------------------------------------------- entry point
@@ -2353,6 +2570,7 @@ void BP2B_Setup(void) {
     BP2B_SetupProtocolFallbacks();
     BP2B_SetupAttributes();
     BP2B_SetupCalculator();
+    BP2B_SetupVCQueries();
     BP2B_SetupLayoutAppLayout();
     BP2B_SetupTapEvent();
     BP2B_SetupSelection();

@@ -370,7 +370,6 @@ static kern_return_t BPD_Execute(mach_msg_header_t *in) {
     if (isSet) {
         BPD_Log(@"clone mirror mode request:%u destinationDisplay:%@ from pid:%d", mode, uuid, pid);
         BPD_SetLocked(pid, uuid, mode, ^(int p) { BPD_WatchPidLocked(p); });
-        BPD_RebuildLocked();                                         // 16.2 refreshes the cache on every change
     } else {
         BPD_Log(@"clone mirror mode remove for destinationDisplay:%@ from pid:%d", uuid, pid);
         BPD_RemoveLocked(pid, uuid);

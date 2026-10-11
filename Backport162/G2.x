@@ -711,18 +711,10 @@ static CGRect RectRoundToScale(CGRect r, double scale) {                        
 
 @implementation BP162ChamoisOverlappingController
 
-// The 16.0 calculator code (SBDisplayItemLayoutAttributesCalculator, reached whenever our replacement falls back to the 16.0 body) still
-// sends the 16.0 selectors (modelForPreferredModel:initialStageFrame:layoutAttributes:draggingItem:modelBeforeDragging: ...) to whatever
-// _chamoisOverlappingControllerCache returns, which is this class. Anything this class does not implement is answered by a stock
-// SBChamoisOverlappingController (device crash: unrecognized selector modelForPreferredModel:... on BP162ChamoisOverlappingController).
-- (id)forwardingTargetForSelector:(SEL)sel {
-    static id stock; static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        Class k = NSClassFromString(@"SBChamoisOverlappingController");
-        if (k) stock = [k new];
-    });
-    return (stock && [stock respondsToSelector:sel]) ? stock : [super forwardingTargetForSelector:sel];
-}
+// 0.7.0: no forwarding to a stock 16.0 SBChamoisOverlappingController any more. 16.2's controller class has exactly one entry point
+// (modelByPerformingAutoLayoutForModel:...); the only 16.0 caller of -modelForPreferredModel:... / -_chamoisOverlappingControllerCache was the 16.0 body of
+// -_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:... (160 0x1c611b078/0x1c611b0a4, scripted caller scan), which group 2b replaces without ever
+// running the original (BP2B_SetupCalculator).
 
 // 162 0x1c73c9b2c
 - (id)modelByPerformingAutoLayoutForModel:(id)model chamoisLayoutAttributes:(id)attrs draggingItem:(id)dragging modelBeforeDragging:(id)before
@@ -903,7 +895,7 @@ static CGRect RectRoundToScale(CGRect r, double scale) {                        
     if (items.count < 2) return;
     for (id a in ArrReverse(items)) {
         for (id b in items) {
-            if (dragging && ([dragging isEqual:a] || [dragging isEqual:b])) break;        // UNSURE: break vs continue (both jump to the same target; identical in 160)
+            if (dragging && ([dragging isEqual:a] || [dragging isEqual:b])) return;       // 162 0x1c73cb574/b584 -> 0x1c73cb820: leaves the WHOLE method (verified, was UNSURE)
             if ([a isEqual:b]) continue;
             double aL = M_Center(m, a).x - M_Size(m, a).width * 0.5;
             double bL = M_Center(m, b).x - M_Size(m, b).width * 0.5;
@@ -1200,7 +1192,7 @@ static NSArray *BP_G2_SortAxis(id m, NSArray *items, id before, id dragging, int
             if (!ov || gRgn.isEmpty(ov)) {
                 CGFloat gw = rect.size.width + 2 * gap + 1, gh = rect.size.height + 2 * gap + 1;
                 BPG2Region near = RgnInter(acc, RgnR(CGRectMake(CGRectGetMidX(rect) - gw * 0.5, CGRectGetMidY(rect) - gh * 0.5, gw, gh)));
-                double w = CGFLOAT_MAX, h = CGFLOAT_MAX;                                      // UNSURE: sentinel for an empty intersection (constants from GOT 0x1d83e1c78+0x10)
+                double w = 0, h = 0;                                                          // sentinel for an empty intersection = CGRectNull.size {0,0} (GOT 0x1d83e1c78 + 0x10, 162 0x1c73ca994)
                 if (near && !gRgn.isEmpty(near)) { CGRect nb = gRgn.bbox(near); w = nb.size.width; h = nb.size.height; }
                 join = (FLT(w, 2.0) && FGT(h, 2.0)) || (FGT(w, 2.0) && FLT(h, 2.0));
             }
@@ -1254,10 +1246,11 @@ static NSArray *BP_G2_SortAxis(id m, NSArray *items, id before, id dragging, int
         }
         double hw = s.width * 0.5, hh = s.height * 0.5;
         BPG2Region vis = NULL;
-        int guardN = 0;     // review F4: the dodge loops must terminate for peekLen <= 0 / NaN rects
+        int guardN = 0;     // last-line guard only (review F4): 16.2 0x1c73ce890 loops until the revealed part is wide enough; cut off (and logged) for peekLen <= 0 / NaN rects
         double xL = c.x;
         do { xL -= peekLen; vis = RgnDiff(RgnR(CGRectMake(xL - hw, c.y - hh, s.width, s.height)), occ); }
         while (occ && ++guardN < 128 && (!vis || gRgn.isEmpty(vis) || FLT(gRgn.bbox(vis).size.width, peekLen)));
+        BOOL guardHit = guardN >= 128;
         double leftScore = xL + (vis ? gRgn.bbox(vis).size.width : 0) - peekLen;
         double xR = c.x; guardN = 0;
         do { xR += peekLen; vis = RgnDiff(RgnR(CGRectMake(xR - hw, c.y - hh, s.width, s.height)), occ); }
@@ -1266,6 +1259,7 @@ static NSArray *BP_G2_SortAxis(id m, NSArray *items, id before, id dragging, int
         double yD = c.y; guardN = 0;
         do { yD += peekLen * 0.5; vis = RgnDiff(RgnR(CGRectMake(c.x - hw, yD - hh, s.width, s.height)), occ); }
         while (occ && ++guardN < 128 && (!vis || gRgn.isEmpty(vis) || FLE(gRgn.bbox(vis).size.height, pad * 0.5)));
+        if ((guardHit || guardN >= 128) && BP_LogEnabled()) BP_Log(@"[g2] dodge: 128-step last-line guard hit (peekLen %.2f) - 16.2 would not terminate here", peekLen);
         double visH = vis ? gRgn.bbox(vis).size.height : 0;
         double kk = 1 - pk;
         double cxL = MAX((gap + leftScore) - kk * pad, pad * 0.5 + pk * pad);
@@ -1558,8 +1552,11 @@ static NSString *gBPG2DSLastLog;
 
 // Hook body: compute (cached per input set), write the 16.2 values into the 16.0 attributes, log once per change.
 static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, long long orient, double dockH, double sb, BOOL rfs, BOOL ps, BOOL pd, BOOL emb) {
-    BOOL useStrip = BP_OnName("g2defsize_strip");
-    BOOL keepRfs = rfs && !BP_OnName("g2defsize_rfs");
+    // 0.7.0: the former sub-switches are gone.  16.2 recomputes the strip geometry (E threshold 1920, stripVerticalEdgeSpacing 32 for rows <= 4) and gives
+    // requiresFullScreen apps the same default window (0x1c78c0f50 stores rfs but never branches on it; the only consumer is the frame code, where
+    // rfs -> defaultWindowSize), so both are always applied.
+    const BOOL useStrip = YES;
+    const BOOL keepRfs = NO;
     unsigned long long rows = BP_G2_ULL(attrs, sel_registerName("numberOfRowsWhileInApp"));
     double sw16 = BP_G2_DSGetD(attrs, "stripWidth"), cs16 = BP_G2_DSGetD(attrs, "stripCardScale"), e16 = BP_G2_DSGetD(attrs, "screenEdgePadding");
     CGSize def16 = BP_G2_DSGetSz(attrs, "defaultWindowSize");
@@ -1637,6 +1634,11 @@ static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, l
     x[@"switcherHeightForIconAndLabelsUnderEachPile"] = @(60.0);
     x[@"switcherPileCardMinimumPeekAmount"] = @(25.0);
     x[@"switcherPileCompactingFactor"] = @(0.6);
+    // The remaining builder constants that differ from the 160 builder (160 0x1c6413524 vs 162 0x1c78c0f50, setter lists diffed): peek length 160 = 0.75 * a
+    // derived value, 162 0x1c78c1768 = 44.0; peek scale 0.9 (0x1c7a90ee0); occluded scale 1 - 32/H; native status-bar clearing scale 1 - 2*statusBar/H.
+    BP_G2_DSSetD(attrs, "setStageOcclusionDodgingPeekLength:", 44.0);
+    BP_G2_DSSetD(attrs, "setStageOcclusionDodgingPeekScale:", 0.9);
+    BP_G2_DSSetD(attrs, "setStageOccludedAppScale:", 1.0 - 32.0 / H);
     if (BP_OnName("g2defsize")) BP_G2_ApplyDefaultSize(self, attrs, bounds, nativeBounds, orientation, dockH, statusBarH, rfs, ps, pd, embedded);   // 16.2 default window size (AUDIT-DEFSIZE-0.6.9)
     return attrs;
 }
@@ -1735,26 +1737,63 @@ static void BP_G2_AdoptAttributeGrid(id grid) {
 %end
 %end // G2AppLayout
 
-// ---- A8: cache key (floating dock height) ------------------------------------------------------------------------------------
-static const void *kBP_G2_KeyDock = &kBP_G2_KeyDock;
+// ---- A8: SBAppLayoutOverlappingModelCacheKey (16.2 data model) ---------------------------------------------------------------------
+// 162 0x1c778a1a0 -_initWithAppLayout:containerBounds:containerOrientation:floatingDockHeight:hideStrips:hideDock:draggingItem: keeps zOrderedItems, a
+// dictionary item -> _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord (attributedSize {normalizedSize, referenceBounds, semanticSizeType}, centerInBounds,
+// sizingPolicy, occlusionState, contentOrientation: 0x1c7789acc), bounds, orientation, floatingDockHeight, hideStrips, hideDock, draggingItem;
+// -isEqual: 0x1c778a5e8 compares ALL of them (BSEqualArrays / BSEqualDictionaries / CGRectEqualToRect / ==), -isEqual: of a record 0x1c7789bd8.
+// 160 kept sizes / sizing policies / centres only.  The fields live in an associated object (the 160 ivars are unused by keys made here); a record is
+// the NSArray built by BP2B_KeyRecord (G2B.m) so that NSDictionary/NSArray equality is the field-wise comparison.
+extern NSArray *BP2B_KeyRecord(id attrs, CGRect bounds);
+
+@interface BP162KeyData : NSObject {
+@public
+    NSArray *z; NSDictionary *recs; CGRect bounds; long long orient; double dock; BOOL hs, hd; id dragging;
+}
+@end
+@implementation BP162KeyData
+- (BOOL)isEqualToData:(BP162KeyData *)o {
+    return o && BP_G2_Equal(z, o->z) && BP_G2_Equal(recs, o->recs) && CGRectEqualToRect(bounds, o->bounds) && orient == o->orient && dock == o->dock
+        && hs == o->hs && hd == o->hd && BP_G2_Equal(dragging, o->dragging);
+}
+- (NSUInteger)hash { return z.hash ^ (recs.count * 31u) ^ (NSUInteger)(bounds.size.width * 7 + bounds.size.height * 13) ^ (NSUInteger)orient ^ (hs ? 0x100 : 0) ^ (hd ? 0x200 : 0) ^ dragging.hash; }
+@end
+
+static const void *kBP_G2_KeyData = &kBP_G2_KeyData;
+static BP162KeyData *BP_G2_KeyDataOf(id key) { return key ? objc_getAssociatedObject(key, kBP_G2_KeyData) : nil; }
+
 static id BP_G2_NewCacheKey(Class kc, id layout, CGRect bounds, long long o, double dockH, BOOL hs, BOOL hd, id dragging) {
-    SEL old = sel_registerName("cacheKeyForSnapshotOfAppLayout:containerBounds:containerOrientation:hideStrips:hideDock:draggingItem:");
-    if (!kc || !class_getClassMethod(kc, old)) return nil;
-    id key = ((id (*)(Class, SEL, id, CGRect, long long, BOOL, BOOL, id))objc_msgSend)(kc, old, layout, bounds, o, hs, hd, dragging);
-    if (key) objc_setAssociatedObject(key, kBP_G2_KeyDock, @(dockH), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    id key = [[kc alloc] init];
+    if (!key) return nil;
+    BP162KeyData *d = [BP162KeyData new];
+    d->z = [BP_G2_Obj(layout, sel_registerName("zOrderedItems")) copy] ?: @[];
+    NSMutableDictionary *recs = [NSMutableDictionary new];
+    for (id item in (BP_G2_Obj(layout, sel_registerName("allItems")) ?: @[])) {
+        id a = BP_G2_Obj1(layout, sel_registerName("layoutAttributesForItem:"), item);
+        NSArray *rec = BP2B_KeyRecord(a, bounds);
+        if (rec) recs[item] = rec;
+    }
+    d->recs = recs; d->bounds = bounds; d->orient = o; d->dock = dockH; d->hs = hs; d->hd = hd; d->dragging = dragging;
+    objc_setAssociatedObject(key, kBP_G2_KeyData, d, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     return key;
 }
 %group G2CacheKey
 %hook SBAppLayoutOverlappingModelCacheKey
 - (BOOL)isEqual:(id)other {
-    BOOL r = %orig;
-    if (!BP_On(F_G2)) return r;
-    if (!r || other == self) return r;
-    NSNumber *a = objc_getAssociatedObject(self, kBP_G2_KeyDock), *b = objc_getAssociatedObject(other, kBP_G2_KeyDock);
-    return (a == b) || [a isEqual:b];
+    BP162KeyData *a = BP_G2_KeyDataOf(self);
+    if (!a || !BP_On(F_G2)) return %orig;
+    if (other == self) return YES;
+    return [a isEqualToData:BP_G2_KeyDataOf(other)];
 }
 - (NSUInteger)hash {
-    return %orig;          // equal keys keep equal hashes (dock height only refines isEqual:)
+    BP162KeyData *a = BP_G2_KeyDataOf(self);
+    return (a && BP_On(F_G2)) ? a.hash : %orig;
+}
+- (id)copyWithZone:(NSZone *)zone {
+    id c = %orig;                                                // pass-through hook of a copy method: ownership as audited in AUDIT-MEMORY-0.6.2 #4
+    BP162KeyData *a = BP_G2_KeyDataOf(self);
+    if (c && a && BP_On(F_G2)) objc_setAssociatedObject(c, kBP_G2_KeyData, a, OBJC_ASSOCIATION_RETAIN_NONATOMIC);   // the data is immutable and shared
+    return c;
 }
 %end
 %end // G2CacheKey
@@ -1768,7 +1807,7 @@ static void BP_G2_SetupCacheKeyFactory(void) {
     IMP imp = imp_implementationWithBlock(^id(Class me, id layout, CGRect bounds, long long o, double dockH, BOOL hs, BOOL hd, id dragging) {
         return BP_G2_NewCacheKey(kc, layout, bounds, o, dockH, hs, hd, dragging);
     });
-    class_addMethod(meta, s, imp, "@96@0:8@16" BPG2_RECT "24q56d64B72B76@80");   // UNSURE exact frame offsets; only used for dispatch by our own code
+    class_addMethod(meta, s, imp, "@88@0:8@16" BPG2_RECT "24q56d64B72B76@80");
 }
 
 // ---- hand-off to the calculator hook (A7.2) ----------------------------------------------------------------------------------
@@ -1796,61 +1835,107 @@ static void BP_G2_SetupLayoutData(void) {
 // =================================================================================================================
 
 // ---- A2.2 / row 7: the two 16.2 identifier lists --------------------------------------------------------------------------
-// Switcher list: 162 0x1c7811880 (fully decoded; the "previous" argument is unused there).
-NSArray *BP_G2_ComputeSwitcherIds(id vc, id stageLayout, NSArray *strip) {
+// Both are the 16.2 implementations that live on SBAppSwitcherContinuousExposeSwitcherModifier (162 0x1c7811880 switcher, 0x1c7811a50 strip), fully decoded
+// (0.7.0, the strip merge is no longer UNSURE).  `ctx` is anything that answers the context queries appLayouts / appLayoutContainingAppLayout: /
+// appLayoutsForContinuousExposeIdentifier: (the VC, or a switcher modifier, whose queries resolve to the VC).
+static BOOL BP_G2_SameStr(NSString *a, NSString *b) { return (a == b) || (a && b && [a isEqualToString:b]); }          // BSEqualStrings
+
+// 162 0x1c7811880  -adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:   (the "previous" argument is unused)
+NSArray *BP_G2_ComputeSwitcherIds(id ctx, id stageLayout, NSArray *strip) {
     NSMutableArray *r = [NSMutableArray new];
     NSString *stageId = BP_G2_Obj(stageLayout, sel_registerName("continuousExposeIdentifier"));
     if (stageId && ![strip containsObject:stageId]) [r insertObject:stageId atIndex:0];
-    [r addObjectsFromArray:strip ?: @[]];
-    NSArray *layouts = BP_G2_Obj(vc, sel_registerName("appLayouts"));
+    if (strip) [r addObjectsFromArray:strip];
     SEL sContain = sel_registerName("appLayoutContainingAppLayout:");
-    for (id l in layouts) {
-        id c = [vc respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(vc, sContain, l) : l;
+    for (id l in (BP_G2_Obj(ctx, sel_registerName("appLayouts")) ?: @[])) {
+        id c = [ctx respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(ctx, sContain, l) : l;
         NSString *i = BP_G2_Obj(c, sel_registerName("continuousExposeIdentifier"));
-        if (!i) continue;
-        if (stageId && [i isEqualToString:stageId]) continue;       // BSEqualStrings(i, stageId)
+        if (!i) continue;                                         // 162 would raise on addObject:nil
+        if (BP_G2_SameStr(i, stageId)) continue;
         if (![r containsObject:i]) [r addObject:i];
     }
     return r;
 }
 
-// Strip list: 162 0x1c7811a50. UNSURE: the final merge with `prev` (swap-in-place of removed/added ids, remaining ids at the front) was only
-// partially decoded (up to 0x1c7811e54); the first half (collection + cap + stage handling) is verified.
-NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger cap) {
+// 162 0x1c7811a50  -adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:
+NSArray *BP_G2_ComputeStripIds(id ctx, id stageLayout, NSArray *prev, NSUInteger cap) {
     SEL sContain = sel_registerName("appLayoutContainingAppLayout:"), sAny = sel_registerName("containsAnyItemFromAppLayout:");
     SEL sGroup = sel_registerName("appLayoutsForContinuousExposeIdentifier:"), sIsOr = sel_registerName("isOrContainsAppLayout:");
+    SEL sCEI = sel_registerName("continuousExposeIdentifier");
+    prev = prev ?: @[];
+    NSArray *layouts = BP_G2_Obj(ctx, sel_registerName("appLayouts")) ?: @[];
     NSMutableOrderedSet *res = [NSMutableOrderedSet new];
-    NSString *stageId = BP_G2_Obj(stageLayout, sel_registerName("continuousExposeIdentifier"));
-    for (id l in (BP_G2_Obj(vc, sel_registerName("appLayouts")) ?: @[])) {
-        id c = [vc respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(vc, sContain, l) : l;
-        if (stageLayout && [stageLayout respondsToSelector:sAny] && ((BOOL (*)(id, SEL, id))objc_msgSend)(stageLayout, sAny, c)) continue;
-        NSString *i = BP_G2_Obj(c, sel_registerName("continuousExposeIdentifier"));
-        if (i) [res addObject:i];
-        if (cap && res.count == cap) break;
+    NSString *stageId = BP_G2_Obj(stageLayout, sCEI);
+    // (1) the groups, in appLayouts order, minus the one on the stage, until `cap` (= rows while in app) are collected
+    for (id l in layouts) {
+        id c = [ctx respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(ctx, sContain, l) : l;
+        BOOL onStage = stageLayout && [stageLayout respondsToSelector:sAny] && ((BOOL (*)(id, SEL, id))objc_msgSend)(stageLayout, sAny, c);
+        if (!onStage) { NSString *i = BP_G2_Obj(c, sCEI); if (i) [res addObject:i]; }
+        if (res.count == cap) break;
     }
-    if (stageId && ![res containsObject:stageId]) {
-        NSArray *g = [vc respondsToSelector:sGroup] ? ((id (*)(id, SEL, id))objc_msgSend)(vc, sGroup, stageId) : nil;
-        BOOL skip = NO;
-        if (g.count == 0) skip = YES;
-        else if (g.count == 1 && stageLayout && [stageLayout respondsToSelector:sIsOr]) {
-            id first = g.firstObject;
-            skip = ((BOOL (*)(id, SEL, id))objc_msgSend)(stageLayout, sIsOr, first) || ((BOOL (*)(id, SEL, id))objc_msgSend)(first, sIsOr, stageLayout);
+    // (2) the stage group is brought to the front unless it is already there or consists of the stage window only
+    if (stageId) {
+        NSArray *g = [ctx respondsToSelector:sGroup] ? ((id (*)(id, SEL, id))objc_msgSend)(ctx, sGroup, stageId) : nil;
+        if (![res containsObject:stageId] && g.count) {
+            BOOL skip = NO;
+            if (g.count == 1 && stageLayout) {
+                id first = g.firstObject;
+                skip = ((BOOL (*)(id, SEL, id))objc_msgSend)(stageLayout, sIsOr, first) || ((BOOL (*)(id, SEL, id))objc_msgSend)(first, sIsOr, stageLayout);
+            }
+            if (!skip) {
+                if (res.count == cap && res.lastObject) [res removeObject:res.lastObject];
+                [res insertObject:stageId atIndex:0];
+            }
         }
-        if (!skip) { if (cap && res.count == cap) [res removeObject:res.lastObject]; [res insertObject:stageId atIndex:0]; }
     }
-    // merge with the previous order: keep the previous relative order, put new ids where removed ones were (UNSURE, see above)
-    NSMutableArray *out = [(prev.count > cap && cap ? [prev subarrayWithRange:NSMakeRange(0, cap)] : prev ?: @[]) mutableCopy];
+    // (3) merge with the previous order (0x1c7811cc4..0x1c78122c8)
+    NSMutableArray *out = [(prev.count > cap ? [prev subarrayWithRange:NSMakeRange(0, cap)] : prev) mutableCopy];
     NSMutableArray *added = [NSMutableArray new], *gone = [NSMutableArray new];
-    for (id i in res) if (![out containsObject:i]) [added addObject:i];
-    for (id i in out) if (![res containsObject:i]) [gone addObject:i];
-    while (added.count && gone.count) {
+    for (id i in res) if (![prev containsObject:i]) [added addObject:i];
+    for (id i in prev) if (![res containsObject:i]) [gone addObject:i];
+    if (!added.count && !gone.count) return out;
+    while (added.count && gone.count) {                          // 1:1 replacement keeps the slot
         NSUInteger idx = [out indexOfObject:gone.firstObject];
         if (idx != NSNotFound) out[idx] = added.firstObject;
-        [added removeObjectAtIndex:0]; [gone removeObjectAtIndex:0];
+        [gone removeObjectAtIndex:0]; [added removeObjectAtIndex:0];
     }
-    [out removeObjectsInArray:gone];
-    for (id i in [added reverseObjectEnumerator]) [out insertObject:i atIndex:0];
+    if (!added.count && !gone.count) return out;
+    NSMutableArray *allIds = [NSMutableArray new];               // ids of every app layout, appLayouts order (duplicates kept)
+    for (id l in layouts) {
+        id c = [ctx respondsToSelector:sContain] ? ((id (*)(id, SEL, id))objc_msgSend)(ctx, sContain, l) : l;
+        NSString *i = BP_G2_Obj(c, sCEI);
+        if (i) [allIds addObject:i];
+    }
+    for (id a in added) {
+        if (out.count < cap) { [out addObject:a]; continue; }
+        NSUInteger bestIdx = NSNotFound; id best = nil;          // evict the window that is furthest back in appLayouts
+        for (id o in [out copy]) {
+            NSUInteger ix = [allIds indexOfObject:o];
+            if (ix == NSNotFound) continue;
+            if (bestIdx != NSNotFound && ix <= bestIdx) continue;
+            bestIdx = ix; best = o;
+        }
+        if (best) out[[out indexOfObject:best]] = a;
+    }
+    for (id g in [gone copy]) {
+        if (![out containsObject:g]) continue;
+        id cand = nil;
+        for (NSString *c in allIds) { if (BP_G2_SameStr(stageId, c) || [out containsObject:c] || [gone containsObject:c]) continue; cand = c; break; }
+        NSUInteger ix = [out indexOfObject:g];
+        if (cand) out[ix] = cand; else [out removeObjectAtIndex:ix];
+    }
     return out;
+}
+
+// Modifier-facing entry points (what the 16.2 modifier methods themselves do: they read the context queries of `modifier`).
+NSArray *BP_G2_AdjustedStripIds(id modifier, NSArray *prev) {
+    id stage = BP_G2_Obj(modifier, sel_registerName("appLayoutOnContinuousExposeStage"));
+    id attrs = BP_G2_Obj(modifier, sel_registerName("chamoisLayoutAttributes"));
+    NSUInteger cap = (attrs && [attrs respondsToSelector:@selector(numberOfRowsWhileInApp)]) ? ((NSUInteger (*)(id, SEL))objc_msgSend)(attrs, @selector(numberOfRowsWhileInApp)) : 0;
+    return BP_G2_ComputeStripIds(modifier, stage, prev, cap);
+}
+NSArray *BP_G2_AdjustedSwitcherIds(id modifier, NSArray *prev, NSArray *strip) {
+    return BP_G2_ComputeSwitcherIds(modifier, BP_G2_Obj(modifier, sel_registerName("appLayoutOnContinuousExposeStage")), strip);
 }
 
 %group G2B
@@ -1884,19 +1969,21 @@ NSArray *BP_G2_ComputeStripIds(id vc, id stageLayout, NSArray *prev, NSUInteger 
     st.idsGeneration += 1;
 }
 
-// B1 row 1. PARTIAL: uses the model-based query when the (extended-protocol) root modifier answers it; otherwise the 16.0 progress test.
+// B1 row 1. 162 0x1c7453b80: `return [_rootModifier isContinuousExposeStripVisible]` (tail call; 160 0x1c5fda820 was strip progress > 0, which is now the
+// SBDefaultImplementationsSwitcherModifier default of that query, group 2b).  No fallback to the 16.0 test.
 - (BOOL)_areContinuousExposeStripsUnoccluded {
+    if (!BP_On(F_G2)) return %orig;
     id root = BP_G2_GetIvarObj(self, "_rootModifier");
-    SEL s = sel_registerName("isContinuousExposeStripVisible");
-    if (BP_On(F_G2) && root && [root respondsToSelector:s]) return ((BOOL (*)(id, SEL))objc_msgSend)(root, s);
-    return %orig;
+    return BP_G2_Bool(root, sel_registerName("isContinuousExposeStripVisible"));
 }
 
-// B1 row 23. PARTIAL: modifier query `wantsContinuousExposeHoverGesture` (default YES when nobody answers).
+// B1 row 23. 162 0x1c7439724: the whole hover handling is gated by `[_rootModifier wantsContinuousExposeHoverGesture]` (default NO from the
+// default implementations, YES from the full-screen modifier while the strip is being revealed).  The body behind the gate is the 160 body.
 - (void)handleContinuousExposeHoverGesture:(id)gesture {
-    id root = BP_G2_GetIvarObj(self, "_rootModifier");
-    SEL s = sel_registerName("wantsContinuousExposeHoverGesture");
-    if (BP_On(F_G2) && root && [root respondsToSelector:s] && !((BOOL (*)(id, SEL))objc_msgSend)(root, s)) return;
+    if (BP_On(F_G2)) {
+        id root = BP_G2_GetIvarObj(self, "_rootModifier");
+        if (!BP_G2_Bool(root, sel_registerName("wantsContinuousExposeHoverGesture"))) return;
+    }
     %orig;
 }
 

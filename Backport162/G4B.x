@@ -751,7 +751,11 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     Class defC = NSClassFromString(@"SBSRemoteAlertDefinition"), cfgC = NSClassFromString(@"SBSRemoteAlertConfigurationContext");
     Class handleC = NSClassFromString(@"SBSRemoteAlertHandle"), actC = NSClassFromString(@"SBSRemoteAlertActivationContext");
     Class actionC = NSClassFromString(@"BSAction"), respC = NSClassFromString(@"BSActionResponder");
-    if (!defC || !cfgC || !handleC || !actC || !actionC || !respC) { G4B_NativeAlert(hwInWindow, complete); return; }   // remote-alert classes missing: native alert instead of silently declining
+    if (!defC || !cfgC || !handleC || !actC || !actionC || !respC) {                       // last-line guard: the 16.0 SpringBoardServices has all of these
+        BP_Log(@"edu: remote alert classes missing, presenting the native alert instead");
+        G4B_NativeAlert(hwInWindow, complete);
+        return;
+    }
     _listener = [NSXPCListener anonymousListener];
     _listener.delegate = self;
     [_listener resume];     // INTEGRATION: -activate is not in the iOS SDK headers; -resume is the 16.0 API
@@ -851,6 +855,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
 @implementation G4BPolicyNoteState
 @end
 
+BOOL BP4_PolicyPostsNotifications(id policy);       // Group4Connect.m
 static NSString *G4B_KeyboardNoteName(void) {
     static NSString *s; static dispatch_once_t once;
     dispatch_once(&once, ^{ void *p = dlsym(RTLD_DEFAULT, "SBHardwareKeyboardAvailabilityChangedNotification"); if (p) s = *(__unsafe_unretained NSString *const *)p; });
@@ -951,6 +956,7 @@ static void G4B_PolicyHardwareChanged(id policy) {
 - (void)connectToDisplayController:(id)controller displayConfiguration:(id)config {
     %orig;
     if (!G4B_On("edu") || objc_getAssociatedObject(self, kG4BKeyD)) return;
+    if (BP4_PolicyPostsNotifications(self)) return;     // Group4Connect.m autoext owns the policy and posts the 16.2 notifications itself
     G4BPolicyNoteState *st = [G4BPolicyNoteState new];
     id ident = G4B_Ivar(self, "_displayIdentity");
     st.identity = [ident respondsToSelector:@selector(rootIdentity)] ? G4B_Obj(ident, @selector(rootIdentity)) : ident;
@@ -1040,25 +1046,25 @@ static NSHashTable *G4B_PointerScenes(id sceneManager, BOOL create) {
 %end
 
 %hook SBSystemShellExtendedDisplayControllerPolicy
+// PORTED (0.7.0) from 16.2 0x1c77dcbe0 (block 0x1c77dce6c), replacing the 16.0 body (0x1c6339470, which updated allScenes):
+//   changed = ![_lastPresentationUpdateDisplayConfiguration isEqual:cfg]; if (changed) store cfg;
+//   scenes = boundPointerUIScenes + _currentScene; if (changed && scenes.count) update each (settings.displayConfiguration = cfg,
+//   settings.frame = cfg.bounds, updateSettings:withTransitionContext:nil completion:) and complete after the last; else complete.
 - (void)displayController:(id)controller updatePresentationWithSceneManager:(id)sm displayConfiguration:(id)cfg completion:(void (^)(void))completion {
     if (!G4B_On("presubset") || !sm) {
         %orig;
         return;
     }
+    Ivar liv = class_getInstanceVariable(object_getClass(self), "_lastPresentationUpdateDisplayConfiguration");
+    id last = liv ? object_getIvar(self, liv) : nil;
+    BOOL changed = !(last && [last isEqual:cfg]);
+    if (changed && liv) object_setIvar(self, liv, cfg);
     NSMutableSet *scenes = [NSMutableSet set];
     NSSet *bound = [sm respondsToSelector:@selector(boundPointerUIScenes)] ? G4B_Obj(sm, @selector(boundPointerUIScenes)) : nil;
     if (bound) [scenes unionSet:bound];
     id cur = G4B_Ivar(self, "_currentScene");
     if (cur) [scenes addObject:cur];
-    if (scenes.count == 0) {
-        NSSet *all = [sm respondsToSelector:@selector(allScenes)] ? G4B_Obj(sm, @selector(allScenes)) : nil;
-        static BOOL fell;                                           // safety net: one 16.0-style pass if the producer never fired
-        if (all.count && !fell) {
-            fell = YES;
-            BP_Log(@"presubset: empty subset, falling back once");
-            %orig;
-            return;
-        }
+    if (!changed || scenes.count == 0) {
         if (completion) completion();
         return;
     }
@@ -1191,6 +1197,17 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
     }
 }
 
+static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 didSelectContainer:modifierFlags: (suppress NO for the selected window's scene)
+    if (!G4B_On("lockedptr2") || ![container respondsToSelector:@selector(appLayout)]) return;
+    id layout = G4B_Obj(container, @selector(appLayout));
+    id item = [layout respondsToSelector:@selector(itemForLayoutRole:)] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, @selector(itemForLayoutRole:), 1) : nil;
+    NSString *uid = [item respondsToSelector:@selector(uniqueIdentifier)] ? G4B_Obj(item, @selector(uniqueIdentifier)) : nil;
+    id sw = G4B_Ivar(vc, "_switcherController");
+    id ws = [sw respondsToSelector:@selector(windowScene)] ? G4B_Obj(sw, @selector(windowScene)) : nil;
+    id m = [ws respondsToSelector:@selector(lockedPointerManager)] ? G4B_Obj(ws, @selector(lockedPointerManager)) : nil;
+    if (uid && m) ((void (*)(id, SEL, id, BOOL))objc_msgSend)(m, @selector(clientWithSceneIdentifier:suppressPreferredLockStatus:), uid, NO);
+}
+
 %group G4B_LockedPtr
 
 %hook SBWindowScene
@@ -1294,10 +1311,10 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
 - (void)_updateLockForLayoutState:(id)state {
     if (G4B_On("lockedptr2")) {
         if (G4B_LPMInv(self)) return;
-        if (!state) {                                               // 16.0 defaults to the MAIN display layout state
+        if (!state) {                                               // 16.2 _notInvalidated_updateLockForLayoutState: (0x1c76ba034): nil -> [[windowScene layoutStateProvider] layoutState]
             id ws = G4B_LPMScene(self);
-            id sm = [ws respondsToSelector:@selector(sceneManager)] ? G4B_Obj(ws, @selector(sceneManager)) : nil;
-            id own = [sm respondsToSelector:@selector(currentLayoutState)] ? G4B_Obj(sm, @selector(currentLayoutState)) : nil;
+            id prov = [ws respondsToSelector:NSSelectorFromString(@"layoutStateProvider")] ? G4B_Obj(ws, NSSelectorFromString(@"layoutStateProvider")) : nil;
+            id own = [prov respondsToSelector:NSSelectorFromString(@"layoutState")] ? G4B_Obj(prov, NSSelectorFromString(@"layoutState")) : nil;
             if (own) {
                 %orig(own);
                 return;
@@ -1454,15 +1471,12 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
     }
 }
 - (void)didSelectContainer:(id)container modifierFlags:(long long)flags {
-    if (G4B_On("lockedptr2") && [container respondsToSelector:@selector(appLayout)]) {
-        id layout = G4B_Obj(container, @selector(appLayout));
-        id item = [layout respondsToSelector:@selector(itemForLayoutRole:)] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, @selector(itemForLayoutRole:), 1) : nil;
-        NSString *uid = [item respondsToSelector:@selector(uniqueIdentifier)] ? G4B_Obj(item, @selector(uniqueIdentifier)) : nil;
-        id sw = G4B_Ivar(self, "_switcherController");
-        id ws = [sw respondsToSelector:@selector(windowScene)] ? G4B_Obj(sw, @selector(windowScene)) : nil;
-        id m = [ws respondsToSelector:@selector(lockedPointerManager)] ? G4B_Obj(ws, @selector(lockedPointerManager)) : nil;
-        if (uid && m) ((void (*)(id, SEL, id, BOOL))objc_msgSend)(m, @selector(clientWithSceneIdentifier:suppressPreferredLockStatus:), uid, NO);
-    }
+    G4B_UnsuppressLockForContainer(self, container);
+    %orig;
+}
+// 16.0 only has the one-argument form (the two-argument one exists when G2B adds it); both must release the suppression (review C8)
+- (void)didSelectContainer:(id)container {
+    G4B_UnsuppressLockForContainer(self, container);
     %orig;
 }
 %end
@@ -1530,9 +1544,9 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
                     SEL rq = NSSelectorFromString(@"requestTransitionWithOptions:builder:validator:");
                     if ([ws2 respondsToSelector:rq]) {
                         __weak id wEmb = embSM;
-                        void (^builder)(id) = ^(id request) {
+                        BOOL (^builder)(id) = ^BOOL(id request) {          // 16.2 builder block 0x1c76c8b2c returns YES
                             SEL mac = NSSelectorFromString(@"modifyApplicationContext:");
-                            if (![request respondsToSelector:mac]) return;
+                            if (![request respondsToSelector:mac]) return YES;
                             void (^mod)(id) = ^(id ctx) {
                                 id ls = [wEmb respondsToSelector:@selector(currentLayoutState)] ? G4B_Obj(wEmb, @selector(currentLayoutState)) : nil;
                                 SEL wpr = NSSelectorFromString(@"windowPickerRole"), uem = NSSelectorFromString(@"unlockedEnvironmentMode");
@@ -1545,6 +1559,7 @@ static void G4B_LPMAttach(id m, id ws, BOOL external) {
                                     ((void (*)(id, SEL, long long))objc_msgSend)(ctx, NSSelectorFromString(@"setRequestedUnlockedEnvironmentMode:"), 2);
                             };
                             ((void (*)(id, SEL, id))objc_msgSend)(request, mac, mod);
+                            return YES;
                         };
                         ((BOOL (*)(id, SEL, unsigned long long, id, id))objc_msgSend)(ws2, rq, 0, builder, nil);
                     }

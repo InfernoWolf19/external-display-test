@@ -22,7 +22,8 @@
 //
 // Feature names:  autoext  mirrorsvc  covernote  nilock(E)  discguard(E)  provmap(E)       (E = experimental)
 
-// The autoext / mirrorsvc / education hooks below are intentionally not installed (ExtendedDisplayEnabler provides them).
+// autoext and mirrorsvc are installed from 0.7.0 on (kill switches Backport162.off.autoext / .mirrorsvc); they used to be left to
+// ExtendedDisplayEnabler.
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
@@ -251,7 +252,11 @@ static const NSTimeInterval kBP4DeviceWindow = 4.0;     // BSContinuousMachTimer
 @end
 
 static const char kBP4ExtStateKey = 0;
+static BOOL gBP4AutoextInstalled;
 static BP4ExtState *BP4_State(id policy) { return policy ? objc_getAssociatedObject(policy, &kBP4ExtStateKey) : nil; }
+// G4B.x posts the same four policy notifications passively when this one does not own the policy (no autoext state)
+BOOL BP4_PolicyPostsNotifications(id policy);
+BOOL BP4_PolicyPostsNotifications(id policy) { return BP4_State(policy) != nil; }
 
 static NSString *BP4_KeyboardNoteName(void) {      // exported by SpringBoard in both builds
     static NSString *s; static dispatch_once_t once;
@@ -610,10 +615,18 @@ static void hk_provDidDisconnect(id self, SEL _cmd, id manager, id identity) {
 static void BP4_Install(void) {
     const char *pol = "SBSystemShellExtendedDisplayControllerPolicy";
     int ok = 0;
-    // autoext and mirrorsvc are NOT installed: ExtendedDisplayEnabler 0.2.2 already restores both 16.2/beta-5 behaviours
-    // (extended-versus-mirror decision on connect, and the setDisplayMirroringEnabled:forDisplay: argument).
-    // The code above stays for reference and for builds without ExtendedDisplayEnabler.
-    (void)pol; (void)ok;
+    // --- autoext / mirrorsvc (0.7.0: ported here instead of relying on ExtendedDisplayEnabler; both are idempotent with it)
+    if (BP4_On(BP4_AUTOEXT) && objc_getClass(pol)) {
+        BP4_AddMethod(pol, @selector(_keyboardAvailabilityChanged:), (IMP)BP4_KeyboardAvailabilityChanged, "v@:@");
+        BP4_AddMethod(pol, @selector(mousePointerManager:hardwarePointingDeviceAttachedDidChange:), (IMP)BP4_PointerAttachChanged, "v@:@B");
+        if (BP4_Hook(pol, @selector(connectToDisplayController:displayConfiguration:), (IMP)hk_policyConnect, (IMP *)&orig_policyConnect)) ok++;
+        if (BP4_Hook(pol, @selector(displayControllerShouldHaveControlOfDisplay:), (IMP)hk_shouldHaveControl, (IMP *)&orig_shouldHaveControl)) ok++;
+        if (BP4_Hook(pol, @selector(displayControllerDidDisconnect:sceneManager:), (IMP)hk_policyDidDisconnect, (IMP *)&orig_policyDidDisconnect)) ok++;
+        BP4_Hook("SBExternalDisplayEducationObserver", @selector(displayManager:didConnectToRootDisplay:), (IMP)hk_eduConnect, (IMP *)&orig_eduConnect);
+        gBP4AutoextInstalled = (ok == 3);
+    }
+    if (BP4_On(BP4_MIRRORSVC))
+        BP4_Hook("SBExternalDisplayService", @selector(setDisplayMirroringEnabled:forDisplay:), (IMP)hk_setMirroring, (IMP *)&orig_setMirroring);
 
     // --- covernote
     BP4_Hook("SBExternalDisplayCoverSheetController", @selector(_setCoverSheetWindowVisible:fadeDuration:), (IMP)hk_coverVisible, (IMP *)&orig_coverVisible);
