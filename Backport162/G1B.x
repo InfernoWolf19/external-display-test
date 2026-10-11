@@ -1206,6 +1206,15 @@ static void G1B_BuildFullScreenToStrip(void) {
 %end
 
 // ============================================================================================================
+// STATUS (0.7.0 port audit, specs/PORT-G1B-0.7.0.md): the assertion and everything that feeds it are byte-for-byte the same logic in 16.2
+// (end handler 16.0 0x1c6237d6c / 16.2 0x1c76cb178: same N, same shouldAddAppLayoutToFront:forTransitionWithContext:transitionCompleted: (VC 0x1c5fc0f90 / 0x1c7439aa4,
+// layout context 0x1c5e4a6e0 / 0x1c72bc92c: identical bodies), same NSAssert at the same place), so 16.2 does not "have a fix" at the assertion; the input differs.
+// The 16.2 differences that can change what reaches it are in the coordinator (not in this file's scope): +_filterAppLayoutForChamois: / the per-scene windowing-mode
+// compatible layout lists behind -appLayoutsForSwitcherController: (16.2 0x1c76e2354), the front-layout item stripping in -_buildAppLayoutCache (16.2 0x1c76da72c),
+// the env 2 -> 1 conversion of the request layout in -_configureRequest:forSwitcherTransitionRequest:withEventLabel: (16.2 0x1c76d1850) and the display-ordinal check of
+// the final add (16.2 0x1c76cbbcc). None of them is a hook of ours, so the faithful path is the coordinator package; this repair stays as the last-line guard
+// (every intervention is logged under Backport162.debug as "addwin net ..."; kill switch Backport162.off.addwinnet).
+//
 // Safety net for the stock assertion "The appLayouts array MUST contain the app layout we're transitioning to." (device crash after
 // "Add Another Window" in the three-dots menu; specs/AUDIT-ADDWINDOW-0.6.4.md has the whole analysis).
 //   16.0 -[SBMainSwitcherControllerCoordinator layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:] 0x1c6237d6c:
@@ -1244,7 +1253,7 @@ static id G1B_AW_Layout(id coord, id ctx, BOOL *notInList) {
     id req = G1B_Send0(G1B_Send0(ctx, NSSelectorFromString(@"applicationTransitionContext")), NSSelectorFromString(@"request"));
     id from = G1B_Send0(ctx, NSSelectorFromString(@"fromLayoutState")), to = G1B_Send0(ctx, NSSelectorFromString(@"toLayoutState"));
     SEL sMode = NSSelectorFromString(@"unlockedEnvironmentMode"), sPeek = NSSelectorFromString(@"peekConfiguration");
-    BP_Log(@"addwin: transition end src=%lld error=%d modes %lld->%lld peek %lld->%lld N %@ in _appLayouts=%d",
+    if (BP_LogEnabled()) BP_Log(@"addwin: transition end src=%lld error=%d modes %lld->%lld peek %lld->%lld N %@ in _appLayouts=%d",
            G1B_SendLL0(req, @selector(source)), failed, G1B_SendLL0(from, sMode), G1B_SendLL0(to, sMode), G1B_SendLL0(from, sPeek), G1B_SendLL0(to, sPeek),
            layout, !*notInList);
     return layout;
@@ -1501,6 +1510,10 @@ static void G1B_BuildWindowDelete(void) {
 %end
 
 // ============================================================================================================
+// STATUS: 16.2 -_performModifierIconOverlayVisibilityUpdateResponse: (0x1c745cb0c) is the same code as 16.0 (0x1c5fe3358) including the NSAssert (SBFluidSwitcherViewController.m
+// line 0x2344 vs 0x2221), so 16.2 has no special handling for a removed container. The only producer of the visible=YES response is
+// -[SBFullScreenToHomeIconZoomSwitcherModifier transitionWillBegin] (16.0 0x1c6127d84 / 16.2 0x1c75b22b0, identical), i.e. an icon zoom was chosen for a layout whose container
+// had already been removed: an upstream (transition selection / container lifetime) difference, ported pieces: G1B_ItemContainer, G1B_WindowDelete. This guard is the last line only.
 // Stock assertion removed: "Trying to add an icon overlay but the item container for this app layout doesn't exist" (device crash: pressing Close on a
 // window on the extended display; an icon-overlay-visible response reached the view controller for an app layout whose item container was already gone).
 // 16.0 -_performModifierIconOverlayVisibilityUpdateResponse: (0x1c5fe3358) only asserts for visible == YES with no container; nothing is left to do then.
@@ -1513,7 +1526,7 @@ static void G1B_BuildWindowDelete(void) {
         id layout = G1B_Send0(response, @selector(appLayout));
         SEL ex = NSSelectorFromString(@"_itemContainerForAppLayoutIfExists:");
         if (layout && [me respondsToSelector:ex] && !G1B_Send1(me, ex, layout)) {
-            BP_Log(@"icon overlay response for an app layout without item container ignored: %@", layout);
+            if (BP_LogEnabled()) BP_Log(@"GUARD icon overlay response for an app layout without item container ignored: %@", layout);
             return;
         }
     }
@@ -1816,16 +1829,18 @@ static void G1B_BuildSwitcherToAppExpose(void) {
 // 16.0 answers 1 (home) for App Expose / inline App Expose floors; 16.2 answers 2 (switcher).
 %group G1B_Root
 %hook SBContinuousExposeRootSwitcherModifier
+// 16.2 0x1c7819cb8 reproduced exactly (16.0 0x1c6372a88 answered 3 for the full-screen floor, 2 for the App Switcher floor and 1 for everything else)
 - (long long)_effectiveEnvironmentMode {
-    long long r = %orig;
-    if (!G1B_ON() || r != 1 || ![self respondsToSelector:@selector(floorModifier)]) return r;
+    if (!G1B_ON() || ![self respondsToSelector:@selector(floorModifier)]) return %orig;
     id floor = G1B_Send0(self, @selector(floorModifier));
-    if (!floor) return r;
-    for (NSString *n in @[ @"SBAppExposeContinuousExposeSwitcherModifier", @"SBInlineAppExposeContinuousExposeSwitcherModifier" ]) {
-        Class c = NSClassFromString(n);
-        if (c && [floor isKindOfClass:c]) return 2;
-    }
-    return r;
+    if (!floor) return 1;
+    Class home = NSClassFromString(@"SBHomeScreenContinuousExposeSwitcherModifier"), full = NSClassFromString(@"SBFullScreenContinuousExposeSwitcherModifier"),
+          sw = NSClassFromString(@"SBAppSwitcherContinuousExposeSwitcherModifier"), ex = NSClassFromString(@"SBAppExposeContinuousExposeSwitcherModifier"),
+          inl = NSClassFromString(@"SBInlineAppExposeContinuousExposeSwitcherModifier");
+    if (home && [floor isKindOfClass:home]) return 1;
+    if (full && [floor isKindOfClass:full]) return 3;
+    if ((sw && [floor isKindOfClass:sw]) || (ex && [floor isKindOfClass:ex])) return 2;
+    return (inl && [floor isKindOfClass:inl]) ? 2 : 1;
 }
 %end
 %end
@@ -1950,6 +1965,18 @@ static id G1B_IZ_LayoutsForIdentifier(id self, SEL _cmd, id ident) {            
 }
 %end
 %end
+// SBHomeGestureRootSwitcherModifier (16.2 0x1c78ee270 / 0x1c78ee338 / 0x1c78ee420): the root pins the selected app layout to space through the anchor point when
+// ensuresSelectedAppLayoutUsesAnchorPointSpacePinning (new BOOL ivar +0x89; set YES by the CE root's gestureModifierForGestureEvent:, G1C.x) is on.
+static char kHGEnsures;
+static BOOL G1B_HG_GetEnsures(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kHGEnsures) boolValue]; }
+static void G1B_HG_SetEnsures(id self, SEL _cmd, BOOL v) { G1B_SET(self, kHGEnsures, @(v)); }
+static BOOL G1B_HG_Pin(id self, SEL _cmd, unsigned long long i) {
+    NSArray *ls = G1B_WD_Layouts(self);
+    id l = i < ls.count ? ls[i] : nil;
+    if (G1B_HG_GetEnsures(self, 0) && G1B_SendB1(l, NSSelectorFromString(@"isOrContainsAppLayout:"), G1B_Send0(self, NSSelectorFromString(@"selectedAppLayout")))) return YES;
+    Class sup = class_getSuperclass(NSClassFromString(@"SBHomeGestureRootSwitcherModifier"));
+    return G1B_HasSuper(sup, _cmd) ? G1B_SUPER(BOOL, sup, self, _cmd, (struct objc_super *, SEL, unsigned long long), i) : NO;
+}
 static void G1B_BuildAnchorPin(void) {
     gAPZD = NSClassFromString(@"SBFullScreenToHomeCenterZoomDownSwitcherModifier");
     gAPSO = NSClassFromString(@"SBFullScreenToHomeSlideOverSwitcherModifier");
@@ -1974,6 +2001,13 @@ static void G1B_BuildAnchorPin(void) {
     Class all[3] = { gAPZD, gAPSO, gAPIZ };
     for (int k = 0; k < 3; k++) if (all[k]) G1B_AddMethods(all[k], common, sizeof common / sizeof common[0]);
     if (gAPIZ) G1B_AddMethods(gAPIZ, iz, sizeof iz / sizeof iz[0]);
+    const G1BMethod hg[] = {
+        { "ensuresSelectedAppLayoutUsesAnchorPointSpacePinning", (IMP)G1B_HG_GetEnsures, "B16@0:8" },
+        { "setEnsuresSelectedAppLayoutUsesAnchorPointSpacePinning:", (IMP)G1B_HG_SetEnsures, "v20@0:8B16" },
+        { "shouldPinLayoutRolesToSpace:", (IMP)G1B_HG_Pin, "B24@0:8Q16" },
+        { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)G1B_HG_Pin, "B24@0:8Q16" },
+    };
+    G1B_AddMethods(NSClassFromString(@"SBHomeGestureRootSwitcherModifier"), hg, sizeof hg / sizeof hg[0]);
 }
 
 // ============================================================================================================
@@ -2070,5 +2104,5 @@ void G1B_Setup(void) {
     %init(G1B_Platform);                     // 2.4 creator
     %init(G1B_Root);                         // 4.1 _effectiveEnvironmentMode fix
 }
-// Not drafted (see spec): 1.1 users (peek / drag root), 1.9 hosting in the VC, 2.3, 2.6, 3.x, 4.2-4.7, 4.9.
+// Status of the former 'Not drafted' list (specs/PORT-G1B-0.7.0.md): 1.1 users / 2.6 / 3.x / 4.2-4.7 / 4.9 are in G1C.x, 1.9 hosting is in G2B.m, 2.3 is here, 4.8 is G1C.x (G1C_A2A_*).
 #pragma clang diagnostic pop

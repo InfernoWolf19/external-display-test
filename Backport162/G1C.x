@@ -138,8 +138,7 @@ static inline id G1C_SendLL1x(id o, SEL s, long long a) { return ((id (*)(id, SE
 static CGSize G1C_DM_SizeInBounds(id attrs, CGRect bounds, CGSize def, double pad) {
     SEL s162 = NSSelectorFromString(@"sizeInBounds:defaultSize:screenEdgePadding:");
     if (attrs && [attrs respondsToSelector:s162]) return ((CGSize (*)(id, SEL, CGRect, CGSize, double))objc_msgSend)(attrs, s162, bounds, def, pad);
-    if (attrs && [attrs respondsToSelector:@selector(sizeInBounds:)]) return ((CGSize (*)(id, SEL, CGRect))objc_msgSend)(attrs, @selector(sizeInBounds:), bounds);
-    return CGSizeZero;
+    return CGSizeZero;       // the 1-argument sizeInBounds: of 16.0 has different semantics (no default size / edge padding): never used
 }
 // DM2  center in the given bounds (both builds)
 static CGPoint G1C_DM_CenterInBounds(id attrs, CGRect bounds) {
@@ -858,14 +857,11 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     NSArray *prevSw = st.idsInSwitcher ?: @[], *prevStrip = st.idsInStrip ?: @[];
     id root = G1C_IvarObj(self, "_rootModifier");
     NSArray *strip = G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:"), prevStrip, nil, NO);
-    NSArray *sw = nil;
-    if (strip) sw = G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:"), prevSw, strip, YES);
-    if (!strip || !sw) {                                               // root does not answer (yet): the group 2 list builders are the fallback
-        id stage = [root respondsToSelector:@selector(appLayoutOnContinuousExposeStage)] ? G1B_Send0(root, @selector(appLayoutOnContinuousExposeStage)) : nil;
-        id attrs = [self respondsToSelector:@selector(chamoisLayoutAttributes)] ? G1B_Send0(self, @selector(chamoisLayoutAttributes)) : nil;
-        NSUInteger cap = (attrs && [attrs respondsToSelector:@selector(numberOfRowsWhileInApp)]) ? ((NSUInteger (*)(id, SEL))objc_msgSend)(attrs, @selector(numberOfRowsWhileInApp)) : 0;
-        strip = BP_G2_ComputeStripIds(self, stage, prevStrip, cap);
-        sw = BP_G2_ComputeSwitcherIds(self, stage, strip);
+    NSArray *sw = strip ? G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:"), prevSw, strip, YES) : nil;
+    if (!strip || !sw) {                                               // last-line guard: the root's query chain always ends in G2's BP_G2_Adjusted*Ids now
+        if (BP_LogEnabled()) BP_Log(@"GUARD identifiers update: the root modifier did not answer the adjusted identifier queries -> stock update");
+        %orig;
+        return;
     }
     st.idsInStrip = strip;
     st.idsInSwitcher = sw;
@@ -3607,8 +3603,10 @@ static BOOL G1C_As_GetTap(id self, SEL _cmd) { return G1C_IvarBool(self, "_bp_ha
 static void G1C_As_SetTap(id self, SEL _cmd, BOOL v) { G1C_SetIvarBool(self, "_bp_handlesTap", v); }
 static BOOL G1C_As_GetHdr(id self, SEL _cmd) { return G1C_IvarBool(self, "_bp_handlesHeaderTap"); }
 static void G1C_As_SetHdr(id self, SEL _cmd, BOOL v) { G1C_SetIvarBool(self, "_bp_handlesHeaderTap", v); }
-static id G1C_As_AdjustedIds(id self, SEL _cmd, id a, id b) { return a; }          // UNSURE: identity (the 579-instr strip variant orders the "forward" pile first)
-static id G1C_As_AdjustedStrip(id self, SEL _cmd, id a) { return a; }
+extern NSArray *BP_G2_AdjustedStripIds(id modifier, NSArray *prev);                          // G2.x, 162 0x1c7811a50
+extern NSArray *BP_G2_AdjustedSwitcherIds(id modifier, NSArray *prev, NSArray *strip);       // G2.x, 162 0x1c7811880
+static id G1C_As_AdjustedIds(id self, SEL _cmd, id a, id b) { return BP_G2_AdjustedSwitcherIds(self, a, b); }
+static id G1C_As_AdjustedStrip(id self, SEL _cmd, id a) { return BP_G2_AdjustedStripIds(self, a); }
 static BOOL G1C_As_ReturnNO(id self, SEL _cmd) { return NO; }
 static BOOL G1C_As_ReturnYES(id self, SEL _cmd) { return YES; }
 static BOOL G1C_As_NoGrab(id self, SEL _cmd, id l) { return NO; }
