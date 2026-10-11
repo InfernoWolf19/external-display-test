@@ -3587,6 +3587,69 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 %end
 %end
 // ============================================================================================================
+// 6.8  switcher -> home (ToHome / HomeToGrid): the first group's cards linger on screen at the left edge (specs/AUDIT-HOMEFLASH-0.6.8.md)
+// ============================================================================================================
+// The 16.0 SBHomeToGridSwitcherModifier (identical in 16.2) hides the Stage Manager cards when the transition is "effectively home" (direction 0 and
+// updating layout) ONLY by sliding the whole grid left by [multi distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreen...:index] (16.0: row-chain over
+// visibleAppLayouts, 16.2: pile based, see audit) and by opacity 0 for layouts missing from the copy's visibleAppLayouts. In our build the first group (grid
+// index 0/1, rightmost column) ends at x = 0..card width, still drawn, until the ToHome modifier is removed (video: ~0.9 s).
+// Invariant enforced here: in the effectively-home end state of a switcher -> home transition of the Stage Manager switcher no card is visible
+// (16.2: all cards are off screen there). Opacity 0 is animated together with the slide, so cards that do slide off are unaffected.
+// Off switch: Backport162.off.g1c_homeflash. Logging (opt-in debug): per-answer lines "GLITCH h2g ..." for grid indices 0..3, one line per change.
+static IMP gH2GOrigOpacity;
+static NSString *gH2GLastSig[4][3];
+static BOOL G1C_H2G_HideActive(id self) {
+    if (!G1C_ON() || !BP_OnName("g1c_homeflash")) return NO;
+    if (!G1C_Resp(self, @selector(direction)) || G1B_SendLL0(self, @selector(direction)) != 0) return NO;      // 0 = switcher -> home
+    if (!G1B_SendB0(self, @selector(isEffectivelyHome))) return NO;
+    id multi = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
+    return G1C_Kind(multi, @"SBAppSwitcherContinuousExposeSwitcherModifier");
+}
+static double G1C_H2G_Distance(id self, unsigned long long idx) {
+    SEL ds = NSSelectorFromString(@"distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreenWithVisibleIndexToStartSearch:");
+    id multi = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
+    if (!G1C_Resp(multi, ds) || ![self respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)]) return -1.0;
+    __block double d = -1.0;
+    ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(self, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), multi, ^{
+        d = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(multi, ds, idx);
+    });
+    return d;
+}
+static void G1C_H2G_Log(id self, long long role, id layout, unsigned long long idx, double stock, double out) {
+    if (idx > 3 || !BP_LogEnabled()) return;
+    long long dir = G1B_SendLL0(self, @selector(direction));
+    BOOL eff = G1B_SendB0(self, @selector(isEffectivelyHome)), prep = G1B_SendB0(self, @selector(isPreparingLayout)), upd = G1B_SendB0(self, @selector(isUpdatingLayout));
+    SEL fs = @selector(frameForIndex:), ss = @selector(scaleForIndex:), vs = @selector(visibleAppLayouts);
+    CGRect f = G1C_Resp(self, fs) ? ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, fs, idx) : CGRectZero;
+    double sc = G1C_Resp(self, ss) ? ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, ss, idx) : -1.0;
+    id vis = G1C_Resp(self, vs) ? G1B_Send0(self, vs) : nil;
+    NSUInteger visN = [vis respondsToSelector:@selector(count)] ? (NSUInteger)((unsigned long long (*)(id, SEL))objc_msgSend)(vis, @selector(count)) : 0;
+    BOOL inVis = layout && [vis respondsToSelector:@selector(containsObject:)] && ((BOOL (*)(id, SEL, id))objc_msgSend)(vis, @selector(containsObject:), layout);
+    double dist = G1C_H2G_Distance(self, idx);
+    NSString *sig = [NSString stringWithFormat:@"%lld %d%d%d %.2f>%.2f %.0f,%.0f %.0fx%.0f s%.3f v%d/%lu d%.1f", dir, eff, prep, upd, stock, out, f.origin.x, f.origin.y, f.size.width, f.size.height, sc, inVis, (unsigned long)visN, dist];
+    NSUInteger ri = role >= 0 && role < 3 ? (NSUInteger)role : 2;
+    @synchronized(@"BP162.h2g") {
+        if ([gH2GLastSig[idx][ri] isEqualToString:sig]) return;
+        gH2GLastSig[idx][ri] = sig;
+    }
+    BP_Log(@"GLITCH h2g idx=%llu role=%lld layout=%@ dir/eff/prep/upd/opacity(stock>out)/frame/scale/inVisible(count)/distance: %@", idx, role, G1C_DbgLayout(layout), sig);
+}
+static double G1C_H2G_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long idx) {
+    double o = gH2GOrigOpacity ? ((double (*)(id, SEL, long long, id, unsigned long long))gH2GOrigOpacity)(self, _cmd, role, layout, idx) : 1.0;
+    double out = (o > 0.0 && G1C_H2G_HideActive(self)) ? 0.0 : o;
+    G1C_H2G_Log(self, role, layout, idx, o, out);
+    return out;
+}
+static void G1C_InstallHomeFlashGuard(void) {
+    Class c = NSClassFromString(@"SBHomeToGridSwitcherModifier");
+    SEL s = @selector(opacityForLayoutRole:inAppLayout:atIndex:);
+    Method m = c ? class_getInstanceMethod(c, s) : NULL;
+    if (!m) return;
+    const char *types = method_getTypeEncoding(m);
+    IMP old = class_replaceMethod(c, s, (IMP)G1C_H2G_Opacity, types);
+    gH2GOrigOpacity = old ?: method_getImplementation(m);        // old is NULL when the method was inherited: the pre-replace implementation is then the inherited one
+}
+// ============================================================================================================
 // setup
 // ============================================================================================================
 void G1C_Setup(void) {
