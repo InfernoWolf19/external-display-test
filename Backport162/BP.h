@@ -25,3 +25,4 @@ BOOL BP_On(int feature);
 BOOL BP_OnName(const char *name);       // default-on switch by name: not killed and no Backport162.off.<name>
 BOOL BP_OptInName(const char *name);    // opt-in switch by name: BP_OnName(name) and Backport162.on.<name> exists
 void BP_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
+BOOL BP_LogEnabled(void);               // cheap test (cached one second): lets callers skip building log arguments

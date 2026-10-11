@@ -146,6 +146,8 @@ BOOL BP_On(int f) {
     return r;
 }
 
+BOOL BP_LogEnabled(void) { return BP_Logging(); }
+
 void BP_Log(NSString *fmt, ...) {
     if (!BP_Logging()) return;
     va_list ap;

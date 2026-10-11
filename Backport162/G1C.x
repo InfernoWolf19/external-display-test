@@ -54,6 +54,21 @@ extern Class gFilteringCls, gOverrideIdsCls, gOverrideIdsSuper, gGrabberRespCls,
 
 #define G1C_ON() BP_On(F_G1C)
 
+// ---- glitch diagnostics (specs/AUDIT-STRIPGLITCH-0.6.6.md): every line starts with "GLITCH"; nothing is built unless logging is on ----
+static NSString *G1C_DbgCls(id o) { return o ? NSStringFromClass(object_getClass(o)) : @"nil"; }
+static NSString *G1C_DbgLayout(id l) {
+    if (!l) return @"nil";
+    id ident = [l respondsToSelector:NSSelectorFromString(@"continuousExposeIdentifier")] ? ((id (*)(id, SEL))objc_msgSend)(l, NSSelectorFromString(@"continuousExposeIdentifier")) : nil;
+    Class alc = NSClassFromString(@"SBAppLayout");
+    id homeL = (alc && [alc respondsToSelector:@selector(homeScreenAppLayout)]) ? ((id (*)(id, SEL))objc_msgSend)((id)alc, @selector(homeScreenAppLayout)) : nil;
+    BOOL home = homeL && [l isEqual:homeL];
+    return [NSString stringWithFormat:@"%@%@", home ? @"HOME:" : @"", [ident isKindOfClass:[NSString class]] ? ident : @"-"];
+}
+static NSString *G1C_DbgIds(id arr) {
+    NSArray *a = [arr isKindOfClass:[NSArray class]] ? arr : ([arr respondsToSelector:@selector(array)] ? ((id (*)(id, SEL))objc_msgSend)(arr, @selector(array)) : nil);
+    return a ? [NSString stringWithFormat:@"[%@]", [a componentsJoinedByString:@","]] : @"nil";
+}
+
 typedef struct { double x, y, w, h; } G1CRectRaw;      // layout-compatible with CGRect (used for the few places we pass rects through varargs-free casts)
 
 // ---- small typed senders (all callers guard with respondsToSelector:) ----
