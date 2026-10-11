@@ -31,3 +31,31 @@ Symptom: window an app, three-dots > Close, reopen from Dock/Home -> full screen
   passingTest:(contains item with that uniqueIdentifier)] layoutAttributesForItem:` -> `[SBDisplayItemLayoutAttributes init]` (policy 0, size Unspecified, centre 0), with `_nextInteractionTime`.
   After Close there is no previous-state entry and no recent layout => the default attributes. `SBMainDisplayLayoutStateManager defaultSceneIdentifierForBundleIdentifier:...` (16.0 0x1c625a1b0 /
   16.2 0x1c76f09f4) only re-uses scene ids of layouts still present in recents (hidden ones included; 15 s double-kill rule `_hasAppLayoutBeenUserKilledWithinThresholdToCreateNewScene:` identical).
+
+## Step 3: other candidates checked and ruled out
+* `_layoutStateForApplicationTransitionContext:` (16.0 0x1c5e23430 / 16.2 0x1c72952ec, 2995 -> 3568 insns): the 16.2 changes are (a) `isDisplayExternal`/display ordinal, (b) `previousEntities`/
+  `isPreviousWorkspaceEntity`/`isEmptyWorkspaceEntity` (empty/previous placeholder entities), (c) the `chamoisWindowingUIEnabled:` flavour of the two `_mostRecentAppLayout...` helpers (16.2
+  0x1c76f1c40 / 0x1c76f2118: additionally split medusa-incompatible items with `appLayoutsBySplittingMedusaIncompatibleItemsWithApplicationController:`; they still search the same recents
+  model, `…MatchingAnyUniqueIdentifier` INCLUDING hidden layouts, `…ForBundleIdentifier:ignoringUniqueIdentifiers:` WITHOUT hidden ones, as in 16.0 0x1c625b298 / 0x1c625b534), and (d) a NEW tail
+  block (16.2 0x1c7298d50..0x1c7298e88): after `_updateSizingPoliciesForLayoutElements:` it asks the calculator `frameForLayoutRole:inAppLayout:containerOrientation:windowScene:` once and writes
+  the (auto-layout resolved) attributes of every item back with the new `-[SBMainDisplayLayoutState _setLayoutAttributes:forLayoutElement:]` (16.2 method, 67 insns). That only resolves
+  Unspecified sizes into explicit ones for the CURRENT state; it reads nothing that survives a Close.
+* `_configureRequest:forSwitcherTransitionRequest:withEventLabel:` (16.0 0x1c623e164 / 16.2 0x1c76d174c): new in 16.2 (0x1c76d246c) for switcher requests with chamois on: the requested
+  attributes of an app-layout item keep the interaction time already requested (`requestedLayoutAttributesForEntity:` -> `lastInteractionTime` -> `attributesByModifyingLastInteractionTime:`).
+  Recency only; applies to tapping an EXISTING layout, not to a relaunch.
+* `SBRecentAppLayouts _validateAndUpdateRecents:` (16.2 0x1c79aa0ec) only adds splitting of medusa-incompatible layouts; `_stashModelToPath:` only debug stash. The persister
+  (`SBRecentAppLayoutsPersister`, protobuf `SBPBDisplayItemLayoutAttributes`) is the same shape; the 16.2 protobuf has the new attributed-size fields (G2B), it persists RECENTS across respring,
+  never a closed window.
+* `_performSceneDestructionForModelRemovalResults:` (16.0 0x1c624a104 / 16.2 0x1c76df2a0): same selector sequence (only `_appForDisplayItem:` -> `[SBApplicationController sharedInstance]
+  applicationForDisplayItem:`).
+* No UserDefaults: `SBAppSwitcherDefaults` has no new key; `SBSwitcherChamoisSettings` (16.2) new members are `_gridWidths/HeightsForSafeWidth...`, `_minimumDefaultWindowSizeForContainerBounds:stripWidth:`,
+  `_nearestGridSizeForSize:gridWidths:gridHeights:bounds:`, `rasterizeScaledApps`, pile/peek numbers and cached chamois defaults (hide strips / hide dock): no remember/restore flag.
+
+## CONCLUSION
+16.2 (20C65) does NOT persist or restore an app's window attributes across a three-dots > Close and relaunch. Close removes the layout from SBRecentAppLayouts (reason 3 => `remove:`, only the
+swipe-kill reason 1 of a multiwindow app hides and keeps it for "Reopen Closed Windows"), the scene is destroyed, and the relaunch starts from `[SBDisplayItemLayoutAttributes init]`
+(policy 0, size Unspecified) exactly like 16.0. Confidence: high (about 90 %) - every function on the path was diffed; the only unread part is UIKit/app-side state (the app, not SpringBoard).
+The difference the user WILL see on 16.2 after relaunch is the DEFAULT window size: 16.2 `-[SBSwitcherChamoisSettings layoutAttributesForContainerBounds:...]` (0x1c78c0f50) sets
+`defaultWindowSize` = `_nearestGridSizeForSize:gridWidths:gridHeights:bounds:` of the SECOND-LARGEST grid column (index count-2; count-1 only with prefersStripHidden, 0x1c78c1524..0x1c78c1548),
+i.e. a window one grid step below full screen, whereas 16.0 (0x1c6413524/0x1c641391c) returns an almost full-screen window. This is the open item AUDIT-ZOOM-0.6.5 R2.3/R2.4 already
+named (port of 0x1c78c0f50 + `_gridWidths/HeightsForSafeWidth...` 0x1c78c18fc/0x1c78c1b54 into the G2.x chamois-settings hook). No G3D.x / `g3d` switch was added because there is nothing to port.
