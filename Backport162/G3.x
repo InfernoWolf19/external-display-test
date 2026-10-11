@@ -273,7 +273,7 @@ static void BP_G3_StoreSet(id handle, NSString *key, NSNumber *val) {
 
 // ================================================================================================ SECTION 2: decorated scene VC
 // opt-in switch <jbroot>/tmp/Backport162.on.<name>
-static BOOL BP_G3_OptIn(const char *name) { return BP_OptInName(name); }
+static BOOL BP_G3_OptIn(const char *name) { return BP_OnName(name); }     // default ON (kill switch Backport162.off.<name>)
 static NSString *const kBPG3WMStyleNote = @"SBSwitcherControllerWindowManagementStyleDidChangeNotification";   // 16.2 extern NSString const
 
 static id BP_G3_SBApp(void) {

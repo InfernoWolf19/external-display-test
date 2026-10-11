@@ -734,7 +734,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     Class defC = NSClassFromString(@"SBSRemoteAlertDefinition"), cfgC = NSClassFromString(@"SBSRemoteAlertConfigurationContext");
     Class handleC = NSClassFromString(@"SBSRemoteAlertHandle"), actC = NSClassFromString(@"SBSRemoteAlertActivationContext");
     Class actionC = NSClassFromString(@"BSAction"), respC = NSClassFromString(@"BSActionResponder");
-    if (!defC || !cfgC || !handleC || !actC || !actionC || !respC) { _isPresenting = NO; complete(0); return; }
+    if (!defC || !cfgC || !handleC || !actC || !actionC || !respC) { G4B_NativeAlert(hwInWindow, complete); return; }   // remote-alert classes missing: native alert instead of silently declining
     _listener = [NSXPCListener anonymousListener];
     _listener.delegate = self;
     [_listener resume];     // INTEGRATION: -activate is not in the iOS SDK headers; -resume is the 16.0 API

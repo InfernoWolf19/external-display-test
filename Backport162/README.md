@@ -9,7 +9,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 
 ## Features in this build (0.6.0) — everything is on by default
 
-0.6.0 integrates the reconstruction packages (groups 1b, 1c, 2, 2b, 3, 3b, 4b) on top of the 0.5.x external-display work. A feature is switched off with the file `<jbroot>/tmp/Backport162.off.<switch>`; everything with `<jbroot>/tmp/Backport162.off`. Features marked **opt-in** are off until `<jbroot>/tmp/Backport162.on.<switch>` exists (only diagnostics and pieces the specs mark as conflicting). The tweak does nothing on any build but 20A8372. Source file in brackets.
+0.6.0 integrates the reconstruction packages (groups 1b, 1c, 2, 2b, 3, 3b, 4b) on top of the 0.5.x external-display work. A feature is switched off with the file `<jbroot>/tmp/Backport162.off.<switch>`; everything with `<jbroot>/tmp/Backport162.off`. Every feature is on by default; the only two opt-ins (`edunative`, `methodology0`) are alternatives that would replace a 16.2 default. The tweak does nothing on any build but 20A8372. Source file in brackets.
 
 ### Group 4: external display (0.5.x) [Tweak.x, Group4Connect.m, Group4Focus.x]
 
@@ -32,14 +32,14 @@ Needs ExtendedDisplayEnabler for the external display features.
 | feature | what it ports | switch |
 |---|---|---|
 | group1b | event types 36/37/38 dispatch, Filtering / OverrideContinuousExposeIdentifiers / Pulse modifiers, tap-header / pointer-crossed / strip-tongue events, edge-protect grabber and invalidate-identifiers responses, FullScreenToStrip + Crossblur transitions, iPadOS window mode change, drag-and-drop-to-app transition, Root `_effectiveEnvironmentMode` | `group1b` |
-| group1b.apptoapp | **opt-in**: the 4.8 AppToApp transition hook (group 1c's Root replaces that class, so it stays off) | `group1b.apptoapp` |
+| group1b.apptoapp | the 4.8 AppToApp transition hook (inert if group 1c supplies its own class) | `group1b.apptoapp` |
 
 ### Group 1c: 16.2 rewrites of the Stage Manager modifiers [G1C.x]
 
 | feature | what it ports | switch |
 |---|---|---|
 | group1c | AppSwitcher / InlineAppExpose / HomeScreen Continuous Expose modifiers, window drag (+ destination, root), Root floor / gesture factories, peek family, app drag-and-drop gesture family, grid swipe-up / slide / cycle / strip reveal and overflow transactions, ToHome and AppToApp / SwitcherToApp transitions, grabber and orientation producers | `group1c` |
-| g1c_piles | OPT-IN (create `Backport162.on.g1c_piles`): the pile layout of the app switcher. Incomplete (role frames not ported), so it is off by default | `g1c_piles` |
+| g1c_piles | the pile layout of the app switcher | `g1c_piles` |
 | g1c_homeflash | Hides the Stage Manager switcher cards in the end state of the switcher -> home transition (the first group otherwise lingers at the left edge for ~1 s, specs/AUDIT-HOMEFLASH-0.6.8.md) | `g1c_homeflash` |
 
 ### Group 2: layout data [G2.x, G2B.m]
@@ -66,7 +66,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 | g3switcher | "will change window management style" gesture cancel and notification | `g3switcher` |
 | g3canvas | relayout on canvas size change (pairs with `scale`) | `g3canvas` |
 | g3embedded | SystemApp scene `enhancedWindowingEnabled` sync | `g3embedded` |
-| g3bootorient | **opt-in**: SpringBoard starts in the panel's boot rotation | `g3bootorient` |
+| g3bootorient | SpringBoard starts in the panel's boot rotation | `g3bootorient` |
 
 ### Group 3b: reconstruction of the non-portable plumbing [G3B.x]
 
@@ -81,8 +81,8 @@ Needs ExtendedDisplayEnabler for the external display features.
 | g3b_grid | orthogonal fixed-aspect grids | `g3b_grid` |
 | g3b_guide | SBSwitcherTraitsAssistant guide | `g3b_guide` |
 | g3b_split | split-view orientation | `g3b_split` |
-| g3b_preflightlog | **opt-in**: log of the privacy-preflight decision (the PDCPreflightManager gate itself does not exist in 16.0) | `g3b_preflightlog` |
-| g3b_axroles | **opt-in**: AX / Eyedropper / Moments traits roles | `g3b_axroles` |
+| g3b_preflightlog | log of the privacy-preflight decision (the PDCPreflightManager gate itself does not exist in 16.0) | `g3b_preflightlog` |
+| g3b_axroles | AX / Eyedropper / Moments traits roles | `g3b_axroles` |
 
 ### Group 3c: top-affordance Zoom [G3C.x]
 

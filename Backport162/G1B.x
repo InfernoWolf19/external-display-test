@@ -1419,7 +1419,7 @@ static void G1B_BuildDndToApp(void) {
 // ============================================================================================================
 // setup
 // ============================================================================================================
-static BOOL G1B_OptIn(const char *name) { return BP_OptInName(name); }
+static BOOL G1B_OptIn(const char *name) { return BP_OnName(name); }     // default ON (kill switch Backport162.off.<name>)
 
 void G1B_Setup(void) {
     G1B_BuildFiltering();

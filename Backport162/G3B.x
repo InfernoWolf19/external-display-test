@@ -301,7 +301,7 @@ static __thread BOOL gBPG3BInBuildMenu;
 // ================================================================================================ ITEM 4: privacy preflight (replacement)
 // (spec section 4)  DONE (replacement). PrivacyDisclosureCore / com.apple.PDUIApp do not exist in 16.0, so the gate is never enforced;
 // the 16.2 decision rule is reproduced for the opt-in diagnostic log only.
-static BOOL BP_G3B_OptIn(const char *name) { return BP_OptInName(name); }
+static BOOL BP_G3B_OptIn(const char *name) { return BP_OnName(name); }     // default ON (kill switch Backport162.off.<name>)
 static BOOL BP_G3B_PreflightFeatureEnabled(void) {       // +[PDCPreflightManager isPreflightFeatureEnabled] 0x20e63dea0
     static BOOL result; static dispatch_once_t once;
     dispatch_once(&once, ^{
