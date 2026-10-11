@@ -238,13 +238,16 @@ static id G1C_GridGest_HandleGesture(id self, SEL _cmd, id event) {
         id perform = ((id (*)(id, SEL, id, BOOL))objc_msgSend)([perfC alloc], initP, req, YES);
         if (perform) resp = G1C_AppendResp(perform, resp);
     }
+    if (BP_LogEnabled()) BP_Log(@"GLITCH grid swipe-up gesture ended: goesToSwitcher=%lld delay=%d translation=%@ -> requested %@", goesToSwitcher, G1C_GridGest_Delay(self, 0), NSStringFromCGPoint(G1C_IvarPoint(self, "_translation")), goesToSwitcher ? @"switcher (unlocked env mode 2)" : @"home app layout");
     if (!G1C_GridGest_Delay(self, 0)) G1B_SendVLL(self, @selector(setState:), 1);      // 16.0: always; 16.2: only when not delayed
     return resp;
 }
 static id G1C_GridGest_HandleTransition(id self, SEL _cmd, id event) {
     id resp = G1B_SUPER(id, gGridGestBase, self, _cmd, (struct objc_super *, SEL, id), event);
-    if (G1C_GridGest_Delay(self, 0) && event && [event respondsToSelector:@selector(phase)] && G1B_SendLL0(event, @selector(phase)) >= 2)
+    if (G1C_GridGest_Delay(self, 0) && event && [event respondsToSelector:@selector(phase)] && G1B_SendLL0(event, @selector(phase)) >= 2) {
+        if (BP_LogEnabled() && G1B_SendLL0(self, @selector(state)) != 1) BP_Log(@"GLITCH grid swipe-up gesture completes on transition phase %lld (modes %lld->%lld)", G1B_SendLL0(event, @selector(phase)), G1B_SendLL0(event, @selector(fromEnvironmentMode)), G1B_SendLL0(event, @selector(toEnvironmentMode)));
         G1B_SendVLL(self, @selector(setState:), 1);                                    // complete when the transition that the gesture requested has begun
+    }
     return resp;
 }
 
@@ -283,6 +286,7 @@ static BOOL G1C_CEH_IsHome(id s) {
     return (prep && d == 1) || (upd && d == 0);
 }
 static id G1C_CEH_Init(id self, SEL _cmd, id tid, long long dir, id ce) {
+    if (BP_LogEnabled()) BP_Log(@"GLITCH ToHome modifier init direction=%lld (0=switcher->home, 1=home->switcher) ce=%@", dir, G1C_DbgCls(ce));
     if (!ce) return nil;
     id me = G1B_SUPER(id, gCEToHomeSuper, self, @selector(initWithTransitionID:), (struct objc_super *, SEL, id), tid);
     if (!me || gCEHDirOff < 0) return nil;
@@ -379,6 +383,7 @@ static id G1C_GridRoot_TransitionChild(id self, SEL _cmd, id event, id activeGes
     id ce = (ceC && multi && [multi isKindOfClass:ceC]) ? multi : nil;                    // _SBSafeCast
     SEL ini = @selector(initWithTransitionID:direction:continuousExposeModifier:);
     if (!ce || !gCEToHomeCls || ![gCEToHomeCls instancesRespondToSelector:ini]) return nil;
+    if (BP_LogEnabled()) BP_Log(@"GLITCH grid root builds ToHome (gesture 2->1) with multitasking modifier %@", G1C_DbgCls(ce));
     return ((id (*)(id, SEL, id, long long, id))objc_msgSend)([gCEToHomeCls alloc], ini, G1B_Send0(event, @selector(transitionID)), 0, ce);
 }
 static id G1C_GestureRoot_GestureModifier(id self, SEL _cmd) {      // 16.2 renamed _gestureModifier -> gestureModifier (property)
@@ -633,9 +638,17 @@ static int G1C_Sl_Mode(id self, id layout) {
     if (G1C_Sl_Bool(self, gSlBeginOff) && G1C_Sl_Dir(self) == 1) return 2;
     return 0;
 }
+static char kSlLogMode;
 static CGRect G1C_Sl_Frame(id self, SEL _cmd, unsigned long long i) {
     CGRect r = G1B_SUPER(CGRect, gSlideSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
     int mode = G1C_Sl_Mode(self, G1C_Sl_LayoutAtIndex(self, i));
+    if (mode != 0 && BP_LogEnabled()) {
+        NSNumber *seen = G1B_GET(self, kSlLogMode);
+        if (!seen || seen.intValue != mode) {
+            G1B_SET(self, kSlLogMode, @(mode));
+            BP_Log(@"GLITCH slide frame ident=%@ mode=%d (1=off-screen start, 2=from previous slot) index=%llu super frame=%@", G1B_GET(self, kSlIdent), mode, i, NSStringFromCGRect(r));
+        }
+    }
     if (mode == 1) { r.origin.x = G1C_Sl_OffscreenX(self, r.size.width); return r; }
     if (mode == 2) {
         __block CGRect pr = r;
@@ -774,6 +787,7 @@ static BOOL G1C_BuildSlide(void) {
 static id G1C_NewSlideModifier(NSString *ident, NSArray *prevSw, NSArray *prevStrip, unsigned long long dir) {
     SEL s = @selector(initWithContinuousExposeIdentifier:previousContinuousExposeIdentifiersInSwitcher:previousContinuousExposeIdentifiersInStrip:direction:);
     if (!gSlideCls || !ident || ![gSlideCls instancesRespondToSelector:s]) return nil;
+    if (BP_LogEnabled()) BP_Log(@"GLITCH slide created ident=%@ dir=%llu (0=slide in, 1=slide out) prevSw=%@ prevStrip=%@", ident, dir, G1C_DbgIds(prevSw), G1C_DbgIds(prevStrip));
     return ((id (*)(id, SEL, id, id, id, unsigned long long))objc_msgSend)([gSlideCls alloc], s, ident, prevSw ?: @[], prevStrip ?: @[], dir);
 }
 
@@ -828,6 +842,8 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     SEL ini = @selector(initWithPreviousContinuousExposeIdentifiersInSwitcher:previousContinuousExposeIdentifiersInStrip:transitioningFromAppLayout:transitioningToAppLayout:animated:);
     id ev = ((id (*)(id, SEL, id, id, id, id, BOOL))objc_msgSend)([gIdsEventCls alloc], ini, prevSw, prevStrip, from, to, animated);
     if (ev && [ev respondsToSelector:@selector(setBPGenerationCount:)]) ((void (*)(id, SEL, unsigned long long))objc_msgSend)(ev, @selector(setBPGenerationCount:), st.idsGeneration);
+    if (BP_LogEnabled()) BP_Log(@"GLITCH VC ids update: from=%@ to=%@ animated=%d root=%@ stage=%@ strip %@ -> %@ switcher %@ -> %@", G1C_DbgLayout(from), G1C_DbgLayout(to), animated, G1C_DbgCls(root),
+                                G1C_DbgLayout([root respondsToSelector:@selector(appLayoutOnContinuousExposeStage)] ? G1B_Send0(root, @selector(appLayoutOnContinuousExposeStage)) : nil), G1C_DbgIds(prevStrip), G1C_DbgIds(strip), G1C_DbgIds(prevSw), G1C_DbgIds(sw));
     if (ev) G1B_SendV1(self, @selector(_dispatchEventAndHandleAction:), ev);
 }
 %end
@@ -982,7 +998,12 @@ static id G1C_NewPerformActivate(id appLayout, BOOL gesture) {
     return req ? ((id (*)(id, SEL, id, BOOL))objc_msgSend)([pc alloc], ps, req, gesture) : nil;
 }
 static NSString *const kG1CRevealTimeout = @"BP162RevealStripsCompletionTimeout";
+static IMP gRevealOrigHandle;      // the 16.0 handleGestureEvent: of the class (NULL when it was inherited): used when the group is switched off (review B8)
 static id G1C_Rv_HandleGesture(id self, SEL _cmd, id event) {
+    if (!G1C_ON()) {
+        if (gRevealOrigHandle) return ((id (*)(id, SEL, id))gRevealOrigHandle)(self, _cmd, event);
+        return G1B_SUPER(id, gRevealSuper, self, _cmd, (struct objc_super *, SEL, id), event);
+    }
     id resp = G1B_SUPER(id, gRevealSuper, self, _cmd, (struct objc_super *, SEL, id), event);
     if (!event || ![event respondsToSelector:@selector(phase)]) return resp;
     BOOL indirect = [event respondsToSelector:@selector(isIndirectPanGestureEvent)] && G1B_SendB0(event, @selector(isIndirectPanGestureEvent));
@@ -1002,6 +1023,7 @@ static id G1C_Rv_HandleGesture(id self, SEL _cmd, id event) {
         unsigned long long reason = [event respondsToSelector:@selector(indirectPanEndReason)] ? ((unsigned long long (*)(id, SEL))objc_msgSend)(event, @selector(indirectPanEndReason)) : 0;
         show = canceled ? (reason == 5) : (reason == 3 || progress >= 0.25);
     } else show = !canceled && progress >= 0.25;
+    if (BP_LogEnabled()) BP_Log(@"GLITCH strip reveal gesture ended: show=%d canceled=%d indirect=%d progress=%.3f initial layout=%@", show, canceled, indirect, progress, G1C_DbgLayout(G1C_IvarObj(self, "_initialAppLayout")));
     id pres = show ? G1C_NewStripsPresentationResponse(1, 0) : G1C_NewStripsPresentationResponse(0, 1);
     if (pres) resp = G1B_Append(pres, resp);
     id upd = G1B_NewUpdateLayoutResponse(0xc, 3);
@@ -1078,7 +1100,11 @@ static void G1C_InstallRevealStrips(void) {
     if (!c) return;
     gRevealCls = c; gRevealSuper = class_getSuperclass(c);
     G1C_AddLike(c, "continuousExposeStripProgress", (IMP)G1C_Rv_Progress, "d16@0:8", NO);                 // 16.2 name of continuousExposeAppStripUnoccludedProgress
-    G1C_AddLike(c, "handleGestureEvent:", (IMP)G1C_Rv_HandleGesture, "@24@0:8@16", YES);
+    {
+        SEL hg = sel_registerName("handleGestureEvent:");
+        const char *ht = G1B_TypesFor(hg, "@24@0:8@16");
+        if (ht) gRevealOrigHandle = class_replaceMethod(c, hg, (IMP)G1C_Rv_HandleGesture, ht);
+    }
     G1C_AddLike(c, "handleTransitionEvent:", (IMP)G1C_Rv_HandleTransition, "@24@0:8@16", NO);
     G1C_AddLike(c, "handleTimerEvent:", (IMP)G1C_Rv_HandleTimer, "@24@0:8@16", NO);
     G1C_AddLike(c, "cornerRadiiForIndex:", (IMP)G1C_Rv_Radii, "{UIRectCornerRadii=dddd}24@0:8Q16", NO);
@@ -2887,6 +2913,7 @@ static char kHsStrip;       // retained by the object (the run-time ivar "_strip
 static id G1C_Hs_Init(id self, SEL _cmd) {
     id me = G1B_SUPER(id, gHsParent, self, _cmd, (struct objc_super *, SEL));
     Class sc = NSClassFromString(@"SBStripContinuousExposeSwitcherModifier");        // the ported / real strip modifier (FullScreen-Strip package)
+    if (BP_LogEnabled()) BP_Log(@"GLITCH home floor created (strip modifier class %@)", sc ? @"PRESENT: strip child will be attached" : @"absent (16.0 has none): no strip child");
     if (me && sc && [me respondsToSelector:@selector(addChildModifier:)]) {
         id strip = [[sc alloc] init];
         if (strip) { G1B_SET(me, kHsStrip, strip); G1B_SendV1(me, @selector(addChildModifier:), strip); }
@@ -3350,8 +3377,12 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
         case 9:  eff = G1C_NewWindowDragRoot(mode, G1C_RootCurrentLayout(self) ?: G1C_HomeLayoutFor(self)); break;
         default: break;
     }
-    if (eff) return eff;
+    if (eff) {
+        if (BP_LogEnabled()) BP_Log(@"GLITCH gesture modifier: type=%lld effMode=%lld -> %@", t, mode, G1C_DbgCls(eff));
+        return eff;
+    }
     id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"GLITCH gesture modifier: type=%lld effMode=%lld -> %@ (stock)", t, mode, G1C_DbgCls(r));
     if (t == 1 && r && [r respondsToSelector:@selector(setEnsuresSelectedAppLayoutUsesAnchorPointSpacePinning:)]) G1C_SendVB(r, @selector(setEnsuresSelectedAppLayoutUsesAnchorPointSpacePinning:), YES);
     return r;
 }
@@ -3377,6 +3408,7 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     else if (!to && from) { if (phase == 3 || !animated) G1B_SET(self, kRootEffStage, nil); }
     else if (to && !from) { if (phase == 1 || !animated) G1B_SET(self, kRootEffStage, to); }
     else if (phase == 1 || !animated) G1B_SET(self, kRootEffStage, nil);
+    if (BP_LogEnabled()) BP_Log(@"GLITCH stage bookkeeping: phase=%lld animated=%d from=%@ to=%@ -> effective stage layout=%@", phase, animated, G1C_DbgLayout(from), G1C_DbgLayout(to), G1C_DbgLayout(G1B_GET(self, kRootEffStage)));
     return r;      // 16.2 also returns an Invalidate response here; the 16.0 controller already updates the identifiers inline (blocks 0x1c5fc50c4 / 0x1c5fc5d9c)
 }
 
@@ -3387,11 +3419,19 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     long long phase = G1B_SendLL0(event, @selector(phase));
     BOOL animated = G1B_SendB0(event, @selector(isAnimated));
     long long cfg = G1B_SendLL0(event, @selector(toPeekConfiguration));
+    if (BP_LogEnabled()) {
+        id fl = G1C_Resp(self, @selector(floorModifier)) ? G1B_Send0(self, @selector(floorModifier)) : nil;
+        BP_Log(@"GLITCH transition event: phase=%lld animated=%d gesture=%d modes %lld->%lld from=%@ to=%@ peek %lld->%lld floor=%@ effMode=%lld stage=%@", phase, animated,
+               G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated)), G1B_SendLL0(event, @selector(fromEnvironmentMode)), G1B_SendLL0(event, @selector(toEnvironmentMode)),
+               G1C_DbgLayout(G1B_Send0(event, @selector(fromAppLayout))), G1C_DbgLayout(G1B_Send0(event, @selector(toAppLayout))), G1B_SendLL0(event, @selector(fromPeekConfiguration)), cfg,
+               G1C_DbgCls(fl), G1C_Resp(self, @selector(_effectiveEnvironmentMode)) ? G1B_SendLL0(self, @selector(_effectiveEnvironmentMode)) : -1, G1C_DbgLayout(G1B_GET(self, kRootEffStage)));
+    }
     if ((phase == 2 || !animated) && G1C_PeekIsValid(cfg)) {
         SEL by = NSSelectorFromString(@"childModifierByKey:");
         id existing = G1C_Resp(self, by) ? G1B_Send1(self, by, kG1CPeekKey) : nil;
         id to = G1B_Send0(event, @selector(toAppLayout));
         id peek = (!existing && to) ? G1C_NewPeekModifier(to, cfg) : nil;
+        if (BP_LogEnabled()) BP_Log(@"GLITCH peek child %@ for %@ cfg=%lld", peek ? @"created" : @"not created", G1C_DbgLayout(to), cfg);
         if (peek && [self respondsToSelector:@selector(addChildModifier:atLevel:key:)]) ((void (*)(id, SEL, id, long long, id))objc_msgSend)(self, @selector(addChildModifier:atLevel:key:), peek, 2, kG1CPeekKey);
     }
     return r;
@@ -3408,6 +3448,14 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     if (!G1C_Resp(event, @selector(transitioningFromAppLayout)) || !G1C_Resp(event, @selector(transitioningToAppLayout))) return r;
     id from = G1B_Send0(event, @selector(transitioningFromAppLayout)), to = G1B_Send0(event, @selector(transitioningToAppLayout));
     BOOL animated = G1C_Resp(event, @selector(isAnimated)) ? G1B_SendB0(event, @selector(isAnimated)) : YES;
+    if (BP_LogEnabled()) {
+        id fl = G1C_Resp(self, @selector(floorModifier)) ? G1B_Send0(self, @selector(floorModifier)) : nil;
+        BP_Log(@"GLITCH ids-changed event: effMode=%lld floor=%@ animated=%d from=%@ to=%@ prevSw=%@ prevStrip=%@ curStrip=%@ -> %@", mode, G1C_DbgCls(fl), animated, G1C_DbgLayout(from), G1C_DbgLayout(to),
+               G1C_DbgIds(G1C_Resp(event, @selector(previousContinuousExposeIdentifiersInSwitcher)) ? G1B_Send0(event, @selector(previousContinuousExposeIdentifiersInSwitcher)) : nil),
+               G1C_DbgIds(G1C_Resp(event, @selector(previousContinuousExposeIdentifiersInStrip)) ? G1B_Send0(event, @selector(previousContinuousExposeIdentifiersInStrip)) : nil),
+               G1C_DbgIds(G1C_Resp(self, @selector(continuousExposeIdentifiersInStrip)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInStrip)) : nil),
+               (!animated || mode != 3 || !from || !to) ? @"no slide/cycle (needs animated, effective mode 3, from and to)" : @"slide/cycle spawning allowed");
+    }
     if (!animated || mode != 3 || !from || !to) return r;
     NSArray *prevSw = G1C_ArrayOf(G1C_Resp(event, @selector(previousContinuousExposeIdentifiersInSwitcher)) ? G1B_Send0(event, @selector(previousContinuousExposeIdentifiersInSwitcher)) : nil);
     NSArray *prevStrip = G1C_ArrayOf(G1C_Resp(event, @selector(previousContinuousExposeIdentifiersInStrip)) ? G1B_Send0(event, @selector(previousContinuousExposeIdentifiersInStrip)) : nil);
@@ -3440,6 +3488,9 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 - (id)transitionModifierForMainTransitionEvent:(id)event {
     id orig = %orig;
     if (!G1C_ON() || !event) return orig;
+    if (BP_LogEnabled()) BP_Log(@"GLITCH main transition: from mode %lld to mode %lld animated=%d gesture=%d from=%@ to=%@ stock modifier=%@", G1B_SendLL0(event, @selector(fromEnvironmentMode)), G1B_SendLL0(event, @selector(toEnvironmentMode)),
+                                G1B_SendB0(event, @selector(isAnimated)), G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated)),
+                                G1C_DbgLayout(G1B_Send0(event, @selector(fromAppLayout))), G1C_DbgLayout(G1B_Send0(event, @selector(toAppLayout))), G1C_DbgCls(orig));
     if (G1C_Resp(event, @selector(isiPadOSWindowingModeChangeEvent)) && G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent))) return nil;    // the iPadOS platform modifier handles it
     if (!G1B_SendB0(event, @selector(isAnimated)) || (G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated)))) return orig;
     long long f = G1B_SendLL0(event, @selector(fromEnvironmentMode)), t = G1B_SendLL0(event, @selector(toEnvironmentMode));
@@ -3453,6 +3504,7 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
         SEL ci = NSSelectorFromString(@"initWithTransitionID:direction:continuousExposeModifier:");
         if (mm && gCEToHomeCls && [gCEToHomeCls instancesRespondToSelector:ci]) n = ((id (*)(id, SEL, id, long long, id))objc_msgSend)([gCEToHomeCls alloc], ci, tid, f == 1 ? 1 : 0, [mm copy]);
     } else if (f == 3 && t == 3 && G1C_Kind(orig, @"SBContinuousExposeAppToAppModifier")) n = G1C_NewAppToApp(event);
+    if (BP_LogEnabled() && n) BP_Log(@"GLITCH main transition replaced: %@ -> %@", G1C_DbgCls(orig), G1C_DbgCls(n));
     return n ?: orig;
 }
 
