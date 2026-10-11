@@ -300,8 +300,19 @@ static id G1C_CEH_Init(id self, SEL _cmd, id tid, long long dir, id ce) {
     G1B_SendV1(me, @selector(addChildModifier:), child);
     return me;
 }
+static BOOL gCEHAnchorLogged[2];
 static CGPoint G1C_CEH_Anchor(id self, SEL _cmd, unsigned long long i) {
-    if (G1C_CEH_IsHome(self)) return CGPointMake(0.5, 0.5);
+    if (G1C_CEH_IsHome(self)) {
+        // 6.8 diagnostics: the 16.0 Stage Manager switcher answers anchorPointForIndex: itself (x = 0 for single windows), 16.2's does not (default .5): log once per effectively-home state
+        if (i < 2 && !gCEHAnchorLogged[i] && BP_LogEnabled()) {
+            gCEHAnchorLogged[i] = YES;
+            id ce = G1B_GET(self, kCEHModifier);
+            CGPoint own = (ce && [ce respondsToSelector:_cmd]) ? ((CGPoint (*)(id, SEL, unsigned long long))objc_msgSend)(ce, _cmd, i) : CGPointMake(-1, -1);
+            BP_Log(@"GLITCH ToHome effectively home dir=%lld idx=%llu: anchor forced to (0.5,0.5), the switcher copy's own anchor would be (%.3f,%.3f)", G1C_CEH_Dir(self), i, own.x, own.y);
+        }
+        return CGPointMake(0.5, 0.5);
+    }
+    if (i < 2) gCEHAnchorLogged[i] = NO;
     return G1B_SUPER(CGPoint, gCEToHomeSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
 static BOOL G1C_CEH_PinSpace(id self, SEL _cmd, long long sp) {
@@ -2920,6 +2931,33 @@ static id G1C_Hs_Init(id self, SEL _cmd) {
     }
     return me;
 }
+// 6.8 diagnostics only (answers are the 16.0 Home floor's own, via super): what the Home floor says about the first cards once the transition modifier is gone
+static NSString *gHsLastOffset;
+static NSString *gHsLastOpacity[2];
+static CGPoint G1C_Hs_ContentOffset(id self, SEL _cmd) {
+    CGPoint p = G1B_SUPER(CGPoint, gHsParent, self, _cmd, (struct objc_super *, SEL));
+    if (BP_LogEnabled()) {
+        NSString *sig = NSStringFromCGPoint(p);
+        BOOL changed = NO;
+        @synchronized(@"BP162.hs") { if (![gHsLastOffset isEqualToString:sig]) { gHsLastOffset = sig; changed = YES; } }
+        if (changed) BP_Log(@"GLITCH home floor scrollViewContentOffset=%@", sig);
+    }
+    return p;
+}
+static double G1C_Hs_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long idx) {
+    double o = G1B_SUPER(double, gHsParent, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, layout, idx);
+    if (idx < 2 && BP_LogEnabled()) {
+        SEL fs = @selector(frameForIndex:), vs = @selector(visibleAppLayouts);
+        CGRect f = G1C_Resp(self, fs) ? ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, fs, idx) : CGRectZero;
+        id vis = G1C_Resp(self, vs) ? G1B_Send0(self, vs) : nil;
+        BOOL inVis = layout && [vis respondsToSelector:@selector(containsObject:)] && ((BOOL (*)(id, SEL, id))objc_msgSend)(vis, @selector(containsObject:), layout);
+        NSString *sig = [NSString stringWithFormat:@"%.2f %@ v%d", o, NSStringFromCGRect(f), inVis];
+        BOOL changed = NO;
+        @synchronized(@"BP162.hs") { if (![gHsLastOpacity[idx] isEqualToString:sig]) { gHsLastOpacity[idx] = sig; changed = YES; } }
+        if (changed) BP_Log(@"GLITCH home floor idx=%llu role=%lld layout=%@ opacity/frame/inVisible: %@", idx, role, G1C_DbgLayout(layout), sig);
+    }
+    return o;
+}
 static double G1C_Hs_StripProgress(id self, SEL _cmd) { return 0.0; }
 static BOOL G1C_Hs_Grabber(id self, SEL _cmd, id layout) { return NO; }
 static id G1C_Hs_ChildResponse(id self, SEL _cmd, id proposed, id child, id event) {
@@ -2959,6 +2997,8 @@ static BOOL G1C_BuildFloors(void) {
         const G1BMethod m[] = {
             { "init", (IMP)G1C_Hs_Init, "@16@0:8" },
             { "continuousExposeStripProgress", (IMP)G1C_Hs_StripProgress, "d16@0:8" },
+            { "scrollViewContentOffset", (IMP)G1C_Hs_ContentOffset, "{CGPoint=dd}16@0:8" },
+            { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_Hs_Opacity, "d40@0:8q16@24Q32" },
             { "isResizeGrabberVisibleForAppLayout:", (IMP)G1C_Hs_Grabber, "B24@0:8@16" },
             { "responseForProposedChildResponse:childModifier:event:", (IMP)G1C_Hs_ChildResponse, "@40@0:8@16@24@32" },
         };
@@ -3656,6 +3696,7 @@ void G1C_Setup(void) {
     G1C_InstallEventPredicates();
     G1C_BuildGridGesture();
     G1C_BuildCEToHome();
+    G1C_InstallHomeFlashGuard();
     G1C_BuildGridRoot();
     G1C_BuildTransactions();
     %init(G1C_Txn);
