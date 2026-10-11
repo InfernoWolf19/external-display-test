@@ -182,7 +182,14 @@ static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
 - (void)_topAffordanceViewController:(id)vc handleActionType:(long long)type transitionSource:(long long)source {
     if (type == 9) BP_Log(@"[g3c] handleActionType 9 (Zoom) seen, switch %d", G3C_On());
     if (type == 9 && G3C_On()) {
-        gG3CSwitcherVC = G3C_Obj(G3C_Obj(G3C_Obj((id)self, "_windowScene"), "switcherController"), "contentViewController");
+        // the decorated VC has no -_windowScene: scene handle -> window scene -> switcher controller -> content (fluid switcher) view controller
+        id handle = G3C_Obj((id)self, "sceneHandle");
+        id ws = G3C_Obj(handle, "_windowScene");
+        id sc = G3C_Obj(ws, "switcherController");
+        id fvc = G3C_Obj(sc, "contentViewController");
+        Class fluid = NSClassFromString(@"SBFluidSwitcherViewController");
+        gG3CSwitcherVC = (fvc && fluid && [fvc isKindOfClass:fluid]) ? fvc : nil;
+        if (!gG3CSwitcherVC) BP_Log(@"[g3c] switcher view controller not found (handle %d windowScene %d switcherController %d content %@)", handle != nil, ws != nil, sc != nil, fvc ? NSStringFromClass(object_getClass(fvc)) : @"nil");
         gG3CArmedUntil = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + kG3CWindowNs;
     }
     %orig(vc, type, source);
