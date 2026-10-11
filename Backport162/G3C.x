@@ -65,6 +65,7 @@
 - (id)requestedLayoutAttributesForEntity:(id)entity;
 - (void)setRequestedLayoutAttributes:(id)attrs forEntity:(id)entity;
 - (void)setFencesAnimations:(BOOL)fences;
+- (void)setRequestedPeekConfiguration:(long long)peek;
 - (id)attributesByModifyingSizingPolicy:(long long)policy;
 - (id)initWithApplicationSceneHandle:(id)handle;
 + (id)mainWorkspace;
@@ -132,7 +133,9 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
 
 // 16.0 0x1c632ba50 / 16.2 0x1c77ccb6c.  Case 9 only; every other action type is the same code in 16.0 and 16.2 (%orig).
 - (void)_topAffordanceViewController:(id)vc handleActionType:(long long)type transitionSource:(long long)source {
-    if (type != 9 || !G3C_On()) {
+    BOOL zoom = type == 9 && G3C_On();
+    BOOL addWin = type == 12 && BP_OnName("g3c_addwin");
+    if (!zoom && !addWin) {
         %orig(vc, type, source);
         return;
     }
@@ -144,13 +147,23 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
     Class entC = NSClassFromString(@"SBDeviceApplicationSceneEntity"), ctxC = NSClassFromString(@"SBWorkspaceApplicationSceneTransitionContext");
     BOOL api = entC && ctxC && [ctxC instancesRespondToSelector:@selector(setEntities:withPolicy:centerEntity:floatingEntity:)]
         && [handle respondsToSelector:NSSelectorFromString(@"_supportedSizingPoliciesForContentOrientation:containerOrientation:")];
-    if (!api || !handle || !windowScene || !cfg || ![workspace respondsToSelector:@selector(requestTransitionWithOptions:displayConfiguration:builder:validator:)]) {
-        BP_Log(@"[g3c] handleActionType 9: api %d handle %d windowScene %d displayConfiguration %d workspace %d, stock path", api, handle != nil, windowScene != nil, cfg != nil, workspace != nil);
+    if ((zoom && !api) || !handle || !windowScene || !cfg || ![workspace respondsToSelector:@selector(requestTransitionWithOptions:displayConfiguration:builder:validator:)]) {
+        BP_Log(@"[g3c] handleActionType %lld: api %d handle %d windowScene %d displayConfiguration %d workspace %d, stock path", type, api, handle != nil, windowScene != nil, cfg != nil, workspace != nil);
         %orig(vc, type, source);
         return;
     }
-    BP_Log(@"[g3c] handleActionType 9 (Zoom) source 0x%llx", (unsigned long long)source);
+    BP_Log(@"[g3c] handleActionType %lld (%s) source 0x%llx", type, zoom ? "Zoom" : "Add Another Window", (unsigned long long)source);
     if ([vc respondsToSelector:@selector(dismissAnimated:)]) [vc dismissAnimated:YES];
+    if (addWin) {
+        // 16.2 case 12 (blocks 0x1c77cd4a0 / 0x1c77cd4fc): source + requestedPeekConfiguration = 2 ONLY.  16.0 (0x1c632c290 / 0x1c632c2ec) also forced
+        // requestedUnlockedEnvironmentMode = 3, which 16.2 dropped (the environment mode of the layout state stays as it is, e.g. on an extended display).
+        id addBuilder = ^(id req) {
+            [req setSource:source];
+            [req modifyApplicationContext:^(id ctx) { [ctx setRequestedPeekConfiguration:2]; }];
+        };
+        [workspace requestTransitionWithOptions:0 displayConfiguration:cfg builder:addBuilder validator:nil];
+        return;
+    }
     id builder = ^(id req) {                                                // 16.2 block 0x1c77cd238
         [req setSource:source];
         [req modifyApplicationContext:^(id ctx) {                           // 16.2 block 0x1c77cd2e8

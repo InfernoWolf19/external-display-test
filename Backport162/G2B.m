@@ -350,11 +350,8 @@ static BP2BAttrSize BP2B_AttrSizeInfer(CGSize size, CGRect bounds, CGSize defSiz
 // Subtle point kept from the disassembly: for the first test (full bounds) "height only" yields 2, "width only" yields 1.
 // The second test (default size) yields 6 / 4 (width matches) / 5 (otherwise, also reached when only the height matches).
 
-// Context set by the wrapper around the 16.0 -_frameForLayoutRole:... (item 3): the 16.0 one-argument `sizeInBounds:` has no
-// default size / padding argument, 16.2 passes chamoisLayoutAttributes.defaultWindowSize / screenEdgePadding. While a calculator
-// frame computation runs, the legacy entry points use these values, which makes the unchanged 16.0 frame code size windows
-// with the exact 16.2 semantics (types 4/5/6 follow the default size, 7/8/9 the padding, shrink clamp).
-static __thread struct { BOOL on; CGSize def; double pad; } gBP2B_Ctx;
+// (0.7.0) The thread-local default-size/padding context that used to wrap the 16.0 -_frameForLayoutRole:... is gone: that method is now a
+// full port of 162 0x1c75a3614 (BP2B_FrameForLayoutRole) which calls the 16.2 three-argument size queries itself.
 
 // -[SBDisplayItemLayoutAttributes _sizeForAttributedSize:inBounds:defaultSize:screenEdgePadding:]   162 0x1c75d0a3c
 // `legacy` = YES when called from the 16.0 one-argument entry points (no default size known): types 4/5/6 then fall back to the scaled value.
@@ -539,14 +536,14 @@ static void BP2B_SetupAttributes(void) {
         return BP2B_SizeForAttributedSize(a, b, d, p, NO);
     }), "{CGSize=dd}80@0:8^v16{CGRect={CGPoint=dd}{CGSize=dd}}24{CGSize=dd}56d72");
 
-    // --- 16.0 entry points that old (unported) callers still use: same algorithm without default size ------------------------------
+    // --- 16.0 one-argument entry points. 16.2 has no such selector (every 16.2 caller passes chamoisLayoutAttributes.defaultWindowSize /
+    // screenEdgePadding). The remaining 16.0-compiled callers (SBContinuousExposeAppToAppModifier -isLayoutRoleMatchMovedToScene:inAppLayout:,
+    // replaced by the group 1c modifier) cannot supply them; semantic types 4/5/6 then degrade to the scaled value (legacy=YES).
     BP2B_Replace(c, "sizeInBounds:", imp_implementationWithBlock(^CGSize(id me, CGRect b) {
-        return gBP2B_Ctx.on ? BP2B_SizeForAttributedSize(BP2B_GetAttributedSize(me), b, gBP2B_Ctx.def, gBP2B_Ctx.pad, NO)
-                            : BP2B_SizeForAttributedSize(BP2B_GetAttributedSize(me), b, CGSizeZero, 0, YES);
+        return BP2B_SizeForAttributedSize(BP2B_GetAttributedSize(me), b, CGSizeZero, 0, YES);
     }));
     BP2B_Replace(c, "userConfiguredSizeBeforeOverlappingInBounds:", imp_implementationWithBlock(^CGSize(id me, CGRect b) {
-        return gBP2B_Ctx.on ? BP2B_SizeForAttributedSize(BP2B_GetAttributedUserSize(me), b, gBP2B_Ctx.def, gBP2B_Ctx.pad, NO)
-                            : BP2B_SizeForAttributedSize(BP2B_GetAttributedUserSize(me), b, CGSizeZero, 0, YES);
+        return BP2B_SizeForAttributedSize(BP2B_GetAttributedUserSize(me), b, CGSizeZero, 0, YES);
     }));
     BP2B_Replace(c, "centerInBounds:", imp_implementationWithBlock(^CGPoint(id me, CGRect b) { return BP2B_AttrsCenterInBounds(me, b); }));
 

@@ -76,6 +76,8 @@ static inline CGRect  G1C_SendRect0(id o, SEL s)                    { return ((C
 static inline CGPoint G1C_SendPoint0(id o, SEL s)                   { return ((CGPoint (*)(id, SEL))objc_msgSend)(o, s); }
 static inline CGSize  G1C_SendSize0(id o, SEL s)                    { return ((CGSize (*)(id, SEL))objc_msgSend)(o, s); }
 static inline double  G1C_SendD0(id o, SEL s)                       { return ((double (*)(id, SEL))objc_msgSend)(o, s); }
+static inline double  G1C_SendD0Q(id o, SEL s, unsigned long long i) { return ((double (*)(id, SEL, unsigned long long))objc_msgSend)(o, s, i); }
+static inline unsigned long long G1C_SendULL0(id o, SEL s)           { return ((unsigned long long (*)(id, SEL))objc_msgSend)(o, s); }
 static inline id      G1C_Send2(id o, SEL s, id a, id b)            { return ((id (*)(id, SEL, id, id))objc_msgSend)(o, s, a, b); }
 static inline id      G1C_SendLL1(id o, SEL s, long long a)         { return ((id (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
 static inline BOOL    G1C_SendBLL1(id o, SEL s, long long a)        { return ((BOOL (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
@@ -367,6 +369,7 @@ static BOOL G1C_BuildCEToHome(void) {
 }
 
 // ---- SBGridSwipeUpGestureRootSwitcherModifier (new in 16.2, gesture type 3) ----
+static void G1C_GR_Guard(id self, id event);
 static char kGridRootMulti;
 static id G1C_GridRoot_Init(id self, SEL _cmd, long long mode, id multi) {
     if (!multi) return nil;                                                               // 16.2 asserts (SBGridSwipeUpGestureRootSwitcherModifier.m:0x1a)
@@ -375,6 +378,10 @@ static id G1C_GridRoot_Init(id self, SEL _cmd, long long mode, id multi) {
     return me;
 }
 static long long G1C_GridRoot_Type(id self, SEL _cmd) { return 3; }
+static id G1C_GridRoot_Gesture(id self, SEL _cmd, id event) {
+    G1C_GR_Guard(self, event);
+    return G1B_SUPER(id, gGridRootSuper, self, _cmd, (struct objc_super *, SEL, id), event);
+}
 static id G1C_GridRoot_NewMulti(id self, SEL _cmd) { id m = G1B_GET(self, kGridRootMulti); return m ? [m copy] : nil; }
 static id G1C_GridRoot_GestureChild(id self, SEL _cmd, id event, id activeTransition) {
     id gid = (event && [event respondsToSelector:@selector(gestureID)]) ? G1B_Send0(event, @selector(gestureID)) : nil;
@@ -383,6 +390,27 @@ static id G1C_GridRoot_GestureChild(id self, SEL _cmd, id event, id activeTransi
     SEL withDelay = @selector(initWithGestureID:delayCompletionUntilTransitionBegins:);
     if ([g instancesRespondToSelector:withDelay]) return ((id (*)(id, SEL, id, BOOL))objc_msgSend)([g alloc], withDelay, gid, YES);
     return ((id (*)(id, SEL, id))objc_msgSend)([g alloc], @selector(initWithGestureID:), gid);
+}
+// The 'Gesture' child of a gesture root: 16.2 property gestureModifier (== childModifierByKey:@"Gesture", 0x1c74d3df4); 16.0 calls it _gestureModifier.
+static id G1C_GR_GM(id self) {
+    if (G1C_Resp(self, @selector(gestureModifier))) return G1B_Send0(self, @selector(gestureModifier));
+    if (G1C_Resp(self, @selector(_gestureModifier))) return G1B_Send0(self, @selector(_gestureModifier));
+    return G1C_Resp(self, @selector(childModifierByKey:)) ? G1B_Send1(self, @selector(childModifierByKey:), @"Gesture") : nil;
+}
+// 16.2 SBGestureRootSwitcherModifier -handleGestureEvent: (0x1c74d3b60, the same shape in 16.0) adds the new gesture child with addChildModifier:atLevel:1 key:@"Gesture" and
+// SBChainableModifier throws NSInternalInconsistencyException when that key is still taken. In 16.2 the previous 'Gesture' child is always finished before a new gesture
+// begins: the gesture's last phase produces a perform-transition response, the transition's phase 1 reaches the root's handleTransitionEvent: (gestureModifier setState:1) and
+// the base class removes finished children. A gesture whose touch ended on another display never produced that transition here (crash log: pointer drag whose touch up came
+// from the external scene, no end event, no transition; the next drag crashed the root), so the child was still active when the next gesture began.
+// Last-line guard (16.2 itself has none): finish and remove the stale child exactly like the base class' removal pass would, and say so in the debug log.
+static void G1C_GR_Guard(id self, id event) {
+    if (!G1C_ON() || !event || !G1C_Resp(event, @selector(phase)) || G1B_SendLL0(event, @selector(phase)) != 1) return;
+    if (!G1C_Resp(event, @selector(gestureType)) || !G1C_Resp(self, @selector(gestureType)) || G1B_SendLL0(event, @selector(gestureType)) != G1B_SendLL0(self, @selector(gestureType))) return;
+    id stale = G1C_GR_GM(self);
+    if (!stale) return;
+    if (BP_LogEnabled()) BP_Log(@"GUARD gesture root %@: a new gesture began while the previous 'Gesture' child %@ was still active (its gesture never produced a transition) -> finishing and removing it", G1C_DbgCls(self), G1C_DbgCls(stale));
+    if (G1C_Resp(stale, @selector(setState:))) G1B_SendVLL(stale, @selector(setState:), 1);
+    if (G1C_Resp(self, @selector(removeChildModifier:))) G1B_SendV1(self, @selector(removeChildModifier:), stale);
 }
 static id G1C_GridRoot_TransitionChild(id self, SEL _cmd, id event, id activeGesture) {
     if (!event || ![event respondsToSelector:@selector(fromEnvironmentMode)]) return nil;
@@ -407,6 +435,7 @@ static BOOL G1C_BuildGridRoot(void) {
     const G1BMethod m[] = {
         { "initWithStartingEnvironmentMode:multitaskingModifier:", (IMP)G1C_GridRoot_Init, "@32@0:8q16@24" },
         { "gestureType", (IMP)G1C_GridRoot_Type, "q16@0:8" },
+        { "handleGestureEvent:", (IMP)G1C_GridRoot_Gesture, "@24@0:8@16" },
         { "_newMultitaskingModifier", (IMP)G1C_GridRoot_NewMulti, "@16@0:8" },
         { "gestureChildModifierForGestureEvent:activeTransitionModifier:", (IMP)G1C_GridRoot_GestureChild, "@32@0:8@16@24" },
         { "transitionChildModifierForMainTransitionEvent:activeGestureModifier:", (IMP)G1C_GridRoot_TransitionChild, "@32@0:8@16@24" },
@@ -1052,7 +1081,10 @@ static id G1C_Rv_HandleTransition(id self, SEL _cmd, id event) {
 static id G1C_Rv_HandleTimer(id self, SEL _cmd, id event) {
     id resp = G1B_HasSuper(gRevealSuper, _cmd) ? G1B_SUPER(id, gRevealSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
     id reason = [event respondsToSelector:@selector(reason)] ? G1B_Send0(event, @selector(reason)) : nil;
-    if ([reason isKindOfClass:[NSString class]] && [reason isEqualToString:kG1CRevealTimeout]) G1B_SendVLL(self, @selector(setState:), 1);
+    if ([reason isKindOfClass:[NSString class]] && [reason isEqualToString:kG1CRevealTimeout]) {
+        if (BP_LogEnabled() && G1B_SendLL0(self, @selector(state)) != 1) BP_Log(@"GUARD strip reveal gesture: no transition began within 2 s of the gesture end -> completing the gesture modifier (16.2 has no such timeout)");
+        G1B_SendVLL(self, @selector(setState:), 1);
+    }
     return resp;
 }
 typedef struct { double tl, bl, br, tr; } G1CRadii;          // UIRectCornerRadii {topLeft, bottomLeft, bottomRight, topRight}
@@ -1857,6 +1889,10 @@ static id G1C_DndRoot_Child(id self, SEL _cmd, id event, id activeTransition) {
     SEL ini = @selector(initWithGestureID:appLayout:displayItemThatWouldBeEvicted:);
     return ((id (*)(id, SEL, id, id, id))objc_msgSend)([gDndCls alloc], ini, G1B_Send0(event, @selector(gestureID)), layout, evicted);
 }
+static id G1C_DndRoot_Gesture(id self, SEL _cmd, id event) {
+    G1C_GR_Guard(self, event);
+    return G1B_SUPER(id, gDndRootSuper, self, _cmd, (struct objc_super *, SEL, id), event);
+}
 static id G1C_DndRoot_Transition(id self, SEL _cmd, id event) {
     id r = G1B_SUPER(id, gDndRootSuper, self, _cmd, (struct objc_super *, SEL, id), event);
     SEL hw = NSSelectorFromString(@"handleWithReason:");
@@ -2154,6 +2190,7 @@ static BOOL G1C_BuildDnd(void) {
     const G1BMethod rm[] = {
         { "initWithStartingEnvironmentMode:appLayout:", (IMP)G1C_DndRoot_Init, "@32@0:8q16@24" }, { "gestureType", (IMP)G1C_DndRoot_Type, "q16@0:8" },
         { "gestureChildModifierForGestureEvent:activeTransitionModifier:", (IMP)G1C_DndRoot_Child, "@32@0:8@16@24" },
+        { "handleGestureEvent:", (IMP)G1C_DndRoot_Gesture, "@24@0:8@16" },
         { "handleTransitionEvent:", (IMP)G1C_DndRoot_Transition, "@24@0:8@16" },
         { "transitionChildModifierForMainTransitionEvent:activeGestureModifier:", (IMP)G1C_DndRoot_TransChild, "@32@0:8@16@24" },
     };
@@ -2345,7 +2382,16 @@ static id G1C_Wd_Gesture(id self, SEL _cmd, id event) {
         r = G1B_AppendTo(u1, r);
         id u2 = G1B_NewUpdateLayoutResponse(8, 3);
         r = G1B_AppendTo(u2, r);
-    } else if (phase == 3) {
+    }
+    {   // every phase (16.2 0x1c76098b4..0x1c7609928): anchor point follows where the proposed layouts put the dragged item
+        BOOL anyProp = G1C_Wd_AnyProposedHas(self);
+        BOOL hasSel = G1C_LayoutHas(G1C_Wd_Proposed(self), sel);
+        BOOL other = G1C_IvarBool(self, "_bp_dragBeganInOtherSwitcher"), strip = G1C_IvarBool(self, "_bp_dragBeganInAnyStrip"), stage = G1C_IvarBool(self, "_bp_dragBeganOnAnyStage");
+        if ((other && hasSel) || (strip && !anyProp)) G1C_SetIvarPoint(self, "_anchorPoint", CGPointMake(0.5, 0.5));
+        else if (stage && !anyProp) G1C_SetIvarPoint(self, "_anchorPoint", CGPointMake(0.4, 0.4));       // 0x3fd999999999999a
+        else G1C_SetIvarPoint(self, "_anchorPoint", G1C_IvarPoint(self, "_initialAnchorPoint"));
+    }
+    if (phase == 3) {
         BOOL canceled = G1C_IvarBool(self, "_gestureWasCanceled");
         id target = G1C_Wd_Proposed(self);
         if (canceled) {
@@ -2376,18 +2422,37 @@ static id G1C_Wd_Gesture(id self, SEL _cmd, id event) {
                     without = ((id (*)(id, SEL, id))objc_msgSend)(target, @selector(appLayoutWithItemsPassingTest:), pass);
                 }
                 target = without;
-            } else if (target && G1C_LayoutHas(target, sel) && G1C_Resp(self, @selector(appLayoutByBringingItemToFront:inAppLayout:))) {
-                id fronted = G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), sel, target);
-                if (fronted) target = fronted;
+            }
+            if (target && G1C_LayoutHas(target, sel)) {                                // 16.2 0x1c7609ba0..0x1c7609df4
+                // write every item's current on-screen centre (overlapping model) back into the layout as a normalized centre
+                id calc = G1C_Resp(self, @selector(displayItemLayoutAttributesCalculator)) ? G1B_Send0(self, @selector(displayItemLayoutAttributesCalculator)) : nil;
+                SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:");
+                id model = nil;
+                CGRect cb = G1C_Resp(self, @selector(containerViewBounds)) ? G1C_SendRect0(self, @selector(containerViewBounds)) : CGRectZero;
+                if (calc && [calc respondsToSelector:om]) {
+                    long long orient = G1B_SendLL0(self, @selector(switcherInterfaceOrientation));
+                    double fdh = G1B_Dbl0(self, @selector(floatingDockHeight)), scale = G1B_Dbl0(self, @selector(screenScale));
+                    BOOL sh = G1B_SendB0(self, @selector(prefersStripHidden)), dh = G1B_SendB0(self, @selector(prefersDockHidden));
+                    model = ((id (*)(id, SEL, id, long long, id, double, double, CGRect, BOOL, BOOL))objc_msgSend)(calc, om, target, orient, attrs, fdh, scale, cb, sh, dh);
+                }
+                if (model && [model respondsToSelector:@selector(centerForItem:)] && G1C_Resp(target, @selector(allItems))) {
+                    for (id item in [G1B_Send0(target, @selector(allItems)) copy]) {
+                        CGPoint c = ((CGPoint (*)(id, SEL, id))objc_msgSend)(model, @selector(centerForItem:), item);
+                        id a0 = G1C_Resp(target, @selector(layoutAttributesForItem:)) ? G1B_Send1(target, @selector(layoutAttributesForItem:), item) : nil;
+                        id a1 = G1C_DM_AttrsByModifyingCenter(a0, c, cb);
+                        id nt = (a1 && G1C_Resp(target, @selector(appLayoutByModifyingLayoutAttributes:forItem:))) ? G1C_Send2(target, @selector(appLayoutByModifyingLayoutAttributes:forItem:), a1, item) : nil;
+                        if (nt) target = nt;
+                    }
+                }
+                if (!toHome && G1C_Resp(self, @selector(appLayoutByBringingItemToFront:inAppLayout:))) {
+                    id fronted = G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), sel, target);
+                    if (fronted) target = fronted;
+                }
             }
             id finalTarget = target;
-            if (!finalTarget) {
+            if (!finalTarget) {                                                          // 16.2 0x1c7609e04: [SBAppLayout homeScreenAppLayout], no ordinal rewrite
                 Class al = NSClassFromString(@"SBAppLayout");
-                id home = (al && [al respondsToSelector:@selector(homeScreenAppLayout)]) ? G1B_Send0((id)al, @selector(homeScreenAppLayout)) : nil;
-                long long ord = G1C_Resp(self, @selector(displayOrdinal)) ? G1B_SendLL0(self, @selector(displayOrdinal)) : 0;
-                SEL mo = NSSelectorFromString(@"appLayoutByModifyingPreferredDisplayOrdinal:");
-                if (home && [home respondsToSelector:mo]) home = G1C_SendLL1(home, mo, ord);
-                finalTarget = home;
+                finalTarget = (al && [al respondsToSelector:@selector(homeScreenAppLayout)]) ? G1B_Send0((id)al, @selector(homeScreenAppLayout)) : nil;
             }
             if (finalTarget) r = G1B_AppendTo(G1C_NewPerformActivate(finalTarget, YES), r);
             double prog = G1C_Resp(self, @selector(continuousExposeStripProgress)) ? G1C_SendD0(self, @selector(continuousExposeStripProgress)) : 0;
@@ -2596,30 +2661,8 @@ static id G1C_Wdr_GestureChild(id self, SEL _cmd, id event, id activeTransition)
     if (![gFilteringCls instancesRespondToSelector:fi]) return nil;
     return G1C_Send2([gFilteringCls alloc], fi, @[ sel ], content) ;
 }
-// The 'Gesture' child of this root: 16.2 property gestureModifier (== childModifierByKey:@"Gesture", 0x1c74d3df4); 16.0 calls it _gestureModifier.
-static id G1C_Wdr_GM(id self) {
-    if (G1C_Resp(self, @selector(gestureModifier))) return G1B_Send0(self, @selector(gestureModifier));
-    if (G1C_Resp(self, @selector(_gestureModifier))) return G1B_Send0(self, @selector(_gestureModifier));
-    return G1C_Resp(self, @selector(childModifierByKey:)) ? G1B_Send1(self, @selector(childModifierByKey:), @"Gesture") : nil;
-}
 static id G1C_Wdr_Gesture(id self, SEL _cmd, id event) {
-    // 16.2 SBGestureRootSwitcherModifier -handleGestureEvent: (0x1c74d3b60, byte-identical shape in 16.0) adds the new gesture child with
-    // addChildModifier:atLevel:1 key:@"Gesture" and SBChainableModifier throws NSInternalInconsistencyException when that key is still taken.
-    // In 16.2 the previous 'Gesture' child (the SBFilteringSwitcherModifier around the drag content) is always finished before a new gesture begins:
-    // the drag's phase-3 event produces a perform-transition response, the transition's phase 1 reaches handleTransitionEvent: below
-    // (gestureModifier setState:1) and the base class removes finished children. A drag whose touch ended on another display never produced that
-    // transition here (log 10:29:39.666-10:29:45.4: touch up on the external scene, no end event, no transition), so the child was still active when
-    // the next drag began. Last-line guard (16.2 itself has none): finish and remove the stale child exactly like the base class' removal pass would.
-    if (G1C_ON() && event && G1C_Resp(event, @selector(phase)) && G1B_SendLL0(event, @selector(phase)) == 1
-        && G1C_Resp(event, @selector(gestureType)) && G1C_Resp(self, @selector(gestureType))
-        && G1B_SendLL0(event, @selector(gestureType)) == G1B_SendLL0(self, @selector(gestureType))) {
-        id stale = G1C_Wdr_GM(self);
-        if (stale) {
-            if (BP_LogEnabled()) BP_Log(@"GUARD window drag root: new gesture began while the previous 'Gesture' child %@ was still active (its drag never produced a transition) -> finishing and removing it", G1C_DbgCls(stale));
-            if (G1C_Resp(stale, @selector(setState:))) G1B_SendVLL(stale, @selector(setState:), 1);
-            if (G1C_Resp(self, @selector(removeChildModifier:))) G1B_SendV1(self, @selector(removeChildModifier:), stale);
-        }
-    }
+    G1C_GR_Guard(self, event);
     id r = G1B_SUPER(id, gWdrGrand, self, _cmd, (struct objc_super *, SEL, id), event);
     if (event && G1B_SendLL0(event, @selector(phase)) == 1) { id inv = G1C_NewInvalidateAdjusted(); if (inv) r = G1B_AppendTo(inv, r); }
     return r;
@@ -2636,13 +2679,13 @@ static id G1C_Wdr_Transition(id self, SEL _cmd, id event) {
     }
     G1C_SetIvarObj(self, "_initialAppLayout", to);
     long long phase = G1C_Resp(event, @selector(phase)) ? G1B_SendLL0(event, @selector(phase)) : 0;
-    if (phase == 1) { id gm = G1C_Wdr_GM(self); if (gm && G1C_Resp(gm, @selector(setState:))) G1B_SendVLL(gm, @selector(setState:), 1); }
+    if (phase == 1) { id gm = G1C_GR_GM(self); if (gm && G1C_Resp(gm, @selector(setState:))) G1B_SendVLL(gm, @selector(setState:), 1); }
     if (phase == 3 && G1C_Resp(self, @selector(setState:))) G1B_SendVLL(self, @selector(setState:), 1);
     return r;
 }
 static id G1C_Wdr_Anim(id self, SEL _cmd, id element) {
     id base = G1B_SUPER(id, gWdrGrand, self, _cmd, (struct objc_super *, SEL, id), element);
-    id gm = G1C_Wdr_GM(self);
+    id gm = G1C_GR_GM(self);
     if (!gm || !base || !element) return base;
     SEL tp = NSSelectorFromString(@"switcherLayoutElementType");
     if (!G1C_Resp(element, tp) || G1B_SendLL0(element, tp) != 0) return base;
@@ -3259,14 +3302,12 @@ static BOOL G1C_As_PileVisible(NSDictionary *c, id ident, double scrollX, CGRect
     r.origin.x -= scrollX;
     return CGRectIntersectsRect(visible, r);
 }
-// 0x1c7810118: the first numberOfVisibleItemsPerGroup windows of every pile whose bounding frame touches the (shadow-extended) view. The 16.0 answer
-// (children incl. the grid child, plus the 16.0 column range) is kept as a superset: a missing card is blank, an extra one is only laid out.
+// 0x1c7810118: the first numberOfVisibleItemsPerGroup windows of every pile whose bounding frame touches the (shadow-extended) view (_visiblePileIdentifiers 0x1c781345c);
+// a plain new set, no 16.0 contribution.
 static id G1C_As_VisibleAppLayouts(id self, SEL _cmd) {
     NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
-    if (![c[@"frames"] count]) return G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL));
-    Class base = class_getSuperclass(gAsParent);
-    id sup = G1B_HasSuper(base, _cmd) ? G1B_SUPER(id, base, self, _cmd, (struct objc_super *, SEL)) : nil;
-    NSMutableSet *out = [sup isKindOfClass:[NSSet class]] ? [sup mutableCopy] : [NSMutableSet set];
+    if (!c) return G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL));        // piles off / detached copy (logged by G1C_As_Calc)
+    NSMutableSet *out = [NSMutableSet set];
     id sw = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
     id cs = G1C_Resp(sw, @selector(chamoisSettings)) ? G1B_Send0(sw, @selector(chamoisSettings)) : nil;
     NSUInteger nVis = (cs && [cs respondsToSelector:@selector(numberOfVisibleItemsPerGroup)]) ? (NSUInteger)G1B_SendLL0(cs, @selector(numberOfVisibleItemsPerGroup)) : 3;
@@ -3291,6 +3332,164 @@ static NSRange G1C_As_VisibleSpaceRange(id self, SEL _cmd, CGPoint offset) {
     NSUInteger lo = NSNotFound, hi = 0;
     for (NSUInteger p = 0; p < ids.count; p++) if (G1C_As_PileVisible(c, ids[p], offset.x, vis)) { if (lo == NSNotFound) lo = p; hi = p; }
     return lo == NSNotFound ? NSMakeRange(0, 0) : NSMakeRange(lo, hi - lo + 1);
+}
+// ---- 16.2 pile queries on the pile cache: _boundingFrameForPileAtIndex:withScrollOffsetApplied: 0x1c781376c / ...WithIdentifier: 0x1c7813800, _visiblePileRange 0x1c7810c9c,
+//      distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreenWithVisibleIndexToStartSearch: 0x1c781264c (HomeToGrid slides the switcher copy off screen by this) ----
+static CGRect G1C_As_PileBox(id self, NSDictionary *c, NSUInteger idx, BOOL scroll) {
+    NSArray *ids = c[@"ids"];
+    id ident = idx < ids.count ? ids[idx] : nil;
+    NSValue *v = ident ? c[@"piles"][ident] : nil;
+    CGRect r = v ? [v CGRectValue] : CGRectZero;
+    if (scroll) r.origin.x -= G1C_As_ScrollX(self);
+    return r;
+}
+static NSRange G1C_As_VisiblePileRange(id self, NSDictionary *c) {
+    const NSUInteger NF = NSNotFound;
+    NSUInteger n = [c[@"ids"] count];
+    CGRect vis = G1C_As_VisibleBounds(self);
+    NSUInteger firstEven = NF, firstOdd = NF, endEven = NF, endOdd = NF;
+    for (NSUInteger p = 0; p < n; p++) {
+        if (endEven != NF && endOdd != NF) break;
+        BOOL even = (p & 1) == 0, v = CGRectIntersectsRect(vis, G1C_As_PileBox(self, c, p, YES));
+        NSUInteger visIdx = v ? p : NF, invIdx = v ? NF : p;
+        if (even && firstEven == NF) firstEven = visIdx;
+        if (!even && firstOdd == NF) firstOdd = visIdx;
+        if (even && firstEven != NF && endEven == NF) endEven = invIdx;
+        if (!even && firstOdd != NF && endOdd == NF) endOdd = invIdx;
+    }
+    if (n == 0) return NSMakeRange(0, 0);
+    NSUInteger lo = MIN(firstEven, firstOdd);
+    NSUInteger lastEven = (endEven == NF ? n : endEven) - 2, lastOdd = (endOdd == NF ? n : endOdd) - 2;
+    NSUInteger last = MAX(lastEven, lastOdd);
+    if (lo == NF || last == NF) return NSMakeRange(0, 0);
+    return NSMakeRange(lo, last - lo + 1);
+}
+static double G1C_As_Distance(id self, SEL _cmd, unsigned long long idx) {
+    NSDictionary *c = (G1C_PilesOn() && BP_OnName("g1c_homeslide")) ? G1C_As_Calc(self) : nil;
+    if (!c) return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), idx);        // piles off / detached copy (logged by G1C_As_Calc)
+    NSUInteger n = [c[@"ids"] count];
+    if (n == 0) return 0.0;                                                          // 16.2 would raise on objectAtIndex: of an empty id list
+    NSRange rg = G1C_As_VisiblePileRange(self, c);
+    NSUInteger pick = rg.location;
+    if (rg.length >= 2 && pick + 1 < n && CGRectGetMaxX(G1C_As_PileBox(self, c, pick + 1, NO)) > CGRectGetMaxX(G1C_As_PileBox(self, c, pick, NO))) pick = pick + 1;
+    if (pick >= n) pick = 0;
+    CGRect f = G1C_As_PileBox(self, c, pick, YES);
+    BOOL rtl = G1C_Resp(self, @selector(isRTLEnabled)) && G1B_SendB0(self, @selector(isRTLEnabled));
+    double x = rtl ? G1C_SendRect0(self, @selector(switcherViewBounds)).size.width - f.origin.x : CGRectGetMaxX(f);
+    return x + G1B_Dbl0(G1B_Send0(self, @selector(chamoisLayoutAttributes)), NSSelectorFromString(@"switcherHorizontalInterItemSpacing"));
+}
+static long long G1C_As_IndexInPile(id self, SEL _cmd, id layout);
+// _visiblePileIdentifiers 0x1c781345c: the identifiers whose pile box (scroll applied) touches the shadow-extended view
+static NSArray *G1C_As_VisibleIdents(id self, NSDictionary *c) {
+    NSMutableArray *out = [NSMutableArray array];
+    CGRect vis = G1C_As_VisibleBounds(self);
+    double sx = G1C_As_ScrollX(self);
+    for (id ident in c[@"ids"]) if (G1C_As_PileVisible(c, ident, sx, vis)) [out addObject:ident];
+    return out;
+}
+static NSUInteger G1C_As_NumVisibleItems(id self) {
+    id sw = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
+    id cs = G1C_Resp(sw, @selector(chamoisSettings)) ? G1B_Send0(sw, @selector(chamoisSettings)) : nil;
+    return (cs && [cs respondsToSelector:@selector(numberOfVisibleItemsPerGroup)]) ? (NSUInteger)G1B_SendLL0(cs, @selector(numberOfVisibleItemsPerGroup)) : 3;
+}
+static NSArray *G1C_As_PileLayouts(id self, id ident) {
+    SEL byId = NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:");
+    return G1C_Resp(self, byId) ? G1C_AsArray(G1B_Send1(self, byId, ident)) : @[];
+}
+// 0x1c7810410: z-order / hit-test list = the first numberOfVisibleItemsPerGroup + 1 windows (index <= n) of every visible pile
+static id G1C_As_TopMost(id self, SEL _cmd) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (!c) return G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    NSMutableArray *out = [NSMutableArray array];
+    NSUInteger nVis = G1C_As_NumVisibleItems(self);
+    for (id ident in G1C_As_VisibleIdents(self, c)) {
+        NSUInteger k = 0;
+        for (id l in G1C_As_PileLayouts(self, ident)) { if (k++ > nVis) break; [out addObject:l]; }
+    }
+    return out;
+}
+// 0x1c78106d4: on-screen radius 10 (7 when the display has no corner radius), counter-scaled by the card scale
+static G1CRadii G1C_As_Corner(id self, SEL _cmd, unsigned long long i) {
+    if (!G1C_PilesOn()) return G1B_SUPER(G1CRadii, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    double r = (G1B_Dbl0(self, NSSelectorFromString(@"displayCornerRadius")) > 0.0 ? 10.0 : 7.0) / G1C_SendD0Q(self, @selector(scaleForIndex:), i);
+    G1CRadii v = { r, r, r, r };
+    return v;
+}
+// 0x1c7810020
+static double G1C_As_TitleIconOpacity(id self, SEL _cmd, unsigned long long i) {
+    if (!G1C_PilesOn()) return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    id l = G1C_As_LayoutAt(self, i);
+    return G1C_As_IndexInPile(self, 0, l) == 0 ? 1.0 : 0.0;
+}
+// 0x1c78115d4: the first window of the first pile that is on screen
+static unsigned long long G1C_As_LeadingIndex(id self, SEL _cmd) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (!c) return G1B_SUPER(unsigned long long, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    NSArray *ls = G1C_Resp(self, @selector(appLayouts)) ? G1B_Send0(self, @selector(appLayouts)) : @[];
+    for (id ident in G1C_As_VisibleIdents(self, c)) {
+        id first = [G1C_As_PileLayouts(self, ident) firstObject];
+        if (first) return (unsigned long long)[ls indexOfObject:first];
+    }
+    return (unsigned long long)NSNotFound;
+}
+// 0x1c7811564 (indexToScrollToAfterInsertingAtIndex: 0x1c7811540 is unchanged: leading index, 0 when none)
+static unsigned long long G1C_As_ScrollAfterRemoving(id self, SEL _cmd, unsigned long long i) {
+    if (!G1C_PilesOn()) return G1B_SUPER(unsigned long long, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    NSArray *ls = G1C_Resp(self, @selector(appLayouts)) ? G1B_Send0(self, @selector(appLayouts)) : @[];
+    if (ls.count < 2) return (unsigned long long)NSNotFound;
+    return G1C_SendULL0(self, NSSelectorFromString(@"_indexOfLeadingAppLayout"));
+}
+// 0x1c780f7dc: remembers the scroll direction for the snapshot cache window
+static id G1C_As_HandleScroll(id self, SEL _cmd, id event) {
+    if (G1C_PilesOn()) {
+        CGPoint off = G1C_Resp(self, @selector(contentOffset)) ? G1C_SendPoint0(self, @selector(contentOffset)) : CGPointZero;
+        CGPoint prev = G1C_IvarPoint(self, "_previousContentOffset");
+        if (!G1C_IsInvalidPoint(off) && fabs(prev.x - off.x) > 0.0001) G1C_SetIvarBool(self, "_isScrollingForward", prev.x > off.x);      // BSFloatEqualToFloat
+        G1C_SetIvarPoint(self, "_previousContentOffset", off);
+    }
+    return G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL, id), event);
+}
+// 0x1c7810e7c: snapshot cache window = the visible piles (ascending when scrolling forward, else descending), then batches of 2 piles in the scroll direction and
+// 1 in the other direction until every pile is listed; the windows of those piles (at most numberOfVisibleItemsPerGroup each) up to numberOfSnapshotsToCache.
+static NSArray *G1C_As_SnapshotWindow(id self, NSDictionary *c, NSRange range, NSUInteger total, BOOL forward) {
+    if (range.length == 0) return @[];
+    NSArray *ids = c[@"ids"];
+    NSInteger n = (NSInteger)ids.count;
+    NSMutableArray *order = [NSMutableArray array];
+    NSInteger end = (NSInteger)(range.location + range.length), loc = (NSInteger)range.location;
+    if (forward) { for (NSInteger i = loc; i < end; i++) [order addObject:@(i)]; }
+    else { for (NSInteger i = end - 1; i >= loc; i--) [order addObject:@(i)]; }
+    NSInteger capFwd = forward ? 2 : 1, capBack = forward ? 1 : 2;
+    NSInteger fwd = end, back = loc - 1;
+    while (fwd < n || back >= 0) {
+        for (int pass = 0; pass < 2; pass++) {
+            BOOL doFwd = forward ? (pass == 0) : (pass == 1);
+            if (doFwd) { NSInteger k = MAX((NSInteger)0, n - fwd); k = MIN(k, capFwd); while (k-- > 0) { [order addObject:@(fwd)]; fwd++; } }
+            else { NSInteger k = MIN(back + 1, capBack); while (k-- > 0) { [order addObject:@(back)]; back--; } }
+        }
+    }
+    NSMutableArray *out = [NSMutableArray array];
+    NSUInteger nVis = G1C_As_NumVisibleItems(self);
+    for (NSNumber *idx in order) {
+        NSUInteger have = out.count;
+        if (have >= total) break;
+        NSUInteger remaining = total - have, i = idx.unsignedIntegerValue;
+        NSArray *ls = G1C_As_PileLayouts(self, i < ids.count ? ids[i] : nil);
+        NSUInteger take = MIN(MIN(ls.count, nVis), remaining);
+        [out addObjectsFromArray:[ls subarrayWithRange:NSMakeRange(0, take)]];
+    }
+    return out;
+}
+static id G1C_As_SnapshotsWithRange(id self, SEL _cmd, NSRange range, unsigned long long total, BOOL forward) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    return c ? G1C_As_SnapshotWindow(self, c, range, (NSUInteger)total, forward) : @[];
+}
+static id G1C_As_CacheSnapshots(id self, SEL _cmd) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (!c) return G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    id sw = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
+    NSUInteger total = (NSUInteger)G1B_SendLL0(sw, NSSelectorFromString(@"numberOfSnapshotsToCacheInSwitcher"));
+    return G1C_As_SnapshotWindow(self, c, G1C_As_VisiblePileRange(self, c), total, G1C_IvarBool(self, "_isScrollingForward"));
 }
 static BOOL G1C_As_Usable(id self) {                                                      // can this (possibly detached) modifier answer protocol queries?
     @try { (void)G1C_SendRect0(self, @selector(containerViewBounds)); return YES; } @catch (NSException *e) { (void)e; return NO; }
@@ -3440,6 +3639,15 @@ static BOOL G1C_BuildAppSwitcher(void) {
             { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_As_Opacity, "d40@0:8q16@24Q32" },
             { "_defaultCardScale", (IMP)G1C_As_DefaultCardScale, "d16@0:8" },
             { "snapshotScaleForAppLayout:", (IMP)G1C_As_SnapshotScale, "d24@0:8@16" },
+            { "distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreenWithVisibleIndexToStartSearch:", (IMP)G1C_As_Distance, "d24@0:8Q16" },
+            { "topMostLayoutElements", (IMP)G1C_As_TopMost, "@16@0:8" },
+            { "cornerRadiiForIndex:", (IMP)G1C_As_Corner, "{UIRectCornerRadii=dddd}24@0:8Q16" },
+            { "titleAndIconOpacityForIndex:", (IMP)G1C_As_TitleIconOpacity, "d24@0:8Q16" },
+            { "_indexOfLeadingAppLayout", (IMP)G1C_As_LeadingIndex, "Q16@0:8" },
+            { "indexToScrollToAfterRemovingIndex:", (IMP)G1C_As_ScrollAfterRemoving, "Q24@0:8Q16" },
+            { "handleScrollEvent:", (IMP)G1C_As_HandleScroll, "@24@0:8@16" },
+            { "appLayoutsToCacheSnapshots", (IMP)G1C_As_CacheSnapshots, "@16@0:8" },
+            { "_appLayoutsToCacheSnapshotsWithVisiblePileRange:numberOfSnapshotsToCache:biasForward:", (IMP)G1C_As_SnapshotsWithRange, "@48@0:8{_NSRange=QQ}16Q32B40" },
         };
         gAsFloorCls = G1B_MakeClass("BP162AppSwitcherFloorContinuousExposeSwitcherModifier", gAsParent, iv, 1, m, sizeof m / sizeof m[0], NULL, NULL);
     }
@@ -3613,6 +3821,16 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     id eff = nil;
     long long mode = G1C_Resp(self, @selector(_effectiveEnvironmentMode)) ? G1B_SendLL0(self, @selector(_effectiveEnvironmentMode)) : 3;
     switch (t) {
+        case 1: {                                         // 16.2 0x1c7818d78 (same shape as 16.0 0x1c6371688): the home gesture root carries a NEW AppSwitcherCE; here that one lays out in piles like the floor
+            id multi = G1C_NewAppSwitcherFloorModifier();
+            Class hc = NSClassFromString(@"SBHomeGestureRootSwitcherModifier");
+            SEL hi = NSSelectorFromString(@"initWithStartingEnvironmentMode:multitaskingModifier:");
+            if (multi && hc && [hc instancesRespondToSelector:hi]) {
+                eff = ((id (*)(id, SEL, long long, id))objc_msgSend)([hc alloc], hi, mode, multi);
+                if (eff && [eff respondsToSelector:@selector(setEnsuresSelectedAppLayoutUsesAnchorPointSpacePinning:)]) G1C_SendVB(eff, @selector(setEnsuresSelectedAppLayoutUsesAnchorPointSpacePinning:), YES);
+            }
+            break;
+        }
         case 3:  eff = G1C_NewGridSwipeUpRoot(mode, G1C_NewAppSwitcherModifier()); break;
         case 7:  eff = G1C_NewDndRoot(3, G1C_RootCurrentLayout(self)); break;
         case 9:  eff = G1C_NewWindowDragRoot(mode, G1C_RootCurrentLayout(self) ?: G1C_HomeLayoutFor(self)); break;
@@ -3828,187 +4046,40 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 %end
 %end
 // ============================================================================================================
-// 6.8  switcher -> home (ToHome / HomeToGrid): the first group's cards linger on screen at the left edge (specs/AUDIT-HOMEFLASH-0.6.8.md, Round 2)
+// switcher -> home (ToHome / HomeToGrid): the Stage Manager cards leave the screen by HomeToGrid's own slide (specs/AUDIT-HOMEFLASH-0.6.8.md)
 // ============================================================================================================
-// The 16.0 SBHomeToGridSwitcherModifier (byte-identical frameForIndex: in 16.2: 0x1c5f64fe8 / 0x1c73dafc4) hides the Stage Manager cards when the transition is
-// "effectively home" (direction 0 and updating layout) ONLY by sliding every container left by d = [multi distanceToLeadingEdgeOfLeadingCardFromTrailingEdge-
-// OfScreenWithVisibleIndexToStartSearch:i] (and by opacity 0 for layouts outside HomeToGrid.visibleAppLayouts = multi.visibleAppLayouts).
-// Round 2 finding: the 16.0 answer (shared utility 0x1c61c375c: chain walk that starts at count-1 and stops at the first card missing from visibleAppLayouts) takes the lead
-// card from column 1 whenever column 0 (grid index 0/1, the most recent windows) is scrolled out of view, so d is one column too small and column 0 ends at x = 0..card width.
-// (a) G1C_Slide_Distance replaces the distance query of the Stage Manager switcher with the 16.2 arithmetic (0x1c781264c) on 16.0 primitives and additionally never lets a card
-//     stop short of the screen edge (max with the card's own right edge + gap; identical to 16.2 whenever the lead column is the right-most one). Off switch: Backport162.off.g1c_homeslide.
-// (b) the 6.8 opacity guard stays as a safety net, but now only hides a card whose slid frame still intersects the screen (so it is dormant when (a) works).
-//     Off switch: Backport162.off.g1c_homeflash.
-// Logging (opt-in debug): "GLITCH h2g ..." per answer for grid indices 0..3 (one line per change) incl. stock/new distance, "GLITCH slide ..." with the pile range.
-static IMP gH2GOrigOpacity;
-static IMP gSlideOrig;
-static NSString *gH2GLastSig[4][3];
-static BOOL G1C_H2G_HideActive(id self) {
-    if (!G1C_ON() || !BP_OnName("g1c_homeflash")) return NO;
-    if (!G1C_Resp(self, @selector(direction)) || G1B_SendLL0(self, @selector(direction)) != 0) return NO;      // 0 = switcher -> home
-    if (!G1B_SendB0(self, @selector(isEffectivelyHome))) return NO;
+// HomeToGrid itself is byte-identical in 16.0 and 16.2 for frameForIndex:/scaleForIndex:/opacity (0x1c5f64fe8 / 0x1c73dafc4): the cards are hidden ONLY by the slide
+// distance of the Stage Manager switcher copy (G1C_As_Distance, the exact 16.2 arithmetic on the pile cache) and by opacity 0 for layouts outside visibleAppLayouts.
+// The 6.8 opacity guard and the "never stop short of the screen edge" floor that were added before the real causes were found (the 16.0 distance maths and the
+// fly-in card, see below) are gone: 16.2 has neither.
+// New in 16.2 on HomeToGrid: frameForLayoutRole:inAppLayout:withBounds: 0x1c73db18c and scaleForLayoutRole:inAppLayout: 0x1c73db488, plain pass-throughs to the multitasking
+// modifier asked as a temporary child (the role frame inside a pile card comes from the pile cache of the switcher copy). 16.0 has neither (the chain's default answered).
+static CGRect G1C_H2G_RoleFrame(id self, SEL _cmd, long long role, id layout, CGRect bounds) {
     id multi = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
-    return G1C_Kind(multi, @"SBAppSwitcherContinuousExposeSwitcherModifier");
-}
-
-// ---- (a) the slide distance --------------------------------------------------------------------------------------------------------
-typedef struct { NSUInteger loc, len, pick, visCount; double pileEdge, ownEdge, gap, result; BOOL ok; } G1CSlideInfo;
-// Rendered rect of a container while ToHome forces the anchor to (0.5,0.5): the frame scaled about its centre (the 16.0 utility 0x1c61c375c measures exactly this:
-// UIRectGetCenter, CGRectApplyAffineTransform(MakeScale(s,s)), SBUnintegralizedRectCenteredAboutPoint); 16.2 pile boxes (build 0x1c7812acc) are the same kind of rect.
-static CGRect G1C_ScaledRect(CGRect f, double s) {
-    double w = f.size.width * s, h = f.size.height * s;
-    return CGRectMake(f.origin.x + f.size.width / 2.0 - w / 2.0, f.origin.y + f.size.height / 2.0 - h / 2.0, w, h);
-}
-static CGRect G1C_Slide_CardRect(id ce, NSUInteger li) {          // scroll offset applied (frameForIndex: 0x1c636a53c applies it)
-    SEL fs = @selector(frameForIndex:), ss = @selector(scaleForIndex:);
-    if (!G1C_Resp(ce, fs) || !G1C_Resp(ce, ss)) return CGRectNull;
-    CGRect f = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(ce, fs, (unsigned long long)li);
-    double s = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(ce, ss, (unsigned long long)li);
-    return G1C_ScaledRect(f, s);
-}
-static CGRect G1C_Slide_PileRect(id ce, NSArray *layouts, id ident) {   // 16.2 _boundingFrameForPileWithIdentifier:withScrollOffsetApplied:YES (union of the pile's card rects)
-    SEL byId = NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:");
-    NSArray *ls = G1C_Resp(ce, byId) ? G1C_AsArray(G1B_Send1(ce, byId, ident)) : @[];
-    CGRect u = CGRectNull;
-    for (id l in ls) {
-        NSUInteger li = [layouts indexOfObject:l];
-        if (li == NSNotFound) continue;
-        u = CGRectUnion(u, G1C_Slide_CardRect(ce, li));
-    }
-    return u;
-}
-// 16.2 -distanceToLeadingEdge...:  see AUDIT-HOMEFLASH-0.6.8.md R2.2. Returns NO when the data is not available (the stock answer is then used).
-static BOOL G1C_Slide_Compute(id ce, unsigned long long idx, G1CSlideInfo *out) {
-    G1CSlideInfo z; memset(&z, 0, sizeof z); z.loc = 0; z.len = 0; z.pick = NSNotFound;
-    SEL idsA = NSSelectorFromString(@"continuousExposeIdentifiers"), idsB = NSSelectorFromString(@"continuousExposeIdentifiersInSwitcher");
-    NSArray *layouts = G1C_Resp(ce, @selector(appLayouts)) ? G1C_AsArray(G1B_Send0(ce, @selector(appLayouts))) : @[];
-    NSArray *ids = G1C_Resp(ce, idsA) ? G1C_AsArray(G1B_Send0(ce, idsA)) : (G1C_Resp(ce, idsB) ? G1C_AsArray(G1B_Send0(ce, idsB)) : @[]);
-    NSUInteger n = ids.count;
-    if (!layouts.count || !n || !G1C_Resp(ce, @selector(switcherViewBounds))) return NO;
-    CGRect vb = G1C_SendRect0(ce, @selector(switcherViewBounds));
-    BOOL rtl = G1B_SendB0(ce, @selector(isRTLEnabled));
-    id st = G1B_Send0(ce, @selector(switcherSettings));
-    double shadow = G1B_Dbl0(st, NSSelectorFromString(@"switcherCardShadowRadius"));
-    CGRect visBounds = CGRectInset(vb, shadow * -2.8, shadow * -2.8);                           // _visibleSwitcherBoundsIncludingShadow 0x1c78133f4, const 0xc006666666666666
-    CGRect pile[n];
-    BOOL vis[n];
-    for (NSUInteger p = 0; p < n; p++) {
-        pile[p] = G1C_Slide_PileRect(ce, layouts, ids[p]);
-        vis[p] = !CGRectIsNull(pile[p]) && CGRectIntersectsRect(visBounds, pile[p]);
-        if (vis[p]) z.visCount++;
-    }
-    // _visiblePileRange 0x1c7810c9c: first visible index and first invisible index after it, tracked separately for even and odd piles (two rows)
-    const NSUInteger NF = NSNotFound;
-    NSUInteger firstEven = NF, firstOdd = NF, endEven = NF, endOdd = NF;
-    for (NSUInteger p = 0; p < n; p++) {
-        if (endEven != NF && endOdd != NF) break;
-        BOOL even = (p & 1) == 0;
-        NSUInteger visIdx = vis[p] ? p : NF, invIdx = vis[p] ? NF : p;
-        if (even && firstEven == NF) firstEven = visIdx;
-        if (!even && firstOdd == NF) firstOdd = visIdx;
-        if (even && firstEven != NF && endEven == NF) endEven = invIdx;
-        if (!even && firstOdd != NF && endOdd == NF) endOdd = invIdx;
-    }
-    NSUInteger loc = MIN(firstEven, firstOdd);
-    NSUInteger lastEven = (endEven == NF ? n : endEven) - 2, lastOdd = (endOdd == NF ? n : endOdd) - 2;
-    NSUInteger last = MAX(lastEven, lastOdd);
-    if (loc == NF || last == NF) { loc = 0; z.len = 0; } else { z.len = last - loc + 1; }
-    z.loc = loc;
-    NSUInteger pick = loc;
-    if (z.len >= 2 && loc + 1 < n && CGRectGetMaxX(pile[loc + 1]) > CGRectGetMaxX(pile[loc])) pick = loc + 1;
-    if (pick >= n || CGRectIsNull(pile[pick])) return NO;
-    z.pick = pick;
-    double edge = rtl ? vb.size.width - pile[pick].origin.x : CGRectGetMaxX(pile[pick]);
-    id ca = G1B_Send0(ce, @selector(chamoisLayoutAttributes));
-    double gap = G1B_Dbl0(ca, NSSelectorFromString(@"switcherHorizontalInterItemSpacing"));
-    if (gap <= 0.0) gap = G1B_Dbl0(ce, NSSelectorFromString(@"_horizontalSpacing"));                // 16.0 padding of the stock query (0x1c636c8a8)
-    z.pileEdge = edge; z.gap = gap;
-    double result = edge + gap;                                                                     // exact 16.2
-    if (idx < layouts.count) {                                                                      // safety (not in 16.2): never stop short of the screen edge
-        CGRect r = G1C_Slide_CardRect(ce, (NSUInteger)idx);
-        if (!CGRectIsNull(r)) {
-            z.ownEdge = rtl ? vb.size.width - r.origin.x : CGRectGetMaxX(r);
-            result = MAX(result, z.ownEdge + gap);
-        }
-    }
-    z.result = result; z.ok = YES;
-    if (out) *out = z;
-    return YES;
-}
-static double G1C_Slide_Distance(id self, SEL _cmd, unsigned long long idx) {
-    G1CSlideInfo info;
-    if (G1C_ON() && BP_OnName("g1c_homeslide") && G1C_Slide_Compute(self, idx, &info)) return info.result;
-    return gSlideOrig ? ((double (*)(id, SEL, unsigned long long))gSlideOrig)(self, _cmd, idx) : 0.0;
-}
-static void G1C_InstallHomeSlide(void) {
-    Class c = NSClassFromString(@"SBAppSwitcherContinuousExposeSwitcherModifier");
-    SEL s = NSSelectorFromString(@"distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreenWithVisibleIndexToStartSearch:");
-    Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m) return;
-    IMP old = class_replaceMethod(c, s, (IMP)G1C_Slide_Distance, method_getTypeEncoding(m));
-    gSlideOrig = old ?: method_getImplementation(m);
-}
-// the multi's distance for index idx, asked the way HomeToGrid asks (multi attached as temporary child); stock = bypass 6.8 (a)
-static double G1C_H2G_Distance(id self, unsigned long long idx, BOOL stock, G1CSlideInfo *info) {
-    SEL ds = NSSelectorFromString(@"distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreenWithVisibleIndexToStartSearch:");
-    id multi = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
-    if (!G1C_Resp(multi, ds) || ![self respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)]) return -1.0;
-    __block double d = -1.0;
+    __block CGRect r = CGRectZero;
+    if (!G1C_ON() || !multi || ![self respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)])
+        return G1B_HasSuper(class_getSuperclass(NSClassFromString(@"SBHomeToGridSwitcherModifier")), _cmd) ? G1B_SUPER(CGRect, class_getSuperclass(NSClassFromString(@"SBHomeToGridSwitcherModifier")), self, _cmd, (struct objc_super *, SEL, long long, id, CGRect), role, layout, bounds) : r;
     ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(self, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), multi, ^{
-        if (stock) d = gSlideOrig ? ((double (*)(id, SEL, unsigned long long))gSlideOrig)(multi, ds, idx) : -1.0;
-        else {
-            d = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(multi, ds, idx);
-            if (info) { G1CSlideInfo i2; memset(&i2, 0, sizeof i2); if (G1C_Slide_Compute(multi, idx, &i2)) *info = i2; }
-        }
+        r = ((CGRect (*)(id, SEL, long long, id, CGRect))objc_msgSend)(multi, _cmd, role, layout, bounds);
     });
-    return d;
+    return r;
 }
-// ---- (b) safety net: does the slid container of grid index idx still touch the screen? (HomeToGrid frame, scaled about its centre = rendered rect) ----
-static BOOL G1C_H2G_StillOnScreen(id self, unsigned long long idx) {
-    SEL fs = @selector(frameForIndex:), ss = @selector(scaleForIndex:), bs = @selector(switcherViewBounds);
-    if (!G1C_Resp(self, fs) || !G1C_Resp(self, ss) || !G1C_Resp(self, bs)) return YES;           // cannot tell: hide (the original 6.8 behaviour)
-    CGRect f = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, fs, idx);
-    double sc = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, ss, idx);
-    CGRect bounds = G1C_SendRect0(self, bs);
-    return CGRectIntersectsRect(G1C_ScaledRect(f, sc), bounds);
+static double G1C_H2G_RoleScale(id self, SEL _cmd, long long role, id layout) {
+    id multi = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
+    __block double r = 1.0;
+    if (!G1C_ON() || !multi || ![self respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)])
+        return G1B_HasSuper(class_getSuperclass(NSClassFromString(@"SBHomeToGridSwitcherModifier")), _cmd) ? G1B_SUPER(double, class_getSuperclass(NSClassFromString(@"SBHomeToGridSwitcherModifier")), self, _cmd, (struct objc_super *, SEL, long long, id), role, layout) : r;
+    ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(self, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), multi, ^{
+        r = ((double (*)(id, SEL, long long, id))objc_msgSend)(multi, _cmd, role, layout);
+    });
+    return r;
 }
-static void G1C_H2G_Log(id self, long long role, id layout, unsigned long long idx, double stock, double out) {
-    if (idx > 3 || !BP_LogEnabled()) return;
-    long long dir = G1B_SendLL0(self, @selector(direction));
-    BOOL eff = G1B_SendB0(self, @selector(isEffectivelyHome)), prep = G1B_SendB0(self, @selector(isPreparingLayout)), upd = G1B_SendB0(self, @selector(isUpdatingLayout));
-    SEL fs = @selector(frameForIndex:), ss = @selector(scaleForIndex:), vs = @selector(visibleAppLayouts);
-    CGRect f = G1C_Resp(self, fs) ? ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, fs, idx) : CGRectZero;
-    double sc = G1C_Resp(self, ss) ? ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, ss, idx) : -1.0;
-    id vis = G1C_Resp(self, vs) ? G1B_Send0(self, vs) : nil;
-    NSUInteger visN = [vis respondsToSelector:@selector(count)] ? (NSUInteger)((unsigned long long (*)(id, SEL))objc_msgSend)(vis, @selector(count)) : 0;
-    BOOL inVis = layout && [vis respondsToSelector:@selector(containsObject:)] && ((BOOL (*)(id, SEL, id))objc_msgSend)(vis, @selector(containsObject:), layout);
-    G1CSlideInfo si; memset(&si, 0, sizeof si);
-    double dist = G1C_H2G_Distance(self, idx, NO, &si), distStock = G1C_H2G_Distance(self, idx, YES, NULL);
-    CGRect r = G1C_ScaledRect(f, sc);
-    NSString *sig = [NSString stringWithFormat:@"%lld %d%d%d %.2f>%.2f %.0f,%.0f %.0fx%.0f s%.3f rendered[%.0f..%.0f] v%d/%lu d%.1f(stock %.1f) pile loc%lu len%lu pick%lu vis%lu edge%.1f own%.1f gap%.1f", dir, eff, prep, upd, stock, out, f.origin.x, f.origin.y, f.size.width, f.size.height, sc,
-                     r.origin.x, CGRectGetMaxX(r), inVis, (unsigned long)visN, dist, distStock, (unsigned long)si.loc, (unsigned long)si.len, (unsigned long)(si.pick == NSNotFound ? 999 : si.pick), (unsigned long)si.visCount, si.pileEdge, si.ownEdge, si.gap];
-    NSUInteger ri = role >= 0 && role < 3 ? (NSUInteger)role : 2;
-    @synchronized(@"BP162.h2g") {
-        if ([gH2GLastSig[idx][ri] isEqualToString:sig]) return;
-        gH2GLastSig[idx][ri] = sig;
-    }
-    BP_Log(@"GLITCH h2g idx=%llu role=%lld layout=%@ dir/eff/prep/upd/opacity(stock>out)/frame/scale/rendered x range/inVisible(count)/distance(new, stock)/16.2 pile range: %@", idx, role, G1C_DbgLayout(layout), sig);
-}
-static double G1C_H2G_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long idx) {
-    double o = gH2GOrigOpacity ? ((double (*)(id, SEL, long long, id, unsigned long long))gH2GOrigOpacity)(self, _cmd, role, layout, idx) : 1.0;
-    double out = (o > 0.0 && G1C_H2G_HideActive(self) && G1C_H2G_StillOnScreen(self, idx)) ? 0.0 : o;
-    G1C_H2G_Log(self, role, layout, idx, o, out);
-    return out;
-}
-static void G1C_InstallHomeFlashGuard(void) {
+static void G1C_InstallHomeToGrid(void) {
     Class c = NSClassFromString(@"SBHomeToGridSwitcherModifier");
-    SEL s = @selector(opacityForLayoutRole:inAppLayout:atIndex:);
-    Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m) return;
-    const char *types = method_getTypeEncoding(m);
-    IMP old = class_replaceMethod(c, s, (IMP)G1C_H2G_Opacity, types);
-    gH2GOrigOpacity = old ?: method_getImplementation(m);        // old is NULL when the method was inherited: the pre-replace implementation is then the inherited one
-    G1C_InstallHomeSlide();
+    if (!c) return;
+    SEL fr = @selector(frameForLayoutRole:inAppLayout:withBounds:), sc = @selector(scaleForLayoutRole:inAppLayout:);
+    class_addMethod(c, fr, (IMP)G1C_H2G_RoleFrame, "{CGRect={CGPoint=dd}{CGSize=dd}}64@0:8q16@24{CGRect={CGPoint=dd}{CGSize=dd}}32");      // no-op when the class defines it itself
+    class_addMethod(c, sc, (IMP)G1C_H2G_RoleScale, "d32@0:8q16@24");
 }
 // ============================================================================================================
 // 7.0  home gesture that ends on the home screen: the 16.0 "fly-in" card of SBHomeGestureToHomeSwitcherModifier
@@ -4083,7 +4154,7 @@ void G1C_Setup(void) {
     G1C_InstallEventPredicates();
     G1C_BuildGridGesture();
     G1C_BuildCEToHome();
-    G1C_InstallHomeFlashGuard();
+    G1C_InstallHomeToGrid();
     G1C_InstallFlyInFix();
     G1C_BuildGridRoot();
     G1C_BuildTransactions();

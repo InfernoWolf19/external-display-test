@@ -40,6 +40,8 @@
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 @interface SBDisplayAssertionPreferences : NSObject @end
+@interface SBMirroredDisplayController : NSObject @end
+@interface SBDisplayAssertion : NSObject @end
 @interface SBSystemShellExtendedDisplayControllerPolicy : NSObject @end
 @interface SBNonInteractiveDisplayControllerPolicy : NSObject @end
 @interface SBSceneHostingDisplayController : NSObject @end
@@ -217,11 +219,13 @@ static const void *kG4BKeyD = &kG4BKeyD;
 @end
 
 // ================================================================================================================
-// 1. CLONE MIRRORING                                                                          [UNSURE, see md 1.7]
+// 1. CLONE MIRRORING                                                       [PORTED; needs the Backport162BBD package in backboardd]
 // ================================================================================================================
 // 16.2 client function BKSDisplayServicesSetMainDisplayCloneMirroringModeForDestinationDisplay(uuid, mode), re-implemented
-// (md 1.1) with a transport that speaks to the NEW backboardd tweak (group4b-backboardd.x) and falls back to the 16.0 BKS
-// global call.  Tokens are G4BCloneToken objects (stand-in for the BSSimpleAssertion of 16.2).
+// (md 1.1) with a transport that speaks to the Backport162BBD tweak in backboardd (the 16.0 daemon has no such routine; the
+// tweak adds the 16.2 per-destination request cache, see Backport162BBD/Tweak.x).  There is no fallback to the 16.0 global
+// BKSDisplayServicesSetCloneMirroringMode: it is per process, not per display.  Tokens are G4BCloneToken objects (stand-in
+// for the BSSimpleAssertion of 16.2).
 
 @interface G4BCloneRequest : NSObject
 @property (nonatomic) unsigned long long mode;
@@ -234,18 +238,21 @@ static const void *kG4BKeyD = &kG4BKeyD;
 - (instancetype)initWithRequest:(G4BCloneRequest *)r;
 @end
 
+static __thread int tG4BMirroredUpdate;                                                  // inside -[SBMirroredDisplayController _updateDisplayAssertion]
 static NSMutableDictionary<NSString *, NSMutableArray<G4BCloneRequest *> *> *gG4BReqs;   // 16.2: static dictionary at 0x1da520000+0x9c0
 static NSObject *gG4BReqLock;
-static int gG4BDaemon = -1;                                                              // -1 unknown, 1 tweak answered, 0 no tweak
-static unsigned long long gG4BLegacyMode;                                                // last mode sent through the legacy global API
+static dispatch_queue_t gG4BSendQ;                                                       // serial: requests reach backboardd in order, off the main thread
 
 extern mach_port_t bootstrap_port;
 extern kern_return_t bootstrap_look_up(mach_port_t bp, const char *service_name, mach_port_t *sp);
 
+// Ids of the two routines the Backport162BBD tweak adds to the BackBoard display service.  16.2 uses 0x5b9174 / 0x5b9175 for
+// them, but 16.0's daemon already uses those ids for other routines (SetVirtualDisplayClientPID, DisplayIsTethered).
 #define G4B_MSG_SET    0x5b9fa0u
 #define G4B_MSG_REMOVE 0x5b9fa1u
 
-// returns 1 = daemon tweak handled it, 0 = daemon answered with an error / does not know the id / timeout, -1 = port unavailable
+// One routine call to backboardd (16.2: _BKSDisplaySetCloneMirroringModeForDestinationDisplay / ...Remove...).
+// Returns the MIG return code, or -1 if the request never got a MIG reply (no port, or the daemon does not serve the id).
 static int G4B_SendCloneMsg(NSString *uuid, unsigned mode, BOOL remove) {
     const char *u = uuid.UTF8String;
     if (!u) return -1;
@@ -279,44 +286,35 @@ static int G4B_SendCloneMsg(NSString *uuid, unsigned mode, BOOL remove) {
     if (kr != KERN_SUCCESS) {
         if (kr == MACH_RCV_TIMED_OUT || kr == MACH_SEND_TIMED_OUT) mig_dealloc_reply_port(rp);
         BP_Log(@"clonemirror: mach_msg kr=0x%x", kr);
-        return 0;
+        return -1;
     }
-    return (rep.Head.msgh_id == req.Head.msgh_id + 100 && rep.RetCode == KERN_SUCCESS) ? 1 : 0;
+    if (rep.Head.msgh_id != req.Head.msgh_id + 100) return -1;      // a send-once notification (0x46): backboardd destroyed the request unanswered
+    return rep.RetCode;
 }
 
-// legacy 16.0 global API; semantic = "disable cloning of EVERY external display"
-static void G4B_LegacyGlobal(unsigned long long mode) {
-    typedef void (*Fn)(unsigned long long);
-    static Fn fn;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ fn = (Fn)dlsym(RTLD_DEFAULT, "BKSDisplayServicesSetCloneMirroringMode"); });
-    if (!fn || mode == gG4BLegacyMode) return;
-    gG4BLegacyMode = mode;
-    fn(mode);
-}
-static void G4B_LegacyRecompute(void) {                    // caller holds gG4BReqLock
-    unsigned long long m = 0;
-    for (NSString *k in gG4BReqs) {
-        G4BCloneRequest *first = gG4BReqs[k].firstObject;
-        if (first && first.mode == 2) { m = 2; break; }
-    }
-    G4B_LegacyGlobal(m);
-}
+// Transport of the 16.2 client: the request goes to the daemon, nothing else.  A daemon that does not serve the routines (the
+// Backport162BBD package is not installed or does not match this build) means the per-destination mode simply cannot be
+// applied; the 16.0 global BKSDisplayServicesSetCloneMirroringMode is NOT a stand-in (it is per process, not per display, and
+// would block AirPlay mirroring of every display).
 static void G4B_Transport(NSString *uuid, unsigned long long mode, BOOL remove) {   // caller holds gG4BReqLock
-    if (gG4BDaemon != 0) {
-        int r = G4B_SendCloneMsg(uuid, (unsigned)mode, remove);
-        if (r == 1) { gG4BDaemon = 1; BP_Log(@"clonemirror: daemon %@ %@ mode %llu", remove ? @"remove" : @"set", uuid, mode); return; }
-        if (r == 0 && gG4BDaemon == -1) gG4BDaemon = 0;          // first failure with a reachable port: no tweak in backboardd
-        if (r == -1) return;                                      // service port not reachable now: do nothing
-    }
-    G4B_LegacyRecompute();
+    if (!remove && !G4B_On("clonemirror")) return;                // a switch turned off later must still be able to release what was requested
+    NSString *u = [uuid copy];
+    dispatch_async(gG4BSendQ, ^{
+        int r = G4B_SendCloneMsg(u, (unsigned)mode, remove);
+        if (r == 0) BP_Log(@"clonemirror: backboardd %@ %@ mode %llu", remove ? @"removed" : @"set", u, mode);
+        else if (r < 0) BP_Log(@"clonemirror: backboardd did not answer the %@ request for %@ (Backport162BBD missing or not matching this build?)", remove ? @"remove" : @"set", u);
+        else BP_Log(@"clonemirror: backboardd refused the %@ request for %@ (MIG code %d)", remove ? @"remove" : @"set", u, r);
+    });
 }
 
 // 16.2 BKSDisplayServicesSetMainDisplayCloneMirroringModeForDestinationDisplay, faithful port.
 static id<G4BInvalidatable> G4B_SetCloneModeForDestination(NSString *uuid, unsigned long long mode) {
     if (![uuid isKindOfClass:[NSString class]] || !uuid.length) return nil;      // 16.2 asserts here (BKSDisplayServices.m:0x145)
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ gG4BReqs = [NSMutableDictionary dictionary]; gG4BReqLock = [NSObject new]; });
+    dispatch_once(&once, ^{
+        gG4BReqs = [NSMutableDictionary dictionary]; gG4BReqLock = [NSObject new];
+        gG4BSendQ = dispatch_queue_create("com.infernowolf19.backport162.clonemirror", DISPATCH_QUEUE_SERIAL);
+    });
     G4BCloneRequest *req = [G4BCloneRequest new];
     req.uuid = uuid;
     req.mode = mode;
@@ -398,6 +396,25 @@ static void G4B_InvalidateCloneRequest(G4BCloneRequest *req) {   // block 0x18e4
 // 16.2 0x1c78e9808: p.cloneMirroringMode = 1 (Default)
 %new
 - (unsigned long long)bp_cloneMirroringMode { return 1; }
+%end
+
+%hook SBMirroredDisplayController
+// 16.2 -_updateDisplayAssertion (0x1c74664a0) also sets cloneMirroringMode = 1 (Default) on its preferences (0x1c7466510); 16.0's
+// body (0x1c5feb828) builds the same preferences without it.  The preferences are created inside the method, so the mark is
+// put on the SBDisplayAssertion.updateWithPreferences: call it ends with (hook below).
+- (void)_updateDisplayAssertion {
+    tG4BMirroredUpdate++;
+    %orig;
+    tG4BMirroredUpdate--;
+}
+%end
+
+%hook SBDisplayAssertion
+- (void)updateWithPreferences:(id)prefs {
+    if (tG4BMirroredUpdate > 0 && G4B_On("clonemirror") && [prefs respondsToSelector:@selector(setCloneMirroringMode:)])
+        ((void (*)(id, SEL, unsigned long long))objc_msgSend)(prefs, @selector(setCloneMirroringMode:), 1);
+    %orig;
+}
 %end
 
 %hook SBSceneHostingDisplayController

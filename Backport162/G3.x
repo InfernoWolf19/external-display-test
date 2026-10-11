@@ -56,7 +56,6 @@ static BOOL BP_G3_On(const char *name) { return BP_OnName(name); }     // INTEGR
 - (long long)currentInterfaceOrientation;                       // SBDeviceApplicationSceneHandle
 - (long long)_interfaceOrientationFromUserResizing;             // %new below
 - (void)_setInterfaceOrientationFromUserResizing:(long long)o;  // %new below
-- (void)_updateSceneHostingInfoForSnapshottingWithView:(id)v;   // SBDeviceApplicationSceneHandle (16.0)
 - (id)sceneHandle;                                              // SBDeviceApplicationSceneView
 // INTEGRATION: selectors the draft sends to its own %new methods / to private classes
 - (void)_setClassicAppPhoneOnPadPrefersLandscape:(BOOL)v;
@@ -89,7 +88,7 @@ static id BP_G3_Ivar(id obj, const char *name) {
 }
 
 // Associated-object slots.
-static char kBPG3HostView;
+static char kBPG3HostView, kBPG3Inspector;
 @interface BPG3WeakBox : NSObject @property (nonatomic, weak) id obj; @end
 @implementation BPG3WeakBox @end
 static void BP_G3_SetWeak(id owner, const void *key, id obj) {
@@ -118,6 +117,32 @@ static void BP_G3_StoreSet(id handle, NSString *key, NSNumber *val) {
     id store = [handle _sceneDataStoreCreatingIfNecessary:YES];
     if ([store respondsToSelector:@selector(setObject:forKey:)]) [store setObject:val forKey:key];
 }
+
+static id BP_G3_SpringBoardApp(void) {
+    Class c = NSClassFromString(@"UIApplication");
+    return [c respondsToSelector:@selector(sharedApplication)] ? [c sharedApplication] : nil;
+}
+@interface NSObject (BPG3Launch)
+- (long long)interfaceOrientationForCurrentDeviceOrientation:(BOOL)b;
+- (long long)homeScreenRotationStyle;
+- (long long)rawDeviceOrientationIgnoringOrientationLocks;
+- (BOOL)builtOnOrAfterSDKVersion:(NSString *)v;
+- (BOOL)_currentClassicModeAllowsLaunchingToAnySupportedOrientation;
+- (BOOL)_mainSceneSupportsInterfaceOrientation:(long long)o;
+- (long long)defaultInterfaceOrientation;
+- (long long)_classicPhoneOnPadActivationOrientationForOrientation:(long long)o;
+- (BOOL)classicAppPhoneAppRunningOnPad;
+- (BOOL)isUserLocked;
++ (id)sharedInstance;
+- (unsigned long long)supportedInterfaceOrientations;
+- (long long)_defaultClassicMode;
+- (BOOL)wantsLegacyFullscreenInterfaceOrientationBehaviors;
+- (BOOL)supportsChamoisSceneResizing;
+- (id)uiPresentationManager;
+- (void)modifyDefaultPresentationContext:(id)block;
+- (void)setPresentedLayerTypes:(unsigned long long)t;
+@end
+
 
 %group G3_Handle
 
@@ -170,19 +195,80 @@ static void BP_G3_StoreSet(id handle, NSString *key, NSNumber *val) {
     [self _setSupportedInterfaceOrientationsFromSceneOrientationRequestSetup:0];
 }
 
-// ---- orientation selection (section 1.2). PARTIAL: inert until something calls _setInterfaceOrientationFromUserResizing: with a
-// nonzero value (the switcher event-response chain is a different group). With the value 0 these are exactly the 16.0 methods.
+// ---- orientation selection (section 1.2).  The user-resize value is set by the G3B chain (g3b_orient / g3b_guide) and by G1B/G1C responses.
 
-// 16.0 0x1c5e73fe0 / 16.2 0x1c72e6e94: classic (non-Medusa) apps launch into the user-resize orientation.
+// 16.0 0x1c5e73fe0 / 16.2 0x1c72e6e94.  FULL 16.2 body (not %orig + a flag): 16.2 dropped the 16.0 "Stage Manager + phone app on pad -> portrait" branch for
+// Medusa-capable apps and gives classic apps the user-resize orientation first.  Everything else is the 16.0 algorithm, restated here.
 - (long long)_launchingInterfaceOrientationForOrientation:(long long)o {
-    if (BP_G3_On("g3handle")) {
-        id app = [self application];
-        if ([app respondsToSelector:@selector(isMedusaCapable)] && ![app isMedusaCapable] && [self currentInterfaceOrientation] == 0) {
-            long long r = [self _interfaceOrientationFromUserResizing];
-            if (r != 0) return r;
+    if (!BP_G3_On("g3handle") || [self currentInterfaceOrientation] != 0) {       // a running app: 16.0 and 16.2 both raise the same NSAssert, keep it
+        return %orig;
+    }
+    id app = [self application];
+    id sbApp = BP_G3_SpringBoardApp();
+    if (o == 0) o = [sbApp interfaceOrientationForCurrentDeviceOrientation:YES];
+    BOOL useO = NO;
+    if ([app isMedusaCapable]) {
+        useO = YES;
+    } else {
+        BOOL rotStyle = [sbApp homeScreenRotationStyle] != 0;
+        BOOL sdkOK = rotStyle || [[app info] builtOnOrAfterSDKVersion:@"8.0"];
+        BOOL anyOK = [self _currentClassicModeAllowsLaunchingToAnySupportedOrientation];
+        BOOL supports = [self _mainSceneSupportsInterfaceOrientation:o];
+        long long r = [self _interfaceOrientationFromUserResizing];                // NEW in 16.2
+        if (r != 0) return r;
+        if (sdkOK && anyOK) {
+            if (supports) {
+                useO = YES;
+            } else {
+                Class lockC = NSClassFromString(@"SBOrientationLockManager");
+                if ([[lockC sharedInstance] isUserLocked]) {
+                    long long raw = [sbApp rawDeviceOrientationIgnoringOrientationLocks];
+                    if (raw >= 1 && raw <= 4 && raw != o && [self _mainSceneSupportsInterfaceOrientation:raw]) return raw;
+                }
+            }
+        } else if ([app classicAppPhoneAppRunningOnPad]) {
+            o = [self _classicPhoneOnPadActivationOrientationForOrientation:o];
+            useO = YES;
         }
     }
-    return %orig;
+    if (useO && o != 0) return o;
+    o = [self defaultInterfaceOrientation];
+    if (o == 0) { NSLog(@"No fallback orientation for '%@'!", [self sceneIdentifier]); o = 1; }
+    return o;
+}
+// 16.0 0x1c5e37cc0 / 16.2 0x1c72aa11c.  FULL 16.2 body: Medusa-capable apps always support all four orientations (16.0 narrowed this for phone apps in
+// Stage Manager and unioned the legacy-fullscreen / Monarch masks for classic apps).
+- (unsigned long long)_mainSceneSupportedInterfaceOrientations {
+    if (!BP_G3_On("g3handle")) return %orig;
+    id app = [self application];
+    unsigned long long mask = [[app info] supportedInterfaceOrientations];
+    if ([app isMedusaCapable]) return 0x1e;
+    id scene = [self sceneIfExists];
+    if (scene) mask = [[scene uiClientSettings] supportedInterfaceOrientations];
+    return mask;
+}
+// 16.0 0x1c62253b4 / 16.2 0x1c76b5e24 and 16.0 0x1c6225328 / 16.2 0x1c76b5dac: with no scene yet 16.2 derives mode/events from the classic mode only
+// (16.0 also consulted wantsLegacyFullscreenInterfaceOrientationBehaviors and _SBPostModernRotationEnabled).  _SBApplicationClassicModeIsClassic(m) = (m + 1) > 1.
+- (long long)_interfaceOrientationMode {
+    if (!BP_G3_On("g3handle") || [self sceneIfExists]) return %orig;
+    unsigned long long m = (unsigned long long)[(id)[self application] _defaultClassicMode];
+    return (m + 1 > 1) ? 1 : 2;
+}
+- (BOOL)wantsDeviceOrientationEventsEnabled {
+    if (!BP_G3_On("g3handle") || [self sceneIfExists]) return %orig;
+    unsigned long long m = (unsigned long long)[(id)[self application] _defaultClassicMode];
+    return m + 1 > 1;
+}
+// 16.0 0x1c5e3df60 / 16.2 0x1c72b0354: the early-out is "app cannot be resized in Stage Manager" (16.0: "app is classic").
+- (void)setKeyboardContextMaskStyle:(unsigned long long)style {
+    if (!BP_G3_On("g3handle")) {
+        %orig;
+        return;
+    }
+    if (![[self application] supportsChamoisSceneResizing] && style == 2) return;
+    Ivar iv = class_getInstanceVariable([self class], "_keyboardLayerMaskStyle");
+    if (iv) *(unsigned long long *)((char *)(__bridge void *)self + ivar_getOffset(iv)) = style;
+    [[[self sceneIfExists] uiPresentationManager] modifyDefaultPresentationContext:^(id ctx) { [ctx setPresentedLayerTypes:style]; }];   // 16.2 block 0x1c76b60f0
 }
 // 16.0 0x1c5e58d94 / 16.2 0x1c72cb524: with a user-resize orientation set, an already running scene keeps its current orientation.
 - (long long)activationInterfaceOrientationForOrientation:(long long)o {
@@ -213,18 +299,28 @@ static void BP_G3_StoreSet(id handle, NSString *key, NSNumber *val) {
     }
 }
 
-// 16.2 0x1c72b9430: when the app's supported orientations no longer contain the user-resize orientation, forget it.
-// PARTIAL: re-implemented as a post-%orig check instead of a UIApplicationSceneClientSettingsDiffInspector observer (same effect, no inspector).
+// 16.0 0x1c5e473d0 / 16.2 0x1c72b9430: 16.2 drives the client-settings handling from a UIApplicationSceneClientSettingsDiffInspector kept on the handle
+// (ivar _clientSettingsInspector, not available on 16.0: associated object).  Its supportedInterfaceOrientations observer (block type v16@?0^v8) forgets the
+// user-resize orientation when the app stops supporting it.  The visibleMiniAlertCount observer of 16.2 does what 16.0's own body already does (%orig).
 - (void)_didUpdateClientSettingsWithDiff:(id)diff transitionContext:(id)ctx {
     %orig;
-    if (!BP_G3_On("g3handle") || ![NSThread isMainThread]) return;
-    long long r = [self _interfaceOrientationFromUserResizing];
-    if (r == 0) return;
-    id scene = [self sceneIfExists];
-    id cs = [scene respondsToSelector:@selector(uiClientSettings)] ? [scene uiClientSettings] : nil;
-    if (![cs respondsToSelector:@selector(supportedInterfaceOrientations)]) return;
-    unsigned long long sup = [(id)cs supportedInterfaceOrientations];
-    if (!(sup & (1ull << r))) [self _setInterfaceOrientationFromUserResizing:0];         // _SBFInterfaceOrientationMaskContainsInterfaceOrientation
+    if (!BP_G3_On("g3handle")) return;
+    Class inspC = NSClassFromString(@"UIApplicationSceneClientSettingsDiffInspector");
+    if (!inspC || ![inspC instancesRespondToSelector:@selector(observeSupportedInterfaceOrientationsWithBlock:)]) return;
+    id insp = objc_getAssociatedObject(self, &kBPG3Inspector);
+    if (!insp) {
+        insp = [inspC new];
+        __weak id w = self;
+        [insp observeSupportedInterfaceOrientationsWithBlock:^(void *unused) {
+            id me = w;
+            if (!me) return;
+            id scene = [me sceneIfExists];
+            unsigned long long sup = [[scene uiClientSettings] supportedInterfaceOrientations];
+            if (!(sup & (1ull << [me _interfaceOrientationFromUserResizing]))) [me _setInterfaceOrientationFromUserResizing:0];   // _SBFInterfaceOrientationMaskContainsInterfaceOrientation
+        }];
+        objc_setAssociatedObject(self, &kBPG3Inspector, insp, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    ((void (*)(id, SEL, id, void *))objc_msgSend)(insp, NSSelectorFromString(@"inspectDiff:withContext:"), diff, (__bridge void *)ctx);
 }
 
 %end // SBDeviceApplicationSceneHandle
@@ -243,29 +339,153 @@ static void BP_G3_StoreSet(id handle, NSString *key, NSNumber *val) {
 %end // G3_Handle
 
 // ================================================================================================ SECTION 1.6: snapshot hosting info
-// 16.0 sets the scene's hostContextIdentifierForSnapshotting / renderId once, in -_configureSceneLiveHostView:. 16.2 refreshes it from
-// -[SBDeviceApplicationSceneView didMoveToWindow], so moving a scene view to another window (other display, other portal) no longer
-// leaves a stale context id. PARTIAL: single hosting value instead of 16.2's assertion stack (the stack only matters when two
-// views host one scene at once and the older one goes away).
+// 16.0 sets the scene's hostContextIdentifierForSnapshotting / renderId once, in -_configureSceneLiveHostView: (via the handle's
+// -_updateSceneHostingInfoForSnapshottingWithView: 0x1c6226eb4, which reads [[host _window] _contextId]).  16.2 replaces that by an ASSERTION STACK on the
+// handle (_snapshottingInfoAssertions / _currentSnapshottingInfoAssertion) and refreshes it from -[SBDeviceApplicationSceneView didMoveToWindow]:
+//   handle  -_sceneHostingInfoForSnapshottingAssertionWithView:  0x1c76b7acc  (nil when the view or its window is nil; ctx = [[view window] _contextId],
+//                                                                   render id = CALayerGetRenderId([view layer]); name "%@-%lu-%lu"; adds it to the stack)
+//   handle  -_addSnapshottingInfoAssertion:                       0x1c76b7ce8  (append, current = a, update(force:YES))
+//   handle  -_removeSnapshottingInfoAssertion:                    0x1c76b7d90  (remove; only if it was current: current = lastObject, update(force:NO))
+//   handle  -_updateSceneHostingInfoForSnapshottingWithAssertion:forceUpdate: 0x1c76b7964 (scene valid; write ctx/render id unless unchanged and !force)
+//   view    -_configureSceneLiveHostView: 0x1c773ef38  : invalidate the old assertion, assertion = [handle ...WithView:host]
+//   view    -_invalidateSceneLiveHostView: 0x1c773f00c : host = nil, [assertion invalidate]
+//   view    -didMoveToWindow 0x1c773d7c8              : if host: new = [handle ...WithView:host]; old = assertion; assertion = new; [old invalidate]
+// The handle's 16.0 method is replaced by the above (it is only called from the two view methods), the whole 16.2 stack is implemented.
+// The 16.2 value of "contextId 0 when the last hosting view left its window" is reproduced: removing the current assertion with an empty stack
+// updates the settings with a nil assertion (ctx 0, render id 0).
+
+@interface BPG3SnapAssertion : NSObject
+@property (nonatomic) unsigned int contextId;
+@property (nonatomic) unsigned long long renderId;
+@property (nonatomic, copy) NSString *name;
+@property (nonatomic, copy) void (^invalidationBlock)(BPG3SnapAssertion *);
+- (void)invalidate;
+@end
+@implementation BPG3SnapAssertion {
+    BOOL _invalidated;
+}
+- (void)invalidate {                       // BSSimpleAssertion semantics: the invalidation block runs once
+    if (_invalidated) return;
+    _invalidated = YES;
+    void (^b)(BPG3SnapAssertion *) = _invalidationBlock;
+    _invalidationBlock = nil;
+    if (b) b(self);
+}
+@end
+
+static char kBPG3SnapStack, kBPG3SnapCurrent, kBPG3SnapViewAssertion;
+
+@interface NSObject (BPG3Snapshot)
+- (id)sceneIdentifier;
+- (id)uiSettings;
+- (BOOL)isValid;
+- (unsigned int)_contextId;
+- (void)updateUISettingsWithBlock:(id)block;
+- (unsigned int)hostContextIdentifierForSnapshotting;
+- (unsigned long long)scenePresenterRenderIdentifierForSnapshotting;
+- (void)setHostContextIdentifierForSnapshotting:(unsigned int)c;
+- (void)setScenePresenterRenderIdentifierForSnapshotting:(unsigned long long)r;
+- (id)_sceneHostingInfoForSnapshottingAssertionWithView:(id)v;
+- (void)_addSnapshottingInfoAssertion:(id)a;
+- (void)_removeSnapshottingInfoAssertion:(id)a;
+- (void)_updateSceneHostingInfoForSnapshottingWithAssertion:(id)a forceUpdate:(BOOL)f;
+@end
+
+static unsigned long long BP_G3_LayerRenderId(id layer) {
+    static unsigned long long (*fn)(id); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (unsigned long long (*)(id))dlsym(RTLD_DEFAULT, "CALayerGetRenderId"); });
+    if (!fn) { BP_Log(@"[g3snapshot] CALayerGetRenderId not found, render id 0"); return 0; }
+    return fn(layer);
+}
+
 %group G3_Snapshot
+%hook SBDeviceApplicationSceneHandle
+
+// 16.0 0x1c6226eb4.  Replaced by the 16.2 assertion stack (the view hooks below drive it); only called from the view's configure/invalidate.
+- (void)_updateSceneHostingInfoForSnapshottingWithView:(id)v {
+    if (!BP_G3_On("g3snapshot")) {
+        %orig;
+        return;
+    }
+}
+
+%new
+- (id)_sceneHostingInfoForSnapshottingAssertionWithView:(id)view {          // 16.2 0x1c76b7acc
+    id w = [view respondsToSelector:@selector(window)] ? [view window] : nil;
+    if (!view || !w) return nil;
+    unsigned int ctx = [w _contextId];
+    unsigned long long rid = BP_G3_LayerRenderId([view layer]);
+    NSString *name = [NSString stringWithFormat:@"%@-%lu-%lu", [self sceneIdentifier], (unsigned long)ctx, (unsigned long)rid];
+    __weak id ws = self;
+    BPG3SnapAssertion *a = [BPG3SnapAssertion new];
+    a.name = name; a.contextId = ctx; a.renderId = rid;
+    a.invalidationBlock = ^(BPG3SnapAssertion *x) { id me = ws; if (me) [me _removeSnapshottingInfoAssertion:x]; };
+    [self _addSnapshottingInfoAssertion:a];
+    return a;
+}
+%new
+- (void)_addSnapshottingInfoAssertion:(id)a {                                  // 16.2 0x1c76b7ce8
+    NSMutableArray *stack = objc_getAssociatedObject(self, &kBPG3SnapStack);
+    if (!stack) { stack = [NSMutableArray array]; objc_setAssociatedObject(self, &kBPG3SnapStack, stack, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    [stack addObject:a];
+    BP_G3_SetWeak(self, &kBPG3SnapCurrent, a);
+    [self _updateSceneHostingInfoForSnapshottingWithAssertion:a forceUpdate:YES];
+}
+%new
+- (void)_removeSnapshottingInfoAssertion:(id)a {                               // 16.2 0x1c76b7d90
+    NSMutableArray *stack = objc_getAssociatedObject(self, &kBPG3SnapStack);
+    [stack removeObject:a];
+    id cur = BP_G3_GetWeak(self, &kBPG3SnapCurrent);
+    if (cur != a) return;
+    id last = [stack lastObject];
+    BP_G3_SetWeak(self, &kBPG3SnapCurrent, last);
+    [self _updateSceneHostingInfoForSnapshottingWithAssertion:last forceUpdate:NO];
+}
+%new
+- (void)_updateSceneHostingInfoForSnapshottingWithAssertion:(id)a forceUpdate:(BOOL)force {   // 16.2 0x1c76b7964
+    id scene = [self respondsToSelector:@selector(sceneIfExists)] ? [self sceneIfExists] : nil;
+    if (![scene isValid]) return;
+    unsigned int ctx = a ? [(BPG3SnapAssertion *)a contextId] : 0;
+    unsigned long long rid = a ? [(BPG3SnapAssertion *)a renderId] : 0;
+    id ui = [scene uiSettings];
+    if (!force && [ui hostContextIdentifierForSnapshotting] == ctx && [ui scenePresenterRenderIdentifierForSnapshotting] == rid) return;
+    [scene updateUISettingsWithBlock:^(id s) {                                   // 16.2 block 0x1c76b7a70
+        [s setHostContextIdentifierForSnapshotting:ctx];
+        [s setScenePresenterRenderIdentifierForSnapshotting:rid];
+    }];
+}
+
+%end
 
 %hook SBDeviceApplicationSceneView
-- (void)_configureSceneLiveHostView:(id)host {
+- (void)_configureSceneLiveHostView:(id)host {                                  // 16.2 0x1c773ef38
     %orig;
     if (host) BP_G3_SetWeak(self, &kBPG3HostView, host);
+    if (!BP_G3_On("g3snapshot")) return;
+    id h = [self respondsToSelector:@selector(sceneHandle)] ? [self sceneHandle] : nil;
+    if (![h respondsToSelector:@selector(_sceneHostingInfoForSnapshottingAssertionWithView:)]) return;
+    [(BPG3SnapAssertion *)objc_getAssociatedObject(self, &kBPG3SnapViewAssertion) invalidate];
+    id a = [h _sceneHostingInfoForSnapshottingAssertionWithView:host];
+    objc_setAssociatedObject(self, &kBPG3SnapViewAssertion, a, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
-- (void)_invalidateSceneLiveHostView:(id)host {
-    BP_G3_SetWeak(self, &kBPG3HostView, nil);
+- (void)_invalidateSceneLiveHostView:(id)host {                                 // 16.2 0x1c773f00c
     %orig;
+    BP_G3_SetWeak(self, &kBPG3HostView, nil);
+    BPG3SnapAssertion *a = objc_getAssociatedObject(self, &kBPG3SnapViewAssertion);
+    [a invalidate];
+    objc_setAssociatedObject(self, &kBPG3SnapViewAssertion, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
-- (void)didMoveToWindow {
+- (void)didMoveToWindow {                                                       // 16.2 0x1c773d7c8
     %orig;
     if (!BP_G3_On("g3snapshot")) return;
-    if (![self window]) return;   // 16.2 0x1c76b7acc: nothing to report once the view left its window (would write context id 0)
     id host = BP_G3_GetWeak(self, &kBPG3HostView);
+    if (!host) return;
     id h = [self respondsToSelector:@selector(sceneHandle)] ? [self sceneHandle] : nil;
-    if (host && [h respondsToSelector:@selector(_updateSceneHostingInfoForSnapshottingWithView:)])
-        [h _updateSceneHostingInfoForSnapshottingWithView:host];
+    if (![h respondsToSelector:@selector(_sceneHostingInfoForSnapshottingAssertionWithView:)]) return;
+    id nw = [h _sceneHostingInfoForSnapshottingAssertionWithView:host];
+    BPG3SnapAssertion *old = objc_getAssociatedObject(self, &kBPG3SnapViewAssertion);
+    objc_setAssociatedObject(self, &kBPG3SnapViewAssertion, nw, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [old invalidate];
 }
 %end
 
@@ -311,10 +531,8 @@ static id BP_G3_KVC(id obj, NSString *key) {      // ivar by name, never throws
     BOOL nub = [BP_G3_KVC(self, @"_nubViewHighlighted") boolValue];
     long long space = [BP_G3_KVC(self, @"_spaceConfiguration") longLongValue];
     long long floating = [BP_G3_KVC(self, @"_floatingConfiguration") longLongValue];
-    static BOOL (*isSplit)(long long); static dispatch_once_t once;
-    dispatch_once(&once, ^{ isSplit = (BOOL (*)(long long))dlsym(RTLD_DEFAULT, "SBSpaceConfigurationIsSplitView"); });
-    if (!isSplit) return;                                    // cannot evaluate: keep the 16.0 result
-    BOOL splitOrFloating = isSplit(space) || (unsigned long long)(floating - 1) < 2;
+    BOOL isSplit = (unsigned long long)(space - 2) < 3;             // SBSpaceConfigurationIsSplitView (16.0 0x1c6289f58 / 16.2 0x1c77229d0)
+    BOOL splitOrFloating = isSplit || (unsigned long long)(floating - 1) < 2;
     id app = BP_G3_SBApp();
     id wsm = [app respondsToSelector:@selector(windowSceneManager)] ? [app windowSceneManager] : nil;
     NSUInteger displays = [[wsm respondsToSelector:@selector(connectedWindowScenes)] ? [wsm connectedWindowScenes] : nil count];
@@ -488,19 +706,68 @@ static void BP_G3_ApplyEnhancedWindowing(id controller, id scene) {
 - (void)_bpUpdateSceneSettings { if (BP_G3_On("g3embedded")) BP_G3_ApplyEnhancedWindowing(self, BP_G3_Ivar(self, "_scene")); }
 %end
 
-// PARTIAL, OPT-IN (Backport162.on.g3bootorient), section 6.2: SpringBoard starts in the panel's boot rotation.
+// Section 6.2: 16.2 -[SpringBoard _bootOrientation] 0x1c734a544 and -[SBTraitsEmbeddedDisplayPipelineManager _bootOrientation] 0x1c75b74a0 (same body):
+//   switch (MGGetSInt32Answer("DisplayBootRotation", -1)) { 0: 1; 90: 3; 180: 2; 270: 4; default: 0 }   (the compiled form is: w > 0xb3 ? (w == 270 ? 4 : 0) : (w == 180 ? 2 : (w == 0 ? 1 : (w == 90 ? 3 : 0))))
+// -[SpringBoard startupInterfaceOrientation]: 16.0 0x1c5ed5ba0 / 16.2 0x1c734a2d4 are the same function except for the iPad idiom branch (idiom 1 or 5):
+//   16.0: o = overlay orientation (BKSDisplayRenderOverlay existingOverlayForDisplay:[CADisplay mainDisplay]), 0 if none; if BSInterfaceOrientationIsValid(o) use it, else BKHIDServicesGetNonFlatDeviceOrientation()
+//   16.2: the same, but the not-valid case is  b = [self _bootOrientation]; o = b ? b : BKHIDServicesGetNonFlatDeviceOrientation()
+// i.e. a valid boot-progress overlay orientation still wins in 16.2; the panel's boot rotation replaces only the non-flat fallback.  Other idioms: unchanged (%orig).
+// -[SBTraitsEmbeddedDisplayPipelineManager setupDefaultPipelineForArbiter:] (16.2 0x1c75b52bc, tail at 0x1c75b55c0): on the iPad idiom
+//   b = [self _bootOrientation]; if (b) { [self _addLastNonFlatOverrideInputsValidatorIfNeeded]; [_lastNonFlatOverrideInputsValidator setLastNonFlatOrientationOverride:b]; }
+static long long BP_G3_BootOrientationValue(void) {
+    static int32_t (*mg)(CFStringRef, int32_t); static dispatch_once_t once;
+    dispatch_once(&once, ^{ mg = (int32_t (*)(CFStringRef, int32_t))dlsym(RTLD_DEFAULT, "MGGetSInt32Answer"); });
+    if (!mg) { BP_Log(@"[g3bootorient] MGGetSInt32Answer not found"); return 0; }
+    int32_t w = mg(CFSTR("DisplayBootRotation"), -1);
+    if (w > 0xb3) return w == 270 ? 4 : 0;
+    if (w == 180) return 2;
+    if (w == 0) return 1;
+    return w == 90 ? 3 : 0;
+}
+static BOOL BP_G3_IsPadIdiom(void) {
+    long long idiom = (long long)[[UIDevice currentDevice] userInterfaceIdiom];
+    return (idiom & ~4ll) == 1;
+}
+@interface NSObject (BPG3Boot)
+- (long long)_bootOrientation;
+- (void)_addLastNonFlatOverrideInputsValidatorIfNeeded;
+- (void)setLastNonFlatOrientationOverride:(long long)o;
++ (id)existingOverlayForDisplay:(id)d;
++ (id)mainDisplay;
+@end
+@interface SBTraitsEmbeddedDisplayPipelineManager : NSObject @end
+
 %hook SpringBoard
+%new
+- (long long)_bootOrientation { return BP_G3_BootOrientationValue(); }
 - (long long)startupInterfaceOrientation {
-    if (BP_G3_OptIn("g3bootorient")) {
-        static int32_t (*mg)(CFStringRef, int32_t); static dispatch_once_t once;
-        dispatch_once(&once, ^{ mg = (int32_t (*)(CFStringRef, int32_t))dlsym(RTLD_DEFAULT, "MGGetSInt32Answer"); });
-        if (mg) {
-            switch (mg(CFSTR("DisplayBootRotation"), -1)) {   // 16.2 -[SpringBoard _bootOrientation] 0x1c734a544
-                case 0: return 1; case 90: return 3; case 180: return 2; case 270: return 4; default: break;
-            }
-        }
-    }
+    if (!BP_G3_On("g3bootorient") || !BP_G3_IsPadIdiom()) return %orig;
+    Class ovC = NSClassFromString(@"BKSDisplayRenderOverlay"), dispC = NSClassFromString(@"CADisplay");
+    id overlay = ([ovC respondsToSelector:@selector(existingOverlayForDisplay:)] && [dispC respondsToSelector:@selector(mainDisplay)])
+        ? [ovC existingOverlayForDisplay:[dispC mainDisplay]] : nil;
+    long long o = [overlay respondsToSelector:@selector(interfaceOrientation)] ? [(id)overlay interfaceOrientation] : 0;
+    if (o >= 1 && o <= 4) return o;                                    // BSInterfaceOrientationIsValid
+    long long b = BP_G3_BootOrientationValue();
+    if (b) return b;
+    static long long (*nonFlat)(void); static dispatch_once_t once;
+    dispatch_once(&once, ^{ nonFlat = (long long (*)(void))dlsym(RTLD_DEFAULT, "BKHIDServicesGetNonFlatDeviceOrientation"); });
+    if (nonFlat) return nonFlat();
+    BP_Log(@"[g3bootorient] BKHIDServicesGetNonFlatDeviceOrientation not found, stock startup orientation");
     return %orig;
+}
+%end
+
+%hook SBTraitsEmbeddedDisplayPipelineManager
+%new
+- (long long)_bootOrientation { return BP_G3_BootOrientationValue(); }
+- (void)setupDefaultPipelineForArbiter:(id)arbiter {
+    %orig;
+    if (!BP_G3_On("g3bootorient") || !BP_G3_IsPadIdiom()) return;
+    long long b = [self _bootOrientation];
+    if (!b) return;
+    [self _addLastNonFlatOverrideInputsValidatorIfNeeded];
+    id v = BP_G3_Ivar(self, "_lastNonFlatOverrideInputsValidator");
+    if ([v respondsToSelector:@selector(setLastNonFlatOrientationOverride:)]) [v setLastNonFlatOrientationOverride:b];
 }
 %end
 %end // G3_Embedded

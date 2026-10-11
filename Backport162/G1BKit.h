@@ -74,6 +74,21 @@ static Class G1B_MakeClass(const char *name, Class sup, const G1BIvar *ivars, si
     return cls;
 }
 
+// Adds 16.2 methods to an EXISTING 16.0 class (the run-time equivalent of Logos %new, with the donor type encodings). Returns the number
+// added; a selector the class already implements itself is left alone and logged. Must run before the first instance exists (the per-class
+// query cache compares the class's IMPs with the base class when the first instance is initialised).
+static size_t G1B_AddMethods(Class cls, const G1BMethod *meths, size_t nMeths) {
+    size_t added = 0;
+    if (!cls) return 0;
+    for (size_t i = 0; i < nMeths; i++) {
+        SEL s = sel_registerName(meths[i].sel);
+        const char *t = G1B_TypesFor(s, meths[i].types);
+        if (t && class_addMethod(cls, s, meths[i].imp, t)) added++;
+        else BP_Log(@"g1b: class_addMethod %s.%s failed (already implemented)", class_getName(cls), meths[i].sel);
+    }
+    return added;
+}
+
 // A `[super sel]` is only safe if the superclass has an IMP (a query trampoline) for it; 16.2-only selectors have none in 16.0.
 static BOOL G1B_HasSuper(Class sup, SEL sel) { return sup && class_getInstanceMethod(sup, sel) != NULL; }
 

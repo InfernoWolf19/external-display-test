@@ -352,15 +352,19 @@ static G1BAsyncRendering G1B_Pulse_Async(id self, SEL _cmd, id layout) {
     if (toPulse && [layout respondsToSelector:@selector(containsItem:)] && G1B_SendB1(layout, @selector(containsItem:), toPulse)) return (G1BAsyncRendering){ NO, NO };
     return G1B_SUPER(G1BAsyncRendering, gPulseSuper, self, _cmd, (struct objc_super *, SEL, id), layout);
 }
-static id G1B_Pulse_TopMost(id self, SEL _cmd) {
+static id G1B_Pulse_TopMost(id self, SEL _cmd) {                                                 // 16.2 0x1c74c70b4
     id base = G1B_SUPER(id, gPulseSuper, self, _cmd, (struct objc_super *, SEL));
-    id stage = G1B_GET(self, kPulseStage), item = G1B_GET(self, kPulseItem);
-    if (!stage || !item || ![self respondsToSelector:@selector(appLayouts)]) return base;
+    id item = G1B_GET(self, kPulseItem);
+    if (!item || ![self respondsToSelector:@selector(appLayouts)]) return base;
     id pulseLayout = nil;
     for (id l in (NSArray *)G1B_Send0(self, @selector(appLayouts))) {
         if ([l respondsToSelector:@selector(containsItem:)] && G1B_SendB1(l, @selector(containsItem:), item)) { pulseLayout = l; break; }
     }
-    if (!pulseLayout || ![stage respondsToSelector:@selector(isOrContainsAppLayout:)] || !G1B_SendB1(stage, @selector(isOrContainsAppLayout:), pulseLayout)) return base;
+    // 16.2: [[self appLayoutOnContinuousExposeStage] isOrContainsAppLayout:pulseLayout]. The context selector is served by the group 2b extended context protocol
+    // (answered by the CE root, G1C.x); the creator-injected stage layout is only used if that selector is not available.
+    SEL stageSel = NSSelectorFromString(@"appLayoutOnContinuousExposeStage");
+    id stage = [self respondsToSelector:stageSel] ? G1B_Send0(self, stageSel) : G1B_GET(self, kPulseStage);
+    if (!pulseLayout || !stage || ![stage respondsToSelector:@selector(isOrContainsAppLayout:)] || !G1B_SendB1(stage, @selector(isOrContainsAppLayout:), pulseLayout)) return base;
     SEL ins = NSSelectorFromString(@"sb_arrayByInsertingOrMovingObject:toIndex:");
     if (![base respondsToSelector:ins]) return base;
     return ((id (*)(id, SEL, id, unsigned long long))objc_msgSend)(base, ins, pulseLayout, 0);
@@ -575,6 +579,56 @@ static void G1B_BuildEventsAndResponses(void) {
 %end
 %end
 // ---- end 1.5
+
+// 1.5 consumer: -[SBFullScreenContinuousExposeSwitcherModifier handleTapAppLayoutHeaderEvent:] (16.2 0x1c75c4a28; NEW, 16.0 has no such method). A tap on a window title bar:
+// the app has several windows -> App Expose (transition request source 3 + bundleIdentifierForAppExpose); a single window -> SBPulseDisplayItemSwitcherModifier
+// (1.4) added as a level-3 child. The event is then handled with the reason string of the class. `_handlesTapAppLayoutHeaderEvents` (+0x79, default YES) is an
+// associated flag here (a 16.0 object has no such ivar).
+static char kFsHdrFlag;
+static id G1B_NewRequestForAppExpose(NSString *bundleID) {
+    Class rc = NSClassFromString(@"SBMutableSwitcherTransitionRequest");
+    id req = rc ? [[rc alloc] init] : nil;
+    if (req && [req respondsToSelector:@selector(setSource:)]) G1B_SendVLL(req, @selector(setSource:), 3);
+    if (req && bundleID && [req respondsToSelector:@selector(setBundleIdentifierForAppExpose:)]) G1B_SendV1(req, @selector(setBundleIdentifierForAppExpose:), bundleID);
+    return req;
+}
+%group G1B_FSHeader
+%hook SBFullScreenContinuousExposeSwitcherModifier
+%new
+- (BOOL)handlesTapAppLayoutHeaderEvents { NSNumber *n = G1B_GET(self, kFsHdrFlag); return n ? n.boolValue : YES; }
+%new
+- (void)setHandlesTapAppLayoutHeaderEvents:(BOOL)v { G1B_SET(self, kFsHdrFlag, @(v)); }
+%new
+- (id)handleTapAppLayoutHeaderEvent:(id)event {
+    id me = (id)self;
+    Class fs = NSClassFromString(@"SBFullScreenContinuousExposeSwitcherModifier"), sup = class_getSuperclass(fs);
+    id response = G1B_HasSuper(sup, _cmd) ? G1B_SUPER(id, sup, me, _cmd, (struct objc_super *, SEL, id), event) : nil;      // [super handleTapAppLayoutHeaderEvent:] (not in 16.0)
+    NSNumber *flag = G1B_GET(self, kFsHdrFlag);
+    if (!G1B_ON() || !event || (flag && !flag.boolValue) || G1B_SendB0(event, @selector(isHandled))) return response;
+    id layout = G1B_Send0(event, @selector(appLayout));
+    id item = (layout && [layout respondsToSelector:@selector(itemForLayoutRole:)]) ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, @selector(itemForLayoutRole:), G1B_SendLL0(event, @selector(layoutRole))) : nil;
+    SEL multi = NSSelectorFromString(@"displayItemSupportsMultipleWindowsIndicator:");
+    if (!item || ![me respondsToSelector:multi]) return response;
+    id r = nil;
+    if (G1B_SendB1(me, multi, item)) {
+        id req = G1B_NewRequestForAppExpose(G1B_Send0(item, @selector(bundleIdentifier)));
+        Class pc = NSClassFromString(@"SBPerformTransitionSwitcherEventResponse");
+        SEL pi = @selector(initWithTransitionRequest:gestureInitiated:);
+        if (req && pc && [pc instancesRespondToSelector:pi]) r = ((id (*)(id, SEL, id, BOOL))objc_msgSend)([pc alloc], pi, req, NO);
+    } else {
+        Class cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
+        SEL ci = NSSelectorFromString(@"initWithModifier:level:");
+        id pulse = (gPulseCls && [gPulseCls instancesRespondToSelector:@selector(initWithDisplayItem:)]) ? G1B_Send1([gPulseCls alloc], @selector(initWithDisplayItem:), item) : nil;
+        if (pulse && cc && [cc instancesRespondToSelector:ci]) r = ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], ci, pulse, 3);
+    }
+    if (!r) return response;
+    response = G1B_AppendTo(r, response);
+    SEL hw = NSSelectorFromString(@"handleWithReason:");
+    if ([event respondsToSelector:hw]) G1B_SendV1(event, hw, @"Full Screen Continuous Expose");
+    return response;
+}
+%end
+%end
 
 // ============================================================================================================
 // 1.9  SBContinuousExposeStripTongueView  (PARTIAL: the view is portable, the hosting in the VC is not; spec 1.9)
@@ -1094,16 +1148,36 @@ static void G1B_BuildFullScreenToStrip(void) {
 // ---- end 2.1 / 2.2
 
 // ============================================================================================================
-// Stock assertion removed: "Can't handle an event that has already been handled." (NSInternalInconsistencyException).
-// With the ported modifiers more than one modifier of the chain can see the same event (device crash: highlight event reaching
-// SBFullScreenContinuousExposeSwitcherModifier after another modifier handled it, hover/three-dots menu). A second handling is ignored.
+// "Can't handle an event that has already been handled." (SBChainableModifierEvent -handleWithReason: asserts !_handled).
+// ROOT CAUSE (16.2 vs 16.0): more than one SBFullScreenContinuousExposeSwitcherModifier (or subclass) sees the same highlight event whenever
+// a second Stage Manager floor lives in the chain (window drag / drop, home gesture, peek, the BP162 App Switcher floor ...). 16.0
+// -[SBFullScreenContinuousExposeSwitcherModifier handleHighlightEvent:] 0x1c6140504 never looks at -isHandled: it updates its hover / touch sets and
+// ends with [event handleWithReason:@"Full Screen Continuous Expose"] (0x1c61408cc) unconditionally. 16.2 moved that body into the new parent
+// -[SBStripContinuousExposeSwitcherModifier handleHighlightEvent:] 0x1c75df73c, which does `response = [super handleHighlightEvent:event]; if
+// (![event isHandled] && [event appLayout] != nil) { set bookkeeping; UpdateLayout(0xc, 0); [event handleWithReason:...] }`, i.e. the second modifier
+// leaves a handled event alone (same pattern as 16.2 SBInlineAppExposeContinuousExposeSwitcherModifier -handleHighlightEvent: 0x1c76872dc).
+// The other 16.0 callers of handleWithReason: that 16.2 gates on isHandled are the FullScreen / Inline / AppSwitcher tap handlers (G1C.x).
 // ============================================================================================================
+%group G1B_Highlight
+%hook SBFullScreenContinuousExposeSwitcherModifier
+- (id)handleHighlightEvent:(id)event {
+    if (G1B_ON() && event && (G1B_SendB0(event, @selector(isHandled)) || !G1B_Send0(event, @selector(appLayout)))) {
+        // 16.2 path for a handled event (or one without app layout): only [super handleHighlightEvent:] (nil, SBSwitcherModifier default).
+        Class fs = NSClassFromString(@"SBFullScreenContinuousExposeSwitcherModifier"), sup = class_getSuperclass(fs);
+        return G1B_HasSuper(sup, _cmd) ? G1B_SUPER(id, sup, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    }
+    return %orig;
+}
+%end
+%end
+
+// Last-line guard only (the faithful gate above makes it dormant): any remaining double handling no longer kills SpringBoard. Logged when debug is on.
 %group G1B_Handled
 %hook SBChainableModifierEvent
 - (void)handleWithReason:(id)reason {
     id me = (id)self;      // SBChainableModifierEvent is only forward-declared in this file
     if ([me respondsToSelector:@selector(isHandled)] && ((BOOL (*)(id, SEL))objc_msgSend)(me, @selector(isHandled))) {
-        BP_Log(@"event %@ already handled, ignoring second handleWithReason:%@", NSStringFromClass(object_getClass(me)), reason);
+        if (BP_LogEnabled()) BP_Log(@"GUARD event %@ already handled, ignoring second handleWithReason:%@ (a handler is missing its 16.2 isHandled gate)", NSStringFromClass(object_getClass(me)), reason);
         return;
     }
     %orig;
@@ -1230,26 +1304,178 @@ static void G1B_AW_Repair(id coord, id layout, const char *how) {
 %end
 
 // ============================================================================================================
-// SBWindowDeleteSwitcherModifier -transitionDidEnd (16.2 0x1c78e702c, new): un-blur the deleted window's container.
+// SBWindowDeleteSwitcherModifier: the whole 16.2 class (20C65 0x1c78e6ad4..0x1c78e8024; 16.0 0x1c643579c..).
+// Method-by-method body diff 16.0 -> 16.2 (init, transitionWillUpdate, appLayoutsToEnsureExist..., animationAttributes..., dimmingAlpha..., frameForIndex:,
+// frameForLayoutRole:..., anchorPointForIndex:, opacityForLayoutRole:..., visibleAppLayouts, asyncRendering..., perspectiveAngle..., wallpaperGradient...,
+// topMostLayoutElements are identical, constants included). Changed / new in 16.2, all ported here:
+//   transitionWillBegin        0x1c78e6c8c  with `_fullScreenAppLayout == nil` the closing window itself is put into the layout list (inserted at 0 when missing)
+//                                           and the block also captures `_initialCornerRadii` (new ivar +0xc8 -> associated object) next to `_initialFrame`
+//   transitionDidEnd           0x1c78e6fcc  NEW: [super] + SBBlurItemContainerSwitcherEventResponse(_centerWindowAppLayout, shouldBlur NO, mode 2)
+//   appLayoutContainingAppLayout: 0x1c78e7078 NEW      adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip: 0x1c78e7140 NEW
+//   titleAndIconOpacityForIndex: 0x1c78e7a7c NEW       cornerRadiiForIndex: 0x1c78e7b20 NEW       isLayoutRoleMatchMovedToScene:inAppLayout: 0x1c78e7ecc NEW
+//   isSwitcherWindowVisible    0x1c78e801c  NEW (YES)  scaleForIndex: 0x1c78e7bf8: the closing window scales to 0.8 under Stage Manager (16.0: fromViewFinalScale)
 // 16.0 -transitionWillUpdate (0x1c6435b6c) blurs the container of _centerWindowAppLayout (SBBlurItemContainerSwitcherEventResponse, shouldBlur YES, mode 3,
-// a gaussianBlur CAFilter + rasterization on the container layer) and 16.0 has NO transitionDidEnd: it relies on -_removeVisibleItemContainerForAppLayout:
-// (0x1c5e70268) un-blurring the container when it leaves the visible set. With the ported Stage Manager model the closed window's container stays alive
-// (it can be reused for the same app layout), so the blur stayed and the app opened again from the same scene was completely blurred (touches worked).
-// 16.2 sends shouldBlur NO, mode 2 at the end of the transition (transitionDidEnd 0x1c78e702c, same ivar _centerWindowAppLayout).
+// a gaussianBlur CAFilter + rasterization on the container layer) and 16.0 has NO transitionDidEnd: it relied on -_removeVisibleItemContainerForAppLayout:
+// (0x1c5e70268) un-blurring the container when it leaves the visible set; 16.2 un-blurs at transitionDidEnd AND again after prepareForReuse in
+// -_removeVisibleItemContainerForAppLayout: (0x1c72e2f98, see G1B_ItemContainer below), so a recycled container never keeps the blur.
 // ============================================================================================================
+static Class gWDSuper;
+static char kWDRadii;
+static id G1B_WD_Ivar(id me, const char *name) {
+    Ivar iv = class_getInstanceVariable(object_getClass(me), name);
+    return iv ? object_getIvar(me, iv) : nil;
+}
+static BOOL G1B_WD_Chamois(id me) { return [me respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && G1B_SendB0(me, @selector(isChamoisWindowingUIEnabled)); }
+static id G1B_WD_Layouts(id me) { return G1B_Send0(me, @selector(appLayouts)); }
+
+// 16.2 -appLayoutContainingAppLayout: 0x1c78e7078
+static id G1B_WD_ContainingLayout(id self, SEL _cmd, id layout) {
+    if (G1B_WD_Chamois(self) && [layout isEqual:G1B_WD_Ivar(self, "_centerWindowAppLayout")]) {
+        id full = G1B_WD_Ivar(self, "_fullScreenAppLayout");
+        return (G1B_SendLL0(self, NSSelectorFromString(@"transitionPhase")) >= 2 && full) ? full : G1B_WD_Ivar(self, "_fromAppLayout");
+    }
+    return G1B_HasSuper(gWDSuper, _cmd) ? G1B_SUPER(id, gWDSuper, self, _cmd, (struct objc_super *, SEL, id), layout) : nil;
+}
+// 16.2 -titleAndIconOpacityForIndex: 0x1c78e7a7c
+static double G1B_WD_TitleOpacity(id self, SEL _cmd, unsigned long long i) {
+    NSArray *ls = G1B_WD_Layouts(self);
+    if (i < ls.count && [ls[i] isEqual:G1B_WD_Ivar(self, "_centerWindowAppLayout")]) return 0.0;
+    return G1B_SUPER(double, gWDSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+// 16.2 -cornerRadiiForIndex: 0x1c78e7b20 (the radii captured in transitionWillBegin for the closing window)
+static G1BRadii G1B_WD_CornerRadii(id self, SEL _cmd, unsigned long long i) {
+    NSArray *ls = G1B_WD_Layouts(self);
+    if (i < ls.count && [ls[i] isEqual:G1B_WD_Ivar(self, "_centerWindowAppLayout")]) {
+        NSValue *v = G1B_GET(self, kWDRadii);
+        G1BRadii r = { 0, 0, 0, 0 };
+        if (v) [v getValue:&r size:sizeof r];
+        return r;
+    }
+    return G1B_SUPER(G1BRadii, gWDSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+// 16.2 -isLayoutRoleMatchMovedToScene:inAppLayout: 0x1c78e7ecc
+static BOOL G1B_WD_MatchMoved(id self, SEL _cmd, long long role, id layout) {
+    if (G1B_SUPER(BOOL, gWDSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout)) return YES;
+    return G1B_WD_Chamois(self) && [layout isEqual:G1B_WD_Ivar(self, "_fullScreenAppLayout")];
+}
+static BOOL G1B_WD_WindowVisible(id self, SEL _cmd) { return YES; }                                  // 16.2 0x1c78e801c: mov w0,#1
+// 16.2 -adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip: 0x1c78e7140
+static id G1B_WD_AdjustedStrip(id self, SEL _cmd, id strip) {
+    id (^sup)(void) = ^id{ return G1B_HasSuper(gWDSuper, _cmd) ? G1B_SUPER(id, gWDSuper, self, _cmd, (struct objc_super *, SEL, id), strip) : nil; };
+    if (!G1B_WD_Chamois(self) || G1B_SendLL0(self, NSSelectorFromString(@"transitionPhase")) < 2 || G1B_WD_Ivar(self, "_fullScreenAppLayout")) return sup();
+    SEL stageSel = NSSelectorFromString(@"appLayoutOnContinuousExposeStage");
+    id stage = [self respondsToSelector:stageSel] ? G1B_Send0(self, stageSel) : nil;
+    if (!stage) return sup();
+    id center = G1B_WD_Ivar(self, "_centerWindowAppLayout");
+    // block 0x1c78e73a0: drop the closing window and the stage layout from the layouts the rest of the chain sees
+    NSMutableArray *kept = [NSMutableArray array];
+    for (id l in (NSArray *)(G1B_HasSuper(gWDSuper, @selector(appLayouts)) ? G1B_SUPER(id, gWDSuper, self, @selector(appLayouts), (struct objc_super *, SEL)) : G1B_WD_Layouts(self)))
+        if (![l isEqual:center] && ![l isEqual:stage]) [kept addObject:l];
+    Class oc = NSClassFromString(@"SBOverrideAppLayoutsSwitcherModifier");
+    SEL oi = @selector(initWithAppLayouts:);
+    id override = (oc && [oc instancesRespondToSelector:oi]) ? G1B_Send1([oc alloc], oi, [kept copy]) : nil;
+    if (!override || ![self respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)]) return sup();
+    __block id result = nil;
+    ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(self, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), override, ^{ result = sup(); });   // block 0x1c78e741c
+    return result;
+}
+
 %group G1B_WindowDelete
 %hook SBWindowDeleteSwitcherModifier
+- (id)transitionWillBegin {
+    if (!G1B_ON() || !gWDSuper) return %orig;
+    id me = (id)self;
+    id r = G1B_SUPER(id, gWDSuper, me, _cmd, (struct objc_super *, SEL));
+    Class inv = NSClassFromString(@"SBInvalidateAdjustedAppLayoutsSwitcherEventResponse");
+    r = G1B_AppendTo(inv ? [[inv alloc] init] : nil, r);
+    r = G1B_AppendTo(G1B_NewUpdateLayoutResponse(2, 2), r);
+    NSMutableArray *layouts = [(NSArray *)G1B_WD_Layouts(me) mutableCopy];
+    id full = G1B_WD_Ivar(me, "_fullScreenAppLayout"), from = G1B_WD_Ivar(me, "_fromAppLayout"), center = G1B_WD_Ivar(me, "_centerWindowAppLayout");
+    NSUInteger idx = NSNotFound;
+    if (full) {
+        idx = [layouts indexOfObject:full];
+        if (idx != NSNotFound) [layouts replaceObjectAtIndex:idx withObject:from];                      // as in 16.0
+        else idx = from ? [layouts indexOfObject:from] : NSNotFound;
+    } else if (center) {                                                                                 // NEW in 16.2: no full-screen layout, the closing window is the subject
+        idx = [layouts indexOfObject:center];
+        if (idx == NSNotFound) { [layouts insertObject:center atIndex:0]; idx = 0; }
+    }
+    Class oc = NSClassFromString(@"SBOverrideAppLayoutsSwitcherModifier");
+    SEL oi = @selector(initWithAppLayouts:);
+    if (idx == NSNotFound || !oc || ![oc instancesRespondToSelector:oi] || ![me respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)]) return r;
+    id override = G1B_Send1([oc alloc], oi, layouts);
+    Ivar ivFrame = class_getInstanceVariable(object_getClass(me), "_initialFrame");
+    unsigned long long index = idx;
+    ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(me, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), override, ^{
+        // [super frameForIndex:idx] -> _initialFrame, [super cornerRadiiForIndex:idx] -> _initialCornerRadii (16.2 block 0x1c78e6e8c)
+        CGRect f = G1B_SUPER(CGRect, gWDSuper, me, @selector(frameForIndex:), (struct objc_super *, SEL, unsigned long long), index);
+        if (ivFrame) *(CGRect *)((uint8_t *)(__bridge void *)me + ivar_getOffset(ivFrame)) = f;
+        G1BRadii rr = G1B_SUPER(G1BRadii, gWDSuper, me, @selector(cornerRadiiForIndex:), (struct objc_super *, SEL, unsigned long long), index);
+        G1B_SET(me, kWDRadii, [NSValue valueWithBytes:&rr objCType:@encode(G1BRadii)]);
+    });
+    return r;
+}
+- (double)scaleForIndex:(unsigned long long)index {
+    double orig = %orig;
+    if (!G1B_ON()) return orig;
+    id me = (id)self;
+    NSArray *ls = G1B_WD_Layouts(me);
+    if (index < ls.count && G1B_WD_Ivar(me, "_centerWindowAppLayout") == ls[index] && G1B_SendB0(me, @selector(isUpdatingLayout)) && G1B_WD_Chamois(me)) return 0.8;     // 16.2 0x1c78e7c6c
+    return orig;
+}
 - (id)transitionDidEnd {
     id r = %orig;
     if (!G1B_ON()) return r;
     id me = (id)self;
-    Ivar iv = class_getInstanceVariable(object_getClass(me), "_centerWindowAppLayout");
-    id layout = iv ? object_getIvar(me, iv) : nil;
+    id layout = G1B_WD_Ivar(me, "_centerWindowAppLayout");
     Class rc = NSClassFromString(@"SBBlurItemContainerSwitcherEventResponse");
     SEL ini = @selector(initWithAppLayout:shouldBlur:animationUpdateMode:);
     if (!layout || !rc || ![rc instancesRespondToSelector:ini]) return r;
     id unblur = ((id (*)(id, SEL, id, BOOL, long long))objc_msgSend)([rc alloc], ini, layout, NO, 2);
-    return G1B_AppendTo(unblur, r);
+    return G1B_AppendTo(unblur, r);                                              // [SBSwitcherModifierEventResponse responseByAppendingResponse:unblur toResponse:[super transitionDidEnd]]
+}
+%end
+%end
+
+// The new 16.2 queries of SBWindowDeleteSwitcherModifier (no 16.0 method of its own: added at run time before the first instance exists).
+static void G1B_BuildWindowDelete(void) {
+    Class wd = NSClassFromString(@"SBWindowDeleteSwitcherModifier");
+    if (!wd) return;
+    gWDSuper = class_getSuperclass(wd);
+    const G1BMethod m[] = {
+        { "appLayoutContainingAppLayout:",  (IMP)G1B_WD_ContainingLayout, "@24@0:8@16" },
+        { "titleAndIconOpacityForIndex:",   (IMP)G1B_WD_TitleOpacity,     "d24@0:8Q16" },
+        { "cornerRadiiForIndex:",           (IMP)G1B_WD_CornerRadii,      "{?=dddd}24@0:8Q16" },
+        { "isLayoutRoleMatchMovedToScene:inAppLayout:", (IMP)G1B_WD_MatchMoved, "B32@0:8q16@24" },
+        { "isSwitcherWindowVisible",        (IMP)G1B_WD_WindowVisible,    "B16@0:8" },
+        { "adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", (IMP)G1B_WD_AdjustedStrip, "@24@0:8@16" },
+    };
+    G1B_AddMethods(wd, m, sizeof m / sizeof m[0]);
+}
+
+// ============================================================================================================
+// G1B_ItemContainer: 16.2 -[SBFluidSwitcherViewController _removeVisibleItemContainerForAppLayout:] (0x1c72e2f98; 16.0 0x1c5e70268) un-blurs the container a
+// SECOND time after -prepareForReuse and right before it is put into _hiddenRecycledItemContainers (_unblurItemContainer:[SBBlurItemContainerParameters
+// defaultCrossblurBlurParameters] withAnimationUpdateMode:2, 0x1c72e30b0). 16.0 only un-blurred at the top of the method, before prepareForReuse and
+// before the container was recycled, so a window closed through SBWindowDeleteSwitcherModifier (which blurs its container) came back blurred when the
+// same scene was opened again in the recycled container.
+// ============================================================================================================
+%group G1B_ItemContainer
+%hook SBFluidSwitcherViewController
+- (BOOL)_removeVisibleItemContainerForAppLayout:(id)layout {
+    id me = (id)self;
+    SEL ex = NSSelectorFromString(@"_itemContainerForAppLayoutIfExists:");
+    id c = (G1B_ON() && layout && [me respondsToSelector:ex]) ? G1B_Send1(me, ex, layout) : nil;       // the container this call recycles
+    BOOL r = %orig;
+    if (!c || !r) return r;
+    Ivar pool = class_getInstanceVariable(object_getClass(me), "_hiddenRecycledItemContainers");
+    NSArray *recycled = pool ? object_getIvar(me, pool) : nil;
+    Class bp = NSClassFromString(@"SBBlurItemContainerParameters");
+    SEL un = NSSelectorFromString(@"_unblurItemContainer:blurParameters:withAnimationUpdateMode:");
+    SEL dp = NSSelectorFromString(@"defaultCrossblurBlurParameters");
+    if ([recycled isKindOfClass:[NSArray class]] && [recycled containsObject:c] && bp && [bp respondsToSelector:dp] && [me respondsToSelector:un])
+        ((void (*)(id, SEL, id, id, long long))objc_msgSend)(me, un, c, G1B_Send0((id)bp, dp), 2);
+    return r;
 }
 %end
 %end
@@ -1363,6 +1589,142 @@ static void G1B_BuildDndToApp(void) {
     };
     gDndToAppCls = G1B_MakeClass("SBContinuousExposeDragAndDropToAppTransitionSwitcherModifier", sup, NULL, 0, m, sizeof m / sizeof m[0], NULL, NULL);
 }
+
+// ============================================================================================================
+// 2.3  SBContinuousExposeSwitcherToAppExposeSwitcherModifier  (16.2 0x1c77b5f94..0x1c77b6880, NEW) + its creator in
+//      -[SBContinuousExposeRootSwitcherModifier transitionModifierForMainTransitionEvent:] (16.2 0x1c78189a0..0x1c7818d74)
+// ============================================================================================================
+// Slides the App Expose layer (a child modifier) over the Stage Manager switcher and back (2 -> 2 transitions whose App Expose bundle id changes). 16.0's Root
+// had no creator for this case, the transition fell through to the generic one. Ivars (16.2): _appExposeModifier +0x88, _timerReason +0x90,
+// _appLayoutsVisibleBeforeTransition +0x98, _appExposeBundleID +0xa0, _direction +0xa8 (0 ToAppExpose, else ToSwitcher).
+Class gS2AECls;     // exported
+static Class gS2AESuper;
+static char kS2AEMod, kS2AEReason, kS2AEBid, kS2AEVisible;
+static ptrdiff_t gS2AEDirOff = -1;
+
+static id G1B_S2AE_Init(id self, SEL _cmd, id tid, id bid, unsigned long long dir, id mod) {
+    id me = G1B_SUPER(id, gS2AESuper, self, @selector(initWithTransitionID:), (struct objc_super *, SEL, id), tid);
+    if (!me) return nil;
+    if (!bid || !mod) { BP_Log(@"g1b: SwitcherToAppExpose: appExposeBundleID / appExposeModifier missing (16.2 asserts, lines 0x25/0x26)"); return nil; }
+    G1B_SET(me, kS2AEBid, [bid copy]);
+    if (gS2AEDirOff >= 0) *(unsigned long long *)((uint8_t *)(__bridge void *)me + gS2AEDirOff) = dir;
+    G1B_SET(me, kS2AEMod, mod);
+    G1B_SET(me, kS2AEReason, [NSString stringWithFormat:@"SBContinuousExposeSwitcherToAppExposeSwitcherModifier:%@", [[NSUUID UUID] UUIDString]]);
+    Class rc = NSClassFromString(@"SBRouteToAppExposeSwitcherModifier");
+    SEL ri = @selector(initWithTransitionID:appExposeModifier:);
+    id route = (rc && [rc instancesRespondToSelector:ri]) ? ((id (*)(id, SEL, id, id))objc_msgSend)([rc alloc], ri, tid, [mod copy]) : nil;
+    if (route) ((void (*)(id, SEL, id, long long, id))objc_msgSend)(me, @selector(addChildModifier:atLevel:key:), route, 0, nil);
+    return me;
+}
+static id G1B_S2AE_WillBegin(id self, SEL _cmd) {                                                // 0x1c77b62b0
+    id r = G1B_SUPER(id, gS2AESuper, self, _cmd, (struct objc_super *, SEL));
+    G1B_SET(self, kS2AEVisible, G1B_SUPER(id, gS2AESuper, self, @selector(visibleAppLayouts), (struct objc_super *, SEL)));
+    id mod = G1B_GET(self, kS2AEMod);
+    if (mod) ((void (*)(id, SEL, id, long long, id))objc_msgSend)(self, @selector(addChildModifier:atLevel:key:), mod, 1, nil);
+    Class ic = NSClassFromString(@"SBInvalidateAdjustedAppLayoutsSwitcherEventResponse");
+    r = G1B_AppendTo(ic ? [[ic alloc] init] : nil, r);
+    return G1B_AppendTo(G1B_Timer(0, G1B_GET(self, kS2AEReason)), r);
+}
+static id G1B_S2AE_Timer(id self, SEL _cmd, id event) {                                          // 0x1c77b63e8
+    id r = G1B_SUPER(id, gS2AESuper, self, _cmd, (struct objc_super *, SEL, id), event);
+    id reason = [event respondsToSelector:@selector(reason)] ? G1B_Send0(event, @selector(reason)) : nil;
+    if (![reason isKindOfClass:[NSString class]] || ![reason isEqualToString:G1B_GET(self, kS2AEReason)]) return r;
+    // 16.2: first identifier of continuousExposeIdentifiersInSwitcher (16.0 name of the same list: continuousExposeIdentifiers)
+    SEL idsSel = [self respondsToSelector:NSSelectorFromString(@"continuousExposeIdentifiersInSwitcher")] ? NSSelectorFromString(@"continuousExposeIdentifiersInSwitcher") : NSSelectorFromString(@"continuousExposeIdentifiers");
+    id ids = G1B_Send0(self, idsSel);
+    id first = [ids respondsToSelector:@selector(firstObject)] ? [ids firstObject] : nil;
+    SEL byId = NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:");
+    id layout = (first && [self respondsToSelector:byId]) ? [(NSArray *)G1B_Send1(self, byId, first) firstObject] : nil;
+    if (!layout) return r;
+    Class sc = NSClassFromString(@"SBScrollToAppLayoutSwitcherEventResponse");
+    SEL si = @selector(initWithAppLayout:alignment:animated:);
+    if (sc && [sc instancesRespondToSelector:si]) r = G1B_AppendTo(((id (*)(id, SEL, id, long long, BOOL))objc_msgSend)([sc alloc], si, layout, 0, NO), r);
+    return G1B_AppendTo(G1B_NewUpdateLayoutResponse(2, 2), r);
+}
+static id G1B_S2AE_WillUpdate(id self, SEL _cmd) {                                               // 0x1c77b6578
+    id mod = G1B_GET(self, kS2AEMod);
+    if (mod) G1B_SendV1(self, @selector(removeChildModifier:), mod);
+    G1B_SET(self, kS2AEMod, nil);
+    return G1B_SUPER(id, gS2AESuper, self, _cmd, (struct objc_super *, SEL));
+}
+static CGRect G1B_S2AE_Frame(id self, SEL _cmd, unsigned long long i) {                          // 0x1c77b65ec
+    CGRect f = G1B_SUPER(CGRect, gS2AESuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    if (G1B_GET(self, kS2AEMod)) {
+        BOOL rtl = [self respondsToSelector:@selector(isRTLEnabled)] && G1B_SendB0(self, @selector(isRTLEnabled));
+        CGRect b = [self respondsToSelector:@selector(switcherViewBounds)] ? ((CGRect (*)(id, SEL))objc_msgSend)(self, @selector(switcherViewBounds)) : CGRectZero;
+        f = CGRectOffset(f, rtl ? b.size.width : -b.size.width, 0);
+    }
+    return f;
+}
+static id G1B_S2AE_Visible(id self, SEL _cmd) {                                                  // 0x1c77b66b8
+    id base = G1B_SUPER(id, gS2AESuper, self, _cmd, (struct objc_super *, SEL));
+    NSSet *before = G1B_GET(self, kS2AEVisible);
+    return (before && [base respondsToSelector:@selector(setByAddingObjectsFromSet:)]) ? [base setByAddingObjectsFromSet:before] : base;
+}
+static id G1B_S2AE_AnimAttrs(id self, SEL _cmd, id el) {                                         // 0x1c77b6734
+    id base = G1B_SUPER(id, gS2AESuper, self, _cmd, (struct objc_super *, SEL, id), el);
+    id a = [base respondsToSelector:@selector(mutableCopy)] ? [base mutableCopy] : base;
+    id as = G1B_AnimSettings(self);
+    id toggle = [as respondsToSelector:NSSelectorFromString(@"toggleAppSwitcherSettings")] ? G1B_Send0(as, NSSelectorFromString(@"toggleAppSwitcherSettings")) : nil;
+    if (a && toggle && [a respondsToSelector:@selector(setLayoutSettings:)]) G1B_SendV1(a, @selector(setLayoutSettings:), toggle);
+    return a;
+}
+static id G1B_S2AE_Bid(id self, SEL _cmd) { return G1B_GET(self, kS2AEBid); }
+static unsigned long long G1B_S2AE_Dir(id self, SEL _cmd) { return gS2AEDirOff < 0 ? 0 : *(unsigned long long *)((uint8_t *)(__bridge void *)self + gS2AEDirOff); }
+static id G1B_S2AE_Desc(id self, SEL _cmd, id prefix) {                                          // 0x1c77b61b4
+    id b = G1B_SUPER(id, gS2AESuper, self, @selector(succinctDescriptionBuilder), (struct objc_super *, SEL));
+    SEL ao = NSSelectorFromString(@"appendObject:withName:");
+    if ([b respondsToSelector:ao]) {
+        id mod = G1B_GET(self, kS2AEMod);
+        ((id (*)(id, SEL, id, id))objc_msgSend)(b, ao, [mod respondsToSelector:@selector(succinctDescription)] ? G1B_Send0(mod, @selector(succinctDescription)) : nil, @"appExposeModifier");
+        ((id (*)(id, SEL, id, id))objc_msgSend)(b, ao, G1B_GET(self, kS2AEBid), @"appExposeBundleID");
+        ((id (*)(id, SEL, id, id))objc_msgSend)(b, ao, G1B_S2AE_Dir(self, 0) == 0 ? @"ToAppExpose" : @"ToSwitcher", @"direction");
+    }
+    return b;
+}
+
+static void G1B_BuildSwitcherToAppExpose(void) {
+    Class sup = NSClassFromString(@"SBTransitionSwitcherModifier");
+    if (!sup || !G1B_HasSuper(sup, @selector(initWithTransitionID:))) return;
+    gS2AESuper = sup;
+    const G1BIvar iv[] = { { "_g1b_direction", sizeof(unsigned long long), 3, "Q" } };
+    const G1BMethod m[] = {
+        { "initWithTransitionID:appExposeBundleID:direction:appExposeModifier:", (IMP)G1B_S2AE_Init, "@48@0:8@16@24Q32@40" },
+        { "descriptionBuilderWithMultilinePrefix:", (IMP)G1B_S2AE_Desc, "@24@0:8@16" },
+        { "transitionWillBegin", (IMP)G1B_S2AE_WillBegin, "@16@0:8" }, { "handleTimerEvent:", (IMP)G1B_S2AE_Timer, "@24@0:8@16" },
+        { "transitionWillUpdate", (IMP)G1B_S2AE_WillUpdate, "@16@0:8" }, { "frameForIndex:", (IMP)G1B_S2AE_Frame, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" },
+        { "visibleAppLayouts", (IMP)G1B_S2AE_Visible, "@16@0:8" }, { "animationAttributesForLayoutElement:", (IMP)G1B_S2AE_AnimAttrs, "@24@0:8@16" },
+        { "appExposeBundleID", (IMP)G1B_S2AE_Bid, "@16@0:8" }, { "direction", (IMP)G1B_S2AE_Dir, "Q16@0:8" },
+    };
+    BOOL made = NO;
+    gS2AECls = G1B_MakeClass("SBContinuousExposeSwitcherToAppExposeSwitcherModifier", sup, iv, 1, m, sizeof m / sizeof m[0], NULL, &made);
+    if (made) gS2AEDirOff = G1B_IvarOffset(gS2AECls, "_g1b_direction");
+}
+
+// Creator, 16.2 Root -transitionModifierForMainTransitionEvent: for 2 -> 2 (animated, not gesture, not handled, not a windowing-mode change) when the App Expose bundle ids differ.
+// Installed first (inner), so the G1C post-processing hook of the same method sees this result as the "stock" modifier.
+%group G1B_RootTransition
+%hook SBContinuousExposeRootSwitcherModifier
+- (id)transitionModifierForMainTransitionEvent:(id)event {
+    id orig = %orig;
+    if (!G1B_ON() || !gS2AECls || !event || G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent)) || G1B_SendB0(event, @selector(isHandled))
+        || G1B_SendB0(event, @selector(isGestureInitiated)) || !G1B_SendB0(event, @selector(isAnimated))) return orig;
+    if (G1B_SendLL0(event, @selector(fromEnvironmentMode)) != 2 || G1B_SendLL0(event, @selector(toEnvironmentMode)) != 2) return orig;
+    NSString *from = G1B_Send0(event, @selector(fromAppExposeBundleID)), *to = G1B_Send0(event, @selector(toAppExposeBundleID));
+    if (from == to || [from isEqualToString:to] || (!from && !to)) return orig;
+    NSString *bid = to ?: from;
+    id me = (id)self;
+    SEL fs = NSSelectorFromString(@"floorModifierForTransitionEvent:");
+    id floor = [me respondsToSelector:fs] ? [G1B_Send1(me, fs, event) copy] : nil;
+    Class ac = NSClassFromString(@"SBAppExposeContinuousExposeSwitcherModifier");
+    id expose = (ac && [floor isKindOfClass:ac]) ? floor : nil;                                    // _SBSafeCast
+    SEL ini = @selector(initWithTransitionID:appExposeBundleID:direction:appExposeModifier:);
+    id tid = G1B_Send0(event, @selector(transitionID));
+    id n = (expose && tid) ? ((id (*)(id, SEL, id, id, unsigned long long, id))objc_msgSend)([gS2AECls alloc], ini, tid, bid, to == nil ? 1 : 0, expose) : nil;
+    return n ?: orig;
+}
+%end
+%end
 
 // ============================================================================================================
 // 4.1  SBContinuousExposeRootSwitcherModifier -_effectiveEnvironmentMode  (PORTABLE: real 16.0 bug)

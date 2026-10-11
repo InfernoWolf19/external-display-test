@@ -275,23 +275,46 @@ static __thread BOOL gBPG3BInBuildMenu;
 %end
 
 %hook UIMenu
-// 16.0 builds the STAGE_MANAGER_MENU_TITLE menu with +menuWithTitle:children: (0x1c5ee3b88); the 16.2 children list simply lacks the
-// _handleNavigateAppWindowsInStripKeyShortcut: command (cmd+opt+` with shift alternate). Filter it out while buildMenuWithBuilder: runs.
+// 16.0 builds the menus with +menuWithTitle:children: (STAGE_MANAGER_MENU_TITLE at 0x1c5ee3b88).  16.2 buildMenuWithBuilder: (0x1c7356c84) differs from 16.0
+// (0x1c5ee2a40) in the iPad part like this (decoded with the annotated listings of both):
+//   * the Stage Manager menu has no _handleNavigateAppWindowsInStripKeyShortcut: command (action 0x15/0x16 deleted)                    -> dropped here
+//   * the "next/previous app window" command (cmd + `, shift = previous) is the FIRST child of the switcher menu (16.0: the last one) -> moved to index 0
+//     and it always uses the plain titles NEXT_APP_WINDOW_DISCOVERABILITY / PREVIOUS_APP_WINDOW_DISCOVERABILITY (16.0 chose the *_ON_STAGE_* variants
+//     while Stage Manager is on)                                                                                                    -> command rebuilt with the plain titles
+//   * the full-screen command is titled ENTER_FULL_SCREEN_DISCOVERABILITY (16.0: ZOOM_DISCOVERABILITY)                                -> title swapped when the key exists in the strings table
+// The selectors stay the 16.0 names (_handleNavigateAppWindowInSpaceKeyShortcut:, _handleToggleMaximizationKeyShortcut:): 16.2 only renamed them
+// (_handleNavigateAppWindowKeyShortcut:, _handleEnterFullScreenKeyShortcut:, identical bodies) and SpringBoard's action table is keyed by the 16.0 names.
 + (id)menuWithTitle:(NSString *)title children:(NSArray *)children {
-    if (gBPG3BInBuildMenu && [children count]) {
-        SEL strip = NSSelectorFromString(@"_handleNavigateAppWindowsInStripKeyShortcut:");
-        NSMutableArray *kept = nil;
-        for (id c in children) {
-            BOOL drop = [c respondsToSelector:@selector(action)] && ((SEL (*)(id, SEL))objc_msgSend)(c, @selector(action)) == strip;
-            if (drop && !kept) {
-                kept = [NSMutableArray arrayWithCapacity:children.count];
-                for (id k in children) { if (k == c) break; [kept addObject:k]; }
-            } else if (kept && !drop) {
-                [kept addObject:c];
-            }
+    if (!gBPG3BInBuildMenu || ![children count]) return %orig;
+    SEL strip = NSSelectorFromString(@"_handleNavigateAppWindowsInStripKeyShortcut:");
+    SEL appWin = NSSelectorFromString(@"_handleNavigateAppWindowInSpaceKeyShortcut:");
+    SEL zoom = NSSelectorFromString(@"_handleToggleMaximizationKeyShortcut:");
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:children.count];
+    id moved = nil;
+    BOOL changed = NO;
+    for (id c in children) {
+        SEL act = [c respondsToSelector:@selector(action)] ? ((SEL (*)(id, SEL))objc_msgSend)(c, @selector(action)) : NULL;
+        if (act && act == strip) { changed = YES; continue; }
+        if (act && act == appWin) {
+            Class cmdC = NSClassFromString(@"UICommand"), altC = NSClassFromString(@"UICommandAlternate");
+            NSBundle *b = [NSBundle mainBundle];
+            NSString *next = [b localizedStringForKey:@"NEXT_APP_WINDOW_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
+            NSString *prev = [b localizedStringForKey:@"PREVIOUS_APP_WINDOW_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
+            id alt = [altC alternateWithTitle:prev action:appWin modifierFlags:0x20000];
+            id cmd = ((id (*)(id, SEL, id, id, SEL, id, long long, id, id))objc_msgSend)(cmdC,
+                NSSelectorFromString(@"commandWithTitle:image:action:input:modifierFlags:propertyList:alternates:"), next, nil, appWin, @"`", (long long)0x100000, nil, @[ alt ]);
+            moved = cmd ?: c;
+            changed = YES;
+            continue;
         }
-        if (kept) return %orig(title, kept);
+        if (act && act == zoom) {
+            NSString *t = [[NSBundle mainBundle] localizedStringForKey:@"ENTER_FULL_SCREEN_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
+            if (t.length && ![t isEqualToString:@"ENTER_FULL_SCREEN_DISCOVERABILITY"] && [c respondsToSelector:@selector(setDiscoverabilityTitle:)]) [c setDiscoverabilityTitle:t];
+        }
+        [out addObject:c];
     }
+    if (moved) [out insertObject:moved atIndex:0];
+    if (changed) return %orig(title, out);
     return %orig;
 }
 %end
@@ -1168,7 +1191,6 @@ static __thread __unsafe_unretained id gBPG3BSwitcherOverride;
 static __thread int tBPOrthDepth;     // > 0 inside a user-resize modifier method whose item may use orthogonal sizes
 static __thread int tBPOrthBuild;     // > 0 while an orthogonal fixed grid is being created
 static __thread int tBPOrthMerge;     // > 0 while the transposed build is running (re-entrancy guard)
-static __thread int tBPNoPhoneOnPad;  // > 0 while classicAppPhoneAppRunningOnPad must answer NO (16.2 launch semantics)
 
 static BOOL BPG3BO_Bool0(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
 static unsigned long long BPG3BO_ULL0(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((unsigned long long (*)(id, SEL))objc_msgSend)(o, s) : 0; }
@@ -1678,29 +1700,8 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
 }
 %end
 
-// 1.5 handle: 16.2 launch/supported orientation semantics for Medusa-capable apps (the 16.0 "phone app on pad in Stage Manager is portrait" special case is gone)
-%hook SBApplication
-- (BOOL)classicAppPhoneAppRunningOnPad {
-    if (tBPNoPhoneOnPad > 0) return NO;
-    return %orig;
-}
-%end
-
-%hook SBDeviceApplicationSceneHandle
-- (long long)_launchingInterfaceOrientationForOrientation:(long long)o {
-    id app = BP_G3B_Send0(self, BPS("application"));
-    BOOL med = BP_G3B_On("g3b_orient") && BPG3BO_Bool0(app, BPS("isMedusaCapable"));
-    if (med) tBPNoPhoneOnPad++;
-    long long r = %orig;
-    if (med) tBPNoPhoneOnPad--;
-    return r;
-}
-- (unsigned long long)_mainSceneSupportedInterfaceOrientations {
-    id app = BP_G3B_Send0(self, BPS("application"));
-    if (BP_G3B_On("g3b_orient") && BPG3BO_Bool0(app, BPS("isMedusaCapable"))) return 0x1e;      // 16.2 0x1c72aa11c
-    return %orig;
-}
-%end
+// 1.5 handle: moved to G3.x (g3handle): the FULL 16.2 -_launchingInterfaceOrientationForOrientation: / -_mainSceneSupportedInterfaceOrientations bodies
+// (0.7.0), which replaced the 0.6.x thread-local "phone app on pad answers NO" flag and the 0x1e shortcut that lived here.
 
 %end // G3B_Orient
 
