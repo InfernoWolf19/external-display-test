@@ -20,10 +20,17 @@
 //     defaultWindowSize -> nearestGridSizeForProposedSize; 16.2 0x1c75a3b34..0x1c75a3b8c: size <= 0 -> defaultWindowSize
 //     sizeInBounds:defaultSize:screenEdgePadding:), then the write-back stores the real size and the policy follows from it.
 //
-// What this file does: when the user's Zoom request changes a full-size item to the smallest policy 0 (leaving maximized) it applies the
-// same primitive 16.2 uses (Unspecified size) to the requested attributes, so the item comes back with the live default window size.
-// A window the user resized before keeps its stored size (not full size -> untouched), exactly like on 16.0 and as the user reports.
-// No window size is invented here; nothing is computed.  Switch: "g3c" (Backport162.off.g3c).
+// ROUND 2 (device log): the stored size of a never-windowed item is UNSPECIFIED ({0,0}), not (1,1).  The calculator resolves (policy 0,
+// Unspecified) to chamoisLayoutAttributes.defaultWindowSize snapped by the grid; with the 16.0 settings builder (0x1c6413524 ->
+// _defaultAppSizeForContainerBounds 0x1c641391c) that is the whole container, so "window" and "maximized" look identical and the write-back
+// (_SBPreferredDisplayItemSizingPolicy 0x1c7954330) derives policy 2.  16.2's builder (0x1c78c0f50) picks the default window from its column
+// grid: the SECOND largest width (index count-2, 0x1c78c1534..0x1c78c1548), i.e. one grid step below full screen.  See specs/AUDIT-ZOOM-0.6.5.md "Round 2".
+//
+// What this file does: when the Zoom request leaves a never-windowed item (policy 0, Unspecified size, or a full-size stored size) it stores an
+// EXPLICIT size = the live grid's size one step below full width (-[SBDisplayItemLayoutGrid gridSizeAtIndexFromFullWidth:1 ...], the same
+// grid and the same index 16.2 uses for its default window).  That is the state a hand-resized window has (policy 0 + explicit size), which the
+// user confirmed toggles fine.  Also when Zoom would maximize an item whose Unspecified default window already IS the whole container (nothing
+// would visibly change), the press goes to the window directly.  Switch: "g3c" (Backport162.off.g3c).  No number is invented.
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -82,6 +89,58 @@ static BOOL G3C_IsFullSize(id attrs) {
     return (s.width >= sc.width * 0.995 && s.height >= sc.height * 0.995) || (s.width >= sc.height * 0.995 && s.height >= sc.width * 0.995);
 }
 
+// Live objects of the switcher the Zoom was pressed in (set by the handler hook, used while armed).
+static __weak id gG3CSwitcherVC;
+
+static id G3C_Obj(id o, const char *sel) {
+    SEL s = sel_registerName(sel);
+    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil;
+}
+
+static BOOL G3C_IsUnspecified(id attrs) {
+    CGSize s;
+    return G3C_ReadSize(attrs, &s) && s.width == 0 && s.height == 0;
+}
+
+// Grid size for the item.  index >= 0: gridSizeAtIndexFromFullWidth:index (0 = full width, 1 = one step below, the 16.2 default window pick);
+// index < 0: nearestGridSizeForProposedSize:(defaultWindowSize) = what the frame code does for an Unspecified size.  Returns NO on any miss.
+static BOOL G3C_GridSize(id vc, id entity, long long index, CGSize *out, CGSize *container) {
+    if (!vc || !entity || !out) return NO;
+    SEL calcS = sel_registerName("displayItemLayoutAttributesCalculator"), boundsS = sel_registerName("containerViewBounds");
+    if (![vc respondsToSelector:calcS] || ![vc respondsToSelector:boundsS]) return NO;
+    id calc = G3C_Obj(vc, "displayItemLayoutAttributesCalculator");
+    id grid = G3C_Obj(calc, "_chamoisLayoutGridCache");
+    id attrs = G3C_Obj(vc, "chamoisLayoutAttributes");
+    id handle = G3C_Obj(entity, "sceneHandle");
+    id item = G3C_Obj(handle, "displayItemRepresentation");
+    SEL infoS = sel_registerName("layoutRestrictionInfoForItem:");
+    if (!grid || !attrs || !item || ![calc respondsToSelector:infoS]) return NO;
+    id info = ((id (*)(id, SEL, id))objc_msgSend)(calc, infoS, item);
+    CGRect bounds = ((CGRect (*)(id, SEL))objc_msgSend)(vc, boundsS);
+    SEL oS = sel_registerName("switcherInterfaceOrientation"), scS = sel_registerName("screenScale");
+    long long orient = [vc respondsToSelector:oS] ? ((long long (*)(id, SEL))objc_msgSend)(vc, oS) : 0;
+    double scale = [vc respondsToSelector:scS] ? ((double (*)(id, SEL))objc_msgSend)(vc, scS) : 0;
+    if (bounds.size.width <= 0 || bounds.size.height <= 0 || scale <= 0) return NO;
+    CGSize r = CGSizeZero;
+    if (index >= 0) {
+        SEL gS = sel_registerName("gridSizeAtIndexFromFullWidth:forBounds:contentOrientation:layoutRestrictionInfo:screenScale:chamoisLayoutAttributes:");
+        if (![grid respondsToSelector:gS]) return NO;
+        r = ((CGSize (*)(id, SEL, unsigned long long, CGRect, long long, id, double, id))objc_msgSend)(grid, gS, (unsigned long long)index, bounds, orient, info, scale, attrs);
+    } else {
+        SEL nS = sel_registerName("nearestGridSizeForProposedSize:inBounds:contentOrientation:layoutRestrictionInfo:screenScale:chamoisLayoutAttributes:");
+        SEL dS = sel_registerName("defaultWindowSize");
+        if (![grid respondsToSelector:nS] || ![attrs respondsToSelector:dS]) return NO;
+        CGSize def = ((CGSize (*)(id, SEL))objc_msgSend)(attrs, dS);
+        r = ((CGSize (*)(id, SEL, CGSize, CGRect, long long, id, double, id))objc_msgSend)(grid, nS, def, bounds, orient, info, scale, attrs);
+    }
+    if (r.width <= 0 || r.height <= 0) return NO;
+    *out = r;
+    if (container) *container = bounds.size;
+    return YES;
+}
+
+static BOOL G3C_IsContainer(CGSize s, CGSize c) { return s.width >= c.width - 0.5 && s.height >= c.height - 0.5; }
+
 static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
     SEL reqS = @selector(requestedLayoutAttributesForEntity:), polS = @selector(sizingPolicy), modS = @selector(attributesByModifyingSize:);
     if (![ctx respondsToSelector:reqS] || ![attrs respondsToSelector:polS] || ![attrs respondsToSelector:modS]) return attrs;
@@ -89,13 +148,26 @@ static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
     if (!prev || ![prev respondsToSelector:polS]) return attrs;
     long long newPolicy = ((long long (*)(id, SEL))objc_msgSend)(attrs, polS);
     long long prevPolicy = ((long long (*)(id, SEL))objc_msgSend)(prev, polS);
+    BOOL unspec = G3C_IsUnspecified(attrs), full = G3C_IsFullSize(attrs);
     { CGSize sn = CGSizeZero; BOOL okn = G3C_ReadSize(attrs, &sn);
-      BP_Log(@"[g3c] setRequestedLayoutAttributes while armed: prevPolicy %lld newPolicy %lld size %s{%g, %g} fullSize %d", prevPolicy, newPolicy, okn ? "" : "(unreadable) ", sn.width, sn.height, G3C_IsFullSize(attrs)); }
-    // leaving maximized / zoomed-to-fill for snap-to-grid (policy 0) while the stored size is still the whole container
-    if (newPolicy != 0 || prevPolicy == 0 || !G3C_IsFullSize(attrs)) return attrs;
-    id out = ((id (*)(id, SEL, CGSize))objc_msgSend)(attrs, modS, CGSizeZero);   // == SBDisplayItemAttributedSizeUnspecified() in the 16.0 model
+      BP_Log(@"[g3c] setRequestedLayoutAttributes while armed: prevPolicy %lld newPolicy %lld size %s{%g, %g} unspecified %d fullSize %d", prevPolicy, newPolicy, okn ? "" : "(unreadable) ", sn.width, sn.height, unspec, full); }
+    if (!unspec && !full) return attrs;                                    // explicit smaller size: the hand-resized case, untouched
+    id vc = gG3CSwitcherVC;
+    CGSize win = CGSizeZero, cont = CGSizeZero;
+    BOOL leaving = (newPolicy == 0 && prevPolicy != 0);                    // maximized / zoomed -> snap-to-grid
+    BOOL stay = (newPolicy != 0 && prevPolicy == 0 && unspec);             // window -> maximize, but the Unspecified window may already be full screen
+    if (!leaving && !stay) return attrs;
+    if (stay) {
+        CGSize def = CGSizeZero;
+        if (!G3C_GridSize(vc, entity, -1, &def, &cont) || !G3C_IsContainer(def, cont)) return attrs;     // a real smaller default window: maximize is visible, keep it
+        BP_Log(@"[g3c] zoom: default window {%g, %g} already fills the container: the press leaves full screen instead", def.width, def.height);
+    }
+    if (!G3C_GridSize(vc, entity, 1, &win, &cont) || G3C_IsContainer(win, cont)) { BP_Log(@"[g3c] zoom: no grid size below full screen (vc %d), request untouched", vc != nil); return attrs; }
+    id base = stay ? prev : attrs;                                          // stay: keep policy 0 of the current state
+    CGSize frac = CGSizeMake(win.width / cont.width, win.height / cont.height);   // fractions of the container (<= 1) = 16.0 data model, also read by the 16.2 emulation
+    id out = ((id (*)(id, SEL, CGSize))objc_msgSend)(base, modS, frac);
     if (!out) return attrs;
-    BP_Log(@"[g3c] zoom: full-size item leaves policy %lld for policy 0, stored size reset to Unspecified (default window size)", prevPolicy);
+    BP_Log(@"[g3c] zoom: stored size {%g, %g} of {%g, %g} (grid index 1 from full width), policy %lld", win.width, win.height, cont.width, cont.height, stay ? prevPolicy : newPolicy);
     gG3CArmedUntil = 0;
     return out;
 }
@@ -109,7 +181,10 @@ static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
 // 16.0 0x1c632ba50 / 16.2 0x1c77ccb6c; action type 9 = the "Zoom" (maximization) item (UIAction block 0x1c645abb8 sends 9).
 - (void)_topAffordanceViewController:(id)vc handleActionType:(long long)type transitionSource:(long long)source {
     if (type == 9) BP_Log(@"[g3c] handleActionType 9 (Zoom) seen, switch %d", G3C_On());
-    if (type == 9 && G3C_On()) gG3CArmedUntil = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + kG3CWindowNs;
+    if (type == 9 && G3C_On()) {
+        gG3CSwitcherVC = G3C_Obj(G3C_Obj(G3C_Obj((id)self, "_windowScene"), "switcherController"), "contentViewController");
+        gG3CArmedUntil = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + kG3CWindowNs;
+    }
     %orig(vc, type, source);
 }
 
