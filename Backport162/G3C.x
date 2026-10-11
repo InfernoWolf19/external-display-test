@@ -26,6 +26,10 @@
 // (_SBPreferredDisplayItemSizingPolicy 0x1c7954330) derives policy 2.  16.2's builder (0x1c78c0f50) picks the default window from its column
 // grid: the SECOND largest width (index count-2, 0x1c78c1534..0x1c78c1548), i.e. one grid step below full screen.  See specs/AUDIT-ZOOM-0.6.5.md "Round 2".
 //
+// ROUND 3: G2.x now ports the 16.2 default window size (switch g2defsize, specs/AUDIT-DEFSIZE-0.6.9.md), so an Unspecified size is already a
+// real window smaller than the container.  This file then does nothing for a never-windowed item (Zoom maximizes, Zoom again returns to the
+// default window, like 16.2); it stays as the safety net for g2defsize off and for items with a stored full-size window.
+//
 // What this file does: when the Zoom request leaves a never-windowed item (policy 0, Unspecified size, or a full-size stored size) it stores an
 // EXPLICIT size = the live grid's size one step below full width (-[SBDisplayItemLayoutGrid gridSizeAtIndexFromFullWidth:1 ...], the same
 // grid and the same index 16.2 uses for its default window).  That is the state a hand-resized window has (policy 0 + explicit size), which the
@@ -157,6 +161,16 @@ static id G3C_FixedAttributes(id ctx, id attrs, id entity) {
     BOOL leaving = (newPolicy == 0 && prevPolicy != 0);                    // maximized / zoomed -> snap-to-grid
     BOOL stay = (newPolicy != 0 && prevPolicy == 0 && unspec);             // window -> maximize, but the Unspecified window may already be full screen
     if (!leaving && !stay) return attrs;
+    if (leaving && unspec) {
+        // ROUND 3 (specs/AUDIT-DEFSIZE-0.6.9.md): with the G2.x port of the 16.2 default window size (switch g2defsize) the calculator resolves
+        // (policy 0, Unspecified) to a window smaller than the container by itself, exactly like 16.2: nothing to add.  The explicit grid size
+        // below stays the fallback for the case where the live default window still fills the container (g2defsize off / killed).
+        CGSize d0 = CGSizeZero, c0 = CGSizeZero;
+        if (G3C_GridSize(vc, entity, -1, &d0, &c0) && !G3C_IsContainer(d0, c0)) {
+            BP_Log(@"[g3c] zoom: leaving full screen with an Unspecified size, the default window {%g, %g} of {%g, %g} (16.2 default size) applies, request untouched", d0.width, d0.height, c0.width, c0.height);
+            return attrs;
+        }
+    }
     if (stay) {
         CGSize def = CGSizeZero;
         if (!G3C_GridSize(vc, entity, -1, &def, &cont) || !G3C_IsContainer(def, cont)) return attrs;     // a real smaller default window: maximize is visible, keep it

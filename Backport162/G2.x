@@ -40,6 +40,7 @@
 @interface SBChamoisOverlappingModel : NSObject @end
 @interface SBSwitcherChamoisLayoutAttributes : NSObject @end
 @interface SBSwitcherChamoisSettings : NSObject @end
+@interface _SBDisplayItemFlexibleGrid : NSObject @end
 @interface SBAppLayout : NSObject @end
 @interface SBAppLayoutOverlappingModelCacheKey : NSObject @end
 @interface SBFluidSwitcherItemContainer : NSObject @end
@@ -1374,6 +1375,243 @@ static void BP_G2_SetupAttributes(void) {
 %end
 %end // G2Attr
 
+// ---- A6b: the 16.2 DEFAULT WINDOW SIZE (specs/AUDIT-DEFSIZE-0.6.9.md) -----------------------------------------------------
+// 16.2 -[SBSwitcherChamoisSettings layoutAttributesForContainerBounds:...] 0x1c78c0f50 computes defaultWindowSize from its column / row grid
+// (lists built by _gridWidthsForSafeWidth:minimumWidth:stageInterItemSpacing: 0x1c78c18fc and _gridHeightsForSafeHeight:minimumHeight:
+// stageInterItemSpacing: 0x1c78c1b54, snapped with _nearestGridSizeForSize:gridWidths:gridHeights:bounds: 0x1c78c1c24); 16.0 0x1c6413524 returns
+// the un-snapped _defaultAppSizeForContainerBounds: value 0x1c641391c, which is the whole container when the display is embedded and
+// nativeBounds.width < 2048 (11 inch iPads).  Everything below is the 16.2 arithmetic, constants read from the 20C65 cache.
+// Exact: formulas, constants, branch structure.  Reused 16.0 bodies (identical instruction by instruction to 16.2): _stripCardScale...,
+// _stripWidth....  Reimplemented: grid lists, nearest grid, _minimumDefaultWindowSizeForContainerBounds:stripWidth:.
+
+typedef struct {
+    double E, persp, sves, siis, cs, stripW, minWinW, wd, defW, hSel, ovlW, hs;
+    CGSize minDef, def;
+    unsigned long long rows;
+    long long idx;
+} BPG2DefSize;
+
+@interface BPG2DefBox : NSObject { @public BPG2DefSize r; NSArray *widths; NSArray *heights; } @end
+@implementation BPG2DefBox @end
+
+// BaseBoard float compare (epsilon compare), resolved once; plain compare fallback.
+static BOOL BP_G2_DSEq(double a, double b) {
+    static int (*fn)(double, double); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (int (*)(double, double))dlsym(RTLD_DEFAULT, "BSFloatEqualToFloat"); });
+    return fn ? fn(a, b) != 0 : fabs(a - b) < 1e-6;
+}
+static BOOL BP_G2_DSGt(double a, double b) {
+    static int (*fn)(double, double); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (int (*)(double, double))dlsym(RTLD_DEFAULT, "BSFloatGreaterThanFloat"); });
+    return fn ? fn(a, b) != 0 : (a > b && !BP_G2_DSEq(a, b));
+}
+
+// 162 0x1c78c18fc.  The fadd/fmul/frintm/fadd/fmul chains around every NSNumber are floor() (x*2*0.5 is exact).
+static NSArray *BP_G2_DSGridWidths(double Ws, double minW, double sp) {
+    NSMutableArray *a = [NSMutableArray array];
+    if (!(minW + sp > 0.0)) return a;                                  // 0x1c78c1944: `fcmp d8,#0; b.ls` -> empty (the device logs, we do not)
+    double q = (Ws + sp) / (minW + sp), fq = floor(q);
+    unsigned long long n = (q > 0.0) ? (fq >= 256.0 ? 256ull : (unsigned long long)fq) : 0ull;   // fcvtmu; 256 = sanity cap (real values <= ~25)
+    double half = floor((Ws - sp) * 0.5);                              // n == 2 entry
+    for (; n != 0; n--) {
+        if (n == 1) { [a addObject:@(Ws)]; }                           // 0x1c78c1a50
+        else if (n == 2) { [a addObject:@(half)]; }                    // 0x1c78c1a5c
+        else {
+            double dn = (double)n;
+            double w = floor((Ws - (dn - 1.0) * sp) / dn);
+            double rest = (Ws - sp) - w;
+            [a addObject:@(floor(w))];
+            [a addObject:@(floor(rest))];
+            if (fq == dn) [a addObject:@(floor(Ws - w * 0.5))];        // 0x1c78c1a24: only for the first (largest) column count
+        }
+    }
+    if (!(fq > 2.0)) {                                                 // 0x1c78c1aac: narrow containers get {minW, rest}
+        [a addObject:@(minW)];
+        double rest = (Ws - sp) - minW;
+        if (BP_G2_DSGt(rest, 0.0)) [a addObject:@(rest)];
+    }
+    return a;
+}
+
+// 162 0x1c78c1b54
+static NSArray *BP_G2_DSGridHeights(double Hs, double minH, double sp) {
+    NSMutableArray *a = [NSMutableArray array];
+    if (Hs < minH) return a;
+    double step = (Hs + (-0.5) * (Hs - sp)) * 0.25;
+    for (int i = 0; i < 64; i++) {                                     // do { add floor(Hs); Hs -= step } while (Hs >= minH)
+        [a addObject:@(floor(Hs))];
+        Hs -= step;
+        if (!(Hs >= minH) || !(step > 0.0)) break;
+    }
+    return a;
+}
+
+// 162 0x1c78c1c24: nearest entry of each (sorted) list, strict `<` so the first minimum wins; both at the largest entry -> the container size.
+static CGSize BP_G2_DSNearest(CGSize p, NSArray *ws, NSArray *hs, CGSize full) {
+    double nw = 0.0, nh = 0.0, best = DBL_MAX;
+    for (NSNumber *n in ws) { double v = n.doubleValue, d = fabs(v - p.width); if (d < best) { nw = v; best = d; } }
+    best = DBL_MAX;
+    for (NSNumber *n in hs) { double v = n.doubleValue, d = fabs(v - p.height); if (d < best) { nh = v; best = d; } }
+    double lw = [(NSNumber *)ws.lastObject doubleValue], lh = [(NSNumber *)hs.lastObject doubleValue];
+    if (BP_G2_DSEq(nw, lw) && BP_G2_DSEq(nh, lh)) return full;
+    return CGSizeMake(nw, nh);
+}
+
+// 162 0x1c78c207c (16.0 0x1c6413cd4 is the same table with hard-coded widths 1158 / 1024 where 16.2 has W - stripWidth).
+static CGSize BP_G2_DSMinDefault(CGSize b, double S) {
+    double W = b.width, H = b.height;
+    if (BP_G2_DSEq(W, 1389.0) && BP_G2_DSEq(H, 970.0)) return CGSizeMake(1194.0, 834.0);
+    if (BP_G2_DSEq(W, 1590.0) && BP_G2_DSEq(H, 1192.0)) return CGSizeMake(1366.0, 1024.0);
+    if (BP_G2_DSEq(W, 1192.0) && BP_G2_DSEq(H, 1590.0)) return CGSizeMake(1024.0, 1366.0);
+    if (BP_G2_DSEq(W, 1681.0) && BP_G2_DSEq(H, 1260.0)) return CGSizeMake(1444.0, 1082.0);
+    if (BP_G2_DSEq(W, 1366.0) && BP_G2_DSEq(H, 1024.0)) return CGSizeMake(1366.0 - S, 858.0);
+    if (BP_G2_DSEq(W, 1194.0) && BP_G2_DSEq(H, 834.0)) return CGSizeMake(1194.0 - S, 683.0);
+    return CGSizeZero;
+}
+
+static double BP_G2_DSGetD(id o, const char *sel) { SEL s = sel_registerName(sel); return (o && [o respondsToSelector:s]) ? ((double (*)(id, SEL))objc_msgSend)(o, s) : 0.0; }
+static CGSize BP_G2_DSGetSz(id o, const char *sel) { SEL s = sel_registerName(sel); return (o && [o respondsToSelector:s]) ? ((CGSize (*)(id, SEL))objc_msgSend)(o, s) : CGSizeZero; }
+static BOOL BP_G2_DSSetD(id o, const char *sel, double v) { SEL s = sel_registerName(sel); if (!o || ![o respondsToSelector:s]) return NO; ((void (*)(id, SEL, double))objc_msgSend)(o, s, v); return YES; }
+static BOOL BP_G2_DSSetSz(id o, const char *sel, CGSize v) { SEL s = sel_registerName(sel); if (!o || ![o respondsToSelector:s]) return NO; ((void (*)(id, SEL, CGSize))objc_msgSend)(o, s, v); return YES; }
+
+// The whole 16.2 computation.  `useStrip`: recompute the strip geometry with the 16.2 inputs (E threshold 1920, stripVerticalEdgeSpacing rows > 4 ? 64 : 32);
+// NO: take E / stripWidth / card scale from the 16.0 attributes `a16` (then only the grid part is 16.2).  Returns nil on any miss.
+static BPG2DefBox *BP_G2_DSCompute(id settings, id a16, CGRect b, double dockH, double sb, BOOL ps, BOOL pd, BOOL emb, BOOL useStrip) {
+    double W = b.size.width, H = b.size.height;
+    if (!(W > 0.0) || !(H > 0.0) || !isfinite(W) || !isfinite(H)) return nil;
+    BPG2DefBox *box = [BPG2DefBox new];
+    BPG2DefSize *r = &box->r;
+    memset(r, 0, sizeof *r);
+    r->rows = BP_G2_ULL(a16, sel_registerName("numberOfRowsWhileInApp"));
+    r->E = (W > 1920.0) ? 36.0 : sb;                                                   // 0x1c78c1170..0x1c78c1188 (16.0: W > 1681)
+    r->persp = (W > 1681.0) ? 3000.0 : 2000.0;                                        // 0x1c78c1164
+    r->sves = (r->rows > 4) ? 64.0 : 32.0;                                            // 0x1c78c11d8 (16.0: always 64)
+    r->siis = (r->rows > 4) ? 64.0 : 44.0;                                            // 0x1c78c11e4
+    SEL sCS = sel_registerName("_stripCardScaleForContainerBounds:screenEdgePadding:stripVerticalEdgeSpacing:stripInterItemSpacing:floatingDockHeight:numberOfRows:");
+    SEL sSW = sel_registerName("_stripWidthForContainerBounds:screenEdgePadding:stripStackDistance:stripCardScale:stripTiltAngle:containerPerspective:");
+    if (useStrip && settings && [settings respondsToSelector:sCS] && [settings respondsToSelector:sSW]) {
+        r->cs = ((double (*)(id, SEL, CGRect, double, double, double, double, unsigned long long))objc_msgSend)(settings, sCS, b, r->E, r->sves, r->siis, dockH, r->rows);
+        r->stripW = ((double (*)(id, SEL, CGRect, double, double, double, double, double))objc_msgSend)(settings, sSW, b, r->E, 60.0, r->cs, 1.1344640137963142, r->persp);
+    } else {
+        r->E = BP_G2_DSGetD(a16, "screenEdgePadding");
+        r->persp = BP_G2_DSGetD(a16, "containerPerspective");
+        r->sves = BP_G2_DSGetD(a16, "stripVerticalEdgeSpacing");
+        r->siis = BP_G2_DSGetD(a16, "stripInterItemSpacing");
+        r->cs = BP_G2_DSGetD(a16, "stripCardScale");
+        r->stripW = BP_G2_DSGetD(a16, "stripWidth");
+    }
+    double S = r->stripW, E = r->E, E2 = E + E;
+    r->minDef = BP_G2_DSMinDefault(b.size, S);                                         // 0x1c78c1278
+    double Hd = H - dockH;
+    r->minWinW = (W > 1920.0) ? 414.0 : 320.0;                                        // 0x1c78c12a0..0x1c78c12ac (16.0: emb ? 320 : 414)
+    r->hs = Hd - E2;                                                                  // 0x1c78c1420 (maximumWindowHeightWithDock)
+    BOOL both = ps && pd;
+
+    NSMutableArray *widths = [NSMutableArray array];
+    if (both) {                                                                       // 0x1c78c12d8
+        [widths addObjectsFromArray:BP_G2_DSGridWidths(W, r->minWinW, 10.0)];
+    } else if (ps) {                                                                  // 0x1c78c1308
+        [widths addObjectsFromArray:BP_G2_DSGridWidths(W - E2, r->minWinW, 10.0)];
+    } else {                                                                          // 0x1c78c1344: strip visible
+        double sp = MIN(S, (W - r->minDef.width) * 0.5);
+        double safe = emb ? (W - E2) : (W - sp - E);
+        [widths addObjectsFromArray:BP_G2_DSGridWidths(safe, r->minWinW, 10.0)];
+        if (!BP_G2_DSEq(sp, S) && widths.count) [widths removeLastObject];            // 0x1c78c13b0..0x1c78c13c0
+        if (!BP_G2_DSEq(sp, S)) [widths addObject:@(W - 2.0 * sp)];                   // 0x1c78c13c8..0x1c78c13e8
+        [widths addObject:@(W - E2)];                                                 // 0x1c78c13f0..0x1c78c140c
+    }
+    [widths sortUsingSelector:@selector(compare:)];
+
+    NSMutableArray *heights = [NSMutableArray array];
+    if (both) {                                                                       // 0x1c78c1450
+        [heights addObjectsFromArray:BP_G2_DSGridHeights(H, 600.0, 10.0)];
+    } else if (pd) {                                                                  // 0x1c78c146c
+        [heights addObjectsFromArray:BP_G2_DSGridHeights(H - E2, 600.0, 10.0)];
+    } else {                                                                          // 0x1c78c14a0
+        [heights addObjectsFromArray:BP_G2_DSGridHeights(r->hs, 600.0, 10.0)];
+        [heights addObject:@(H - E2)];
+    }
+    [heights sortUsingSelector:@selector(compare:)];
+    box->widths = [widths copy];
+    box->heights = [heights copy];
+
+    NSInteger cnt = (NSInteger)heights.count;                                         // 0x1c78c1524..0x1c78c1548
+    r->idx = cnt + (pd ? -1 : (cnt == 1 ? -1 : -2));
+    if (r->idx < 0 || r->idx >= cnt || widths.count == 0) return nil;                 // the device would throw NSRangeException here
+    r->hSel = [(NSNumber *)heights[(NSUInteger)r->idx] doubleValue];
+    double d11 = pd ? 0.0 : E2;
+    double capped = MAX(0.65 * W, 1590.0);
+    double c = MIN(W - 2.0 * S, capped);
+    c = MAX(r->minDef.width, c);
+    r->wd = (ps && emb) ? (W - d11) : c;                                              // 0x1c78c15a4..0x1c78c15a8
+    BOOL over = BP_G2_DSGt(r->wd, 1590.0);
+    r->defW = over ? 1590.0 : r->wd;                                                  // 0x1c78c15c0..0x1c78c15c8
+    r->ovlW = over ? 1590.0 : r->wd * 0.8;                                            // 0x1c78c15b4, 0x1c78c15cc
+    CGSize full = CGSizeMake(W, H);
+    r->def = BP_G2_DSNearest(CGSizeMake(r->defW, r->hSel), box->widths, box->heights, full);   // 0x1c78c15f8
+    r->ovlW = BP_G2_DSNearest(CGSizeMake(r->ovlW, H), box->widths, box->heights, full).width;   // 0x1c78c1628
+    return box;
+}
+
+static NSMutableDictionary *gBPG2DSCache;
+static NSString *gBPG2DSLastLog;
+
+// Hook body: compute (cached per input set), write the 16.2 values into the 16.0 attributes, log once per change.
+static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, long long orient, double dockH, double sb, BOOL rfs, BOOL ps, BOOL pd, BOOL emb) {
+    BOOL useStrip = BP_OnName("g2defsize_strip");
+    BOOL keepRfs = rfs && !BP_OnName("g2defsize_rfs");
+    unsigned long long rows = BP_G2_ULL(attrs, sel_registerName("numberOfRowsWhileInApp"));
+    double sw16 = BP_G2_DSGetD(attrs, "stripWidth"), cs16 = BP_G2_DSGetD(attrs, "stripCardScale"), e16 = BP_G2_DSGetD(attrs, "screenEdgePadding");
+    CGSize def16 = BP_G2_DSGetSz(attrs, "defaultWindowSize");
+    NSString *key = [NSString stringWithFormat:@"%.4f,%.4f,%.4f,%.4f|%.3f|%.3f|%d%d%d%d|%llu|%.5f|%.5f|%.3f", b.origin.x, b.origin.y, b.size.width, b.size.height, dockH, sb, ps, pd, emb, useStrip, rows, sw16, cs16, e16];
+    BPG2DefBox *box;
+    @synchronized ([BPG2DefBox class]) {
+        if (!gBPG2DSCache) gBPG2DSCache = [NSMutableDictionary new];
+        box = gBPG2DSCache[key];
+        if (!box) {
+            box = BP_G2_DSCompute(settings, attrs, b, dockH, sb, ps, pd, emb, useStrip);
+            if (box) { if (gBPG2DSCache.count >= 8) [gBPG2DSCache removeAllObjects]; gBPG2DSCache[key] = box; }
+        }
+    }
+    if (!box) { if (BP_LogEnabled()) BP_Log(@"[defsize] compute failed for bounds %@ (kept 16.0 default %@)", NSStringFromCGRect(b), NSStringFromCGSize(def16)); return; }
+    BPG2DefSize *r = &box->r;
+    BOOL sane = r->def.width > 0.0 && r->def.height > 0.0 && r->def.width <= b.size.width + 0.5 && r->def.height <= b.size.height + 0.5;
+    if (sane && !keepRfs) BP_G2_DSSetSz(attrs, "setDefaultWindowSize:", r->def);
+    if (sane) {
+        // the other outputs of the same 16.2 block: the 16.0 grid (_SBDisplayItemFlexibleGrid 0x1c6468f0c) reads exactly these, so it now builds the 16.2 lists
+        BP_G2_DSSetSz(attrs, "setMinimumDefaultWindowSize:", r->minDef);
+        BP_G2_DSSetD(attrs, "setMinimumWindowWidth:", r->minWinW);
+        BP_G2_DSSetD(attrs, "setMaximumWindowHeightWithDock:", r->hs);
+        BP_G2_DSSetD(attrs, "setMaximumWindowWidthForOverlapping:", r->ovlW);
+        if (useStrip) {
+            BP_G2_DSSetD(attrs, "setScreenEdgePadding:", r->E);
+            BP_G2_DSSetD(attrs, "setContainerPerspective:", r->persp);
+            BP_G2_DSSetD(attrs, "setStripVerticalEdgeSpacing:", r->sves);
+            BP_G2_DSSetD(attrs, "setStripInterItemSpacing:", r->siis);
+            BP_G2_DSSetD(attrs, "setStripCardScale:", r->cs);
+            BP_G2_DSSetD(attrs, "setStripWidth:", r->stripW);
+        }
+        SEL gw = sel_registerName("setGridWidths:"), gh = sel_registerName("setGridHeights:");     // 16.2 attributes lists (G2 extras)
+        if ([attrs respondsToSelector:gw]) ((void (*)(id, SEL, id))objc_msgSend)(attrs, gw, box->widths);
+        if ([attrs respondsToSelector:gh]) ((void (*)(id, SEL, id))objc_msgSend)(attrs, gh, box->heights);
+    }
+    if (BP_LogEnabled()) {
+        NSString *sig = [NSString stringWithFormat:@"%@|%@|%d|%d%d%d%d|%.2f|%.2f", NSStringFromCGRect(b), NSStringFromCGSize(r->def), sane, rfs, ps, pd, emb, dockH, sb];
+        BOOL changed;
+        @synchronized ([BPG2DefBox class]) { changed = ![gBPG2DSLastLog isEqualToString:sig]; if (changed) gBPG2DSLastLog = sig; }
+        if (changed) {
+            BP_Log(@"[defsize] bounds %@ native %@ orient %lld dock %.1f statusBar %.1f rfs %d stripHidden %d dockHidden %d embedded %d (orient/native are cache key only in 16.2)",
+                   NSStringFromCGRect(b), NSStringFromCGRect(nb), orient, dockH, sb, rfs, ps, pd, emb);
+            BP_Log(@"[defsize]   E %.1f persp %.0f rows %llu stripVEdge %.0f stripInter %.0f cardScale %.5f stripWidth %.3f minDefault %@ minWindowWidth %.0f maxHeightWithDock %.1f (16.0 attrs: E %.1f stripWidth %.3f cardScale %.5f) strip geometry %s",
+                   r->E, r->persp, r->rows, r->sves, r->siis, r->cs, r->stripW, NSStringFromCGSize(r->minDef), r->minWinW, r->hs, e16, sw16, cs16, useStrip ? "16.2 (applied)" : "16.0 (kept)");
+            BP_Log(@"[defsize]   gridWidths %@ gridHeights %@ -> height index %lld = %.1f; width formula %.3f -> proposed (%.3f, %.1f); overlapping width %.1f",
+                   [box->widths componentsJoinedByString:@","], [box->heights componentsJoinedByString:@","], r->idx, r->hSel, r->wd, r->defW, r->hSel, r->ovlW);
+            BP_Log(@"[defsize]   DEFAULT WINDOW SIZE 16.2 = %@ (stock 16.0 builder gave %@) -> %s", NSStringFromCGSize(r->def), NSStringFromCGSize(def16),
+                   sane ? (keepRfs ? "NOT applied (requiresFullScreen, g2defsize_rfs off)" : "applied") : "NOT applied (not a size inside the container)");
+        }
+    }
+}
+
 // ---- A6: settings -------------------------------------------------------------------------------------------------------
 %group G2Settings
 %hook SBSwitcherChamoisSettings
@@ -1399,6 +1637,7 @@ static void BP_G2_SetupAttributes(void) {
     x[@"switcherHeightForIconAndLabelsUnderEachPile"] = @(60.0);
     x[@"switcherPileCardMinimumPeekAmount"] = @(25.0);
     x[@"switcherPileCompactingFactor"] = @(0.6);
+    if (BP_OnName("g2defsize")) BP_G2_ApplyDefaultSize(self, attrs, bounds, nativeBounds, orientation, dockH, statusBarH, rfs, ps, pd, embedded);   // 16.2 default window size (AUDIT-DEFSIZE-0.6.9)
     return attrs;
 }
 
@@ -1436,6 +1675,32 @@ static void BP_G2_SetupAttributes(void) {
 - (BOOL)rasterizeScaledApps { return NO; }
 %end
 %end // G2Settings
+
+// ---- A6c: the grid takes the attribute lists (AUDIT-DEFSIZE-0.6.9) ------------------------------------------------------------
+// 16.2 -[_SBDisplayItemFlexibleGrid _buildGridWithScreenScale:] 0x1c791e5d4 just stores chamoisLayoutAttributes.gridWidths / .gridHeights into _widths / _heights
+// (ivars +0x38 / +0x40, same layout as 16.0); 16.0 0x1c6468f0c builds the same lists itself (without the narrow-container tail entries of 16.2's
+// _gridWidthsForSafeWidth:).  With the settings hook filling the lists, adopt them so the grid and the 16.2 default window size agree to the point.
+// _SBDisplayItemFixedAspectGrid has its own _buildGridWithScreenScale: and is not affected (as in 16.2).
+static void BP_G2_AdoptAttributeGrid(id grid) {
+    id attrs = BP_G2_GetIvarObj(grid, "_chamoisLayoutAttributes");
+    NSArray *w = BP_G2_Obj(attrs, sel_registerName("gridWidths")), *h = BP_G2_Obj(attrs, sel_registerName("gridHeights"));
+    if (![w isKindOfClass:[NSArray class]] || ![h isKindOfClass:[NSArray class]] || w.count == 0 || h.count == 0) return;
+    Class k = object_getClass(grid);
+    Ivar wi = class_getInstanceVariable(k, "_widths"), hi = class_getInstanceVariable(k, "_heights");
+    const char *we = wi ? ivar_getTypeEncoding(wi) : NULL, *he = hi ? ivar_getTypeEncoding(hi) : NULL;
+    if (!we || !he || we[0] != '@' || he[0] != '@') return;
+    object_setIvar(grid, wi, [w copy]);
+    object_setIvar(grid, hi, [h copy]);
+}
+
+%group G2Grid
+%hook _SBDisplayItemFlexibleGrid
+- (void)_buildGridWithScreenScale:(double)scale {
+    %orig;
+    if (BP_On(F_G2) && BP_OnName("g2defsize")) BP_G2_AdoptAttributeGrid(self);
+}
+%end
+%end // G2Grid
 
 // ---- A8: SBAppLayout ------------------------------------------------------------------------------------------------------
 %group G2AppLayout
@@ -1521,6 +1786,7 @@ static void BP_G2_SetupLayoutData(void) {
     BP_G2_SetupCacheKeyFactory();
     %init(G2Attr);
     %init(G2Settings);
+    %init(G2Grid);
     %init(G2AppLayout);
     %init(G2CacheKey);
 }
