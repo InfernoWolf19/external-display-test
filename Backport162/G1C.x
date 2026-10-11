@@ -306,9 +306,7 @@ static CGPoint G1C_CEH_Anchor(id self, SEL _cmd, unsigned long long i) {
         // 6.8 diagnostics: the 16.0 Stage Manager switcher answers anchorPointForIndex: itself (x = 0 for single windows), 16.2's does not (default .5): log once per effectively-home state
         if (i < 2 && !gCEHAnchorLogged[i] && BP_LogEnabled()) {
             gCEHAnchorLogged[i] = YES;
-            id ce = G1B_GET(self, kCEHModifier);
-            CGPoint own = (ce && [ce respondsToSelector:_cmd]) ? ((CGPoint (*)(id, SEL, unsigned long long))objc_msgSend)(ce, _cmd, i) : CGPointMake(-1, -1);
-            BP_Log(@"GLITCH ToHome effectively home dir=%lld idx=%llu: anchor forced to (0.5,0.5), the switcher copy's own anchor would be (%.3f,%.3f)", G1C_CEH_Dir(self), i, own.x, own.y);
+            BP_Log(@"GLITCH ToHome effectively home dir=%lld idx=%llu: anchor forced to (0.5,0.5)", G1C_CEH_Dir(self), i);   // the detached switcher copy is not asked: with piles on that would query containerViewBounds without a delegate (crash)
         }
         return CGPointMake(0.5, 0.5);
     }
@@ -3131,14 +3129,22 @@ static NSDictionary *G1C_As_Build(id self) {
     }
     return @{ @"frames": frames, @"srects": srects, @"scales": scales, @"piles": piles, @"ids": ids, @"fitted": [NSValue valueWithCGSize:CGSizeMake(fittedW, containerH)] };
 }
+// nil when the modifier cannot answer the protocol queries: the ToHome / HomeToGrid transitions hold detached copies (no delegate at the end of the query chain),
+// where the first query raises "couldn't find implementor for ...". Every caller then takes its 16.0 [super] path.
 static NSDictionary *G1C_As_Calc(id self) {
-    NSString *tok = G1C_As_Token(self);
-    NSDictionary *c = G1B_GET(self, kAsCalc);
-    if (c && [G1B_GET(self, kAsToken) isEqualToString:tok]) return c;
-    c = G1C_As_Build(self);
-    G1B_SET(self, kAsCalc, c);
-    G1B_SET(self, kAsToken, tok);
-    return c;
+    @try {
+        NSString *tok = G1C_As_Token(self);
+        NSDictionary *c = G1B_GET(self, kAsCalc);
+        if (c && [G1B_GET(self, kAsToken) isEqualToString:tok]) return c;
+        c = G1C_As_Build(self);
+        G1B_SET(self, kAsCalc, c);
+        G1B_SET(self, kAsToken, tok);
+        return c;
+    } @catch (NSException *e) {
+        static BOOL logged;
+        if (!logged && BP_LogEnabled()) { logged = YES; BP_Log(@"piles: detached switcher copy (%@), using the 16.0 layout for it", e.reason); }
+        return nil;
+    }
 }
 static id G1C_As_LayoutAt(id self, unsigned long long i) { NSArray *ls = G1C_Resp(self, @selector(appLayouts)) ? G1B_Send0(self, @selector(appLayouts)) : nil; return i < ls.count ? ls[i] : nil; }
 // ---- everything below answers from the cache above when piles are on and the layout was laid out; otherwise it is the 16.0 [super] ----
@@ -3160,8 +3166,9 @@ static CGRect G1C_As_FrameForIndex(id self, SEL _cmd, unsigned long long i) {   
     return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
 static double G1C_As_ScaleForIndex(id self, SEL _cmd, unsigned long long i) {            // 0x1c780ff80
-    id l = G1C_As_LayoutAt(self, i);
-    NSNumber *v = (G1C_PilesOn() && l) ? G1C_As_Calc(self)[@"scales"][l] : nil;
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    id l = c ? G1C_As_LayoutAt(self, i) : nil;
+    NSNumber *v = l ? c[@"scales"][l] : nil;
     return v ? v.doubleValue : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
 // 16.2 has no override: the DefaultImplementations answer (0.5, 0.5). The 16.0 override returns a pile-stack anchor (0.0 for a single window) and its
@@ -3188,13 +3195,15 @@ static CGRect G1C_As_FrameForRole(id self, SEL _cmd, long long role, id layout, 
     return CGRectMake(G1C_RoundForScale(ctr.x - box.origin.x - size.width / 2.0, sc), G1C_RoundForScale(ctr.y - box.origin.y - size.height / 2.0, sc), size.width, size.height);
 }
 static CGSize G1C_As_Fitted(id self, SEL _cmd) {                                          // 0x1c7812504
-    if (G1C_PilesOn()) return [G1C_As_Calc(self)[@"fitted"] CGSizeValue];
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (c) return [c[@"fitted"] CGSizeValue];
     return G1B_SUPER(CGSize, gAsParent, self, _cmd, (struct objc_super *, SEL));
 }
 static CGSize G1C_As_ContentSize(id self, SEL _cmd) {                                     // 0x1c78124c8: (max(fitted.width, view width), view height); 16.0 added _horizontalSpacing
-    if (!G1C_PilesOn()) return G1B_SUPER(CGSize, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (!c) return G1B_SUPER(CGSize, gAsParent, self, _cmd, (struct objc_super *, SEL));
     CGRect vb = G1C_SendRect0(self, @selector(switcherViewBounds));
-    return CGSizeMake(MAX([G1C_As_Calc(self)[@"fitted"] CGSizeValue].width, vb.size.width), vb.size.height);
+    return CGSizeMake(MAX([c[@"fitted"] CGSizeValue].width, vb.size.width), vb.size.height);
 }
 // 0x1c7812518: the offset that puts the (scaled) card at hEdge from one edge (alignment 0/3: the LTR trailing / RTL leading edge, 1: the other edge) or centred (2),
 // clamped to [0, contentWidth - viewWidth]; y is always 0.
@@ -3259,6 +3268,9 @@ static NSRange G1C_As_VisibleSpaceRange(id self, SEL _cmd, CGPoint offset) {
     for (NSUInteger p = 0; p < ids.count; p++) if (G1C_As_PileVisible(c, ids[p], offset.x, vis)) { if (lo == NSNotFound) lo = p; hi = p; }
     return lo == NSNotFound ? NSMakeRange(0, 0) : NSMakeRange(lo, hi - lo + 1);
 }
+static BOOL G1C_As_Usable(id self) {                                                      // can this (possibly detached) modifier answer protocol queries?
+    @try { (void)G1C_SendRect0(self, @selector(containerViewBounds)); return YES; } @catch (NSException *e) { (void)e; return NO; }
+}
 static long long G1C_As_IndexInPile(id self, SEL _cmd, id layout) {
     id ident = G1C_Resp(layout, @selector(continuousExposeIdentifier)) ? G1B_Send0(layout, @selector(continuousExposeIdentifier)) : nil;
     SEL byId = NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:");
@@ -3267,18 +3279,22 @@ static long long G1C_As_IndexInPile(id self, SEL _cmd, id layout) {
     return n == NSNotFound ? 0 : (long long)n;
 }
 static double G1C_As_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long i) {
-    if (!G1C_PilesOn()) return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, layout, i);
+    if (!G1C_PilesOn() || !G1C_As_Usable(self)) return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, layout, i);
     id s = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
     id cs = G1C_Resp(s, @selector(chamoisSettings)) ? G1B_Send0(s, @selector(chamoisSettings)) : nil;
     long long vis = (cs && [cs respondsToSelector:@selector(numberOfVisibleItemsPerGroup)]) ? G1B_SendLL0(cs, @selector(numberOfVisibleItemsPerGroup)) : 3;
     return G1C_As_IndexInPile(self, 0, layout) < vis ? 1.0 : 0.0;
 }
-static double G1C_As_DefaultCardScale(id self, SEL _cmd) {                      // 0x1c78132d4
+static double G1C_As_CardScale(id self) {                                         // 0x1c78132d4
     double h = G1C_As_CardHeight(self);
     CGRect b = G1C_SendRect0(self, @selector(containerViewBounds));
     return b.size.height == 0 ? 1.0 : h / b.size.height;
 }
-static double G1C_As_SnapshotScale(id self, SEL _cmd, id layout) { return G1C_PilesOn() ? G1C_As_DefaultCardScale(self, 0) : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, id), layout); }
+static double G1C_As_DefaultCardScale(id self, SEL _cmd) {
+    if (!G1C_PilesOn() || !G1C_As_Usable(self)) return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    return G1C_As_CardScale(self);
+}
+static double G1C_As_SnapshotScale(id self, SEL _cmd, id layout) { return (G1C_PilesOn() && G1C_As_Usable(self)) ? G1C_As_CardScale(self) : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, id), layout); }
 
 // --- behaviour (only on the full class; the floor class below has the layout overrides and nothing else) ---
 static id G1C_As_Init(id self, SEL _cmd) {
