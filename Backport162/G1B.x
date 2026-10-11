@@ -1255,6 +1255,28 @@ static void G1B_AW_Repair(id coord, id layout, const char *how) {
 %end
 
 // ============================================================================================================
+// Stock assertion removed: "Trying to add an icon overlay but the item container for this app layout doesn't exist" (device crash: pressing Close on a
+// window on the extended display; an icon-overlay-visible response reached the view controller for an app layout whose item container was already gone).
+// 16.0 -_performModifierIconOverlayVisibilityUpdateResponse: (0x1c5fe3358) only asserts for visible == YES with no container; nothing is left to do then.
+// ============================================================================================================
+%group G1B_IconOverlay
+%hook SBFluidSwitcherViewController
+- (void)_performModifierIconOverlayVisibilityUpdateResponse:(id)response {
+    id me = (id)self;
+    if (G1B_ON() && response && G1B_SendB0(response, @selector(isVisible))) {
+        id layout = G1B_Send0(response, @selector(appLayout));
+        SEL ex = NSSelectorFromString(@"_itemContainerForAppLayoutIfExists:");
+        if (layout && [me respondsToSelector:ex] && !G1B_Send1(me, ex, layout)) {
+            BP_Log(@"icon overlay response for an app layout without item container ignored: %@", layout);
+            return;
+        }
+    }
+    %orig;
+}
+%end
+%end
+
+// ============================================================================================================
 // 2.4  SBiPadOSWindowModeChangeTransitionModifier  (PORTABLE: new class + creator hook; needs 2.0 flags)
 // ============================================================================================================
 static Class gWinModeCls;
@@ -1410,6 +1432,7 @@ void G1B_Setup(void) {
     G1B_BuildWindowModeChange();
     G1B_BuildDndToApp();
     G1B_InstallTransitionEventFlags();
+    %init(G1B_IconOverlay);                  // icon-overlay response for a missing item container is ignored instead of asserting
     %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
     if (BP_OnName("addwinnet")) %init(G1B_AddWin);   // stock "appLayouts array MUST contain" assertion at the end of a transition: repair instead of crash
     %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
