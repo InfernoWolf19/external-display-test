@@ -3021,16 +3021,23 @@ static id G1C_NewHomeModifier(void) {
 // 1a  SBAppSwitcherContinuousExposeSwitcherModifier  (the Stage Manager "all windows" switcher)
 //     BP162AppSwitcherContinuousExposeSwitcherModifier : SBAppSwitcherContinuousExposeSwitcherModifier (16.0)
 //     Behaviour layer (tap / header tap / tap outside / removal / flags / resign-active / pile opacity): DONE.
-//     Pile layout (buildLayoutCalculationsForCache:, frameForIndex:, scaleForIndex:, fitted size): UNSURE, OFF by default
-//     (G1C_PILES_DEFAULT 0). The 16.0 scrolling maths (contentOffsetForIndex:alignment: etc.) is kept and reads our frames.
+//     Pile layout (g1c_piles, ON by default; kill switch Backport162.off.g1c_piles): 16.2 buildLayoutCalculationsForCache: 0x1c7812acc (G1C_As_Build) and
+//     every 16.0 AppSwitcherCE query that used the 16.0 grid maths is overridden so that frames, scales, role frames, anchor, visible set, scroll range
+//     and scroll targets all come from ONE cache (review B2):
+//       frameForIndex: 0x1c780fe78, scaleForIndex: 0x1c780ff80, frameForLayoutRole:inAppLayout:withBounds: 0x1c780fe84, anchorPointForIndex: (16.2: not
+//       overridden -> DefaultImplementations 0x1c788b08c = (0.5,0.5); 16.0 returned the pile-stack anchor 0x1c636a844 and shifted the frame by -0.5*scale*w),
+//       visibleAppLayouts 0x1c7810118 (+ _visiblePileIdentifiers 0x1c781345c), 16.0 visibleSpaceRangeForContentOffset: (feeds snapshot caching / leading
+//       index; it was the 16.0 column maths), _contentSize 0x1c78124c8, _fittedContentSize 0x1c7812504, contentOffsetForIndex:alignment: 0x1c7812518.
+//     Layout direction (verified 0x1c7812acc): LTR lays the first pile at the RIGHT end of the content (cursor starts at -hEdge, piles extend leftwards,
+//     everything is shifted by the content width afterwards), RTL starts at hEdge at the LEFT and extends rightwards; two rows by pile parity, each row has
+//     its own cursor. The 16.0 maths agrees (RTL: index grows with x; LTR: index 0 at the right end).
+//     The persistent switcher floor is the same class (16.2 Root multitaskingModifierForEvent: 0x1c7818560 == 16.0 0x1c63711ec: `multitaskingModifier ?:
+//     [AppSwitcherCE new]`; G1C hooks it, see G1C_NewAppSwitcherFloorModifier) so the layout does not jump between the gesture and the floor.
 // ============================================================================================================
-#ifndef G1C_PILES_DEFAULT
-#define G1C_PILES_DEFAULT 0
-#endif
 static Class gAsParent, gAsCls;
 static char kAsCalc, kAsToken;
 
-static BOOL G1C_PilesOn(void) { return G1C_ON() && BP_On(F_G1C_PILES); }     // opt-in (Backport162.on.g1c_piles): review B2 - the 16.0 role frames (frameForLayoutRole:...withBounds:) are not ported, so windows land off their cards
+static BOOL G1C_PilesOn(void) { return G1C_ON() && BP_On(F_G1C_PILES); }     // kill switch: Backport162.off.g1c_piles (every override below is then an exact [super])
 static BOOL G1C_As_Handles(id self, const char *iv) {
     Ivar v = class_getInstanceVariable(object_getClass(self), iv);
     return v ? G1C_IvarBool(self, iv) : YES;
@@ -3055,55 +3062,74 @@ static double G1C_As_CardHeight(id self) {
     double avail = vb.size.height - dock - pad - status - 2 * vEdge;
     return G1C_RoundForScale((avail - vInter * (rows - 1)) / rows, sc);
 }
+// Layout cache = the 16.2 _appLayoutLayoutCalculationsCache + _cachedPileBoundingFrameByPileIdentifier + _cachedFittedContentSize:
+//   @"frames" appLayout -> NSValue(CGRect)  card at its compacted size, centred on the scaled card, content coordinates, scroll offset NOT applied
+//   @"srects" appLayout -> NSValue(CGRect)  the scaled card (the `frame` of the 16.2 calculation object)
+//   @"scales" appLayout -> NSNumber         the `scale` of the 16.2 calculation object
+//   @"piles"  identifier -> NSValue(CGRect) union of the pile's scaled card rects (CGRectZero when empty)
+//   @"ids"    identifiers in layout order;  @"fitted" NSValue(CGSize)
+// Exact port of 0x1c7812acc (see the section header for the direction): per pile parity one cursor; a pile's cards are anchored at the cursor (k = 0) and
+// each further card is pushed `peek` beyond the previous card's far edge but never past the previous anchor; the cursor then moves to the far edge of the
+// last card that counts as visible (k < numberOfVisibleItemsPerGroup) plus the inter-item spacing.
 static NSDictionary *G1C_As_Build(id self) {
-    NSMutableDictionary *frames = [NSMutableDictionary dictionary], *scales = [NSMutableDictionary dictionary], *piles = [NSMutableDictionary dictionary];
+    NSMutableDictionary *frames = [NSMutableDictionary dictionary], *srects = [NSMutableDictionary dictionary], *scales = [NSMutableDictionary dictionary], *piles = [NSMutableDictionary dictionary];
     id ca = G1B_Send0(self, @selector(chamoisLayoutAttributes));
     double pad = G1B_Dbl0(ca, @selector(screenEdgePadding)), hEdge = G1B_Dbl0(ca, NSSelectorFromString(@"switcherHorizontalEdgeSpacing")),
            hInter = G1B_Dbl0(ca, NSSelectorFromString(@"switcherHorizontalInterItemSpacing")), vEdge = G1B_Dbl0(ca, NSSelectorFromString(@"switcherVerticalEdgeSpacing")),
            vInter = G1B_Dbl0(ca, NSSelectorFromString(@"switcherVerticalInterItemSpacing")), peek = G1B_Dbl0(ca, NSSelectorFromString(@"switcherPileCardMinimumPeekAmount"));
     long long rows = G1C_Resp(self, NSSelectorFromString(@"numberOfRowsInGridSwitcher")) ? G1B_SendLL0(self, NSSelectorFromString(@"numberOfRowsInGridSwitcher")) : 1;
     if (rows < 1) rows = 1;
+    id sw = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
+    id cs = G1C_Resp(sw, @selector(chamoisSettings)) ? G1B_Send0(sw, @selector(chamoisSettings)) : nil;
+    unsigned long long nVis = (cs && [cs respondsToSelector:@selector(numberOfVisibleItemsPerGroup)]) ? (unsigned long long)G1B_SendLL0(cs, @selector(numberOfVisibleItemsPerGroup)) : 3;
     BOOL rtl = G1C_Resp(self, @selector(isRTLEnabled)) && G1B_SendB0(self, @selector(isRTLEnabled));
     CGRect vb = G1C_SendRect0(self, @selector(switcherViewBounds));
+    double containerH = G1C_Resp(self, @selector(containerViewBounds)) ? G1C_SendRect0(self, @selector(containerViewBounds)).size.height : vb.size.height;    // fitted height = [super containerViewBounds].size.height
     double cardH = G1C_As_CardHeight(self);
-    NSArray *ids = G1C_Resp(self, @selector(continuousExposeIdentifiersInSwitcher)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInSwitcher)) : @[];
-    ids = [ids isKindOfClass:[NSArray class]] ? ids : [(NSOrderedSet *)ids array];
+    NSArray *ids = G1C_Resp(self, @selector(continuousExposeIdentifiersInSwitcher)) ? G1C_AsArray(G1B_Send0(self, @selector(continuousExposeIdentifiersInSwitcher))) : @[];
     SEL byId = NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), om = NSSelectorFromString(@"overlappingModelForAppLayout:");
-    double x = hEdge, colW = 0, y = pad + vEdge;
-    long long i = 0;
+    const double A = rtl ? hEdge : -hEdge, B = rtl ? -hInter : hInter;                  // LTR: cursor starts at -hEdge and moves left; RTL: starts at +hEdge and moves right
+    double cursor[2] = { A, A };
+    const double rowTop[2] = { pad + vEdge, pad + vEdge + vInter + cardH };
+    NSUInteger pi = 0;
     for (id ident in ids) {
-        long long row = i % rows;
-        if (row == 0 && i > 0) { x += colW + hInter; colW = 0; }
-        y = pad + vEdge + (cardH + vInter) * row;
-        NSArray *ls = G1C_Resp(self, byId) ? G1B_Send1(self, byId, ident) : nil;
-        CGRect pileBox = CGRectNull;
-        double pileW = 0;
+        const int par = rows >= 2 ? (int)(pi & 1) : 0;                                  // 16.2 hard-codes two rows by pile parity (tst x28,#1); with one row (not seen) a single cursor avoids overlap
+        const double cur = cursor[par];
+        const double cy = rowTop[par] + cardH / 2.0;
+        NSArray *ls = G1C_Resp(self, byId) ? G1C_AsArray(G1B_Send1(self, byId, ident)) : @[];
+        CGRect acc = CGRectNull;
+        double anchor = cur, prevEdge = cur, lastVisEdge = cur;
         NSUInteger k = 0;
         for (id l in ls) {
             id model = G1C_Resp(self, om) ? G1B_Send1(self, om, l) : nil;
             CGSize sz = (model && [model respondsToSelector:@selector(compactedBoundingBox)]) ? G1C_SendRect0(model, @selector(compactedBoundingBox)).size : CGSizeZero;
-            if (sz.height <= 0 || sz.width <= 0) { k++; continue; }
-            double s = cardH / sz.height - 0.01 * (double)k;                       // const 0x1c7a916c0 = -0.01 per stacked card
+            if (sz.height <= 0 || sz.width <= 0) { k++; continue; }                     // (16.2 has no guard; a model-less layout would give NaN there)
+            double s = cardH / sz.height + (double)k * -0.01;                          // const 0x1c7a916c0 = -0.01 per stacked card
             double w = sz.width * s, h = sz.height * s;
-            double cx = x + w / 2.0 + peek * (double)k, cy = y + cardH / 2.0;
-            CGRect scaled = CGRectMake(cx - w / 2.0, cy - h / 2.0, w, h);
-            CGRect unscaled = CGRectMake(cx - sz.width / 2.0, cy - sz.height / 2.0, sz.width, sz.height);
-            frames[l] = [NSValue valueWithCGRect:unscaled];
+            if (k != 0) anchor = rtl ? MAX(anchor, prevEdge + peek - w) : MIN(anchor, prevEdge - peek + w);
+            double cx = rtl ? anchor + w / 2.0 : anchor - w / 2.0;
+            CGRect r = CGRectMake(cx - w / 2.0, cy - h / 2.0, w, h);
+            frames[l] = [NSValue valueWithCGRect:CGRectMake(cx - sz.width / 2.0, cy - sz.height / 2.0, sz.width, sz.height)];
+            srects[l] = [NSValue valueWithCGRect:r];
             scales[l] = @(s);
-            pileBox = CGRectUnion(pileBox, scaled);
-            if (cx + w / 2.0 - x > pileW) pileW = cx + w / 2.0 - x;
+            prevEdge = rtl ? CGRectGetMaxX(r) : CGRectGetMinX(r);
+            if (k < nVis) lastVisEdge = prevEdge;
+            acc = CGRectUnion(acc, r);
             k++;
         }
-        if (!CGRectIsNull(pileBox)) piles[ident] = [NSValue valueWithCGRect:pileBox];
-        if (pileW > colW) colW = pileW;
-        i++;
+        if (ident) piles[ident] = [NSValue valueWithCGRect:CGRectIsNull(acc) ? CGRectZero : acc];
+        cursor[par] = lastVisEdge - B;
+        pi++;
     }
-    double total = x + colW + hEdge;
-    if (rtl) {                                                                      // mirror inside the content width
-        for (id l in [frames allKeys]) { CGRect f = [frames[l] CGRectValue]; f.origin.x = total - f.origin.x - f.size.width; frames[l] = [NSValue valueWithCGRect:f]; }
-        for (id p in [piles allKeys]) { CGRect f = [piles[p] CGRectValue]; f.origin.x = total - f.origin.x - f.size.width; piles[p] = [NSValue valueWithCGRect:f]; }
+    double m = rtl ? MAX(cursor[0], cursor[1]) : MIN(cursor[0], cursor[1]);
+    double fittedW = (hEdge - hInter) + (rtl ? m : -m);
+    if (!rtl) {                                                                         // LTR: shift everything right by _contentSize.width (= max(fitted, view width))
+        double dx = MAX(fittedW, vb.size.width);
+        for (id key in [frames allKeys]) { CGRect f = [frames[key] CGRectValue]; f.origin.x += dx; frames[key] = [NSValue valueWithCGRect:f]; }
+        for (id key in [srects allKeys]) { CGRect f = [srects[key] CGRectValue]; f.origin.x += dx; srects[key] = [NSValue valueWithCGRect:f]; }
+        for (id key in [piles allKeys]) { CGRect f = [piles[key] CGRectValue]; f.origin.x += dx; piles[key] = [NSValue valueWithCGRect:f]; }
     }
-    return @{ @"frames": frames, @"scales": scales, @"piles": piles, @"fitted": [NSValue valueWithCGSize:CGSizeMake(total, vb.size.height)] };
+    return @{ @"frames": frames, @"srects": srects, @"scales": scales, @"piles": piles, @"ids": ids, @"fitted": [NSValue valueWithCGSize:CGSizeMake(fittedW, containerH)] };
 }
 static NSDictionary *G1C_As_Calc(id self) {
     NSString *tok = G1C_As_Token(self);
@@ -3115,22 +3141,123 @@ static NSDictionary *G1C_As_Calc(id self) {
     return c;
 }
 static id G1C_As_LayoutAt(id self, unsigned long long i) { NSArray *ls = G1C_Resp(self, @selector(appLayouts)) ? G1B_Send0(self, @selector(appLayouts)) : nil; return i < ls.count ? ls[i] : nil; }
-static CGRect G1C_As_FrameForIndex(id self, SEL _cmd, unsigned long long i) {
-    id l = G1C_As_LayoutAt(self, i);
-    NSValue *v = (G1C_PilesOn() && l) ? G1C_As_Calc(self)[@"frames"][l] : nil;
-    if (!v) return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+// ---- everything below answers from the cache above when piles are on and the layout was laid out; otherwise it is the 16.0 [super] ----
+static double G1C_As_ScrollX(id self) { return G1C_Resp(self, @selector(scrollViewContentOffset)) ? G1C_SendPoint0(self, @selector(scrollViewContentOffset)).x : 0.0; }
+// 16.2 -_frameForIndex:withScaleApplied:scrollOffsetApplied: 0x1c78135dc. NO when the layout has no pile calculation.
+static BOOL G1C_As_Frame(id self, unsigned long long i, BOOL scaled, BOOL scroll, CGRect *out) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    id l = c ? G1C_As_LayoutAt(self, i) : nil;
+    NSValue *v = l ? c[scaled ? @"srects" : @"frames"][l] : nil;
+    if (!v) return NO;
     CGRect f = [v CGRectValue];
-    if (G1C_Resp(self, @selector(scrollViewContentOffset))) f.origin.x -= G1C_SendPoint0(self, @selector(scrollViewContentOffset)).x;
-    return f;
+    if (scroll) f.origin.x -= G1C_As_ScrollX(self);
+    *out = f;
+    return YES;
 }
-static double G1C_As_ScaleForIndex(id self, SEL _cmd, unsigned long long i) {
+static CGRect G1C_As_FrameForIndex(id self, SEL _cmd, unsigned long long i) {            // 0x1c780fe78: withScaleApplied:NO scrollOffsetApplied:YES
+    CGRect f;
+    if (G1C_As_Frame(self, i, NO, YES, &f)) return f;
+    return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_As_ScaleForIndex(id self, SEL _cmd, unsigned long long i) {            // 0x1c780ff80
     id l = G1C_As_LayoutAt(self, i);
     NSNumber *v = (G1C_PilesOn() && l) ? G1C_As_Calc(self)[@"scales"][l] : nil;
     return v ? v.doubleValue : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
-static CGSize G1C_As_Fitted(id self, SEL _cmd) {
+// 16.2 has no override: the DefaultImplementations answer (0.5, 0.5). The 16.0 override returns a pile-stack anchor (0.0 for a single window) and its
+// frameForIndex: compensates with -0.5*scale*w, which the pile frames above do not do.
+static CGPoint G1C_As_Anchor(id self, SEL _cmd, unsigned long long i) {
+    CGRect f;
+    if (G1C_As_Frame(self, i, NO, NO, &f)) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+// 16.2 0x1c780fe84: a window sits at compactedCenterForItem - compactedBoundingBox.origin with sizeForItem (the card canvas is the compacted bounding box);
+// UIRectCenteredAboutPointScale(SBRectWithSize(size), center, screenScale) rounds the origin to the screen scale (0x1893a3324). `bounds` is ignored by 16.2.
+// 16.0 0x1c636a5a8 positioned the window on a container-sized canvas.
+static CGRect G1C_As_FrameForRole(id self, SEL _cmd, long long role, id layout, CGRect bounds) {
+    NSDictionary *c = (layout && G1C_PilesOn()) ? G1C_As_Calc(self) : nil;
+    SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:"), cc = NSSelectorFromString(@"compactedCenterForItem:"), sf = NSSelectorFromString(@"sizeForItem:");
+    id item = (c[@"frames"][layout] && G1C_Resp(layout, @selector(itemForLayoutRole:))) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
+    id model = (item && G1C_Resp(self, om)) ? G1B_Send1(self, om, layout) : nil;
+    if (!model || !G1C_Resp(model, cc) || !G1C_Resp(model, sf) || !G1C_Resp(model, @selector(compactedBoundingBox)))
+        return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, long long, id, CGRect), role, layout, bounds);
+    CGPoint ctr = ((CGPoint (*)(id, SEL, id))objc_msgSend)(model, cc, item);
+    CGRect box = G1C_SendRect0(model, @selector(compactedBoundingBox));
+    CGSize size = ((CGSize (*)(id, SEL, id))objc_msgSend)(model, sf, item);
+    double sc = G1B_Dbl0(self, @selector(screenScale));
+    return CGRectMake(G1C_RoundForScale(ctr.x - box.origin.x - size.width / 2.0, sc), G1C_RoundForScale(ctr.y - box.origin.y - size.height / 2.0, sc), size.width, size.height);
+}
+static CGSize G1C_As_Fitted(id self, SEL _cmd) {                                          // 0x1c7812504
     if (G1C_PilesOn()) return [G1C_As_Calc(self)[@"fitted"] CGSizeValue];
     return G1B_SUPER(CGSize, gAsParent, self, _cmd, (struct objc_super *, SEL));
+}
+static CGSize G1C_As_ContentSize(id self, SEL _cmd) {                                     // 0x1c78124c8: (max(fitted.width, view width), view height); 16.0 added _horizontalSpacing
+    if (!G1C_PilesOn()) return G1B_SUPER(CGSize, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    CGRect vb = G1C_SendRect0(self, @selector(switcherViewBounds));
+    return CGSizeMake(MAX([G1C_As_Calc(self)[@"fitted"] CGSizeValue].width, vb.size.width), vb.size.height);
+}
+// 0x1c7812518: the offset that puts the (scaled) card at hEdge from one edge (alignment 0/3: the LTR trailing / RTL leading edge, 1: the other edge) or centred (2),
+// clamped to [0, contentWidth - viewWidth]; y is always 0.
+static CGPoint G1C_As_ContentOffsetForIndex(id self, SEL _cmd, unsigned long long i, long long align) {
+    CGRect f;
+    if (!G1C_As_Frame(self, i, YES, NO, &f)) return G1B_SUPER(CGPoint, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long, long long), i, align);
+    BOOL rtl = G1C_Resp(self, @selector(isRTLEnabled)) && G1B_SendB0(self, @selector(isRTLEnabled));
+    double hEdge = G1B_Dbl0(G1B_Send0(self, @selector(chamoisLayoutAttributes)), NSSelectorFromString(@"switcherHorizontalEdgeSpacing"));
+    double vbW = G1C_SendRect0(self, @selector(switcherViewBounds)).size.width, off = 0.0;
+    switch (align) {
+        case 0: case 3: off = rtl ? hEdge : vbW - f.size.width - hEdge; break;
+        case 1: off = rtl ? vbW - f.size.width - hEdge : hEdge; break;
+        case 2: off = (vbW - f.size.width) * 0.5; break;
+        default: break;
+    }
+    double x = MAX(CGRectGetMinX(f) - off, 0.0), limit = G1C_As_ContentSize(self, 0).width - vbW;
+    return CGPointMake(limit > x ? x : limit, 0.0);
+}
+// _visibleSwitcherBoundsIncludingShadow 0x1c78133f4 (const 0xc006666666666666 = -2.8) and the pile bounding frame of 0x1c7813800 with the scroll offset applied
+static CGRect G1C_As_VisibleBounds(id self) {
+    CGRect vb = G1C_SendRect0(self, @selector(switcherViewBounds));
+    double r = G1B_Dbl0(G1B_Send0(self, @selector(switcherSettings)), NSSelectorFromString(@"switcherCardShadowRadius"));
+    return CGRectInset(vb, r * -2.8, r * -2.8);
+}
+static BOOL G1C_As_PileVisible(NSDictionary *c, id ident, double scrollX, CGRect visible) {
+    NSValue *v = ident ? c[@"piles"][ident] : nil;
+    if (!v) return NO;
+    CGRect r = [v CGRectValue];
+    r.origin.x -= scrollX;
+    return CGRectIntersectsRect(visible, r);
+}
+// 0x1c7810118: the first numberOfVisibleItemsPerGroup windows of every pile whose bounding frame touches the (shadow-extended) view. The 16.0 answer
+// (children incl. the grid child, plus the 16.0 column range) is kept as a superset: a missing card is blank, an extra one is only laid out.
+static id G1C_As_VisibleAppLayouts(id self, SEL _cmd) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (![c[@"frames"] count]) return G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    Class base = class_getSuperclass(gAsParent);
+    id sup = G1B_HasSuper(base, _cmd) ? G1B_SUPER(id, base, self, _cmd, (struct objc_super *, SEL)) : nil;
+    NSMutableSet *out = [sup isKindOfClass:[NSSet class]] ? [sup mutableCopy] : [NSMutableSet set];
+    id sw = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
+    id cs = G1C_Resp(sw, @selector(chamoisSettings)) ? G1B_Send0(sw, @selector(chamoisSettings)) : nil;
+    NSUInteger nVis = (cs && [cs respondsToSelector:@selector(numberOfVisibleItemsPerGroup)]) ? (NSUInteger)G1B_SendLL0(cs, @selector(numberOfVisibleItemsPerGroup)) : 3;
+    SEL byId = NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:");
+    CGRect vis = G1C_As_VisibleBounds(self);
+    double sx = G1C_As_ScrollX(self);
+    for (id ident in c[@"ids"]) {
+        if (!G1C_As_PileVisible(c, ident, sx, vis)) continue;
+        NSUInteger n = 0;
+        for (id l in (G1C_Resp(self, byId) ? G1C_AsArray(G1B_Send1(self, byId, ident)) : @[])) { if (n++ >= nVis) break; [out addObject:l]; }
+    }
+    return out;
+}
+// 16.0 visibleSpaceRangeForContentOffset: (column maths) feeds visibleAppLayouts, appLayoutsToCacheSnapshots, topMostLayoutElements and _indexOfLeadingAppLayout.
+// The answer is the contiguous range of piles that touch the view at that offset (16.2 _visiblePileRange 0x1c7810c9c tracks the two parity rows separately and
+// ends one row short for 1-2 piles; its only consumer is the snapshot cache, so the plain contiguous range is the safe superset).
+static NSRange G1C_As_VisibleSpaceRange(id self, SEL _cmd, CGPoint offset) {
+    NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
+    if (![c[@"frames"] count]) return G1B_SUPER(NSRange, gAsParent, self, _cmd, (struct objc_super *, SEL, CGPoint), offset);
+    NSArray *ids = c[@"ids"];
+    CGRect vis = G1C_As_VisibleBounds(self);
+    NSUInteger lo = NSNotFound, hi = 0;
+    for (NSUInteger p = 0; p < ids.count; p++) if (G1C_As_PileVisible(c, ids[p], offset.x, vis)) { if (lo == NSNotFound) lo = p; hi = p; }
+    return lo == NSNotFound ? NSMakeRange(0, 0) : NSMakeRange(lo, hi - lo + 1);
 }
 static long long G1C_As_IndexInPile(id self, SEL _cmd, id layout) {
     id ident = G1C_Resp(layout, @selector(continuousExposeIdentifier)) ? G1B_Send0(layout, @selector(continuousExposeIdentifier)) : nil;
@@ -3153,7 +3280,7 @@ static double G1C_As_DefaultCardScale(id self, SEL _cmd) {                      
 }
 static double G1C_As_SnapshotScale(id self, SEL _cmd, id layout) { return G1C_PilesOn() ? G1C_As_DefaultCardScale(self, 0) : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, id), layout); }
 
-// --- behaviour ---
+// --- behaviour (only on the full class; the floor class below has the layout overrides and nothing else) ---
 static id G1C_As_Init(id self, SEL _cmd) {
     id me = G1B_SUPER(id, gAsParent, self, _cmd, (struct objc_super *, SEL));
     if (!me) return nil;
@@ -3247,16 +3374,41 @@ static BOOL G1C_As_ReturnNO(id self, SEL _cmd) { return NO; }
 static BOOL G1C_As_ReturnYES(id self, SEL _cmd) { return YES; }
 static BOOL G1C_As_NoGrab(id self, SEL _cmd, id l) { return NO; }
 
+// Two run-time classes:
+//   BP162AppSwitcherFloorContinuousExposeSwitcherModifier : SBAppSwitcherContinuousExposeSwitcherModifier  - the pile LAYOUT only (+ the cache invalidation tick).
+//       This is what the persistent switcher floor uses (G1C_NewAppSwitcherFloorModifier): its tap / removal / flag answers stay exactly the stock 16.0 ones
+//       (those come from the SBGridSwitcherModifier child that the 16.0 init adds), so the working switcher keeps working and only the geometry changes.
+//   BP162AppSwitcherContinuousExposeSwitcherModifier : the floor class  - adds the 16.2 behaviour layer; used by the swipe-up gesture root, peek and drag content.
+static Class gAsFloorCls;
 static BOOL G1C_BuildAppSwitcher(void) {
     gAsParent = NSClassFromString(@"SBAppSwitcherContinuousExposeSwitcherModifier");
     if (!gAsParent) return NO;
+    {
+        const G1BIvar iv[] = { { "_bp_eventGen", sizeof(long long), 3, "q" } };
+        const G1BMethod m[] = {
+            { "handleEvent:", (IMP)G1C_As_Event, "@24@0:8@16" },
+            { "frameForIndex:", (IMP)G1C_As_FrameForIndex, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" },
+            { "scaleForIndex:", (IMP)G1C_As_ScaleForIndex, "d24@0:8Q16" },
+            { "anchorPointForIndex:", (IMP)G1C_As_Anchor, "{CGPoint=dd}24@0:8Q16" },
+            { "frameForLayoutRole:inAppLayout:withBounds:", (IMP)G1C_As_FrameForRole, "{CGRect={CGPoint=dd}{CGSize=dd}}64@0:8q16@24{CGRect={CGPoint=dd}{CGSize=dd}}32" },
+            { "_fittedContentSize", (IMP)G1C_As_Fitted, "{CGSize=dd}16@0:8" },
+            { "_contentSize", (IMP)G1C_As_ContentSize, "{CGSize=dd}16@0:8" },
+            { "contentOffsetForIndex:alignment:", (IMP)G1C_As_ContentOffsetForIndex, "{CGPoint=dd}32@0:8Q16q24" },
+            { "visibleAppLayouts", (IMP)G1C_As_VisibleAppLayouts, "@16@0:8" },
+            { "visibleSpaceRangeForContentOffset:", (IMP)G1C_As_VisibleSpaceRange, "{_NSRange=QQ}32@0:8{CGPoint=dd}16" },
+            { "_indexOfAppLayoutInItsPile:", (IMP)G1C_As_IndexInPile, "Q24@0:8@16" },
+            { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_As_Opacity, "d40@0:8q16@24Q32" },
+            { "_defaultCardScale", (IMP)G1C_As_DefaultCardScale, "d16@0:8" },
+            { "snapshotScaleForAppLayout:", (IMP)G1C_As_SnapshotScale, "d24@0:8@16" },
+        };
+        gAsFloorCls = G1B_MakeClass("BP162AppSwitcherFloorContinuousExposeSwitcherModifier", gAsParent, iv, 1, m, sizeof m / sizeof m[0], NULL, NULL);
+    }
     const G1BIvar iv[] = {
         { "_bp_handlesTap", 1, 0, "B" }, { "_bp_handlesHeaderTap", 1, 0, "B" },
-        { "_bp_ongoingRemovals", sizeof(long long), 3, "q" }, { "_bp_eventGen", sizeof(long long), 3, "q" },
+        { "_bp_ongoingRemovals", sizeof(long long), 3, "q" },
     };
     const G1BMethod m[] = {
         { "init", (IMP)G1C_As_Init, "@16@0:8" },
-        { "handleEvent:", (IMP)G1C_As_Event, "@24@0:8@16" },
         { "handleTapAppLayoutEvent:", (IMP)G1C_As_Tap, "@24@0:8@16" },
         { "handleTapAppLayoutHeaderEvent:", (IMP)G1C_As_HeaderTap, "@24@0:8@16" },
         { "handleTapOutsideToDismissEvent:", (IMP)G1C_As_TapOutside, "@24@0:8@16" },
@@ -3270,19 +3422,17 @@ static BOOL G1C_BuildAppSwitcher(void) {
         { "isItemContainerPointerInteractionEnabled", (IMP)G1C_As_ReturnYES, "B16@0:8" },
         { "isSwitcherWindowVisible", (IMP)G1C_As_ReturnYES, "B16@0:8" },
         { "isSwitcherWindowUserInteractionEnabled", (IMP)G1C_As_ReturnYES, "B16@0:8" },
-        { "frameForIndex:", (IMP)G1C_As_FrameForIndex, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" },
-        { "scaleForIndex:", (IMP)G1C_As_ScaleForIndex, "d24@0:8Q16" },
-        { "_fittedContentSize", (IMP)G1C_As_Fitted, "{CGSize=dd}16@0:8" },
-        { "_indexOfAppLayoutInItsPile:", (IMP)G1C_As_IndexInPile, "Q24@0:8@16" },
-        { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_As_Opacity, "d40@0:8q16@24Q32" },
-        { "_defaultCardScale", (IMP)G1C_As_DefaultCardScale, "d16@0:8" },
-        { "snapshotScaleForAppLayout:", (IMP)G1C_As_SnapshotScale, "d24@0:8@16" },
     };
-    gAsCls = G1B_MakeClass("BP162AppSwitcherContinuousExposeSwitcherModifier", gAsParent, iv, 4, m, sizeof m / sizeof m[0], NULL, NULL);
+    gAsCls = G1B_MakeClass("BP162AppSwitcherContinuousExposeSwitcherModifier", gAsFloorCls ?: gAsParent, iv, 3, m, sizeof m / sizeof m[0], NULL, NULL);
     return gAsCls != Nil;
 }
 static id G1C_NewAppSwitcherModifier(void) {
-    Class c = gAsCls ?: gAsParent;
+    Class c = gAsCls ?: (gAsFloorCls ?: gAsParent);
+    return c ? [[c alloc] init] : nil;
+}
+// The persistent switcher floor (see the section header): layout class only; stock 16.0 class when piles are off or the class could not be built.
+static id G1C_NewAppSwitcherFloorModifier(void) {
+    Class c = G1C_PilesOn() ? gAsFloorCls : Nil;
     return c ? [[c alloc] init] : nil;
 }
 static id G1C_NewFullScreenModifier(id appLayout) {
@@ -3378,6 +3528,17 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
         }
         default: return %orig;
     }
+}
+
+// ---- multitaskingModifierForEvent: (16.2 0x1c7818560; 16.0 0x1c63711ec is the same two lines) -- `self.multitaskingModifier ?: [AppSwitcherCE new]` ----
+// With piles on the persistent switcher must be laid out by the same pile geometry as the swipe-up gesture / peek / drag instances (G1C_NewAppSwitcherModifier),
+// otherwise the layout snaps from the stock grid to the piles at the hand-off. The floor class carries the layout only (see G1C_BuildAppSwitcher).
+- (id)multitaskingModifierForEvent:(id)event {
+    if (!G1C_PilesOn()) return %orig;
+    id current = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
+    if (current) return current;
+    id n = G1C_NewAppSwitcherFloorModifier();
+    return n ?: %orig;
 }
 
 // ---- floorModifierForGestureEvent: (0x1c78183f0, new) ----
