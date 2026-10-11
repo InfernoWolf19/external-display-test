@@ -81,7 +81,7 @@ home, (2) partial swipe-up + quick dismissal: a window at the left edge, (3) thi
 
 ## R2.3 Proof of the lead column (independent of the anchor convention) and what was changed (G1C.x section 6.8, Round 2)
 * Settled s1 (px): col 0 = grid index 0/1 at x 1199..1559 (off screen right), col 1 at 792..1152, pitch 407, card 360, grid gap hs = 407-360 = 47. Final left edge of a card with the slide d = R_lead + hs (R = right edge measured with the SAME rect convention the utility uses):
-  left_final(col0) = L0 - d_conv... = (L0 - c) - (R_lead - c) - hs = L0 - R_lead - hs, c = convention shift. With lead = col 1: L0 - R1 - hs = 1199 - 1152 - 47 = 0  => x = 0..360 exactly as in the video. With lead = col 0 it would be L0 - R0 - hs = -407 (off screen).
+  left_final(col0) = (L0 - c) - ((R_lead - c) + hs) = L0 - R_lead - hs (c = convention shift, cancels). With lead = col 1: L0 - R1 - hs = 1199 - 1152 - 47 = 0  => x = 0..360 exactly as in the video. With lead = col 0 it would be L0 - R0 - hs = -407 (off screen).
   So the video proves: the lead column was column 1, i.e. `[copy visibleAppLayouts]` did not contain layouts 0/1 when the utility ran (chain start count-1, stop at the first invisible card), independent of any anchor details.
 * Open (needs the new log): why those two cards were nevertheless DRAWN. HomeToGrid's own opacity is `visibleAppLayouts containsObject ? multi : 0` with the same set. The new `GLITCH h2g` line prints inVisible and opacity for idx 0/1.
 * Changes:
@@ -93,3 +93,15 @@ home, (2) partial swipe-up + quick dismissal: a window at the left edge, (3) thi
     (When the lead column is the right-most one, e.g. col 0 visible, this max is a no-op = exactly 16.2.)
   - The 6.8 opacity guard stays, now only for cards whose slid frame still intersects switcherViewBounds (safety net, dormant when the distance is right).
   - Same fix covers home -> switcher (ToHome direction 1: `isEffectivelyHome` while preparing, the cards START slid off screen): before, col 0 started at x = 0..360.
+
+## R2.4 Why 16.2 does not show the glitch, residual uncertainty, exact vs approximated
+* Default `switcherCardShadowRadius` on iPad = 30 (16.0 `-[SBAppSwitcherSettings setDefaultValues]` 0x1c6381590: 30 unless device class 2 -> 16), so the visible bounds are the screen inflated by 2.8*30 = 84 pt: col 0 at x 1199.. IS "visible" by 16.2's `_visiblePileRange`
+  (and by 16.0 `_isIndexVisible:`), hence in 16.2 the lead pile is col 0 (d = maxX(col 0) + gap, all cards leave the screen). Our G1C_Slide_Compute applies that same rule on its own data, so it picks col 0 as well.
+  Unexplained: the stock 16.0 utility behaved as if layouts 0/1 were missing from `[copy visibleAppLayouts]` (proved by the 0..360 landing). Most likely `[super visibleAppLayouts]` / the visible run is evaluated in the temporary-child context with other data; the new log prints `inVisible`, the stock and the new distance per index to settle it.
+  The replacement does not depend on that set, so the result is the same either way.
+* EXACT 16.2 logic: query ignores its index for the lead; `_visiblePileRange` state machine; pick loc/loc+1 by larger maxX; pile edge (RTL: width - x) + switcherHorizontalInterItemSpacing; visibility = box vs bounds inset by -2.8*shadow radius; HomeToGrid itself (unchanged stock code).
+* APPROXIMATED: pile box = union of the 16.0 `frameForIndex:` rects scaled about their centre (what a card renders as while ToHome forces anchor 0.5; 16.2 boxes come from its own cache); gap falls back to 16.0 `_horizontalSpacing` when G2's switcherHorizontalInterItemSpacing is 0;
+  `continuousExposeIdentifiers` (16.0 name) stands for 16.2's `...InSwitcher`; the max(.., own edge + gap) safety is NOT in 16.2 (no-op whenever the lead column is the right-most visible one).
+* Not changed: the settled switcher shows col 0 (most recent windows) scrolled off to the right (offset ~22 px); 16.2 scrolls differently (separate issue, `contentOffsetForIndex:alignment:`).
+* Found while reading build 0x1c7812acc: 16.2 fills piles right-to-left in LTR (cursor starts at -hEdge, card extends left, final x += _contentSize.width), like 16.0; the opt-in G1C_As_Build (g1c_piles) fills left-to-right and mirrors for RTL = inverted direction. Not touched (opt-in, review B2), but it must be flipped before g1c_piles can be enabled.
+* Log to read (debug on, grep GLITCH h2g): per idx 0..3 `d<new>(stock <old>)`: stock should show ~one column less than new for idx 0/1; `pile loc/len/pick/vis` = 16.2 range; `rendered[x0..x1]` after slide must end <= 0 (LTR); `opacity(stock>out)` 1.00>0.00 only if the safety net still had to act.
