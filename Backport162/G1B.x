@@ -55,6 +55,8 @@
 @interface SBFullScreenContinuousExposeSwitcherModifier : NSObject @end
 @interface SBWindowDeleteSwitcherModifier : NSObject @end
 @interface SBTransitionSwitcherModifierEvent : NSObject @end
+@interface SBFullScreenToHomeIconZoomSwitcherModifier : NSObject @end
+@interface SBFullScreenToHomeSlideOverSwitcherModifier : NSObject @end
 // END INTEGRATION interfaces
 
 // ============================================================================================================
@@ -1835,6 +1837,200 @@ static void G1B_BuildSwitcherToAppExpose(void) {
 // ============================================================================================================
 
 // ============================================================================================================
+// Anchor-point space pinning of the zoom-to-home transitions under Stage Manager (16.2, new): SBFullScreenToHomeCenterZoomDownSwitcherModifier (0x1c78342b0..),
+// SBFullScreenToHomeSlideOverSwitcherModifier (0x1c7836d34..), SBFullScreenToHomeIconZoomSwitcherModifier (0x1c75b2024..).
+// Each got the BOOL `shouldForceDefaultAnchorPointForTransition` (+setter) and the same six overrides; with the flag on, the zoomed layout is laid out around its centre
+// (anchor 0.5/0.5, pinned to space through the anchor point, no perspective, accessory frame = frameForIndex of that layout):
+//   anchorPointForIndex: / shouldPinLayoutRolesToSpace: / shouldUseAnchorPointToPinLayoutRolesToSpace:   flag && _isIndex{CenterZoom|SlideOver|Zoom}AppLayout:i -> (0.5,0.5) / YES / YES
+//   perspectiveAngleForAppLayout: flag && [l isEqual:_appLayout] -> 0      adjustedSpaceAccessoryViewAnchorPoint:forAppLayout: same -> (0.5,0.5)
+//   adjustedSpaceAccessoryViewFrame:forAppLayout: same -> [self frameForIndex:[[self appLayouts] indexOfObject:_appLayout]]
+// Every 16.2 creator (Root, floor, home-screen CE, window drop, home gesture) sets the flag from -isChamoisWindowingUIEnabled (home gesture: the root's
+// ensuresSelectedAppLayoutUsesAnchorPointSpacePinning, which the CE root sets to YES), i.e. "Stage Manager is on"; a modifier whose creator did not set it explicitly
+// therefore answers with that same query (the creators here are 16.0 code that cannot be changed, only the setter is provided for those that can).
+// ============================================================================================================
+static char kAPFlag;
+static Class gAPZD, gAPSO, gAPIZ;
+static Class G1B_AP_Cls(id self) {
+    if (gAPIZ && [self isKindOfClass:gAPIZ]) return gAPIZ;
+    if (gAPSO && [self isKindOfClass:gAPSO]) return gAPSO;
+    return gAPZD;
+}
+static Class G1B_AP_Sup(id self) { return class_getSuperclass(G1B_AP_Cls(self)); }
+static BOOL G1B_AP_Flag(id self) {
+    NSNumber *n = G1B_GET(self, kAPFlag);
+    return n ? n.boolValue : G1B_WD_Chamois(self);
+}
+static BOOL G1B_AP_IsLayout(id self, id l) { id mine = G1B_WD_Ivar(self, "_appLayout"); return l && mine && [l isEqual:mine]; }
+static BOOL G1B_AP_IsIndex(id self, unsigned long long i) {
+    Class c = G1B_AP_Cls(self);
+    SEL s = (c == gAPIZ) ? NSSelectorFromString(@"_isIndexZoomAppLayout:") : (c == gAPSO) ? NSSelectorFromString(@"_isIndexSlideOverAppLayout:") : NSSelectorFromString(@"_isIndexCenterZoomAppLayout:");
+    return [self respondsToSelector:s] && ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(self, s, i);
+}
+static BOOL G1B_AP_GetFlag(id self, SEL _cmd) { return G1B_AP_Flag(self); }
+static void G1B_AP_SetFlag(id self, SEL _cmd, BOOL v) { G1B_SET(self, kAPFlag, @(v)); }
+static CGPoint G1B_AP_Anchor(id self, SEL _cmd, unsigned long long i) {
+    if (G1B_AP_Flag(self) && G1B_AP_IsIndex(self, i)) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, G1B_AP_Sup(self), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static BOOL G1B_AP_Pin(id self, SEL _cmd, unsigned long long i) {
+    if (G1B_AP_Flag(self) && G1B_AP_IsIndex(self, i)) return YES;
+    return G1B_SUPER(BOOL, G1B_AP_Sup(self), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1B_AP_Persp(id self, SEL _cmd, id l) {
+    if (G1B_AP_Flag(self) && G1B_AP_IsLayout(self, l)) return 0.0;
+    return G1B_SUPER(double, G1B_AP_Sup(self), self, _cmd, (struct objc_super *, SEL, id), l);
+}
+static CGPoint G1B_AP_AccAnchor(id self, SEL _cmd, CGPoint p, id l) {
+    if (G1B_AP_Flag(self) && G1B_AP_IsLayout(self, l)) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, G1B_AP_Sup(self), self, _cmd, (struct objc_super *, SEL, CGPoint, id), p, l);
+}
+static CGRect G1B_AP_AccFrame(id self, SEL _cmd, CGRect f, id l) {
+    if (G1B_AP_Flag(self) && G1B_AP_IsLayout(self, l)) {
+        NSUInteger idx = [(NSArray *)G1B_WD_Layouts(self) indexOfObject:G1B_WD_Ivar(self, "_appLayout")];
+        return ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(frameForIndex:), idx);
+    }
+    return G1B_SUPER(CGRect, G1B_AP_Sup(self), self, _cmd, (struct objc_super *, SEL, CGRect, id), f, l);
+}
+// IconZoom only
+static char kIZNoAsync;
+static id G1B_IZ_AppLayout(id self, SEL _cmd) { return G1B_WD_Ivar(self, "_appLayout"); }                                  // 0x1c75b3d1c
+static BOOL G1B_IZ_GetNoAsync(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kIZNoAsync) boolValue]; }              // 0x1c75b3cfc / asyncRenderingDisabled 0x1c75b2024
+static void G1B_IZ_SetNoAsync(id self, SEL _cmd, BOOL v) { G1B_SET(self, kIZNoAsync, @(v)); }
+static long long G1B_IZ_DockUpdateMode(id self, SEL _cmd) { return 3; }                                                       // 0x1c75b39c8
+static id G1B_IZ_LayoutsForIdentifier(id self, SEL _cmd, id ident) {                                                          // 0x1c75b2aa0
+    id r = G1B_HasSuper(G1B_AP_Sup(self), _cmd) ? G1B_SUPER(id, G1B_AP_Sup(self), self, _cmd, (struct objc_super *, SEL, id), ident) : nil;
+    if (!G1B_WD_Chamois(self) || !r) return r;
+    id mine = G1B_WD_Ivar(self, "_appLayout");
+    id mineId = G1B_Send0(mine, @selector(continuousExposeIdentifier));
+    if (!(ident == mineId || [ident isEqual:mineId])) return r;
+    SEL oc = NSSelectorFromString(@"isOrContainsAppLayout:");
+    NSMutableArray *out = [NSMutableArray array];
+    for (id l in (NSArray *)r) {                                                                                                // block 0x1c75b2bc4: keep layouts unrelated to the zooming one
+        if (G1B_SendB1(mine, oc, l) || G1B_SendB1(l, oc, mine)) continue;
+        [out addObject:l];
+    }
+    return out;
+}
+%group G1B_IconZoom
+%hook SBFullScreenToHomeIconZoomSwitcherModifier
+- (BOOL)shouldAsyncRenderUntilDelay:(double *)delay {                                                                         // 16.2 0x1c75b2034
+    id me = (id)self;
+    Ivar iv = class_getInstanceVariable(object_getClass(me), "_direction");
+    long long direction = iv ? *(long long *)((uint8_t *)(__bridge void *)me + ivar_getOffset(iv)) : 0;
+    if (!G1B_ON()) return %orig;
+    if (direction != 0 || G1B_IZ_GetNoAsync(me, 0)) return NO;
+    double d = 0;
+    BOOL r = %orig(&d);
+    if (delay) *delay = d;
+    return r;
+}
+- (BOOL)wantsDockBehaviorAssertion {                                                                                          // 16.2 0x1c75b3988: direction 1 && floating dock -> YES, else direction == 0
+    if (!G1B_ON()) return %orig;
+    id me = (id)self;
+    Ivar iv = class_getInstanceVariable(object_getClass(me), "_direction"), fd = class_getInstanceVariable(object_getClass(me), "_homeScreenIconLocationIsFloatingDock");
+    long long direction = iv ? *(long long *)((uint8_t *)(__bridge void *)me + ivar_getOffset(iv)) : 0;
+    BOOL floatingDock = fd ? *(BOOL *)((uint8_t *)(__bridge void *)me + ivar_getOffset(fd)) : NO;
+    return (direction == 1 && floatingDock) ? YES : (direction == 0);
+}
+%end
+%end
+%group G1B_SlideOverZoom
+%hook SBFullScreenToHomeSlideOverSwitcherModifier
+- (double)scaleForIndex:(unsigned long long)i {                                                                               // 16.2 0x1c7836d34 (16.0: always 1.0)
+    if (!G1B_ON()) return %orig;
+    if (G1B_AP_IsIndex((id)self, i)) return 1.0;
+    return G1B_SUPER(double, class_getSuperclass(NSClassFromString(@"SBFullScreenToHomeSlideOverSwitcherModifier")), (id)self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+- (id)visibleAppLayouts {                                                                                                     // 16.2 0x1c783713c (16.0: only {_appLayout})
+    if (!G1B_ON()) return %orig;
+    id me = (id)self;
+    id base = G1B_SUPER(id, class_getSuperclass(NSClassFromString(@"SBFullScreenToHomeSlideOverSwitcherModifier")), me, _cmd, (struct objc_super *, SEL));
+    id mine = G1B_WD_Ivar(me, "_appLayout");
+    return (mine && [base respondsToSelector:@selector(setByAddingObject:)]) ? [base setByAddingObject:mine] : base;
+}
+%end
+%end
+static void G1B_BuildAnchorPin(void) {
+    gAPZD = NSClassFromString(@"SBFullScreenToHomeCenterZoomDownSwitcherModifier");
+    gAPSO = NSClassFromString(@"SBFullScreenToHomeSlideOverSwitcherModifier");
+    gAPIZ = NSClassFromString(@"SBFullScreenToHomeIconZoomSwitcherModifier");
+    const G1BMethod common[] = {
+        { "anchorPointForIndex:", (IMP)G1B_AP_Anchor, "{CGPoint=dd}24@0:8Q16" },
+        { "shouldPinLayoutRolesToSpace:", (IMP)G1B_AP_Pin, "B24@0:8Q16" },
+        { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)G1B_AP_Pin, "B24@0:8Q16" },
+        { "perspectiveAngleForAppLayout:", (IMP)G1B_AP_Persp, "d24@0:8@16" },
+        { "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (IMP)G1B_AP_AccAnchor, "{CGPoint=dd}40@0:8{CGPoint=dd}16@32" },
+        { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)G1B_AP_AccFrame, "{CGRect={CGPoint=dd}{CGSize=dd}}56@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16@48" },
+        { "shouldForceDefaultAnchorPointForTransition", (IMP)G1B_AP_GetFlag, "B16@0:8" },
+        { "setShouldForceDefaultAnchorPointForTransition:", (IMP)G1B_AP_SetFlag, "v20@0:8B16" },
+    };
+    const G1BMethod iz[] = {
+        { "appLayout", (IMP)G1B_IZ_AppLayout, "@16@0:8" },
+        { "shouldDisableAsyncRendering", (IMP)G1B_IZ_GetNoAsync, "B16@0:8" }, { "setShouldDisableAsyncRendering:", (IMP)G1B_IZ_SetNoAsync, "v20@0:8B16" },
+        { "asyncRenderingDisabled", (IMP)G1B_IZ_GetNoAsync, "B16@0:8" },
+        { "dockUpdateMode", (IMP)G1B_IZ_DockUpdateMode, "q16@0:8" },
+        { "appLayoutsForContinuousExposeIdentifier:", (IMP)G1B_IZ_LayoutsForIdentifier, "@24@0:8@16" },
+    };
+    Class all[3] = { gAPZD, gAPSO, gAPIZ };
+    for (int k = 0; k < 3; k++) if (all[k]) G1B_AddMethods(all[k], common, sizeof common / sizeof common[0]);
+    if (gAPIZ) G1B_AddMethods(gAPIZ, iz, sizeof iz / sizeof iz[0]);
+}
+
+// ============================================================================================================
+// 16.2 methods that the G1B response consumers (1.7 / 1.10) call and that 16.0 does not have (the consumers used to skip silently when the selector was missing).
+// ============================================================================================================
+// -[SBMainSwitcherControllerCoordinator switcherContentController:setInterfaceOrientationFromUserResizing:forDisplayItem:] (16.2 0x1c76d71d0): store the orientation the
+// user resized a window to on the scene handle; only for apps that are not multitasking (Medusa) capable. A phone app running on iPad keeps the value; otherwise the
+// value equal to the content controller's current content orientation is cleared (0), except on the external display where it is kept.
+static void G1B_Coord_SetOrientFromResizing(id self, SEL _cmd, id controller, long long resizing, id item) {
+    if (!controller || !item) { BP_Log(@"g1b: setInterfaceOrientationFromUserResizing: controller / item missing (16.2 asserts)"); return; }
+    SEL dsh = NSSelectorFromString(@"switcherContentController:deviceApplicationSceneHandleForDisplayItem:");
+    id h = [self respondsToSelector:dsh] ? ((id (*)(id, SEL, id, id))objc_msgSend)(self, dsh, controller, item) : nil;
+    id app = G1B_Send0(h, @selector(application));
+    if (!h || G1B_SendB0(app, NSSelectorFromString(@"isMedusaCapable"))) return;
+    if (!G1B_SendB0(G1B_Send0(h, @selector(application)), NSSelectorFromString(@"classicAppPhoneAppRunningOnPad"))) {
+        id sc = G1B_Send1(self, NSSelectorFromString(@"_switcherControllerForContentViewController:"), controller);
+        BOOL ext = G1B_SendB0(G1B_Send0(sc, NSSelectorFromString(@"windowScene")), NSSelectorFromString(@"isExternalDisplayWindowScene"));
+        if (!ext && G1B_SendLL0(controller, NSSelectorFromString(@"contentOrientation")) == resizing) resizing = 0;
+    }
+    G1B_SendVLL(h, NSSelectorFromString(@"_setInterfaceOrientationFromUserResizing:"), resizing);
+}
+// SBFluidSwitcherGestureManager (16.2 ivar _continuousExposeStripRevealGrabberTongue +0x140; kept as associated object, created by the gesture manager configuration):
+// present = [tongue presentAnimated:YES autoDismiss:YES] (0x1c78fc1e8), tickle = the same when the tongue is visible (0x1c78fc1f8).
+static char kGMStripTongue;
+static id G1B_GM_StripTongue(id self, SEL _cmd) { return G1B_GET(self, kGMStripTongue); }
+static void G1B_GM_SetStripTongue(id self, SEL _cmd, id t) { G1B_SET(self, kGMStripTongue, t); }
+static void G1B_GM_PresentStrip(id self, SEL _cmd) {
+    id t = G1B_GET(self, kGMStripTongue); SEL p = NSSelectorFromString(@"presentAnimated:autoDismiss:");
+    if (t && [t respondsToSelector:p]) ((void (*)(id, SEL, BOOL, BOOL))objc_msgSend)(t, p, YES, YES);
+}
+static void G1B_GM_TickleStrip(id self, SEL _cmd) {
+    id t = G1B_GET(self, kGMStripTongue);
+    if (t && G1B_SendB0(t, NSSelectorFromString(@"isVisible"))) G1B_GM_PresentStrip(self, _cmd);
+}
+// SBSwitcherController (16.2 0x1c7606c3c / 0x1c7606c44): forward to the gesture manager (ivar +0xd8).
+static void G1B_SC_Forward(id self, SEL _cmd) {
+    Ivar iv = class_getInstanceVariable(object_getClass(self), "_gestureManager");
+    id gm = iv ? object_getIvar(self, iv) : nil;
+    G1B_SendV0(gm, _cmd);
+}
+static void G1B_InstallConsumerTargets(void) {
+    const G1BMethod cm[] = { { "switcherContentController:setInterfaceOrientationFromUserResizing:forDisplayItem:", (IMP)G1B_Coord_SetOrientFromResizing, "v40@0:8@16q24@32" } };
+    const G1BMethod gm[] = {
+        { "continuousExposeStripRevealGrabberTongue", (IMP)G1B_GM_StripTongue, "@16@0:8" }, { "setContinuousExposeStripRevealGrabberTongue:", (IMP)G1B_GM_SetStripTongue, "v24@0:8@16" },
+        { "presentContinuousExposeStripRevealGrabberTongueImmediately", (IMP)G1B_GM_PresentStrip, "v16@0:8" },
+        { "tickleContinuousExposeStripRevealGrabberTongueIfVisible", (IMP)G1B_GM_TickleStrip, "v16@0:8" },
+    };
+    const G1BMethod sm[] = {
+        { "presentContinuousExposeStripRevealGrabberTongueImmediately", (IMP)G1B_SC_Forward, "v16@0:8" },
+        { "tickleContinuousExposeStripRevealGrabberTongueIfVisible", (IMP)G1B_SC_Forward, "v16@0:8" },
+    };
+    G1B_AddMethods(NSClassFromString(@"SBMainSwitcherControllerCoordinator"), cm, 1);
+    G1B_AddMethods(NSClassFromString(@"SBFluidSwitcherGestureManager"), gm, sizeof gm / sizeof gm[0]);
+    G1B_AddMethods(NSClassFromString(@"SBSwitcherController"), sm, sizeof sm / sizeof sm[0]);
+}
+
+// ============================================================================================================
 // setup
 // ============================================================================================================
 static BOOL G1B_OptIn(const char *name) { return BP_OnName(name); }     // default ON (kill switch Backport162.off.<name>)
@@ -1852,6 +2048,8 @@ void G1B_Setup(void) {
     G1B_BuildSwitcherToAppExpose();
     G1B_BuildWindowDelete();
     G1B_InstallChamoisFilter();
+    G1B_BuildAnchorPin();
+    G1B_InstallConsumerTargets();
     G1B_InstallTransitionEventFlags();
     %init(G1B_IconOverlay);                  // icon-overlay response for a missing item container is ignored instead of asserting
     %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
@@ -1860,6 +2058,8 @@ void G1B_Setup(void) {
     %init(G1B_FSHeader);                     // 1.5 consumer: FullScreen handleTapAppLayoutHeaderEvent:
     %init(G1B_RootTransition);               // 2.3 creator
     %init(G1B_ItemContainer);                // 16.2 unblur after prepareForReuse
+    %init(G1B_IconZoom);                     // 16.2 async rendering / dock behaviour of the icon zoom
+    %init(G1B_SlideOverZoom);                // 16.2 slide-over zoom scale / visible layouts
     %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below

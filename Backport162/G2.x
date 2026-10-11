@@ -1659,7 +1659,7 @@ static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, l
     BOOL isMain = BP_G2_Bool(scene, sel_registerName("isMainDisplayWindowScene"));
     BOOL isExternal = BP_G2_Bool(scene, sel_registerName("isExternalDisplayWindowScene"));
     CGFloat w = b.size.width, h = b.size.height;
-    if (isMain) { if (orientation - 1 < 2u) { CGFloat t = w; w = h; h = t; } }         // UIInterfaceOrientationPortrait(1)/UpsideDown(2): see md (swap only for those)
+    if (isMain) { if (!(orientation - 1 < 2u)) { CGFloat t = w; w = h; h = t; } }      // 162 0x1c78c0de4: portrait (1,2) keeps the portrait-based display bounds, landscape swaps them (was inverted)
     else { CGFloat mx = MAX(w, h), mn = MIN(w, h); w = mx; h = mn; }                  // external display: landscape
     b.size = CGSizeMake(w, h);
     double sb = [self respondsToSelector:sSb] ? ((double (*)(id, SEL))objc_msgSend)(self, sSb) : 0;

@@ -1416,9 +1416,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             id item = ((id (*)(id, SEL, long long))objc_msgSend)(appLayout, sel_registerName("itemForLayoutRole:"), r);
             if (item && BP2B_RoleMaskContains(roleMask, r)) anyRole = YES;
         });
-        __block unsigned long long allMask = 0;
-        BP2B_EnumerateValidRoles(^(long long r) { allMask |= (1ull << r); });
-        if (roleMask == allMask || anyRole) {                                                      // UNSURE: 162 compares with the constant at 0x1c7a933c8 (assumed "all valid roles")
+        if (roleMask == 0 || anyRole) {                                                            // 162 0x1c74452e0..0x1c74452e8: the constant at 0x1c7a933c8 is 0 (read from the cache)
             id overlay = overlayViews[appLayout], underlay = underlayViews[appLayout];
             double accScale = S;
             if ([root respondsToSelector:sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:")]) {
@@ -1592,6 +1590,9 @@ static void BP2B_DidSelectContainer(id vc, id container, long long flags) {
 static void BP2B_SetupSelection(void) {
     Class vc = objc_getClass("SBFluidSwitcherViewController"), ic = objc_getClass("SBFluidSwitcherItemContainer");
     if (vc) BP2B_AddIfMissing(vc, "didSelectContainer:modifierFlags:", imp_implementationWithBlock(^(id me, id container, long long flags) { BP2B_DidSelectContainer(me, container, flags); }), "v32@0:8@16q24");
+    // 162 has only didSelectContainer:modifierFlags: (the one-argument form is gone from the delegate protocol); every remaining 16.0 caller of the old name
+    // therefore takes the 16.2 path with no modifier flags (review F3: the container now calls the 2-argument form in every mode, as 16.2 does).
+    if (vc && BP2B_Enabled("g2bkeys")) BP2B_Replace(vc, "didSelectContainer:", imp_implementationWithBlock(^(id me, id container) { BP2B_DidSelectContainer(me, container, 0); }));
     if (!ic) return;
     SEL sc = sel_registerName("didSelectContainer:modifierFlags:");
     // 162 _handlePageViewTap: / _returnKeyPressed: forward [sender modifierFlags] (a gesture recognizer / UIKeyCommand)
