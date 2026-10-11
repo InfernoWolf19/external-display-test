@@ -2870,7 +2870,7 @@ static id G1C_Inl_HeaderTap(id self, SEL _cmd, id event) {                // 0x1
         if (active && [layout isEqual:active]) {                                     // header of the active window: pulse it
             Class pc = NSClassFromString(@"SBPulseDisplayItemSwitcherModifier");
             id pulse = (pc && [pc instancesRespondToSelector:@selector(initWithDisplayItem:)]) ? G1B_Send1([pc alloc], @selector(initWithDisplayItem:), item) : nil;
-            Class cc = NSClassFromString(@"SBChildModifierEventResponse");
+            Class cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
             SEL ci = NSSelectorFromString(@"initWithModifier:level:");
             id add = (pulse && cc && [cc instancesRespondToSelector:ci]) ? ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], ci, pulse, 3) : nil;
             out = add;
@@ -3556,7 +3556,7 @@ static id G1C_As_HeaderTap(id self, SEL _cmd, id event) {                       
             r = G1B_AppendTo(G1C_NewPerformFromRequest(req, NO), r);
         }
     } else {
-        Class pc = NSClassFromString(@"SBPulseDisplayItemSwitcherModifier"), cc = NSClassFromString(@"SBChildModifierEventResponse");
+        Class pc = NSClassFromString(@"SBPulseDisplayItemSwitcherModifier"), cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
         SEL ci = NSSelectorFromString(@"initWithModifier:level:");
         id pulse = (pc && [pc instancesRespondToSelector:@selector(initWithDisplayItem:)]) ? G1B_Send1([pc alloc], @selector(initWithDisplayItem:), item) : nil;
         id add = (pulse && cc && [cc instancesRespondToSelector:ci]) ? ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], ci, pulse, 3) : nil;
