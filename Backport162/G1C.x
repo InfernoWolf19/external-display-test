@@ -3987,6 +3987,72 @@ static void G1C_InstallHomeFlashGuard(void) {
     G1C_InstallHomeSlide();
 }
 // ============================================================================================================
+// 7.0  home gesture that ends on the home screen: the 16.0 "fly-in" card of SBHomeGestureToHomeSwitcherModifier
+// ============================================================================================================
+// ROOT CAUSE of "a dark window card (first group, NewTerm) clipped at the left edge of the home screen for ~0.75 s after a partial / quick home swipe":
+//  * SBHomeGestureToHomeSwitcherModifier is the transition modifier for home-gesture 1 -> 1 (swipe up on the home screen, released back to home). Its answers
+//    16.0 (0x1c5f44d40..0x1c5f44e48): visibleAppLayouts = { appLayouts.firstObject }, opacity = (index == 0 ? 1 : 0), scaleForIndex: = switcherSettings.offscreenCardScaleForFlyIn
+//    (0.8, 0x1c65cdb48), frameForIndex: = [super frameForIndex:] with x - 1 -- ALL UNCONDITIONAL (the ivar _showingOrAnimatingCardsForFlyIn at +0x88 is only stored).
+//  * 16.2 (0x1c73b93a4..0x1c73b9508) makes scale and the x - 1 conditional on that ivar (flag NO -> [super scaleForIndex:] / [super frameForIndex:]), and the Home gesture root
+//    builds the modifier with flag = gesture.isShowingOrAnimatingCardsForFlyIn ? !isChamoisWindowingUIEnabled : NO (16.2 0x1c78ede2c..0x1c78ede40; 16.0 0x1c643c314 passes the raw flag).
+//    So with Stage Manager the 16.2 card keeps the home floor's own scale (grid page scale 0.3 here / strip scale there) and stays off screen.
+//  * On the port the flag is YES, the card (grid index 0 = most recent window, opacity 1) is drawn at the home floor frame (centre x ~ -227 after the 16.0 home floor's grid
+//    slot, size 1056x646 with g2defsize) at scale 0.8: right edge -227 + 528 * 0.8 = 195 pt, bottom 210.5 + 323 * 0.8 = 469 pt, top above the screen = exactly the video.
+// Fix: (a) the root's transition child gets flag = flag && !chamois in the 1 -> 1 branch (the only branch 16.2 masks), (b) the modifier's frameForIndex: / scaleForIndex: honour
+// the flag like 16.2. Off switch: Backport162.off.g1c_flyin.   Logging (debug): "GLITCH home gesture ..." lines.
+static IMP gFlyFrameOrig, gFlyScaleOrig, gFlyRootOrig;
+static Class gFlyCls;
+static NSString *gFlyLastSig[2];
+static BOOL G1C_Fly_Stock(id self) {
+    return !G1C_ON() || !BP_OnName("g1c_flyin") || G1C_IvarBool(self, "_showingOrAnimatingCardsForFlyIn");
+}
+static CGRect G1C_Fly_Frame(id self, SEL _cmd, unsigned long long i) {
+    BOOL stock = G1C_Fly_Stock(self);
+    CGRect f = stock ? ((CGRect (*)(id, SEL, unsigned long long))gFlyFrameOrig)(self, _cmd, i)
+                     : G1B_SUPER(CGRect, class_getSuperclass(gFlyCls), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    if (i < 2 && BP_LogEnabled()) {
+        double sc = G1C_Resp(self, @selector(scaleForIndex:)) ? ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(scaleForIndex:), i) : 0.0;
+        NSString *sig = [NSString stringWithFormat:@"flyIn=%d frame=%@ scale=%.3f", (int)G1C_IvarBool(self, "_showingOrAnimatingCardsForFlyIn"), NSStringFromCGRect(f), sc];
+        BOOL changed = NO;
+        @synchronized(@"BP162.fly") { if (![gFlyLastSig[i] isEqualToString:sig]) { gFlyLastSig[i] = sig; changed = YES; } }
+        if (changed) BP_Log(@"GLITCH home gesture to home idx=%llu: %@ (answered by %@)", i, sig, stock ? @"16.0 fly-in" : @"home floor (16.2)");
+    }
+    return f;
+}
+static double G1C_Fly_Scale(id self, SEL _cmd, unsigned long long i) {
+    if (G1C_Fly_Stock(self)) return ((double (*)(id, SEL, unsigned long long))gFlyScaleOrig)(self, _cmd, i);
+    return G1B_SUPER(double, class_getSuperclass(gFlyCls), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static id G1C_Fly_Root(id self, SEL _cmd, id event, id gesture) {
+    id r = ((id (*)(id, SEL, id, id))gFlyRootOrig)(self, _cmd, event, gesture);
+    if (!r || !G1C_ON() || !BP_OnName("g1c_flyin") || !gFlyCls || ![r isKindOfClass:gFlyCls]) {
+        if (r && BP_LogEnabled()) BP_Log(@"GLITCH home gesture root: transition child %@ for modes %lld->%lld", G1C_DbgCls(r), G1B_SendLL0(event, @selector(fromEnvironmentMode)), G1B_SendLL0(event, @selector(toEnvironmentMode)));
+        return r;
+    }
+    long long from = G1B_SendLL0(event, @selector(fromEnvironmentMode)), to = G1B_SendLL0(event, @selector(toEnvironmentMode));
+    BOOL chamois = G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled));
+    BOOL was = G1C_IvarBool(r, "_showingOrAnimatingCardsForFlyIn");
+    if (to == 1 && from == 1 && chamois && was) G1C_SetIvarBool(r, "_showingOrAnimatingCardsForFlyIn", NO);     // 16.2 0x1c78ede2c: flag = flyIn ? !chamois : NO (this branch only)
+    if (BP_LogEnabled()) BP_Log(@"GLITCH home gesture root: transition child %@ for modes %lld->%lld chamois=%d flyIn %d -> %d", G1C_DbgCls(r), from, to, chamois, was, G1C_IvarBool(r, "_showingOrAnimatingCardsForFlyIn"));
+    return r;
+}
+static void G1C_InstallFlyInFix(void) {
+    gFlyCls = NSClassFromString(@"SBHomeGestureToHomeSwitcherModifier");
+    Class root = NSClassFromString(@"SBHomeGestureRootSwitcherModifier");
+    if (!gFlyCls || !root || !class_getInstanceVariable(gFlyCls, "_showingOrAnimatingCardsForFlyIn")) return;
+    struct { SEL sel; IMP imp; IMP *orig; Class cls; } t[] = {
+        { @selector(frameForIndex:), (IMP)G1C_Fly_Frame, &gFlyFrameOrig, gFlyCls },
+        { @selector(scaleForIndex:), (IMP)G1C_Fly_Scale, &gFlyScaleOrig, gFlyCls },
+        { NSSelectorFromString(@"transitionChildModifierForMainTransitionEvent:activeGestureModifier:"), (IMP)G1C_Fly_Root, &gFlyRootOrig, root },
+    };
+    for (size_t k = 0; k < sizeof t / sizeof t[0]; k++) if (!class_getInstanceMethod(t[k].cls, t[k].sel)) { gFlyCls = Nil; return; }      // not the expected 16.0 shape: stay stock
+    for (size_t k = 0; k < sizeof t / sizeof t[0]; k++) {
+        Method m = class_getInstanceMethod(t[k].cls, t[k].sel);
+        IMP old = class_replaceMethod(t[k].cls, t[k].sel, t[k].imp, method_getTypeEncoding(m));
+        *t[k].orig = old ?: method_getImplementation(m);
+    }
+}
+// ============================================================================================================
 // setup
 // ============================================================================================================
 void G1C_Setup(void) {
@@ -3994,6 +4060,7 @@ void G1C_Setup(void) {
     G1C_BuildGridGesture();
     G1C_BuildCEToHome();
     G1C_InstallHomeFlashGuard();
+    G1C_InstallFlyInFix();
     G1C_BuildGridRoot();
     G1C_BuildTransactions();
     %init(G1C_Txn);
