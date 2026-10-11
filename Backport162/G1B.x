@@ -52,6 +52,8 @@
 @interface SBiPadOSPlatformSwitcherModifier : NSObject @end
 @interface SBContinuousExposeRootSwitcherModifier : NSObject @end
 @interface SBContinuousExposeAppToAppModifier : NSObject @end
+@interface SBFullScreenContinuousExposeSwitcherModifier : NSObject @end
+@interface SBWindowDeleteSwitcherModifier : NSObject @end
 // END INTEGRATION interfaces
 
 // ============================================================================================================
@@ -1747,36 +1749,10 @@ static void G1B_BuildSwitcherToAppExpose(void) {
 %end
 
 // ============================================================================================================
-// 4.8  SBContinuousExposeAppToAppModifier -didMoveToParentModifier:  (PARTIAL: replaces the 16.0 crossblur child; opt-in)
+// 4.8  SBContinuousExposeAppToAppModifier: the 16.2 class is built in full by G1C.x (BP162ContinuousExposeAppToAppModifier, G1C_A2A_DidMove creates the
+// FullScreenToStrip / Crossblur child from this file's gF2SCls / gXBCls exactly as 16.2 0x1c759598c does). The former G1B hook that patched the 16.0 class
+// read flags nothing ever set on it (it was inert) and is removed.
 // ============================================================================================================
-// Switch file <jbroot>/tmp/Backport162.on.group1b.apptoapp (opt-in): changes the look of every app-to-app transition.
-%group G1B_AppToApp
-%hook SBContinuousExposeAppToAppModifier
-- (void)didMoveToParentModifier:(id)parent {
-    NSMutableSet *before = [NSMutableSet set];
-    if (parent && [self respondsToSelector:@selector(enumerateChildModifiersWithBlock:)])
-        ((void (*)(id, SEL, void (^)(id)))objc_msgSend)(self, @selector(enumerateChildModifiersWithBlock:), ^(id c) { [before addObject:c]; });
-    %orig;
-    if (!G1B_ON() || !parent || !gF2SCls || !gXBCls || gTransSuper == Nil) return;
-    Ivar ivTo = class_getInstanceVariable([self class], "_toAppLayout"), ivFrom = class_getInstanceVariable([self class], "_fromAppLayout");
-    id to = ivTo ? object_getIvar(self, ivTo) : nil, from = ivFrom ? object_getIvar(self, ivFrom) : nil;
-    SEL cmdTab = @selector(isCommandTabTransition), dock = @selector(isLaunchingFromDockTransition);
-    if (!to || !from || ![to respondsToSelector:@selector(containsAnyItemFromAppLayout:)] || ![self respondsToSelector:cmdTab] || ![self respondsToSelector:dock]
-        || ![self respondsToSelector:@selector(transitionID)] || ![self respondsToSelector:@selector(appLayouts)]) return;
-    // 16.2 condition: different apps (no shared item) and the target layout is known to the switcher.
-    if (G1B_SendB1(to, @selector(containsAnyItemFromAppLayout:), from) || ![(NSArray *)G1B_Send0(self, @selector(appLayouts)) containsObject:to]) return;
-    // remove the 16.0 crossblur child that %orig may have added
-    Class old = NSClassFromString(@"SBContinuousExposeCrossblurModifier");
-    if (old) ((void (*)(id, SEL, void (^)(id)))objc_msgSend)(self, @selector(enumerateChildModifiersWithBlock:), ^(id c) {
-        if ([c isKindOfClass:old] && ![before containsObject:c]) G1B_SendV1(self, @selector(removeChildModifier:), c); });
-    id tid = G1B_Send0(self, @selector(transitionID));
-    id child = (G1B_SendB0(self, cmdTab) || G1B_SendB0(self, dock))
-        ? ((id (*)(id, SEL, id, id, id))objc_msgSend)([gXBCls alloc], @selector(initWithTransitionID:toAppLayout:fromAppLayout:), tid, to, from)
-        : ((id (*)(id, SEL, id, id))objc_msgSend)([gF2SCls alloc], @selector(initWithTransitionID:outgoingAppLayout:), tid, from);
-    if (child) G1B_SendV1(self, @selector(addChildModifier:), child);
-}
-%end
-%end
 
 // ============================================================================================================
 // setup
@@ -1793,10 +1769,16 @@ void G1B_Setup(void) {
     G1B_BuildFullScreenToStrip();
     G1B_BuildWindowModeChange();
     G1B_BuildDndToApp();
+    G1B_BuildSwitcherToAppExpose();
+    G1B_BuildWindowDelete();
     G1B_InstallTransitionEventFlags();
     %init(G1B_IconOverlay);                  // icon-overlay response for a missing item container is ignored instead of asserting
     %init(G1B_Handled);                      // second handleWithReason: is ignored instead of asserting
     if (BP_OnName("addwinnet")) %init(G1B_AddWin);   // stock "appLayouts array MUST contain" assertion at the end of a transition: repair instead of crash
+    %init(G1B_Highlight);                    // 16.2 isHandled gate of the FullScreen highlight handler (root cause of 'already handled')
+    %init(G1B_FSHeader);                     // 1.5 consumer: FullScreen handleTapAppLayoutHeaderEvent:
+    %init(G1B_RootTransition);               // 2.3 creator
+    %init(G1B_ItemContainer);                // 16.2 unblur after prepareForReuse
     %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
@@ -1805,7 +1787,6 @@ void G1B_Setup(void) {
     %init(G1B_Coordinator);                  // 2.0 transition-event flags
     %init(G1B_Platform);                     // 2.4 creator
     %init(G1B_Root);                         // 4.1 _effectiveEnvironmentMode fix
-    if (G1B_OptIn("group1b.apptoapp")) %init(G1B_AppToApp);   // 4.8: opt-in, changes every app-to-app transition
 }
 // Not drafted (see spec): 1.1 users (peek / drag root), 1.9 hosting in the VC, 2.3, 2.6, 3.x, 4.2-4.7, 4.9.
 #pragma clang diagnostic pop
