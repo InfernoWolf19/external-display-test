@@ -2042,8 +2042,11 @@ static double G1C_Dnd_BackgroundOpacity(id self, SEL _cmd, unsigned long long i)
     if (!([self respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled)))) return 0.0;
     return G1B_SUPER(double, gDndSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
-static double G1C_Dnd_HomeDim(id self, SEL _cmd) {
-    // chamois: [super]; non-chamois: UNSURE (0x1c7639120: transition-modifier phase test returning 1.0 early)
+static double G1C_Dnd_HomeDim(id self, SEL _cmd) {                                       // 0x1c7639120
+    if (!G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled))) {
+        id t = G1B_GET(self, kDndTrans);                                                 // _transitionModifier: past phase 1 the home screen is fully dimmed
+        if (t && (unsigned long long)G1B_SendLL0(t, NSSelectorFromString(@"transitionPhase")) > 1) return 1.0;
+    }
     return G1B_SUPER(double, gDndSuper, self, _cmd, (struct objc_super *, SEL));
 }
 static BOOL G1C_Dnd_GrabberVisible(id self, SEL _cmd, id layout) {
@@ -2308,7 +2311,7 @@ static id G1C_Wd_Init(id self, SEL _cmd, id gid, id initial, id item) {
     CGPoint inv = CGPointMake(DBL_MAX, DBL_MAX);
     G1C_SetIvarPoint(me, "_anchorPoint", inv);
     G1C_SetIvarPoint(me, "_initialAnchorPoint", inv);
-    Class dc = gWddCls ?: gWddParent;
+    Class dc = gWddCls;
     SEL di = @selector(initWithSelectedDisplayItem:initialAppLayout:delegate:);
     if (dc && [dc instancesRespondToSelector:di]) {
         id dest = ((id (*)(id, SEL, id, id, id))objc_msgSend)([dc alloc], di, item, initial, me);
@@ -2596,46 +2599,235 @@ static id G1C_Wd_AnimAttrs(id self, SEL _cmd, id element) {
     return m;
 }
 static BOOL G1C_Wd_WindowVisible(id self, SEL _cmd) { return YES; }
+// 0x1c760b400  isSwitcherWindowUserInteractionEnabled = [self isSwitcherWindowVisible]  (16.2 tail call)
+static BOOL G1C_Wd_WindowInteraction(id self, SEL _cmd) { return G1B_SendB0(self, @selector(isSwitcherWindowVisible)); }
+// 0x1c760adb0  topMostLayoutElements: the layout holding the dragged item moves to the top
+static id G1C_Wd_TopMost(id self, SEL _cmd) {
+    id r = G1B_SUPER(id, gWdGrand, self, _cmd, (struct objc_super *, SEL));
+    id l = G1B_Send1(self, @selector(_appLayoutContainingDisplayItem:), G1C_Wd_Sel(self));
+    if (!l) return r;
+    return ((id (*)(id, SEL, id, unsigned long long))objc_msgSend)(r, NSSelectorFromString(@"sb_arrayByInsertingOrMovingObject:toIndex:"), l, 0);
+}
+// 0x1c760b404  _appLayoutContainingDisplayItem: = first of -appLayouts containing the item (the 16.0 body logged; 16.2 does not)
+static id G1C_Wd_LayoutForItem(id self, SEL _cmd, id item) {
+    for (id l in (NSArray *)G1B_Send0(self, @selector(appLayouts))) if (G1C_LayoutHas(l, item)) return l;
+    return nil;
+}
 
-// ---- WindowDragDestination (UNSURE: composition over the 16.0 algorithm) ----
+// ---- WindowDragDestination: faithful port of 16.2 (20C65) -----------------------------------------------------------------------------------------
+// BP162ContinuousExposeWindowDragDestinationSwitcherModifier subclasses the 16.0 class and replaces the five methods 16.2 changed; none of the 16.0
+// bodies runs (handleGestureEvent: starts at SBSwitcherModifier, as the 16.2 -[super handleGestureEvent:] does).
+//   handleGestureEvent:                    16.2 0x1c74f3330 (160 0x1c6070880)   _widthThresholdToHideStrips           0x1c74f3d8c
+//   _frameForSelectedDisplayItem           16.2 0x1c74f3dd8                     _appLayoutByAddingItem:toAppLayout:size:center:  0x1c74f406c
+//   proposedAppLayoutForContinuousExposeWindowDrag 0x1c74f3d7c                  _anyProposedAppLayoutContainsSelectedDisplayItem 0x1c74f46e0
+// 16.2 ivars the 16.0 class lacks: _initialSelectedDisplayItemLayoutAttributes +0x90, _dragBeganInOtherSwitcher +0x98, _lastAppLayoutForStripCalculation +0xb0
+// (the two objects live in associated objects: runtime-added ivars are unretained). _translation / _draggingFromStrips / _hasForegroundedSelectedDisplayItem
+// of 16.0 are not touched any more. The cross-display queries (draggingAppLayouts... / proposedAppLayouts...) are answered by SBMainSwitcherControllerCoordinator in
+// 16.2; that class does not exist in 16.0 (G2 stubs them), so a single display answers with its own layouts (the one documented non-portable part).
+static Class gWddGrand;
 static char kWddLast, kWddInitAttrs;
+static BOOL G1C_Wdd_GT(double a, double b) { return a > b && fabs(a - b) >= 0.0001; }                                                // BSFloatGreaterThanFloat
+static BOOL G1C_Wdd_RoleValid(long long r) { return (unsigned long long)(r - 1) < 10 && ((1u << (r & 31)) & 0xfffffc19u) == 0; }   // _SBLayoutRoleIsValidForSplitView 0x1c7894a30
+static id G1C_Wdd_OverlapModel(id self, id layout, id attrs, CGRect cb) {
+    id calc = G1B_Send0(self, @selector(displayItemLayoutAttributesCalculator));
+    SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:");
+    if (!calc || ![calc respondsToSelector:om]) { if (BP_LogEnabled()) BP_Log(@"GUARD WindowDragDestination: calculator lacks the overlapping-model query"); return nil; }
+    return ((id (*)(id, SEL, id, long long, id, double, double, CGRect, BOOL, BOOL))objc_msgSend)(calc, om, layout, G1B_SendLL0(self, @selector(switcherInterfaceOrientation)), attrs,
+        G1B_Dbl0(self, @selector(floatingDockHeight)), G1B_Dbl0(self, @selector(screenScale)), cb, G1B_SendB0(self, @selector(prefersStripHidden)), G1B_SendB0(self, @selector(prefersDockHidden)));
+}
+static id G1C_Wdd_ByDragging(id self, id item, id layout, id attrs, CGRect cb) {
+    id calc = G1B_Send0(self, @selector(displayItemLayoutAttributesCalculator));
+    SEL ds = NSSelectorFromString(@"appLayoutByDraggingItem:inAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:");
+    if (!calc || ![calc respondsToSelector:ds]) { if (BP_LogEnabled()) BP_Log(@"GUARD WindowDragDestination: calculator lacks appLayoutByDraggingItem:..."); return layout; }
+    return ((id (*)(id, SEL, id, id, long long, id, double, double, id, CGRect, BOOL, BOOL))objc_msgSend)(calc, ds, item, layout, G1B_SendLL0(self, @selector(switcherInterfaceOrientation)), attrs,
+        G1B_Dbl0(self, @selector(floatingDockHeight)), G1B_Dbl0(self, @selector(screenScale)), G1C_IvarObj(self, "_initialOverlappingModel"), cb,
+        G1B_SendB0(self, @selector(prefersStripHidden)), G1B_SendB0(self, @selector(prefersDockHidden)));
+}
+static G1CAttributedSize G1C_Wdd_AttrSize(id a) {                                                  // -[SBDisplayItemLayoutAttributes attributedSize] (zeros for nil, as the 16.2 code)
+    G1CAttributedSize z; memset(&z, 0, sizeof z);
+    SEL s = NSSelectorFromString(@"attributedSize");
+    return (a && [a respondsToSelector:s]) ? ((G1CAttributedSize (*)(id, SEL))objc_msgSend)(a, s) : z;
+}
+static id G1C_Wdd_FirstDragging(id self) {                                                         // bs_firstObjectPassingTest: [l containsItem:_selectedDisplayItem]
+    id sel = G1C_IvarObj(self, "_selectedDisplayItem");
+    for (id l in G1C_WdDragging(self, G1C_IvarObj(self, "_initialAppLayout"))) if (G1C_LayoutHas(l, sel)) return l;
+    return nil;
+}
+
+// 0x1c74f2fe8  init: 16.0 additionally set _draggingFromStrips from the delegate (ivar gone in 16.2); 16.2 seeds _lastAppLayoutForStripCalculation with the initial layout
+extern id G1C_storeWeak(void *location, id obj) __asm__("_objc_storeWeak");        // ARC runtime entry (not declared by the public headers)
+static id G1C_Wdd_Init(id self, SEL _cmd, id item, id initial, id delegate) {
+    id me = G1B_SUPER(id, gWddGrand, self, @selector(init), (struct objc_super *, SEL));
+    if (!me) return nil;
+    if (!item || !initial || !delegate) return nil;                      // 16.2 NSAssert (SBContinuousExposeWindowDragDestinationSwitcherModifier.m lines 0x2c..0x2e)
+    G1C_SetIvarObj(me, "_selectedDisplayItem", item);
+    G1C_SetIvarObj(me, "_initialAppLayout", initial);
+    Ivar dv = class_getInstanceVariable(object_getClass(me), "_destinationDelegate");
+    if (dv) G1C_storeWeak((uint8_t *)(__bridge void *)me + ivar_getOffset(dv), delegate);
+    G1C_SetIvarLL(me, "_proposedDestination", 0);
+    G1C_SetIvarObj(me, "_proposedAppLayout", initial);
+    G1B_SET(me, kWddLast, initial);
+    return me;
+}
+// 0x1c74f46e0  [[self proposedAppLayoutsForContinuousExposeWindowDrag] bs_containsObjectPassingTest:^(l){ [l containsItem:_selectedDisplayItem] }]
+static BOOL G1C_Wdd_AnyProposed(id self, SEL _cmd) {
+    id sel = G1C_IvarObj(self, "_selectedDisplayItem");
+    for (id l in G1C_WdProposedAll(self, self)) if (G1C_LayoutHas(l, sel)) return YES;
+    return NO;
+}
+// 0x1c74f3d7c
+static id G1C_Wdd_ProposedForDrag(id self, SEL _cmd) { return G1C_IvarObj(self, "_proposedAppLayout"); }
+// 0x1c74f3d8c  [[self overlappingModelForAppLayout:_proposedAppLayout] widthThresholdToHideStrip]
+static double G1C_Wdd_WidthThreshold(id self, SEL _cmd) {
+    return G1C_DM_WidthThresholdToHideStrip(G1B_Send1(self, NSSelectorFromString(@"overlappingModelForAppLayout:"), G1C_IvarObj(self, "_proposedAppLayout")));
+}
+// 0x1c74f3dd8
+static CGRect G1C_Wdd_Frame(id self, SEL _cmd) {
+    id sel = G1C_IvarObj(self, "_selectedDisplayItem"), prop = G1C_IvarObj(self, "_proposedAppLayout");
+    id layout = G1C_LayoutHas(prop, sel) ? prop : G1B_Send1(self, @selector(appLayoutContainingAppLayout:), G1B_Send1(self, @selector(_appLayoutContainingDisplayItem:), sel));
+    BOOL any = G1B_SendB0(self, @selector(_anyProposedAppLayoutContainsSelectedDisplayItem));
+    CGRect cb = G1C_SendRect0(self, @selector(containerViewBounds));
+    id attrs = G1B_Send0(self, @selector(chamoisLayoutAttributes));
+    CGSize size;
+    if (G1C_IvarBool(self, "_dragBeganInOtherSwitcher") && any && !G1C_LayoutHas(prop, sel)) {             // dragged in from another switcher: its own size
+        size = G1C_DM_SizeInBounds(G1B_GET(self, kWddInitAttrs), cb, G1C_DM_DefaultWindowSize(attrs), G1C_DM_ScreenEdgePadding(attrs));
+    } else {
+        id calc = G1B_Send0(self, @selector(displayItemLayoutAttributesCalculator));
+        SEL fs = NSSelectorFromString(@"frameForLayoutRole:inAppLayout:containerBounds:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:isChamoisWindowingUIEnabled:prefersStripHidden:prefersDockHidden:");
+        CGRect f = CGRectZero;
+        if (calc && [calc respondsToSelector:fs])
+            f = ((CGRect (*)(id, SEL, long long, id, CGRect, long long, id, double, double, BOOL, BOOL, BOOL))objc_msgSend)(calc, fs, G1C_SendLLId(layout, @selector(layoutRoleForItem:), sel), layout, cb,
+                G1B_SendLL0(self, @selector(switcherInterfaceOrientation)), attrs, G1B_Dbl0(self, @selector(floatingDockHeight)), G1B_Dbl0(self, @selector(screenScale)), YES,
+                G1B_SendB0(self, @selector(prefersStripHidden)), G1B_SendB0(self, @selector(prefersDockHidden)));
+        else if (BP_LogEnabled()) BP_Log(@"GUARD WindowDragDestination._frameForSelectedDisplayItem: calculator lacks frameForLayoutRole:...");
+        size = f.size;
+    }
+    id delegate = G1B_Send0(self, @selector(destinationDelegate));
+    CGPoint c = (delegate && G1C_Resp(delegate, @selector(preferredCenterForSelectedItemInDestinationModifier:))) ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(delegate, @selector(preferredCenterForSelectedItemInDestinationModifier:), self) : CGPointZero;
+    return CGRectMake(c.x - size.width * 0.5, c.y - size.height * 0.5, size.width, size.height);     // _UIRectCenteredAboutPoint(SBRectWithSize(size), center)
+}
+// 0x1c74f406c
+static id G1C_Wdd_AddItem(id self, SEL _cmd, id item, id layout, CGSize size, CGPoint center) {
+    id selItem = G1C_IvarObj(self, "_selectedDisplayItem");
+    if (G1C_LayoutHas(layout, item)) return layout;
+    if (!layout) return G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), item, G1C_IvarObj(self, "_initialAppLayout"));
+    NSMutableArray *items = [(NSArray *)G1B_Send0(layout, @selector(allItems)) mutableCopy];
+    [items addObject:item];
+    id attrs = G1B_Send0(self, @selector(chamoisLayoutAttributes));
+    CGRect cb = G1C_SendRect0(self, @selector(containerViewBounds));
+    Class dla = NSClassFromString(@"SBDisplayItemLayoutAttributes");
+    CGPoint norm = ((CGPoint (*)(id, SEL, CGPoint, CGRect))objc_msgSend)((id)dla, @selector(normalizedPointForPoint:inBounds:), center, cb);
+    id first = G1C_Wdd_FirstDragging(self);
+    G1CAttributedSize as;
+    if (!first || G1B_SendLL0(first, @selector(preferredDisplayOrdinal)) == G1B_SendLL0(self, @selector(displayOrdinal)))
+        as = G1C_DM_InferAttributedSize(size, cb, G1C_DM_DefaultWindowSize(attrs), G1C_DM_ScreenEdgePadding(attrs));       // _SBDisplayItemAttributedSizeInfer 0x1c75cedfc
+    else
+        as = G1C_Wdd_AttrSize(G1B_Send1(first, @selector(layoutAttributesForItem:), selItem));                              // dragged in from another switcher: that window's size
+    SEL ia = NSSelectorFromString(@"initWithContentOrientation:lastInteractionTime:sizingPolicy:attributedSize:normalizedCenter:");
+    id na = ((id (*)(id, SEL, long long, long long, long long, G1CAttributedSize, CGPoint))objc_msgSend)([dla alloc], ia, 0, 0, 0, as, norm);
+    NSMutableDictionary *map = [(NSDictionary *)G1B_Send0(layout, @selector(itemsToLayoutAttributesMap)) mutableCopy];
+    if (na) [map addEntriesFromDictionary:@{ item : na }];
+    Class alc = NSClassFromString(@"SBAppLayout");
+    SEL ini = NSSelectorFromString(@"initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:centerConfiguration:environment:hidden:preferredDisplayOrdinal:");
+    id nl = ((id (*)(id, SEL, id, id, id, long long, id, long long, long long, BOOL, long long))objc_msgSend)([alc alloc], ini, items,
+        G1C_SendLL1(layout, @selector(itemForLayoutRole:), 4), G1C_SendLL1(layout, @selector(itemForLayoutRole:), 3), 3, map,
+        G1B_SendLL0(layout, @selector(centerConfiguration)), G1B_SendLL0(layout, @selector(environment)), G1B_SendB0(layout, @selector(isHidden)), G1B_SendLL0(layout, @selector(preferredDisplayOrdinal)));
+    id fronted = G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), item, nl);
+    return G1C_Wdd_ByDragging(self, item, fronted, G1B_Send0(self, @selector(chamoisLayoutAttributes)), G1C_SendRect0(self, @selector(containerViewBounds)));
+}
+// 0x1c74f3330
 static id G1C_Wdd_Gesture(id self, SEL _cmd, id event) {
-    id r = G1B_SUPER(id, gWddParent, self, _cmd, (struct objc_super *, SEL, id), event);
-    if (!G1C_ON() || !event) return r;
+    id r = G1B_SUPER(id, gWddGrand, self, _cmd, (struct objc_super *, SEL, id), event);
+    CGPoint loc = G1C_SendPoint0(event, @selector(locationInContainerView)), vel = G1C_SendPoint0(event, @selector(velocityInContainerView));
+    G1C_SetIvarPoint(self, "_location", loc);
+    G1C_SetIvarPoint(self, "_velocity", vel);
+    id attrs = G1B_Send0(self, @selector(chamoisLayoutAttributes));
+    CGRect cb = G1C_SendRect0(self, @selector(containerViewBounds));
+    double W = cb.size.width;
+    long long phase = G1B_SendLL0(event, @selector(phase));
+    id sel = G1C_IvarObj(self, "_selectedDisplayItem"), initial = G1C_IvarObj(self, "_initialAppLayout");
+    if (phase == 1) {
+        G1C_SetIvarPoint(self, "_initialLocation", loc);
+        id model = G1C_Wdd_OverlapModel(self, G1C_IvarObj(self, "_proposedAppLayout"), attrs, cb);
+        double th = G1C_DM_WidthThresholdToHideStrip(model);
+        double bbW = (model && G1C_Resp(model, @selector(boundingBox))) ? G1C_SendRect0(model, @selector(boundingBox)).size.width : 0.0;
+        double sw = G1B_Dbl0(attrs, @selector(stripWidth)), cz;
+        if (G1C_LayoutHas(initial, sel)) cz = sw + G1B_Dbl0(attrs, @selector(screenEdgePadding));
+        else {
+            double d = MIN(sw, (W - bbW) * 0.5);
+            if (G1C_Wdd_GT(G1C_SendD0(self, @selector(continuousExposeStripProgress)), 0.0)) d = MAX(d, sw);
+            cz = G1C_Wdd_GT(th, 0.0) ? MAX(d, (W - th) * 0.5) : d;
+        }
+        G1C_SetIvarD(self, "_stripsWidthForCancelZone", cz);
+        id inLayout = G1B_Send1(self, @selector(_appLayoutContainingDisplayItem:), sel);
+        G1B_SET(self, kWddInitAttrs, G1B_Send1(inLayout, @selector(layoutAttributesForItem:), sel));
+        id first = G1C_Wdd_FirstDragging(self);
+        G1C_SetIvarBool(self, "_dragBeganInOtherSwitcher", G1B_SendLL0(first, @selector(preferredDisplayOrdinal)) != G1B_SendLL0(self, @selector(displayOrdinal)));
+        return r;
+    }
+    CGRect fr = G1C_SendRect0(self, @selector(_frameForSelectedDisplayItem));
+    CGPoint il = G1C_IvarPoint(self, "_initialLocation");
+    BOOL outside;                                                           // w23: the finger is in the stage part of the container (not over the strips' cancel zone)
+    if (!CGRectContainsPoint(cb, loc)) outside = NO;
+    else if (!CGRectContainsPoint(cb, il)) outside = YES;
+    else {
+        BOOL inItem = G1C_LayoutHas(initial, sel);
+        if ([(NSArray *)G1B_Send0(initial, @selector(allItems)) count] == 1 && inItem) outside = YES;
+        else {
+            BOOL rtl = G1B_SendB0(self, @selector(isRTLEnabled));
+            double cz = G1C_IvarD(self, "_stripsWidthForCancelZone");
+            outside = (inItem || (rtl ? il.x >= W * 0.5 : il.x < W * 0.5)) && (rtl ? loc.x < W - cz : loc.x > cz);
+        }
+    }
+    if (phase == 3 && (fabs(vel.x) > 1000.0 || fabs(vel.y) > 1000.0)) { fr.origin.x += vel.x * 0.15; fr.origin.y += vel.y * 0.15; }     // 0x1c7a90e18 / 0x1c7a90d70
     id prop = G1C_IvarObj(self, "_proposedAppLayout");
-    if (G1B_SendLL0(event, @selector(phase)) == 1) {
-        id al = G1C_Resp(self, @selector(_appLayoutContainingDisplayItem:)) ? G1B_Send1(self, @selector(_appLayoutContainingDisplayItem:), G1C_IvarObj(self, "_selectedDisplayItem")) : nil;
-        id at = (al && G1C_Resp(al, @selector(layoutAttributesForItem:))) ? G1B_Send1(al, @selector(layoutAttributesForItem:), G1C_IvarObj(self, "_selectedDisplayItem")) : nil;
-        G1B_SET(self, kWddInitAttrs, at);
-        SEL dg = NSSelectorFromString(@"draggingAppLayoutsForContinuousExposeWindowDrag");
-        id initial = G1C_IvarObj(self, "_initialAppLayout");
-        NSArray *dragging = G1C_Resp(self, dg) ? G1B_Send0(self, dg) : (initial ? @[ initial ] : @[]);
-        id first = nil;
-        for (id l in dragging) if (G1C_LayoutHas(l, G1C_IvarObj(self, "_selectedDisplayItem"))) { first = l; break; }
-        long long mine = G1C_Resp(self, @selector(displayOrdinal)) ? G1B_SendLL0(self, @selector(displayOrdinal)) : 0;
-        long long its = (first && G1C_Resp(first, @selector(preferredDisplayOrdinal))) ? G1B_SendLL0(first, @selector(preferredDisplayOrdinal)) : mine;
-        G1C_SetIvarBool(self, "_bp_dragBeganInOtherSwitcher", its != mine);
+    BOOL has = G1C_LayoutHas(prop, sel);
+    long long dest;
+    if (outside) {
+        if (has) {                                                                                     // 0x1c74f39d4: bring to front, keep the dragged centre
+            id p = G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), sel, prop);
+            CGPoint c = CGPointMake(CGRectGetMidX(fr), CGRectGetMidY(fr));
+            Class dla = NSClassFromString(@"SBDisplayItemLayoutAttributes");
+            CGPoint norm = ((CGPoint (*)(id, SEL, CGPoint, CGRect))objc_msgSend)((id)dla, @selector(normalizedPointForPoint:inBounds:), c, cb);
+            id na = ((id (*)(id, SEL, CGPoint))objc_msgSend)(G1B_Send1(p, @selector(layoutAttributesForItem:), sel), NSSelectorFromString(@"attributesByModifyingNormalizedCenter:"), norm);
+            p = G1C_Send2(p, @selector(appLayoutByModifyingLayoutAttributes:forItem:), na, sel);
+            p = G1C_Wdd_ByDragging(self, sel, p, G1B_Send0(self, @selector(chamoisLayoutAttributes)), cb);
+            G1C_SetIvarObj(self, "_proposedAppLayout", p);
+            G1C_SetIvarLL(self, "_proposedDestination", 1);
+            return r;
+        }
+        id cs = G1B_Send0(G1B_Send0(self, @selector(switcherSettings)), @selector(chamoisSettings));       // 0x1c74f3874: a window coming in from the strips / elsewhere
+        unsigned long long mx = (unsigned long long)G1B_SendLL0(cs, @selector(maximumNumberOfAppsOnStage));
+        NSUInteger cnt = 0;                                                                                    // bs_filter: items of the initial layout in a split-view-valid role (block 0x1c74f3d10)
+        for (id it in (NSArray *)G1B_Send0(initial, @selector(allItems))) if (G1C_Wdd_RoleValid(G1C_SendLLId(initial, @selector(layoutRoleForItem:), it))) cnt++;
+        if (cnt >= mx && G1B_SendB0(cs, NSSelectorFromString(@"rejectDropsWhenStageIsFull"))) return r;
+        G1C_SetIvarObj(self, "_proposedAppLayout", ((id (*)(id, SEL, id, id, CGSize, CGPoint))objc_msgSend)(self, @selector(_appLayoutByAddingItem:toAppLayout:size:center:), sel, prop, fr.size, CGPointMake(CGRectGetMidX(fr), CGRectGetMidY(fr))));
+        dest = 2;
+    } else {
+        if (!has) return r;
+        if (!G1C_LayoutHas(initial, sel)) { G1C_SetIvarObj(self, "_proposedAppLayout", initial); dest = 0; }       // 0x1c74f3bfc: back to where it came from
+        else {                                                                                                 // 0x1c74f3944: drop on the strips: leaves the stage
+            BOOL (^notSel)(id) = ^BOOL(id item) { return ![item isEqual:sel]; };                              // block 0x1c74f3d4c
+            G1C_SetIvarObj(self, "_proposedAppLayout", G1B_Send1(prop, @selector(appLayoutWithItemsPassingTest:), notSel));
+            dest = 3;
+        }
     }
+    G1C_SetIvarLL(self, "_proposedDestination", dest);
+    id np = G1C_IvarObj(self, "_proposedAppLayout");
+    Class rc = NSClassFromString(@"SBSwitcherTransitionRequest"), pc = NSClassFromString(@"SBPerformTransitionSwitcherEventResponse");
+    id req = G1B_Send1((id)rc, @selector(requestForActivatingAppLayout:), np);
+    ((void (*)(id, SEL, long long))objc_msgSend)(req, @selector(setUnlockedEnvironmentMode:), np ? 3 : 1);
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(req, @selector(setSceneUpdatesOnly:), YES);
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(req, @selector(setFenceSceneUpdate:), NO);
+    r = G1B_AppendTo(((id (*)(id, SEL, id, BOOL))objc_msgSend)([pc alloc], @selector(initWithTransitionRequest:gestureInitiated:), req, YES), r);
     id last = G1B_GET(self, kWddLast);
-    BOOL same = last && prop && G1C_Resp(last, @selector(containsAllItemsFromAppLayout:)) && G1B_SendB1(last, @selector(containsAllItemsFromAppLayout:), prop) && G1B_SendB1(prop, @selector(containsAllItemsFromAppLayout:), last);
-    if (prop && !same && gInvalidateRespCls) {
-        G1B_SET(self, kWddLast, prop);
-        SEL ii = @selector(initWithTransitioningFromAppLayout:transitioningToAppLayout:animated:);
-        id resp = ((id (*)(id, SEL, id, id, BOOL))objc_msgSend)([gInvalidateRespCls alloc], ii, last, prop, YES);
-        if (resp) r = G1B_AppendTo(resp, r);
-    }
+    if (G1B_SendB1(last, @selector(containsAllItemsFromAppLayout:), np)) return r;
+    G1B_SET(self, kWddLast, np);
+    SEL ii = @selector(initWithTransitioningFromAppLayout:transitioningToAppLayout:animated:);
+    if (gInvalidateRespCls && [gInvalidateRespCls instancesRespondToSelector:ii])
+        r = G1B_AppendTo(((id (*)(id, SEL, id, id, BOOL))objc_msgSend)([gInvalidateRespCls alloc], ii, nil, nil, YES), r);          // (nil, nil, animated) as 16.2
     return r;
 }
-static double G1C_Wdd_WidthThreshold(id self, SEL _cmd) {
-    id p = G1C_IvarObj(self, "_proposedAppLayout") ?: G1C_IvarObj(self, "_initialAppLayout");
-    SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:");
-    SEL wt = NSSelectorFromString(@"widthThresholdToHideStrip");
-    id model = (p && G1C_Resp(self, om)) ? G1B_Send1(self, om, p) : nil;
-    if (model && [model respondsToSelector:wt]) return G1C_SendD0(model, wt);
-    return G1B_SUPER(double, gWddParent, self, _cmd, (struct objc_super *, SEL));
-}
-static id G1C_Wdd_ProposedForDrag(id self, SEL _cmd) { return G1C_IvarObj(self, "_proposedAppLayout"); }
-static BOOL G1C_Wdd_AnyProposed(id self, SEL _cmd) { return G1C_LayoutHas(G1C_IvarObj(self, "_proposedAppLayout"), G1C_IvarObj(self, "_selectedDisplayItem")); }
 
 // ---- WindowDragRoot ----
 static id G1C_Wdr_Init(id self, SEL _cmd, long long mode, id initial) {
@@ -2715,15 +2907,20 @@ static BOOL G1C_BuildWindowDragFamily(void) {
         class_addMethod(ev, @selector(sizeOfSelectedDisplayItem), (IMP)G1C_Wdev_GetSize, "{CGSize=dd}16@0:8");
         class_addMethod(ev, NSSelectorFromString(@"setSizeOfSelectedDisplayItem:"), (IMP)G1C_Wdev_SetSize, "v32@0:8{CGSize=dd}16");
     }
-    {   // destination
-        const G1BIvar iv[] = { { "_bp_dragBeganInOtherSwitcher", 1, 0, "B" } };
+    {   // destination (faithful 16.2 port: see the block above G1C_Wdd_Gesture)
+        gWddGrand = class_getSuperclass(gWddParent);
+        const G1BIvar iv[] = { { "_dragBeganInOtherSwitcher", 1, 0, "B" } };
         const G1BMethod m[] = {
+            { "initWithSelectedDisplayItem:initialAppLayout:delegate:", (IMP)G1C_Wdd_Init, "@40@0:8@16@24@32" },
             { "handleGestureEvent:", (IMP)G1C_Wdd_Gesture, "@24@0:8@16" },
             { "_widthThresholdToHideStrips", (IMP)G1C_Wdd_WidthThreshold, "d16@0:8" },
+            { "_frameForSelectedDisplayItem", (IMP)G1C_Wdd_Frame, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8" },
+            { "_appLayoutByAddingItem:toAppLayout:size:center:", (IMP)G1C_Wdd_AddItem, "@64@0:8@16@24{CGSize=dd}32{CGPoint=dd}48" },
             { "proposedAppLayoutForContinuousExposeWindowDrag", (IMP)G1C_Wdd_ProposedForDrag, "@16@0:8" },
             { "_anyProposedAppLayoutContainsSelectedDisplayItem", (IMP)G1C_Wdd_AnyProposed, "B16@0:8" },
         };
         gWddCls = G1B_MakeClass("BP162ContinuousExposeWindowDragDestinationSwitcherModifier", gWddParent, iv, 1, m, sizeof m / sizeof m[0], NULL, NULL);
+        if (!gWddCls) return NO;
     }
     {   // drag modifier
         const G1BIvar iv[] = {
@@ -2747,6 +2944,9 @@ static BOOL G1C_BuildWindowDragFamily(void) {
             { "perspectiveAngleForAppLayout:", (IMP)G1C_Wd_Perspective, "d24@0:8@16" },
             { "animationAttributesForLayoutElement:", (IMP)G1C_Wd_AnimAttrs, "@24@0:8@16" },
             { "isSwitcherWindowVisible", (IMP)G1C_Wd_WindowVisible, "B16@0:8" },
+            { "isSwitcherWindowUserInteractionEnabled", (IMP)G1C_Wd_WindowInteraction, "B16@0:8" },
+            { "topMostLayoutElements", (IMP)G1C_Wd_TopMost, "@16@0:8" },
+            { "_appLayoutContainingDisplayItem:", (IMP)G1C_Wd_LayoutForItem, "@24@0:8@16" },
             { "_anyItemExceedsWidthThresholdToHideStrip", (IMP)G1C_Wd_AnyExceeds, "B16@0:8" },
             { "_anyProposedAppLayoutContainsSelectedDisplayItem", (IMP)G1C_Wd_AnyProposedHasQ, "B16@0:8" },
         };
@@ -2808,7 +3008,7 @@ static id G1C_NewWindowDragRoot(long long mode, id initial) {
 //     BP162 subclasses of the 16.0 classes (only the changed / new methods). DONE for behaviour, UNSURE for the geometry details
 //     listed in the md (frameForLayoutRole / scaleForLayoutRole / homeScreenDimmingAlpha keep the 16.0 maths).
 // ============================================================================================================
-static Class gInlParent, gInlCls, gHsParent, gHsCls;
+static Class gInlParent, gInlCls, gInlGrand;
 static char kInlHidden, kInlShowing;
 
 static id G1C_NewPerformFromRequest(id req, BOOL gesture) {
@@ -2829,93 +3029,83 @@ static void G1C_HandleEvent(id event, NSString *reason) {
 // request for "bring the tapped item to front inside its layout and activate it" (shared by the tap and header-tap handlers)
 static id G1C_Inl_ActivationRequest(id self, id layout, id item) {
     id req = G1C_NewBareRequest();
-    if (!req || !layout || !item) return nil;
-    id containing = G1C_Resp(self, @selector(appLayoutContainingAppLayout:)) ? G1B_Send1(self, @selector(appLayoutContainingAppLayout:), layout) : layout;
-    id fronted = G1C_Resp(self, @selector(appLayoutByBringingItemToFront:inAppLayout:)) ? G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), item, containing) : containing;
-    if ([req respondsToSelector:@selector(setAppLayout:)]) G1B_SendV1(req, @selector(setAppLayout:), fronted ?: containing);
-    if ([req respondsToSelector:@selector(setActivatingDisplayItem:)]) G1B_SendV1(req, @selector(setActivatingDisplayItem:), item);
+    id fronted = G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), item, G1B_Send1(self, @selector(appLayoutContainingAppLayout:), layout));
+    G1B_SendV1(req, @selector(setAppLayout:), fronted);
+    G1B_SendV1(req, @selector(setActivatingDisplayItem:), item);
     return req;
 }
-static id G1C_Inl_Tap(id self, SEL _cmd, id event) {                      // 0x1c7686a58
-    id r = G1B_SUPER(id, gInlParent, self, _cmd, (struct objc_super *, SEL, id), event);
-    if (!G1C_ON() || !event || (G1C_Resp(event, @selector(isHandled)) && G1B_SendB0(event, @selector(isHandled)))) return r;
+static id G1C_Inl_Tap(id self, SEL _cmd, id event) {                      // 0x1c7686a58 (160 0x1c61f8000: the same request building without the super call)
+    id r = G1B_SUPER(id, gInlGrand, self, _cmd, (struct objc_super *, SEL, id), event);
+    if (G1B_SendB0(event, @selector(isHandled))) return r;
     id layout = G1B_Send0(event, @selector(appLayout));
-    id active = G1C_IvarObj(self, "_activeAppLayout");
-    id resp = nil;
-    if (layout && active && [layout isEqual:active]) {
-        Class rq = NSClassFromString(@"SBSwitcherTransitionRequest");
-        SEL rs = NSSelectorFromString(@"requestForTapAppLayoutEvent:");
-        id req = (rq && [rq respondsToSelector:rs]) ? G1B_Send1((id)rq, rs, event) : nil;
-        resp = G1C_NewPerformFromRequest(req, NO);
-    } else if (layout) {
-        long long role = G1B_SendLL0(event, @selector(layoutRole));
-        id item = G1C_Resp(layout, @selector(itemForLayoutRole:)) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
-        resp = G1C_NewPerformFromRequest(G1C_Inl_ActivationRequest(self, layout, item), NO);
-    }
-    if (resp) { r = G1B_AppendTo(resp, r); G1C_HandleEvent(event, @"I"); }
+    id req;
+    if ([layout isEqual:G1C_IvarObj(self, "_activeAppLayout")]) req = G1B_Send1((id)NSClassFromString(@"SBSwitcherTransitionRequest"), NSSelectorFromString(@"requestForTapAppLayoutEvent:"), event);
+    else req = G1C_Inl_ActivationRequest(self, layout, G1C_SendLL1(layout, @selector(itemForLayoutRole:), G1B_SendLL0(event, @selector(layoutRole))));
+    r = G1B_AppendTo(G1C_NewPerformFromRequest(req, NO), r);
+    G1C_HandleEvent(event, @"I");
     return r;
 }
-static id G1C_Inl_HeaderTap(id self, SEL _cmd, id event) {                // 0x1c7686bf8 (new)
-    if (!G1C_ON() || !event || (G1C_Resp(event, @selector(isHandled)) && G1B_SendB0(event, @selector(isHandled)))) return nil;
+static id G1C_Inl_HeaderTap(id self, SEL _cmd, id event) {                // 0x1c7686bf8 (new in 16.2)
+    id r = G1B_SUPER(id, gInlGrand, self, _cmd, (struct objc_super *, SEL, id), event);
+    if (G1B_SendB0(event, @selector(isHandled))) return r;
     id layout = G1B_Send0(event, @selector(appLayout));
-    long long role = G1B_SendLL0(event, @selector(layoutRole));
-    id item = (layout && G1C_Resp(layout, @selector(itemForLayoutRole:))) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
-    SEL multi = NSSelectorFromString(@"displayItemSupportsMultipleWindowsIndicator:");
-    if (!item || !G1C_Resp(self, multi) || !G1B_SendB1(self, multi, item)) return nil;
-    NSString *bid = G1C_Resp(item, @selector(bundleIdentifier)) ? G1B_Send0(item, @selector(bundleIdentifier)) : nil;
-    NSString *expose = G1C_IvarObj(self, "_appExposeBundleIdentifier");
-    id active = G1C_IvarObj(self, "_activeAppLayout");
-    id out = nil;
-    if (bid && expose && [bid isEqualToString:expose]) {
-        if (active && [layout isEqual:active]) {                                     // header of the active window: pulse it
-            Class pc = NSClassFromString(@"SBPulseDisplayItemSwitcherModifier");
-            id pulse = (pc && [pc instancesRespondToSelector:@selector(initWithDisplayItem:)]) ? G1B_Send1([pc alloc], @selector(initWithDisplayItem:), item) : nil;
-            Class cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
-            SEL ci = NSSelectorFromString(@"initWithModifier:level:");
-            id add = (pulse && cc && [cc instancesRespondToSelector:ci]) ? ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], ci, pulse, 3) : nil;
-            out = add;
-        } else {
-            out = G1C_NewPerformFromRequest(G1C_Inl_ActivationRequest(self, layout, item), NO);
-        }
+    id item = G1C_SendLL1(layout, @selector(itemForLayoutRole:), G1B_SendLL0(event, @selector(layoutRole)));
+    id resp = nil;
+    if (!G1B_SendB1(self, NSSelectorFromString(@"displayItemSupportsMultipleWindowsIndicator:"), item)) {          // single window: pulse the header
+        Class pc = NSClassFromString(@"SBPulseDisplayItemSwitcherModifier"), cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
+        id pulse = G1B_Send1([pc alloc], @selector(initWithDisplayItem:), item);
+        resp = ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], NSSelectorFromString(@"initWithModifier:level:"), pulse, 3);
     } else {
-        id req = G1C_NewBareRequest();
-        if (req) {
-            if ([req respondsToSelector:@selector(setSource:)]) G1B_SendVLL(req, @selector(setSource:), 3);
-            if ([req respondsToSelector:@selector(setBundleIdentifierForAppExpose:)]) G1B_SendV1(req, @selector(setBundleIdentifierForAppExpose:), bid);
-            out = G1C_NewPerformFromRequest(req, NO);
+        Class rq = NSClassFromString(@"SBSwitcherTransitionRequest");
+        NSString *bid = G1B_Send0(item, @selector(bundleIdentifier));
+        id req;
+        if ([bid isEqualToString:G1C_IvarObj(self, "_appExposeBundleIdentifier")]) {                         // the App Expose app's own window
+            if ([layout isEqual:G1C_IvarObj(self, "_activeAppLayout")]) req = G1B_Send1((id)rq, NSSelectorFromString(@"requestForTapAppLayoutHeaderEvent:"), event);
+            else req = G1C_Inl_ActivationRequest(self, layout, item);
+        } else {                                                                                             // another app's header: App Expose of that app
+            req = [[rq alloc] init];
+            G1B_SendVLL(req, @selector(setSource:), 3);
+            G1B_SendV1(req, @selector(setBundleIdentifierForAppExpose:), bid);
         }
+        resp = G1C_NewPerformFromRequest(req, NO);
     }
-    if (out) G1C_HandleEvent(event, @"I");
-    return out;
+    r = G1B_AppendTo(resp, r);
+    G1C_HandleEvent(event, @"I");
+    return r;
 }
 static id G1C_Inl_ReopenResponse(id self) {                                 // _responseToUpdateReopenClosedWindowsButtonPresenceIfNeeded (0x1c7688f84)
-    NSNumber *prevN = G1B_GET(self, kInlHidden);
-    BOOL could = prevN.longLongValue != 0;
-    SEL q = NSSelectorFromString(@"numberOfHiddenAppLayoutsForBundleIdentifier:");
-    long long n = G1C_Resp(self, q) ? G1C_SendLLId(self, q, G1C_IvarObj(self, "_appExposeBundleIdentifier")) : 0;
+    BOOL could = [(NSNumber *)G1B_GET(self, kInlHidden) longLongValue] != 0;
+    long long n = G1C_SendLLId(self, NSSelectorFromString(@"numberOfHiddenAppLayoutsForBundleIdentifier:"), G1C_IvarObj(self, "_appExposeBundleIdentifier"));
     G1B_SET(self, kInlHidden, @(n));
-    if (n != 0 && !could) {
-        G1B_SET(self, kInlShowing, @NO);
-        return G1C_NewTimerResponse(0.5, @"SBInlineAppExposeContinuousExposeSwitcherModifierTimerEventReason");     // delay = animationSettings.reopenButtonFadeInDelay (UNSURE default)
-    }
-    return nil;
+    if (n == 0 || could) return nil;
+    G1B_SET(self, kInlShowing, @NO);
+    double delay = G1B_Dbl0(G1B_Send0(G1B_Send0(self, @selector(switcherSettings)), @selector(animationSettings)), NSSelectorFromString(@"reopenButtonFadeInDelay"));
+    __weak id wself = self;
+    BOOL (^valid)(void) = ^BOOL{ id s = wself; return G1B_Send0(s, @selector(parentModifier)) != nil; };
+    Class tc = NSClassFromString(@"SBTimerEventSwitcherEventResponse");
+    SEL ti = @selector(initWithDelay:validator:reason:);
+    if (!tc || ![tc instancesRespondToSelector:ti]) return nil;
+    return ((id (*)(id, SEL, double, id, id))objc_msgSend)([tc alloc], ti, delay, valid, @"SBInlineAppExposeContinuousExposeSwitcherModifierTimerEventReason");
 }
 static id G1C_Inl_Insertion(id self, SEL _cmd, id event) {                 // 0x1c7686824
     id r = G1B_SUPER(id, gInlParent, self, _cmd, (struct objc_super *, SEL, id), event);
     if (G1C_ON() && event && G1B_SendLL0(event, @selector(phase)) == 2) r = G1B_AppendTo(G1C_Inl_ReopenResponse(self), r);
     return r;
 }
-static id G1C_Inl_Transition(id self, SEL _cmd, id event) {                // 0x1c76868e0
-    id r = G1B_SUPER(id, gInlParent, self, _cmd, (struct objc_super *, SEL, id), event);
-    if (!G1C_ON() || !event) return r;
+static id G1C_Inl_Transition(id self, SEL _cmd, id event) {                // 0x1c76868e0 (160 0x1c61f81fc: super + the invalidate only)
+    id r = G1B_SUPER(id, gInlGrand, self, _cmd, (struct objc_super *, SEL, id), event);
+    G1C_SetIvarObj(self, "_activeAppLayout", G1B_Send0(event, @selector(toAppLayout)));
     long long phase = G1B_SendLL0(event, @selector(phase));
+    if (phase == 2 || !G1B_SendB0(event, @selector(isAnimated))) {
+        Class c = NSClassFromString(@"SBInvalidateAdjustedAppLayoutsSwitcherEventResponse");
+        r = G1B_AppendTo([[c alloc] init], r);
+    }
     if (phase == 2) {
-        NSString *from = G1C_Resp(event, @selector(fromAppExposeBundleID)) ? G1B_Send0(event, @selector(fromAppExposeBundleID)) : nil;
-        NSString *to = G1C_Resp(event, @selector(toAppExposeBundleID)) ? G1B_Send0(event, @selector(toAppExposeBundleID)) : nil;
-        if (to && (!from || ![from isEqualToString:to])) {
+        NSString *bid = G1B_Send0(event, @selector(fromAppExposeBundleID)) ?: G1B_Send0(event, @selector(toAppExposeBundleID));
+        if (bid) {
             r = G1B_AppendTo(G1C_Inl_ReopenResponse(self), r);
             Class ir = NSClassFromString(@"SBInvalidateReopenButtonTextSwitcherEventResponse");
-            if (ir) r = G1B_AppendTo([[ir alloc] init], r);
+            r = G1B_AppendTo([[ir alloc] init], r);
         }
     }
     return r;
@@ -2930,16 +3120,22 @@ static id G1C_Inl_Timer(id self, SEL _cmd, id event) {                    // 0x1
     return r;
 }
 static BOOL G1C_Inl_CanShow(id self) { return [(NSNumber *)G1B_GET(self, kInlHidden) longLongValue] != 0; }
+static BOOL G1C_Inl_RTL(void) { return [[UIApplication sharedApplication] userInterfaceLayoutDirection] == UIUserInterfaceLayoutDirectionRightToLeft; }
+static double G1C_Inl_RS(double v, double s) { return s > 0 ? (s == 1.0 ? round(v) : round(v * s) / s) : v; }                                  // _UIRectRoundToScale component
+static id G1C_Inl_Model(id self, id layout) { return G1B_Send1(self, NSSelectorFromString(@"overlappingModelForAppLayout:"), layout); }       // 16.2 query (the 16.0 private _overlappingModelForAppLayout: is gone)
+static BOOL G1C_Inl_ModelBool(id model, NSString *sel, id item) { SEL s = NSSelectorFromString(sel); return G1B_SendB1(model, s, item); }
+// 0x1c7688f6c  _canShowReopenClosedWindowsButton = (_numberOfHiddenAppLayouts != 0)
+static BOOL G1C_Inl_CanShowSel(id self, SEL _cmd) { return G1C_Inl_CanShow(self); }
+// 0x1c76883a4  reopenClosedWindowsButtonAlpha
 static double G1C_Inl_ReopenAlpha(id self, SEL _cmd) {
     if (G1C_Inl_CanShow(self) && [(NSNumber *)G1B_GET(self, kInlShowing) boolValue]) return 1.0;
-    return 0.0;
+    return G1B_SUPER(double, gInlGrand, self, _cmd, (struct objc_super *, SEL));
 }
+// 0x1c7688400  reopenClosedWindowsButtonScale
 static double G1C_Inl_ReopenScale(id self, SEL _cmd) {
     if ([(NSNumber *)G1B_GET(self, kInlShowing) boolValue]) return 1.0;
-    id s = G1C_Resp(self, @selector(switcherSettings)) ? G1B_Send0(self, @selector(switcherSettings)) : nil;
-    id a = G1C_Resp(s, @selector(animationSettings)) ? G1B_Send0(s, @selector(animationSettings)) : nil;
-    double v = G1B_Dbl0(a, NSSelectorFromString(@"reopenButtonInitialScale"));
-    return v > 0 ? v : 1.0;
+    id s = G1B_Send0(self, @selector(switcherSettings));
+    return G1B_Dbl0(G1B_Send0(s, @selector(animationSettings)), NSSelectorFromString(@"reopenButtonInitialScale"));
 }
 static BOOL G1C_Inl_IsShowing(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kInlShowing) boolValue]; }
 static void G1C_Inl_SetShowing(id self, SEL _cmd, BOOL v) { G1B_SET(self, kInlShowing, @(v)); }
@@ -2951,82 +3147,1107 @@ static double G1C_Inl_TitleOpacity(id self, SEL _cmd, unsigned long long i) {
     id active = G1C_IvarObj(self, "_activeAppLayout");
     return (l && active && [l isEqual:active]) ? 0.0 : 1.0;
 }
-static BOOL G1C_Inl_Focus(id self, SEL _cmd, id layout) { id a = G1C_IvarObj(self, "_activeAppLayout"); return layout && a && [layout isEqual:a]; }
+static BOOL G1C_Inl_Focus(id self, SEL _cmd, id layout) { return ![layout isEqual:G1C_IvarObj(self, "_activeAppLayout")]; }          // 0x1c7688470 (NOT equal to the active window)
 static BOOL G1C_Inl_NoGrabber(id self, SEL _cmd, id layout) { return NO; }
 static BOOL G1C_Inl_Pointer(id self, SEL _cmd) { return YES; }
+// 0x1c7688908  the other windows of the App Expose app (identifiers containing the bundle id, minus the active window)
+static id G1C_Inl_InlineLayouts(id self, SEL _cmd) {
+    NSMutableArray *out = [[NSMutableArray alloc] init];
+    NSString *bid = G1C_IvarObj(self, "_appExposeBundleIdentifier");
+    id active = G1C_IvarObj(self, "_activeAppLayout");
+    for (id ident in (id<NSFastEnumeration>)G1B_Send0(self, NSSelectorFromString(@"continuousExposeIdentifiersInSwitcher")))
+        if ([ident containsString:bid])
+            for (id l in (id<NSFastEnumeration>)G1B_Send1(self, NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), ident))
+                if (![l isEqual:active]) [out addObject:l];
+    return out;
+}
+// 0x1c7688ea8
+static double G1C_Inl_ScaleActive(id self, SEL _cmd) {
+    double h = G1C_SendRect0(self, @selector(containerViewBounds)).size.height;
+    double avail = h - G1B_Dbl0(self, @selector(floatingDockPresentedHeight)) + (-192.0);
+    id model = G1C_Inl_Model(self, G1C_IvarObj(self, "_activeAppLayout"));
+    double bh = model ? G1C_SendRect0(model, @selector(boundingBox)).size.height : 0.0;
+    return fmin(avail / bh, 1.0);
+}
+// 0x1c76885fc  homeScreenDimmingAlpha: grows with the stage area covered by the active window
+static double G1C_Inl_HomeDim(id self, SEL _cmd) {
+    CGRect cb = G1C_SendRect0(self, @selector(containerViewBounds));
+    CGRect st = G1C_DM_StageArea(G1C_Inl_Model(self, G1C_IvarObj(self, "_activeAppLayout")));
+    double x = (((st.size.width * st.size.height) / (cb.size.width * cb.size.height) + (-0.7)) * 0.5) / 0.30000000000000004;       // 0x1c7a91c50 / 0x1c7a91c58
+    x = fmin(fmax(x, 0.0), 1.0);
+    return x * 0.5;
+}
+// 0x1c7687b9c  the active window is pulled toward the overlapping model's bounding box when it is scaled
+static CGRect G1C_Inl_FrameForRole(id self, SEL _cmd, long long role, id layout, CGRect bounds) {
+    CGRect f = G1B_SUPER(CGRect, gInlGrand, self, _cmd, (struct objc_super *, SEL, long long, id, CGRect), role, layout, bounds);
+    if (![layout isEqual:G1C_IvarObj(self, "_activeAppLayout")]) return f;
+    id model = G1C_Inl_Model(self, layout);
+    CGRect bb = model ? G1C_SendRect0(model, @selector(boundingBox)) : CGRectZero;
+    double sc = ((double (*)(id, SEL, long long, id))objc_msgSend)(self, @selector(scaleForLayoutRole:inAppLayout:), role, layout);
+    BOOL rtl = G1C_Inl_RTL();
+    double k = 1.0 - sc;
+    double dx = k * (CGRectGetMidX(f) - (rtl ? CGRectGetMinX(bb) : CGRectGetMaxX(bb)));
+    double dy = k * (CGRectGetMidY(f) - CGRectGetMidY(bb));
+    f.origin.x -= dx;
+    f.origin.y -= dy;
+    double x = CGRectGetMinX(f);
+    CGRect sw = G1C_SendRect0(self, NSSelectorFromString(@"_inlineAppExposeSwitcherFrame"));
+    if (rtl) { double lim = CGRectGetMinX(sw) - CGRectGetWidth(bb); if (x > lim) x = lim; }
+    else     { double lim = CGRectGetMaxX(sw) - CGRectGetMinX(bb); if (x < lim) x = lim; }
+    f.origin.x = x;
+    double ss = G1B_Dbl0(self, @selector(screenScale));
+    return CGRectMake(G1C_Inl_RS(f.origin.x, ss), G1C_Inl_RS(f.origin.y, ss), G1C_Inl_RS(f.size.width, ss), G1C_Inl_RS(f.size.height, ss));
+}
+// 0x1c7687eb4
+static double G1C_Inl_ScaleForRole(id self, SEL _cmd, long long role, id layout) {
+    double s = G1B_SUPER(double, gInlGrand, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+    id attrs = G1B_Send0(self, @selector(chamoisLayoutAttributes));
+    id model = G1C_Inl_Model(self, layout);
+    id item = G1C_SendLL1(layout, @selector(itemForLayoutRole:), role);
+    if (G1C_Inl_ModelBool(model, @"isItemFullyOccluded:", item)) s *= G1B_Dbl0(attrs, NSSelectorFromString(@"stageOcclusionDodgingPeekScale"));
+    else if (G1C_Inl_ModelBool(model, @"isItemPartiallyOccluded:", item)) {
+        CGSize sz = ((CGSize (*)(id, SEL, id))objc_msgSend)(model, @selector(sizeForItem:), item);
+        s *= ((double (*)(id, SEL, CGSize))objc_msgSend)(attrs, NSSelectorFromString(@"partiallyOccludedStageScaleForItemWithSize:"), sz);
+    }
+    if ([layout isEqual:G1C_IvarObj(self, "_activeAppLayout")]) return s * G1C_SendD0(self, NSSelectorFromString(@"_scaleForActiveAppLayoutLeafAppLayouts"));
+    BOOL hover = [(NSSet *)G1B_Send0(self, @selector(highlightedByHoverAppLayouts)) containsObject:layout], touch = [(NSSet *)G1B_Send0(self, @selector(highlightedByTouchAppLayouts)) containsObject:layout];
+    if (hover && touch) return s * 0.98;               // 0x1c7a91a38
+    if (hover) return s * 1.1;                         // 0x1c7a90e60
+    return touch ? s * 0.9 : s;                        // 0x1c7a90ee0
+}
+// 0x1c7687820  the windows of the App Expose app form a grid of columns (right to left in LTR) x rows, centred vertically
 static CGRect G1C_Inl_FrameForIndex(id self, SEL _cmd, unsigned long long i) {
-    // 16.2 mirrors the inline App Expose grid for right-to-left layouts; the vertical maths is identical to 16.0.
-    CGRect f = G1B_SUPER(CGRect, gInlParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
-    if (!G1C_ON() || [[UIApplication sharedApplication] userInterfaceLayoutDirection] != UIUserInterfaceLayoutDirectionRightToLeft) return f;
-    NSArray *ls = G1C_Resp(self, @selector(appLayouts)) ? G1B_Send0(self, @selector(appLayouts)) : nil;
-    id layout = i < ls.count ? ls[i] : nil;
-    SEL inl = NSSelectorFromString(@"_inlineAppExposeAppLayouts");
-    id set = G1C_Resp(self, inl) ? G1B_Send0(self, inl) : nil;
-    if (!layout || ![set respondsToSelector:@selector(containsObject:)] || ![set containsObject:layout]) return f;
-    CGRect b = G1C_SendRect0(self, @selector(containerViewBounds));
-    f.origin.x = b.origin.x + b.origin.x + b.size.width - f.origin.x - f.size.width;       // mirror about the container bounds
-    return f;
+    CGRect f = G1B_SUPER(CGRect, gInlGrand, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+    NSArray *inl = G1C_Inl_InlineLayouts(self, 0);
+    NSArray *all = G1B_Send0(self, @selector(appLayouts));
+    id layout = i < all.count ? all[i] : nil;
+    if (![inl containsObject:layout]) return f;
+    CGRect cb = G1C_SendRect0(self, @selector(containerViewBounds));
+    double a = round(cb.size.height * 0.0625), b = round(cb.size.height * 0.0625);          // both pads are height / 16 (0x3fb0000000000000)
+    double gap = G1B_SendB0(self, NSSelectorFromString(@"isDisplayEmbedded")) ? 192.0 : 132.0;      // 0x1c7a91ff0 = 132.0
+    double top = cb.size.height - G1B_Dbl0(self, @selector(floatingDockPresentedHeight)) + (-128.0);
+    unsigned long long maxRows = G1C_SendULL0(self, NSSelectorFromString(@"_maximumNumberOfInlineAppExposeRows")), rows = G1C_SendULL0(self, NSSelectorFromString(@"_numberOfInlineAppExposeRows"));
+    double rowH = round((top + (-128.0) - gap * (double)(maxRows - 1)) / (double)maxRows);
+    double yOff = floor((gap * (double)(rows - 1) + rowH * (double)rows) * 0.5 - top * 0.5);
+    unsigned long long idx = [inl indexOfObject:layout], col = rows ? idx / rows : 0, row = idx - col * rows;
+    double cardW = G1C_DM_DefaultWindowSize(G1B_Send0(self, @selector(chamoisLayoutAttributes))).width * G1C_SendD0(self, NSSelectorFromString(@"_scaleForInlineAppExposeAppLayouts"));
+    unsigned long long cols = G1C_SendULL0(self, NSSelectorFromString(@"_numberOfInlineAppExposeColumns"));
+    double n = (double)(cols + ~col), xc;
+    if (G1C_Inl_RTL()) xc = (CGRectGetMaxX(cb) - a + cardW * -0.5) - cardW * n - b * n;
+    else               xc = (cardW * 0.5 + (a + CGRectGetMinX(cb))) + cardW * n + b * n;
+    double yc = rowH * 0.5 + (CGRectGetMinX(cb) + 64.0) + (gap + rowH) * (double)row - yOff;      // CGRectGetMinX sic (16.2 uses MinX here)
+    return CGRectMake(xc - f.size.width * 0.5, yc - f.size.height * 0.5, f.size.width, f.size.height);
 }
+// 0x1c7688c70  occluded = fully | partially | covered by a fully occluded peeking item (the 16.0 private model helper is gone)
 static BOOL G1C_Inl_Occluded(id self, SEL _cmd, long long role, id layout) {
-    BOOL v = G1B_SUPER(BOOL, gInlParent, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
-    if (v || !G1C_ON()) return v;
-    SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:"), cov = NSSelectorFromString(@"isItemCoveredByFullyOccludedPeekingItem:");
-    id model = (layout && G1C_Resp(self, om)) ? G1B_Send1(self, om, layout) : nil;
-    id item = (layout && G1C_Resp(layout, @selector(itemForLayoutRole:))) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
-    return (model && item && [model respondsToSelector:cov]) ? G1B_SendB1(model, cov, item) : NO;
+    id model = G1C_Inl_Model(self, layout), item = G1C_SendLL1(layout, @selector(itemForLayoutRole:), role);
+    return G1C_Inl_ModelBool(model, @"isItemFullyOccluded:", item) || G1C_Inl_ModelBool(model, @"isItemPartiallyOccluded:", item) || G1C_Inl_ModelBool(model, @"isItemCoveredByFullyOccludedPeekingItem:", item);
 }
+// trivial 16.2-only queries
+static double G1C_Inl_IconOutset(id self, SEL _cmd, id layout) { return 10.0; }                                          // 0x1c768823c
+static id G1C_Inl_AccBundle(id self, SEL _cmd) { return G1C_IvarObj(self, "_appExposeBundleIdentifier"); }               // 0x1c768837c
+static long long G1C_Inl_AccStyle(id self, SEL _cmd) { return 1; }                                                      // 0x1c768838c (UIUserInterfaceStyleLight)
+static double G1C_Inl_PlusAlpha(id self, SEL _cmd) { return 1.0; }                                                      // 0x1c7688394
+static long long G1C_Inl_PlusStyle(id self, SEL _cmd) { return 0; }                                                     // 0x1c768839c
 static id G1C_Inl_Highlight(id self, SEL _cmd, id event) {
     if (G1C_ON() && event && G1C_Resp(event, @selector(isHandled)) && G1B_SendB0(event, @selector(isHandled))) return nil;      // 16.2 ignores handled highlight events
     return G1B_SUPER(id, gInlParent, self, _cmd, (struct objc_super *, SEL, id), event);
 }
 
-// ---- HomeScreen ----
-static char kHsStrip;       // retained by the object (the run-time ivar "_stripModifier" below is unretained: object_setIvar on a class_addIvar'ed ivar has no ARC layout)
-static id G1C_Hs_Init(id self, SEL _cmd) {
-    id me = G1B_SUPER(id, gHsParent, self, _cmd, (struct objc_super *, SEL));
-    Class sc = NSClassFromString(@"SBStripContinuousExposeSwitcherModifier");        // the ported / real strip modifier (FullScreen-Strip package)
-    if (BP_LogEnabled()) BP_Log(@"GLITCH home floor created (strip modifier class %@)", sc ? @"PRESENT: strip child will be attached" : @"absent (16.0 has none): no strip child");
-    if (me && sc && [me respondsToSelector:@selector(addChildModifier:)]) {
-        id strip = [[sc alloc] init];
-        if (strip) { G1B_SET(me, kHsStrip, strip); G1B_SendV1(me, @selector(addChildModifier:), strip); }
-    }
+// ============================================================================================================
+// 1g  SBStripContinuousExposeSwitcherModifier  (NEW in 16.2: the Stage Manager strip, split out of the FullScreen floor)         PORTED
+// ============================================================================================================
+// Faithful port of specs/SBStripContinuousExposeSwitcherModifier.md (16.2 class 0x1de230be8, methods 0x1c75de0cc..0x1c75e0770). 16.0 has no such class: it is built here with the
+// 16.2 name (G1B_MakeClass never shadows a real one), superclass SBSwitcherModifier, 16.2 ivars as run-time ivars (scalars) / associated objects (object ivars, unretained
+// otherwise). Parents (the FullScreen and HomeScreen floors, see 1h / 1i) add it as a child and reach it through `[super X]`, exactly like 16.2.
+// The layout cache is the real SBSwitcherLayoutCalculationsCache (16.0 API names frameForKey:validityToken:fallback: / scaleForKey:... are the same; the 16.0 delegate selector
+// is buildLayoutCalculations, 16.2's is buildLayoutCalculationsForCache: - both are implemented here).
+static Class gStripCls, gStripSuper;
+static char kStripCache, kStripTouch, kStripHover;
+static BOOL G1C_RTL(void) { return [[UIApplication sharedApplication] userInterfaceLayoutDirection] == UIUserInterfaceLayoutDirectionRightToLeft; }
+static id G1C_Chamois(id s) { return G1C_Resp(s, @selector(chamoisLayoutAttributes)) ? G1B_Send0(s, @selector(chamoisLayoutAttributes)) : nil; }
+static id G1C_ChamoisSettings(id s) { id sw = G1C_Resp(s, @selector(switcherSettings)) ? G1B_Send0(s, @selector(switcherSettings)) : nil; return G1C_Resp(sw, @selector(chamoisSettings)) ? G1B_Send0(sw, @selector(chamoisSettings)) : nil; }
+static unsigned long long G1C_PerGroup(id s) { id cs = G1C_ChamoisSettings(s); return G1C_Resp(cs, @selector(numberOfVisibleItemsPerGroup)) ? (unsigned long long)G1B_SendLL0(cs, @selector(numberOfVisibleItemsPerGroup)) : 3; }
+static id G1C_LayoutAtIdx(id s, unsigned long long i) { NSArray *ls = G1C_Resp(s, @selector(appLayouts)) ? G1B_Send0(s, @selector(appLayouts)) : nil; return i < ls.count ? ls[i] : nil; }
+static NSString *G1C_CEId(id layout) { id v = G1C_Resp(layout, @selector(continuousExposeIdentifier)) ? G1B_Send0(layout, @selector(continuousExposeIdentifier)) : nil; return [v isKindOfClass:[NSString class]] ? v : nil; }
+static BOOL G1C_FloatEq(double a, double b) { return fabs(a - b) < 0.0001; }
+
+static id G1C_Strip_Init(id self, SEL _cmd) {
+    id me = G1B_SUPER(id, gStripSuper, self, _cmd, (struct objc_super *, SEL));
+    if (!me) return nil;
+    G1B_SET(me, kStripTouch, [NSMutableSet set]);
+    G1B_SET(me, kStripHover, [NSMutableSet set]);
+    Class cc = NSClassFromString(@"SBSwitcherLayoutCalculationsCache");
+    id cache = cc ? [[cc alloc] init] : nil;
+    if (cache) { G1B_SET(me, kStripCache, cache); G1B_SendV1(cache, @selector(setDelegate:), me); }
     return me;
 }
-// 6.8 diagnostics only (answers are the 16.0 Home floor's own, via super): what the Home floor says about the first cards once the transition modifier is gone
-static NSString *gHsLastOffset;
-static NSString *gHsLastOpacity[2];
-static CGPoint G1C_Hs_ContentOffset(id self, SEL _cmd) {
-    CGPoint p = G1B_SUPER(CGPoint, gHsParent, self, _cmd, (struct objc_super *, SEL));
-    if (BP_LogEnabled()) {
-        NSString *sig = NSStringFromCGPoint(p);
-        BOOL changed = NO;
-        @synchronized(@"BP162.hs") { if (![gHsLastOffset isEqualToString:sig]) { gHsLastOffset = sig; changed = YES; } }
-        if (changed) BP_Log(@"GLITCH home floor scrollViewContentOffset=%@", sig);
+static id G1C_Strip_GetTouch(id s, SEL c) { return G1B_GET(s, kStripTouch); }
+static void G1C_Strip_SetTouch(id s, SEL c, id v) { G1B_SET(s, kStripTouch, v); }
+static id G1C_Strip_GetHover(id s, SEL c) { return G1B_GET(s, kStripHover); }
+static void G1C_Strip_SetHover(id s, SEL c, id v) { G1B_SET(s, kStripHover, v); }
+
+static BOOL G1C_Strip_OnStage(id self, SEL _cmd, id layout) {                          // 0x1c75e0584
+    id stage = G1C_Resp(self, @selector(appLayoutOnContinuousExposeStage)) ? G1B_Send0(self, @selector(appLayoutOnContinuousExposeStage)) : nil;
+    if (!stage) return NO;
+    if (G1B_SendB1(stage, @selector(containsAllItemsFromAppLayout:), layout) || G1B_SendB1(layout, @selector(containsAllItemsFromAppLayout:), stage)) return YES;
+    id cs = G1C_ChamoisSettings(self);
+    NSUInteger max = G1C_Resp(cs, @selector(maximumNumberOfAppsOnStage)) ? (NSUInteger)G1B_SendLL0(cs, @selector(maximumNumberOfAppsOnStage)) : 0;
+    if (G1C_AsArray(G1B_Send0(stage, @selector(allItems))).count != max) return NO;
+    NSArray *items = G1C_AsArray(G1B_Send0(layout, @selector(allItems)));
+    if (items.count != max) return NO;
+    NSUInteger shared = 0;
+    for (id it in items) if (G1B_SendB1(stage, @selector(containsItem:), it)) shared++;
+    return shared == max - 1;
+}
+static BOOL G1C_Strip_IsOnStage(id self, id layout) { return G1C_Strip_OnStage(self, NSSelectorFromString(@"_isAppLayoutEffectivelyOnStage:"), layout); }
+static id G1C_Strip_LayoutsForId(id self, SEL _cmd, id ident) {                         // 0x1c75de180
+    id layouts = G1B_HasSuper(gStripSuper, _cmd) ? G1B_SUPER(id, gStripSuper, self, _cmd, (struct objc_super *, SEL, id), ident) : @[];
+    id stage = G1C_Resp(self, @selector(appLayoutOnContinuousExposeStage)) ? G1B_Send0(self, @selector(appLayoutOnContinuousExposeStage)) : nil;
+    if (stage && [G1C_CEId(stage) isEqualToString:ident]) {
+        NSMutableArray *out = [NSMutableArray array];
+        for (id l in G1C_AsArray(layouts)) if (!G1C_Strip_IsOnStage(self, l)) [out addObject:l];
+        return out;
     }
+    return layouts;
+}
+static unsigned long long G1C_Strip_PileIndex(id self, SEL _cmd, id layout) {           // 0x1c75dff60
+    NSArray *pile = G1C_AsArray(G1C_Strip_LayoutsForId(self, NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), G1C_CEId(layout)));
+    NSUInteger i = layout ? [pile indexOfObject:layout] : NSNotFound;
+    return i == NSNotFound ? 0 : i;
+}
+static unsigned long long G1C_Strip_PileIdx(id self, id layout) { return G1C_Strip_PileIndex(self, 0, layout); }
+static id G1C_Strip_Anim(id self, SEL _cmd, id element) {                               // 0x1c75dfa58
+    id base = G1B_HasSuper(gStripSuper, _cmd) ? G1B_SUPER(id, gStripSuper, self, _cmd, (struct objc_super *, SEL, id), element) : nil;
+    id a = [base respondsToSelector:@selector(mutableCopy)] ? [base mutableCopy] : base;
+    G1B_SendVLL(a, @selector(setUpdateMode:), 3);
+    return a;
+}
+static double G1C_Strip_StripProgress(id self) { return G1C_Resp(self, @selector(continuousExposeStripProgress)) ? G1C_SendD0(self, @selector(continuousExposeStripProgress)) : 0.0; }
+static double G1C_Strip_OriginX(id self, SEL _cmd) {                                    // 0x1c75dffd4
+    double progress = G1C_Strip_StripProgress(self);
+    double cx = G1C_IvarD(self, "_cached_appStripOriginX"), cp = G1C_IvarD(self, "_cached_appStripUnocclusionProgress");
+    if (cx == 0.0 || !G1C_FloatEq(cp, progress)) {
+        G1C_SetIvarD(self, "_cached_appStripUnocclusionProgress", progress);
+        id a = G1C_Chamois(self);
+        double sw = G1B_Dbl0(a, @selector(stripWidth));
+        double x = progress * (sw + G1B_Dbl0(a, @selector(screenEdgePadding))) - sw;
+        if (G1C_RTL()) x = G1C_SendRect0(self, @selector(containerViewBounds)).size.width - x;
+        G1C_SetIvarD(self, "_cached_appStripOriginX", x);
+        cx = x;
+    }
+    return cx;
+}
+static void G1C_Strip_InvalidateOriginX(id self, SEL _cmd) { G1C_SetIvarD(self, "_cached_appStripOriginX", 0.0); G1C_SetIvarD(self, "_cached_appStripUnocclusionProgress", -1.0); }   // 0x1c75e0098
+static CGRect G1C_Strip_StripFrame(id self, SEL _cmd) {                                 // 0x1c75e00b8
+    CGRect b = G1C_SendRect0(self, @selector(containerViewBounds));
+    return CGRectMake(G1C_RTL() ? b.size.width : 0.0, 0.0, G1B_Dbl0(G1C_Chamois(self), @selector(stripWidth)), b.size.height);
+}
+static id G1C_Strip_Token(id self, SEL _cmd) {                                          // 0x1c75dfacc
+    Class tc = NSClassFromString(@"BP162LayoutCalcValidityToken");
+    SEL ini = NSSelectorFromString(@"initWithAppLayoutsGenCount:continuousExposeIdentifiersGenCount:switcherInterfaceOrientation:containerViewBounds:modifierEventGenCount:");
+    unsigned long long a = (unsigned long long)G1B_SendLL0(self, @selector(appLayoutsGenerationCount)), c = (unsigned long long)G1B_SendLL0(self, NSSelectorFromString(@"continuousExposeIdentifiersGenerationCount"));
+    long long o = G1B_SendLL0(self, @selector(switcherInterfaceOrientation));
+    CGRect b = G1C_SendRect0(self, @selector(containerViewBounds));
+    unsigned long long g = (unsigned long long)G1C_IvarLL(self, "_modifierEventGenCount");
+    if (tc && [tc instancesRespondToSelector:ini]) return ((id (*)(id, SEL, unsigned long long, unsigned long long, long long, CGRect, unsigned long long))objc_msgSend)([tc alloc], ini, a, c, o, b, g);
+    return [NSString stringWithFormat:@"%llu/%llu/%lld/%@/%llu", a, c, o, NSStringFromCGRect(b), g];     // equal tokens compare equal
+}
+typedef CGRect (^G1CRectBlk)(void);
+typedef double (^G1CDblBlk)(void);
+static CGRect G1C_Strip_CacheFrame(id self, id key, id token, G1CRectBlk fb) {
+    id cache = G1B_GET(self, kStripCache);
+    SEL s = NSSelectorFromString(@"frameForKey:validityToken:fallback:");
+    return G1C_Resp(cache, s) ? ((CGRect (*)(id, SEL, id, id, G1CRectBlk))objc_msgSend)(cache, s, key, token, fb) : fb();
+}
+static double G1C_Strip_CacheScale(id self, id key, id token, G1CDblBlk fb) {
+    id cache = G1B_GET(self, kStripCache);
+    SEL s = NSSelectorFromString(@"scaleForKey:validityToken:fallback:");
+    return G1C_Resp(cache, s) ? ((double (*)(id, SEL, id, id, G1CDblBlk))objc_msgSend)(cache, s, key, token, fb) : fb();
+}
+static CGRect G1C_Strip_Frame(id self, SEL _cmd, unsigned long long index) {            // 0x1c75de2cc
+    CGSize sz = G1B_SUPER(CGRect, gStripSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), index).size;
+    id layout = G1C_LayoutAtIdx(self, index);
+    NSString *ident = G1C_CEId(layout);
+    id token = G1C_Strip_Token(self, 0);
+    __unsafe_unretained id us = self;
+    CGRect cached = G1C_Strip_CacheFrame(self, ident, token, ^CGRect{
+        CGSize sf = G1B_SUPER(CGRect, gStripSuper, us, _cmd, (struct objc_super *, SEL, unsigned long long), index).size;
+        double stripWidth = G1B_Dbl0(G1C_Chamois(us), @selector(stripWidth));
+        CGRect bounds = G1C_SendRect0(us, @selector(containerViewBounds));
+        double x = G1C_RTL() ? (0.5 * sf.width + bounds.size.width) : (0.0 - stripWidth - 0.5 * sf.width);
+        return CGRectMake(x, 0.5 * bounds.size.height, sf.width, sf.height);
+    });
+    double x = cached.origin.x, y = cached.origin.y;                                       // the cache stores centre-form frames
+    NSArray *stripIds = G1C_AsArray(G1C_Resp(self, @selector(continuousExposeIdentifiersInStrip)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInStrip)) : nil);
+    if (ident && [stripIds containsObject:ident]) x = G1C_Strip_OriginX(self, 0);
+    return CGRectMake(x - 0.5 * sz.width, y - 0.5 * sz.height, sz.width, sz.height);
+}
+static CGPoint G1C_Strip_Anchor(id self, SEL _cmd, unsigned long long index) {          // 0x1c75de53c
+    id layout = G1C_LayoutAtIdx(self, index);
+    NSArray *group = G1C_AsArray(G1C_Strip_LayoutsForId(self, NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), G1C_CEId(layout)));
+    unsigned long long n = MIN((unsigned long long)group.count, G1C_PerGroup(self));
+    double ax = 0.0;
+    if (n >= 2) {
+        id a = G1C_Chamois(self);
+        double cardScale = G1B_Dbl0(a, @selector(stripCardScale)), stackDist = G1B_Dbl0(a, @selector(stripStackDistance));
+        id token = G1C_Strip_Token(self, 0);
+        NSString *ident = G1C_CEId(layout);
+        CGRect gf = G1C_Strip_CacheFrame(self, ident, token, ^CGRect{
+            if (BP_LogEnabled()) BP_Log(@"strip: group frame not in cache");           // 16.2 os_log_error "group frame not in cache"
+            return CGRectMake(0, 0, 400, 400);
+        });
+        double cached = G1C_Strip_CacheScale(self, ident, token, ^double{ return cardScale; });
+        NSUInteger pi = [group indexOfObject:layout];
+        if (pi == NSNotFound) pi = 0;
+        double unit = (stackDist / gf.size.width) * (cardScale / cached);
+        ax = unit * (double)pi - ((double)n - 1.0) * unit;
+    }
+    if (G1C_RTL()) ax = 1.0 - ax;
+    return CGPointMake(ax, 0.5);
+}
+static double G1C_Strip_HighlightScale(id self, SEL _cmd, id layout);
+static double G1C_Strip_Scale(id self, SEL _cmd, unsigned long long index) {            // 0x1c75de7e8
+    id layout = G1C_LayoutAtIdx(self, index);
+    id token = G1C_Strip_Token(self, 0);
+    NSString *ident = G1C_CEId(layout);
+    __unsafe_unretained id us = self;
+    double scale = G1C_Strip_CacheScale(self, ident, token, ^double{ return G1B_Dbl0(G1C_Chamois(us), @selector(stripCardScale)); });
+    NSArray *group = G1C_AsArray(G1C_Strip_LayoutsForId(self, NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), ident));
+    if (group.count >= 2) {
+        double itemH = G1C_Strip_Frame(self, @selector(frameForIndex:), index).size.height;
+        NSUInteger pi = [group indexOfObject:layout];
+        if (pi == NSNotFound) pi = 0;
+        double cachedH = G1C_Strip_CacheFrame(self, ident, token, ^CGRect{ return CGRectZero; }).size.height;
+        double denom = (itemH == 0.0) ? 400.0 : itemH;
+        scale = (scale * cachedH) / denom + (double)pi * -0.01;
+    }
+    return scale * G1C_Strip_HighlightScale(self, 0, layout);
+}
+static BOOL G1C_Strip_GroupHighlighted(id self, id set, id layout) {
+    if (G1C_Strip_IsOnStage(self, layout)) return NO;
+    NSString *ident = G1C_CEId(layout);
+    for (id l in set) if ([G1C_CEId(l) isEqualToString:ident]) return YES;
+    return NO;
+}
+static BOOL G1C_Strip_HighlightedTouch(id self, SEL _cmd, id layout) { return G1C_Strip_GroupHighlighted(self, G1B_GET(self, kStripTouch), layout); }   // 0x1c75e02b4
+static BOOL G1C_Strip_HighlightedHover(id self, SEL _cmd, id layout) { return G1C_Strip_GroupHighlighted(self, G1B_GET(self, kStripHover), layout); }   // 0x1c75e041c
+static double G1C_Strip_HighlightScale(id self, SEL _cmd, id layout) {                  // 0x1c75dea24
+    if (G1C_Strip_PileIdx(self, layout) != 0) return 1.0;
+    BOOL hover = G1C_Strip_HighlightedHover(self, 0, layout), touch = G1C_Strip_HighlightedTouch(self, 0, layout);
+    if (hover && touch) return 0.98;
+    if (!hover || touch) return touch ? 0.9 : 1.0;
+    return 1.1;
+}
+static CGRect G1C_Strip_AccFrame(id self, SEL _cmd, CGRect frame, id layout) {          // 0x1c75dead4
+    NSArray *ids = G1C_AsArray(G1C_Resp(self, @selector(continuousExposeIdentifiersInStrip)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInStrip)) : nil);
+    NSString *ident = G1C_CEId(layout);
+    if (ident && [ids indexOfObject:ident] != NSNotFound) frame.origin.x = G1C_Strip_OriginX(self, 0) + (-0.5 * frame.size.width);
+    return frame;
+}
+static CGPoint G1C_Strip_AccAnchor(id self, SEL _cmd, CGPoint p, id layout) { return CGPointMake(G1C_RTL() ? 1.0 : 0.0, p.y); }          // 0x1c75deb90
+static double G1C_Strip_AccScale(id self, SEL _cmd, double s, id layout) { return s / G1C_Strip_HighlightScale(self, 0, layout); }        // 0x1c75debd4
+static G1CRadii G1C_Strip_Corner(id self, SEL _cmd, unsigned long long index) {          // 0x1c75def2c
+    id layout = G1C_LayoutAtIdx(self, index);
+    if (G1C_Strip_IsOnStage(self, layout)) return G1B_SUPER(G1CRadii, gStripSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), index);
+    double r = G1B_Dbl0(G1C_Chamois(self), @selector(stripCornerRaddii)) / G1C_SendD0Q(self, @selector(scaleForIndex:), index);
+    return (G1CRadii){ r, r, r, r };
+}
+static unsigned long long G1C_Strip_Masked(id self, SEL _cmd, unsigned long long i) { return 0xF; }                // 0x1c75df018
+static double G1C_Strip_ShadowOpacity(id self, SEL _cmd, long long role, unsigned long long i) { return 1.0; }     // 0x1c75df020
+static long long G1C_Strip_ShadowStyle(id self, SEL _cmd, long long role, id l) { return 5; }                       // 0x1c75df028
+static long long G1C_Strip_HeaderStyle(id self, SEL _cmd, unsigned long long i) { return 1; }                       // 0x1c75df48c
+static double G1C_Strip_PageScale(id self, SEL _cmd, id l, double s) { return s; }                                  // 0x1c75df494
+static double G1C_Strip_Zero1(id self, SEL _cmd, unsigned long long i) { return 0.0; }                              // titleOpacity 0x1c75df510 / backgroundOpacity 0x1c75df520
+static double G1C_Strip_Dimming(id self, SEL _cmd, long long role, id l) { return 0.0; }                            // 0x1c75df518
+static BOOL G1C_Strip_NoHomeAffordance(id self, SEL _cmd, id l) { return NO; }                                      // 0x1c75df5dc
+static double G1C_Strip_TitleIcon(id self, SEL _cmd, unsigned long long index) { return G1C_Strip_PileIdx(self, G1C_LayoutAtIdx(self, index)) == 0 ? 1.0 : 0.0; }   // 0x1c75df498
+static double G1C_Strip_Perspective(id self, SEL _cmd, id layout) {                      // 0x1c75df528
+    double tilt = G1B_Dbl0(G1C_Chamois(self), @selector(stripTiltAngle));
+    return G1C_RTL() ? -tilt : tilt;
+}
+static double G1C_Strip_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long index) {      // 0x1c75dee60
+    double o = G1B_HasSuper(gStripSuper, _cmd) ? G1B_SUPER(double, gStripSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, layout, index) : 1.0;
+    return G1C_Strip_PileIdx(self, layout) > G1C_PerGroup(self) ? 0.0 : o;
+}
+static double G1C_Strip_WallpaperDimming(id self, SEL _cmd, unsigned long long index) { // 0x1c75df3e4
+    id layout = G1C_LayoutAtIdx(self, index);
+    BOOL hover = G1C_Strip_HighlightedHover(self, 0, layout);
+    unsigned long long pi = G1C_Strip_PileIdx(self, layout);
+    if (hover && pi == 0) return 0.0;
+    double d = (double)pi * 0.25 + 0.1;
+    return hover ? d + 0.1 : d;
+}
+// 0x1c75e0174: QuartzCore's CAPointApplyTransform on the layer transform, then the container perspective (m34 = -1/perspective)
+static CGPoint G1C_Strip_Project(id self, CGPoint space, CGPoint position, CGSize size, CGPoint anchor, CATransform3D T, double perspective) {
+    CGRect bounds = G1C_SendRect0(self, @selector(containerViewBounds));
+    double ptX = space.x + size.width * (0.5 - anchor.x), ptY = space.y + size.height * (0.5 - anchor.y);
+    double px = T.m11 * ptX + T.m21 * ptY + T.m41, py = T.m12 * ptX + T.m22 * ptY + T.m42, pz = T.m13 * ptX + T.m23 * ptY + T.m43;
+    double halfW = bounds.size.width * 0.5, halfH = bounds.size.height * 0.5;
+    double x1 = px + (position.x - halfW), y1 = py + (position.y - halfH);
+    double qw = 1.0 + (-1.0 / perspective) * pz;
+    return CGPointMake(halfW + x1 / qw, halfH + y1 / qw);
+}
+typedef struct { double lead, trail; } G1CGrad;
+static G1CGrad G1C_Strip_Gradient(id self, SEL _cmd, unsigned long long index) {         // 0x1c75df030
+    id layout = G1C_LayoutAtIdx(self, index);
+    double dimming = G1C_Strip_WallpaperDimming(self, 0, index), lead = 0.0, trail = 0.0;
+    if (dimming > 0.0001) {
+        double angle = ((double (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"perspectiveAngleForAppLayout:"), layout);
+        lead = trail = dimming;
+        if (!G1C_FloatEq(angle, 0.0)) {
+            id a = G1C_Chamois(self);
+            double edgePad = G1B_Dbl0(a, @selector(screenEdgePadding)), stripWidth = G1B_Dbl0(a, @selector(stripWidth)), persp = G1B_Dbl0(a, @selector(containerPerspective));
+            CGRect f = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(frameForIndex:), index);
+            double sc = G1C_SendD0Q(self, @selector(scaleForIndex:), index);
+            CGPoint ap = ((CGPoint (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(anchorPointForIndex:), index);
+            CGPoint c = CGPointMake(CGRectGetMidX(f), CGRectGetMidY(f));
+            CATransform3D T = CATransform3DConcat(CATransform3DMakeScale(sc, sc, 1.0), CATransform3DMakeRotation(angle, 0.0, 1.0, 0.0));
+            double leftX = G1C_Strip_Project(self, CGPointMake(-0.5 * f.size.width, 0.0), c, f.size, ap, T, persp).x;
+            double rightX = G1C_Strip_Project(self, CGPointMake(0.5 * f.size.width, 0.0), c, f.size, ap, T, persp).x;
+            double extra = 0.25;
+            CGSize mdw = G1C_Resp(a, @selector(minimumDefaultWindowSize)) ? G1C_SendSize0(a, @selector(minimumDefaultWindowSize)) : CGSizeZero;
+            if (!G1C_FloatEq(mdw.width, 0.0)) extra = G1B_SendB0(self, @selector(prefersStripHidden)) ? 0.25 : 0.6;
+            double maxDim = dimming + extra, range = maxDim - dimming, span = stripWidth - edgePad, dLeft, dRight;
+            if (G1C_RTL()) {
+                double maxX = CGRectGetMaxX(G1C_SendRect0(self, @selector(containerViewBounds)));
+                dLeft = range * ((maxX - leftX) - edgePad) / span; dRight = range * ((maxX - rightX) - edgePad) / span;
+            } else { dLeft = range * (leftX - edgePad) / span; dRight = range * (rightX - edgePad) / span; }
+            trail = MAX(dimming, MIN(dimming + dLeft, maxDim));
+            lead = MAX(dimming, MIN(dimming + dRight, maxDim));
+        }
+    }
+    return (G1CGrad){ lead, trail };
+}
+static id G1C_Strip_Ordered(id self, BOOL ignoring) {                                    // 0x1c75dec4c
+    NSMutableOrderedSet *result = [NSMutableOrderedSet orderedSetWithArray:@[]];
+    if (G1C_Strip_StripProgress(self) > 0.0001 || G1B_SendB0(self, @selector(requireStripContentsInViewHierarchy)) || ignoring) {
+        NSArray *ids = G1C_AsArray(G1C_Resp(self, @selector(continuousExposeIdentifiersInStrip)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInStrip)) : nil);
+        unsigned long long per = G1C_PerGroup(self);
+        NSCountedSet *seen = [[NSCountedSet alloc] init];
+        for (NSString *ident in ids)
+            for (id l in G1C_AsArray(G1C_Strip_LayoutsForId(self, NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), ident))) {
+                [seen addObject:ident];
+                if ([seen countForObject:ident] <= per) [result addObject:l];
+            }
+    }
+    return result;
+}
+static id G1C_Strip_Visible(id self, SEL _cmd) { return [G1C_Strip_Ordered(self, NO) set]; }                          // 0x1c75debfc
+static id G1C_Strip_TopMost(id self, SEL _cmd) { return [G1C_Strip_Ordered(self, NO) array]; }                       // 0x1c75df58c
+static id G1C_Strip_Inactive(id self, SEL _cmd) { return [G1C_Strip_Ordered(self, YES) array]; }                      // 0x1c75df5e4 (ignores the strip progress: the strip may be hidden)
+static id G1C_Strip_HandleEvent(id self, SEL _cmd, id event) {                           // 0x1c75df634
+    G1C_Strip_InvalidateOriginX(self, 0);
+    G1C_SetIvarLL(self, "_modifierEventGenCount", G1C_IvarLL(self, "_modifierEventGenCount") + 1);
+    BOOL require = G1B_SendB0(self, @selector(requireStripContentsInViewHierarchy));
+    id response = nil;
+    if (G1C_IvarBool(self, "_requireStripContentsInViewHierarchy") != require) {
+        G1C_SetIvarBool(self, "_requireStripContentsInViewHierarchy", require);
+        response = G1B_AppendTo(G1B_NewUpdateLayoutResponse(2, 0), nil);
+    }
+    id sup = G1B_HasSuper(gStripSuper, _cmd) ? G1B_SUPER(id, gStripSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    return response ? G1B_AppendTo(response, sup) : sup;
+}
+static id G1C_Strip_HandleHighlight(id self, SEL _cmd, id event) {                       // 0x1c75df73c
+    id response = G1B_HasSuper(gStripSuper, _cmd) ? G1B_SUPER(id, gStripSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    id layout = G1B_Send0(event, @selector(appLayout));
+    if (!G1B_SendB0(event, @selector(isHandled)) && layout) {
+        long long phase = G1B_SendLL0(event, @selector(phase));
+        BOOL onStage = G1C_Strip_IsOnStage(self, layout), isHover = G1B_SendB0(event, @selector(isHoverEvent)), phaseEnd = (unsigned long long)(phase - 1) < 2;
+        NSMutableSet *hover = G1B_GET(self, kStripHover), *touch = G1B_GET(self, kStripTouch);
+        if (!onStage && !phaseEnd) {
+            [(isHover ? hover : touch) addObject:layout];
+        } else {
+            NSMutableSet *set = (isHover && phaseEnd) ? hover : touch;                 // as compiled: a hover event that is on stage / not 1,2 uses the TOUCH set
+            if ([set containsObject:layout]) [set removeObject:layout];
+            else for (id m in [set copy]) if (G1B_SendB1(m, @selector(containsAnyItemFromAppLayout:), layout)) [set removeObject:m];
+        }
+        response = G1B_AppendTo(G1B_NewUpdateLayoutResponse(0xc, 0), response);
+        G1C_HandleEvent(event, @"Full Screen Continuous Expose");
+    }
+    return response;
+}
+static id G1C_Strip_Build(id self, SEL _cmd, id cache) {                                // 0x1c75dfb68
+    NSArray *ids = G1C_AsArray(G1C_Resp(self, @selector(continuousExposeIdentifiersInStrip)) ? G1B_Send0(self, @selector(continuousExposeIdentifiersInStrip)) : nil);
+    NSUInteger n = ids.count;
+    id a = G1C_Chamois(self);
+    double stripWidth = G1B_Dbl0(a, @selector(stripWidth)), stackDist = G1B_Dbl0(a, @selector(stripStackDistance)), cardScale = G1B_Dbl0(a, @selector(stripCardScale)), spacing = G1B_Dbl0(a, @selector(stripInterItemSpacing));
+    CGRect bounds = G1C_SendRect0(self, @selector(containerViewBounds));
+    unsigned long long perGroup = G1C_PerGroup(self);
+    double availH = bounds.size.height;
+    if (!G1B_SendB0(self, @selector(prefersDockHidden))) availH -= G1B_Dbl0(self, @selector(floatingDockHeight));
+    double (^limitFor)(NSUInteger) = ^double(NSUInteger count) { return bounds.size.width - 2.0 * stripWidth + stackDist * (double)((long long)perGroup - (long long)count); };
+    Class cc = NSClassFromString(@"SBSwitcherLayoutCalculations");
+    NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithCapacity:n];
+    double y = 0.0;
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *ident = ids[i];
+        NSArray *group = G1C_AsArray(G1C_Strip_LayoutsForId(self, NSSelectorFromString(@"appLayoutsForContinuousExposeIdentifier:"), ident));
+        id first = group.firstObject;
+        id m = first && G1C_Resp(self, @selector(overlappingModelForAppLayout:)) ? G1B_Send1(self, @selector(overlappingModelForAppLayout:), first) : nil;
+        CGRect bb = G1C_Resp(m, @selector(boundingBox)) ? G1C_SendRect0(m, @selector(boundingBox)) : CGRectZero;
+        double limit = limitFor(group.count), scale = cardScale;
+        if (bb.size.width > limit) scale = cardScale * (limit / bb.size.width);
+        double scaledH = bb.size.height * scale;
+        id calc = cc ? [[cc alloc] init] : nil;
+        G1C_SendVD(calc, @selector(setScale:), scale);
+        if (calc && [calc respondsToSelector:@selector(setFrame:)]) ((void (*)(id, SEL, CGRect))objc_msgSend)(calc, @selector(setFrame:), CGRectMake(0.0, y + scaledH * 0.5, bb.size.width, bb.size.height));
+        if (calc) dict[ident] = calc;
+        y = (i + 1 < n) ? y + scaledH + spacing : y + scaledH;
+    }
+    double yOff = (availH + 0.0) * 0.5 - (y * 0.5);
+    for (NSString *k in dict) {
+        id c = dict[k];
+        CGRect f = ((CGRect (*)(id, SEL))objc_msgSend)(c, @selector(frame));
+        f.origin.y += yOff;
+        ((void (*)(id, SEL, CGRect))objc_msgSend)(c, @selector(setFrame:), f);
+    }
+    return dict;
+}
+static id G1C_Strip_Build0(id self, SEL _cmd) { return G1C_Strip_Build(self, _cmd, nil); }      // 16.0 delegate selector buildLayoutCalculations
+static BOOL G1C_BuildStrip(void) {
+    gStripSuper = NSClassFromString(@"SBSwitcherModifier");
+    if (!gStripSuper) return NO;
+    const G1BIvar iv[] = {
+        { "_requireStripContentsInViewHierarchy", 1, 0, "B" }, { "_modifierEventGenCount", 8, 3, "Q" },
+        { "_cached_appStripOriginX", 8, 3, "d" }, { "_cached_appStripUnocclusionProgress", 8, 3, "d" },
+    };
+    const G1BMethod m[] = {
+        { "init", (IMP)G1C_Strip_Init, "@16@0:8" },
+        { "highlightedByTouchAppLayouts", (IMP)G1C_Strip_GetTouch, "@16@0:8" }, { "setHighlightedByTouchAppLayouts:", (IMP)G1C_Strip_SetTouch, "v24@0:8@16" },
+        { "highlightedByHoverAppLayouts", (IMP)G1C_Strip_GetHover, "@16@0:8" }, { "setHighlightedByHoverAppLayouts:", (IMP)G1C_Strip_SetHover, "v24@0:8@16" },
+        { "appLayoutsForContinuousExposeIdentifier:", (IMP)G1C_Strip_LayoutsForId, "@24@0:8@16" },
+        { "_indexInContinuousExposeIdentifierPileForAppLayout:", (IMP)G1C_Strip_PileIndex, "Q24@0:8@16" },
+        { "_isAppLayoutEffectivelyOnStage:", (IMP)G1C_Strip_OnStage, "B24@0:8@16" },
+        { "animationAttributesForLayoutElement:", (IMP)G1C_Strip_Anim, "@24@0:8@16" },
+        { "_appStripOriginX", (IMP)G1C_Strip_OriginX, "d16@0:8" }, { "_invalidateAppStripOriginX", (IMP)G1C_Strip_InvalidateOriginX, "v16@0:8" },
+        { "_stripFrame", (IMP)G1C_Strip_StripFrame, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8" },
+        { "frameForIndex:", (IMP)G1C_Strip_Frame, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" },
+        { "anchorPointForIndex:", (IMP)G1C_Strip_Anchor, "{CGPoint=dd}24@0:8Q16" },
+        { "scaleForIndex:", (IMP)G1C_Strip_Scale, "d24@0:8Q16" },
+        { "_highlightScaleForAppLayout:", (IMP)G1C_Strip_HighlightScale, "d24@0:8@16" },
+        { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)G1C_Strip_AccFrame, "{CGRect={CGPoint=dd}{CGSize=dd}}56@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16@48" },
+        { "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (IMP)G1C_Strip_AccAnchor, "{CGPoint=dd}40@0:8{CGPoint=dd}16@32" },
+        { "adjustedSpaceAccessoryViewScale:forAppLayout:", (IMP)G1C_Strip_AccScale, "d32@0:8d16@24" },
+        { "cornerRadiiForIndex:", (IMP)G1C_Strip_Corner, "{UIRectCornerRadii=dddd}24@0:8Q16" },
+        { "maskedCornersForIndex:", (IMP)G1C_Strip_Masked, "Q24@0:8Q16" },
+        { "shadowOpacityForLayoutRole:atIndex:", (IMP)G1C_Strip_ShadowOpacity, "d32@0:8q16Q24" },
+        { "shadowStyleForLayoutRole:inAppLayout:", (IMP)G1C_Strip_ShadowStyle, "q32@0:8q16@24" },
+        { "headerStyleForIndex:", (IMP)G1C_Strip_HeaderStyle, "q24@0:8Q16" },
+        { "contentPageViewScaleForAppLayout:withScale:", (IMP)G1C_Strip_PageScale, "d32@0:8@16d24" },
+        { "titleOpacityForIndex:", (IMP)G1C_Strip_Zero1, "d24@0:8Q16" },
+        { "dimmingAlphaForLayoutRole:inAppLayout:", (IMP)G1C_Strip_Dimming, "d32@0:8q16@24" },
+        { "backgroundOpacityForIndex:", (IMP)G1C_Strip_Zero1, "d24@0:8Q16" },
+        { "isHomeAffordanceSupportedForAppLayout:", (IMP)G1C_Strip_NoHomeAffordance, "B24@0:8@16" },
+        { "titleAndIconOpacityForIndex:", (IMP)G1C_Strip_TitleIcon, "d24@0:8Q16" },
+        { "perspectiveAngleForAppLayout:", (IMP)G1C_Strip_Perspective, "d24@0:8@16" },
+        { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_Strip_Opacity, "d40@0:8q16@24Q32" },
+        { "_wallpaperDimmingForIndex:", (IMP)G1C_Strip_WallpaperDimming, "d24@0:8Q16" },
+        { "wallpaperGradientAttributesForIndex:", (IMP)G1C_Strip_Gradient, "{SBSwitcherGradientWallpaperAttributes=dd}24@0:8Q16" },
+        { "visibleAppLayouts", (IMP)G1C_Strip_Visible, "@16@0:8" },
+        { "topMostLayoutElements", (IMP)G1C_Strip_TopMost, "@16@0:8" },
+        { "inactiveAppLayoutsReachableByKeyboardShortcut", (IMP)G1C_Strip_Inactive, "@16@0:8" },
+        { "_isGroupForAppLayoutHighlightedFromTouch:", (IMP)G1C_Strip_HighlightedTouch, "B24@0:8@16" },
+        { "_isGroupForAppLayoutHighlightedFromHover:", (IMP)G1C_Strip_HighlightedHover, "B24@0:8@16" },
+        { "handleEvent:", (IMP)G1C_Strip_HandleEvent, "@24@0:8@16" },
+        { "handleHighlightEvent:", (IMP)G1C_Strip_HandleHighlight, "@24@0:8@16" },
+        { "_currentLayoutCalculationsValidityToken", (IMP)G1C_Strip_Token, "@16@0:8" },
+        { "buildLayoutCalculationsForCache:", (IMP)G1C_Strip_Build, "@24@0:8@16" },
+        { "buildLayoutCalculations", (IMP)G1C_Strip_Build0, "@16@0:8" },
+    };
+    gStripCls = G1B_MakeClass("SBStripContinuousExposeSwitcherModifier", gStripSuper, iv, sizeof iv / sizeof iv[0], m, sizeof m / sizeof m[0], NULL, NULL);
+    return gStripCls != Nil;
+}
+// ============================================================================================================
+// 1h  SBFullScreenContinuousExposeSwitcherModifier  (16.2 form: a thin floor with two children, SBFullScreenAppLayoutSwitcherModifier + the Strip)       PORTED
+// ============================================================================================================
+// specs/SBFullScreenContinuousExposeSwitcherModifier.md. The 16.0 class does the stage AND the whole strip inline; 16.2 splits the strip out (1g). The class is allocated
+// by 16.0 code paths too, so it is converted IN PLACE: the 37 logic-changed 16.0 methods and the 16.2-only ones get the 16.2 implementation (class_replaceMethod /
+// class_addMethod before the first instance), and the 16.0-only protocol / event methods that would shadow the strip child are turned into plain `[super]` pass-throughs.
+// 16.2 object state: _stripModifier / _zOrderedLeafAppLayoutsForKeyboardNavigation / the two handle flags are associated objects (the class cannot get ivars);
+// _fullScreenAppLayout and _fullScreenAppLayoutModifier are the 16.0 ivars of the same name.
+static Class gFsCls, gFsSuper;
+static char kFsStrip, kFsZ, kFsTap, kFsHdr;
+static id G1C_FS_Layout(id s) { return G1C_IvarObj(s, "_fullScreenAppLayout"); }
+static id G1C_FS_Child(id s) { return G1C_IvarObj(s, "_fullScreenAppLayoutModifier"); }
+static BOOL G1C_FS_OnStage(id s, id layout) {                                          // 0x1c75c5334
+    id fs = G1C_FS_Layout(s);
+    if (G1B_SendB1(fs, @selector(containsAllItemsFromAppLayout:), layout) || G1B_SendB1(layout, @selector(containsAllItemsFromAppLayout:), fs)) return YES;
+    id cs = G1C_ChamoisSettings(s);
+    NSUInteger max = G1C_Resp(cs, @selector(maximumNumberOfAppsOnStage)) ? (NSUInteger)G1B_SendLL0(cs, @selector(maximumNumberOfAppsOnStage)) : 0;
+    if (G1C_AsArray(G1B_Send0(fs, @selector(allItems))).count != max) return NO;
+    NSArray *items = G1C_AsArray(G1B_Send0(layout, @selector(allItems)));
+    if (items.count != max) return NO;
+    NSUInteger shared = 0;
+    for (id it in items) if (G1B_SendB1(fs, @selector(containsItem:), it)) shared++;
+    return shared == max - 1;
+}
+static BOOL G1C_FS_OnStageIMP(id self, SEL _cmd, id layout) { return G1C_FS_OnStage(self, layout); }
+static BOOL G1C_FS_Maximized(id s, id layout) { return G1B_SendB1(s, NSSelectorFromString(@"appLayoutContainsAnUnoccludedMaximizedDisplayItem:"), layout); }
+static id G1C_FS_Model(id s, id layout) { return layout && G1C_Resp(s, @selector(overlappingModelForAppLayout:)) ? G1B_Send1(s, @selector(overlappingModelForAppLayout:), layout) : nil; }
+static BOOL G1C_FS_Exceeds(id self, SEL _cmd) {                                        // 0x1c75c5244
+    id m = G1C_FS_Model(self, G1C_FS_Layout(self));
+    return G1C_Resp(m, @selector(isContinuousExposeStripVisible)) ? !G1B_SendB0(m, @selector(isContinuousExposeStripVisible)) : NO;
+}
+static double G1C_FS_RevealProgress(id self, SEL _cmd) {                               // 0x1c75c2d6c: [super continuousExposeStripProgress]
+    SEL q = NSSelectorFromString(@"continuousExposeStripProgress");
+    return G1B_HasSuper(gFsSuper, q) ? G1B_SUPER(double, gFsSuper, self, q, (struct objc_super *, SEL)) : 0.0;
+}
+static double G1C_FS_Reveal(id s) { return G1C_FS_RevealProgress(s, 0); }
+static double G1C_FS_StripProgress(id self, SEL _cmd) {                                // 0x1c75c2d14
+    if (G1C_FS_Exceeds(self, 0) || G1B_SendB0(self, @selector(prefersStripHidden))) return G1C_FS_Reveal(self);
+    return 1.0;
+}
+static BOOL G1C_FS_RevealedFromHidden(id self, SEL _cmd) {                              // 0x1c75c54c4
+    if (G1C_FS_Exceeds(self, 0) || G1B_SendB0(self, @selector(prefersStripHidden))) return G1C_FS_Reveal(self) > 0.0001;
+    return NO;
+}
+static BOOL G1C_FS_IsFullScreenLayout(id self, SEL _cmd, id layout) { return [layout isEqual:G1C_FS_Layout(self)] && G1C_FS_Maximized(self, layout); }   // 0x1c75c4378
+static unsigned int G1C_FS_StripEdge(id self, SEL _cmd) { return G1C_RTL() ? 2 : 0; }  // 0x1c75c5520
+static BOOL G1C_FS_WantsHideHover(id self, SEL _cmd) { return G1C_FS_Reveal(self) > 0.0001; }       // 0x1c75c4600
+static BOOL G1C_FS_WantsHover(id self, SEL _cmd) {                                      // 0x1c75c45ac
+    SEL q = NSSelectorFromString(@"wantsContinuousExposeHoverGesture");
+    BOOL s = G1B_HasSuper(gFsSuper, q) ? G1B_SUPER(BOOL, gFsSuper, self, q, (struct objc_super *, SEL)) : NO;
+    return s | G1C_FS_WantsHideHover(self, 0);
+}
+static void G1C_FS_ResetZ(id self, SEL _cmd) {                                          // 0x1c75c5550
+    id fs = G1C_FS_Layout(self);
+    G1B_SET(self, kFsZ, G1C_Resp(fs, @selector(zOrderedLeafAppLayouts)) ? G1B_Send0(fs, @selector(zOrderedLeafAppLayouts)) : nil);
+}
+static id G1C_FS_ActiveLeafs(id self, SEL _cmd) { return G1B_GET(self, kFsZ); }          // 0x1c75c3f14
+static BOOL G1C_FS_CanSelectLeaf(id self, SEL _cmd, id layout) { return !G1B_SendB1(G1C_FS_Layout(self), NSSelectorFromString(@"isOrContainsAppLayout:"), layout); }       // 0x1c75c3eec
+static id G1C_FS_Init(id self, SEL _cmd, id appLayout) {                                // 0x1c75c2990
+    id me = G1B_SUPER(id, gFsSuper, self, @selector(init), (struct objc_super *, SEL));
+    if (!me) return nil;
+    if (!appLayout) { BP_Log(@"fullscreen floor: initWithFullScreenAppLayout: nil (16.2 asserts, line 45)"); return nil; }
+    G1C_SetIvarObj(me, "_fullScreenAppLayout", appLayout);
+    G1C_FS_ResetZ(me, 0);
+    G1B_SET(me, kFsTap, @YES);
+    G1B_SET(me, kFsHdr, @YES);
+    Class fc = NSClassFromString(@"SBFullScreenAppLayoutSwitcherModifier");
+    SEL fi = NSSelectorFromString(@"initWithActiveAppLayout:");
+    id fm = (fc && [fc instancesRespondToSelector:fi]) ? G1B_Send1([fc alloc], fi, appLayout) : nil;
+    if (fm) { G1C_SetIvarObj(me, "_fullScreenAppLayoutModifier", fm); G1B_SendV1(me, @selector(addChildModifier:), fm); }
+    id strip = gStripCls ? [[gStripCls alloc] init] : nil;
+    if (strip) { G1B_SET(me, kFsStrip, strip); G1B_SendV1(me, @selector(addChildModifier:), strip); }
+    return me;
+}
+static id G1C_FS_GetTouch(id s, SEL c) { return G1B_Send0(G1B_GET(s, kFsStrip), @selector(highlightedByTouchAppLayouts)); }
+static void G1C_FS_SetTouch(id s, SEL c, id v) { G1B_SendV1(G1B_GET(s, kFsStrip), @selector(setHighlightedByTouchAppLayouts:), v); }
+static id G1C_FS_GetHover(id s, SEL c) { return G1B_Send0(G1B_GET(s, kFsStrip), @selector(highlightedByHoverAppLayouts)); }
+static void G1C_FS_SetHover(id s, SEL c, id v) { G1B_SendV1(G1B_GET(s, kFsStrip), @selector(setHighlightedByHoverAppLayouts:), v); }
+static BOOL G1C_FS_GetTapFlag(id s, SEL c) { return [(NSNumber *)G1B_GET(s, kFsTap) boolValue]; }
+static void G1C_FS_SetTapFlag(id s, SEL c, BOOL v) { G1B_SET(s, kFsTap, @(v)); }
+static BOOL G1C_FS_GetHdrFlag(id s, SEL c) { return [(NSNumber *)G1B_GET(s, kFsHdr) boolValue]; }
+static void G1C_FS_SetHdrFlag(id s, SEL c, BOOL v) { G1B_SET(s, kFsHdr, @(v)); }
+
+// ---- geometry ----
+static CGRect G1C_FS_Frame(id self, SEL _cmd, unsigned long long i) {                   // 0x1c75c2da4
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(G1C_FS_Child(self), _cmd, i);
+    return G1B_SUPER(CGRect, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static CGPoint G1C_FS_Anchor(id self, SEL _cmd, unsigned long long i) {                 // 0x1c75c2e74
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_FS_Scale(id self, SEL _cmd, unsigned long long i) {                   // 0x1c75c2f1c
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return G1C_SendD0Q(G1C_FS_Child(self), _cmd, i);
+    return G1B_SUPER(double, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static CGRect G1C_FS_AccFrame(id self, SEL _cmd, CGRect f, id layout) {                 // 0x1c75c2fcc
+    if (!G1C_FS_OnStage(self, layout)) return G1B_SUPER(CGRect, gFsSuper, self, _cmd, (struct objc_super *, SEL, CGRect, id), f, layout);
+    return f;
+}
+static CGPoint G1C_FS_AccAnchor(id self, SEL _cmd, CGPoint p, id layout) {              // 0x1c75c3080
+    if (!G1C_FS_OnStage(self, layout)) return G1B_SUPER(CGPoint, gFsSuper, self, _cmd, (struct objc_super *, SEL, CGPoint, id), p, layout);
     return p;
 }
-static double G1C_Hs_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long idx) {
-    double o = G1B_SUPER(double, gHsParent, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, layout, idx);
-    if (idx < 2 && BP_LogEnabled()) {
-        SEL fs = @selector(frameForIndex:), vs = @selector(visibleAppLayouts);
-        CGRect f = G1C_Resp(self, fs) ? ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, fs, idx) : CGRectZero;
-        id vis = G1C_Resp(self, vs) ? G1B_Send0(self, vs) : nil;
-        BOOL inVis = layout && [vis respondsToSelector:@selector(containsObject:)] && ((BOOL (*)(id, SEL, id))objc_msgSend)(vis, @selector(containsObject:), layout);
-        NSString *sig = [NSString stringWithFormat:@"%.2f %@ v%d", o, NSStringFromCGRect(f), inVis];
-        BOOL changed = NO;
-        @synchronized(@"BP162.hs") { if (![gHsLastOpacity[idx] isEqualToString:sig]) { gHsLastOpacity[idx] = sig; changed = YES; } }
-        if (changed) BP_Log(@"GLITCH home floor idx=%llu role=%lld layout=%@ opacity/frame/inVisible: %@", idx, role, G1C_DbgLayout(layout), sig);
-    }
-    return o;
+// stage squeeze when the strip is revealed from the hidden state: shared fit factor of the stage's bounding box
+static BOOL G1C_FS_Squeeze(id self, double *outFit, CGRect *outBB, id *outModel, double *outStrip, double *outPad, double *outCW) {
+    double progress = G1C_FS_Reveal(self);
+    if (!(progress > 0.0001)) return NO;
+    double cw = G1C_SendRect0(self, @selector(containerViewBounds)).size.width;
+    id a = G1C_Chamois(self), model = G1C_FS_Model(self, G1C_FS_Layout(self));
+    CGRect bb = G1C_Resp(model, @selector(boundingBox)) ? G1C_SendRect0(model, @selector(boundingBox)) : CGRectZero;
+    double sw = G1B_Dbl0(a, @selector(stripWidth)), pad = G1B_Dbl0(a, @selector(screenEdgePadding));
+    *outFit = bb.size.width > 0 ? MIN((cw - sw - pad) / bb.size.width, 1.0) : 1.0;
+    *outBB = bb; *outModel = model; *outStrip = sw; *outPad = pad; *outCW = cw;
+    return YES;
 }
+static CGRect G1C_FS_RoleFrame(id self, SEL _cmd, long long role, id layout, CGRect bounds) {      // 0x1c75c310c
+    CGRect frame = G1B_SUPER(CGRect, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id, CGRect), role, layout, bounds);
+    if (!G1C_FS_OnStage(self, layout)) return frame;
+    double fit, sw, pad, cw; CGRect bb; id model;
+    if (!G1C_FS_Squeeze(self, &fit, &bb, &model, &sw, &pad, &cw)) return frame;
+    double progress = G1C_FS_Reveal(self);
+    double bbCx = bb.origin.x + bb.size.width * 0.5, bbCy = bb.origin.y + bb.size.height * 0.5;
+    double mid = (sw + (cw - pad)) * 0.5, leftC = MIN(mid, sw + bb.size.width * fit * 0.5);
+    double targetCx = (bbCx - bb.size.width * 0.5 * fit > sw) ? bbCx : leftC;
+    double s = 1.0 + progress * (fit - 1.0), dx = (targetCx - bbCx) * progress + 0.0;
+    if (G1B_SendB0(self, @selector(isRTLEnabled))) dx = -dx;
+    id item = G1C_Resp(layout, @selector(itemForLayoutRole:)) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
+    CGPoint c = (item && G1C_Resp(model, @selector(centerForItem:))) ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(model, @selector(centerForItem:), item) : CGPointMake(bbCx, bbCy);
+    frame.origin.x = (frame.origin.x - (1.0 - s) * (c.x - bbCx)) + dx;
+    frame.origin.y = frame.origin.y - (1.0 - s) * (c.y - bbCy);
+    return frame;
+}
+static double G1C_FS_RoleScale(id self, SEL _cmd, long long role, id layout) {          // 0x1c75c3360
+    double scale = G1B_SUPER(double, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+    if (G1C_FS_OnStage(self, layout)) {
+        double fit, sw, pad, cw; CGRect bb; id model;
+        if (G1C_FS_Squeeze(self, &fit, &bb, &model, &sw, &pad, &cw)) scale *= 1.0 + G1C_FS_Reveal(self) * (fit - 1.0);
+    }
+    return scale;
+}
+static id G1C_FS_Visible(id self, SEL _cmd) {                                           // 0x1c75c34c0
+    id sup = G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL));
+    NSSet *set = [sup isKindOfClass:[NSSet class]] ? sup : [NSSet set];
+    id fs = G1C_FS_Layout(self);
+    return fs ? [set setByAddingObject:fs] : set;
+}
+static id G1C_FS_CacheSnapshots(id self, SEL _cmd) { return [G1B_Send0(self, @selector(visibleAppLayouts)) allObjects] ?: @[]; }     // 0x1c75c353c
+static id G1C_FS_CacheFullsize(id self, SEL _cmd) { return @[]; }                         // 0x1c75c3588
+static id G1C_FS_TopMost(id self, SEL _cmd) {                                           // 0x1c75c4284
+    id sup = G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL));
+    id fs = G1C_FS_Layout(self);
+    SEL ins = NSSelectorFromString(@"sb_arrayByInsertingOrMovingObject:toIndex:");
+    id elems = ([sup respondsToSelector:ins] && fs) ? ((id (*)(id, SEL, id, unsigned long long))objc_msgSend)(sup, ins, fs, 0) : sup;
+    id tongue = G1C_Resp(self, @selector(continuousExposeStripTongueBackdropCaptureLayoutElement)) ? G1B_Send0(self, @selector(continuousExposeStripTongueBackdropCaptureLayoutElement)) : nil;
+    if (tongue && elems) {
+        NSMutableArray *m = [elems mutableCopy];
+        [m removeObject:fs]; [m insertObject:tongue atIndex:0]; [m insertObject:fs atIndex:0];
+        elems = m;
+    }
+    return elems;
+}
+static G1CRadii G1C_FS_Corner(id self, SEL _cmd, unsigned long long i) {                // 0x1c75c3594
+    id layout = G1C_LayoutAtIdx(self, i);
+    if (G1C_FS_OnStage(self, layout)) {
+        double r = G1B_Dbl0(self, @selector(displayCornerRadius));
+        if (G1C_FloatEq(r, 0.0) && !G1C_FS_Maximized(self, layout)) r = G1B_Dbl0(G1C_Chamois(self), @selector(stageCornerRaddii));
+        r = r / G1C_SendD0Q(self, @selector(scaleForIndex:), i);
+        return (G1CRadii){ r, r, r, r };
+    }
+    return G1B_SUPER(G1CRadii, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static unsigned long long G1C_FS_Masked(id self, SEL _cmd, unsigned long long i) {       // 0x1c75c36a4
+    id layout = G1C_LayoutAtIdx(self, i);
+    if (G1C_FS_OnStage(self, layout)) return G1C_FS_Maximized(self, layout) ? 0 : 0xf;
+    return G1B_SUPER(unsigned long long, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_FS_ShadowOpacity(id self, SEL _cmd, long long role, unsigned long long i) {   // 0x1c75c3750
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return 1.0;
+    return G1B_SUPER(double, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, unsigned long long), role, i);
+}
+static G1CGrad G1C_FS_Gradient(id self, SEL _cmd, unsigned long long i) {                // 0x1c75c380c
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return (G1CGrad){ 0.0, 0.0 };     // SBSwitcherGradientWallpaperAttributesMakeEmpty
+    return G1B_SUPER(G1CGrad, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_FS_TitleIcon(id self, SEL _cmd, unsigned long long i) {                // 0x1c75c38c0
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return 0.0;
+    return G1B_SUPER(double, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_FS_Perspective(id self, SEL _cmd, id layout) {                         // 0x1c75c420c
+    if (G1C_FS_OnStage(self, layout)) return 0.0;
+    return G1B_SUPER(double, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), layout);
+}
+static BOOL G1C_FS_PinRoles(id self, SEL _cmd, unsigned long long i) {                   // 0x1c75c4498
+    if (G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i))) return YES;
+    return G1B_SUPER(BOOL, gFsSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static BOOL G1C_FS_AnchorPin(id self, SEL _cmd, unsigned long long i) { return !G1C_FS_OnStage(self, G1C_LayoutAtIdx(self, i)); }      // 0x1c75c4530
+static BOOL G1C_FS_NO1(id self, SEL _cmd, id a) { return NO; }                           // isResizeGrabberVisible / shouldAllowGroupOpacity / shouldAccessoryDrawShadow ...
+static double G1C_FS_HitTestOutset(id self, SEL _cmd, id a) { return 10.0; }             // 0x1c75c459c
+// ---- touch / selection / resize ----
+static BOOL G1C_FS_Occluded(id self, SEL _cmd, long long role, id layout) {              // 0x1c75c3e48
+    id m = G1C_FS_Model(self, layout);
+    id item = G1C_Resp(layout, @selector(itemForLayoutRole:)) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
+    return G1B_SendB1(m, @selector(isItemFullyOccluded:), item) || G1B_SendB1(m, @selector(isItemPartiallyOccluded:), item) || G1B_SendB1(m, NSSelectorFromString(@"isItemCoveredByFullyOccludedPeekingItem:"), item);
+}
+static long long G1C_FS_Touch(id self, SEL _cmd, long long role, id layout) {            // 0x1c75c3974
+    id item = G1C_Resp(layout, @selector(itemForLayoutRole:)) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
+    if (G1B_SendB1(G1C_FS_Layout(self), @selector(containsItem:), item)) return G1C_FS_Occluded(self, 0, role, layout) ? 1 : 2;
+    return G1B_SUPER(long long, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+}
+static BOOL G1C_FS_ResizingAllowed(id self, SEL _cmd, long long role, id layout) {       // 0x1c75c3a44
+    return G1B_SendB1(self, @selector(appLayoutContainsOnlyResizableApps:), layout) && G1C_FloatEq(G1C_FS_Reveal(self), 0.0) && G1C_FS_OnStage(self, layout);
+}
+static BOOL G1C_FS_ShouldEnableGrabbers(id self, SEL _cmd, long long role, id layout) {  // 0x1c75c5288
+    if (!G1C_FloatEq(G1C_FS_Reveal(self), 0.0) && G1C_FS_Exceeds(self, 0)) return NO;
+    if (!G1B_SendB0(self, @selector(isDisplayEmbedded))) return NO;
+    if (!G1C_FS_OnStage(self, layout)) return NO;
+    if (!G1B_SendB1(self, @selector(appLayoutContainsOnlyResizableApps:), layout)) return NO;
+    if (!(role == 1 || role == 2)) return NO;                                                // SBLayoutRoleIsValidForSplitView (0x1c7894a30): primary / side
+    return !G1C_FS_Occluded(self, 0, role, layout);
+}
+static unsigned long long G1C_FS_ActiveCorners(id self, SEL _cmd, long long role, id layout) {   // 0x1c75c3aac
+    if (!G1C_FS_ShouldEnableGrabbers(self, 0, role, layout)) return G1B_SUPER(unsigned long long, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+    NSUInteger idx = [G1B_Send0(self, @selector(appLayouts)) indexOfObject:layout];
+    if (idx == NSNotFound) return G1B_SUPER(unsigned long long, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+    CGRect lf = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(frameForIndex:), idx);
+    CGRect b = G1C_SendRect0(self, @selector(containerViewBounds));
+    CGRect rect = ((CGRect (*)(id, SEL, long long, id, CGRect))objc_msgSend)(self, @selector(frameForLayoutRole:inAppLayout:withBounds:), role, layout, b);
+    id cs = G1C_ChamoisSettings(self);
+    double margin = G1B_Dbl0(cs, NSSelectorFromString(@"pinWindowEdgeForResizeMargin"));
+    if (CGRectGetMaxX(rect) < CGRectGetWidth(lf) - margin) return 8;
+    if (CGRectGetMaxY(rect) < CGRectGetHeight(lf) - margin) return 4;
+    if (CGRectGetMinY(rect) > margin) return 4;
+    if (CGRectGetMinX(rect) > margin) return 4;
+    return G1C_RTL() ? 4 : 8;
+}
+static BOOL G1C_FS_ContentTouches(id self, SEL _cmd, long long role, id layout) {        // 0x1c75c3cf4
+    if (!G1C_FS_OnStage(self, layout) || G1C_FS_RevealedFromHidden(self, 0)) return NO;
+    return G1B_SUPER(BOOL, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
+}
+static BOOL G1C_FS_Selectable(id self, SEL _cmd, long long role, id layout) {            // 0x1c75c3d84
+    if (!G1C_FS_OnStage(self, layout) || G1C_FS_RevealedFromHidden(self, 0)) return YES;
+    if (G1B_SUPER(BOOL, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout)) return YES;
+    return G1C_FS_Occluded(self, 0, role, G1B_Send1(self, @selector(appLayoutContainingAppLayout:), layout));
+}
+static BOOL G1C_FS_SpringLoading(id self, SEL _cmd, long long role, id layout) {         // 0x1c75c4150
+    return G1C_FS_OnStage(self, layout) ? G1C_FS_Occluded(self, 0, role, layout) : YES;
+}
+// ---- dock / home screen / status bar ----
+static double G1C_FS_HomeDimming(id self, SEL _cmd) {                                    // 0x1c75c3f74
+    CGRect cb = G1C_SendRect0(self, @selector(containerViewBounds));
+    id m = G1C_FS_Model(self, G1C_FS_Layout(self));
+    CGRect stage = G1C_Resp(m, NSSelectorFromString(@"stageArea")) ? G1C_SendRect0(m, NSSelectorFromString(@"stageArea")) : CGRectZero;
+    double ratio = (stage.size.width * stage.size.height) / (cb.size.width * cb.size.height);
+    double d = fmin(fmax(((ratio + -0.7) * 0.5) / 0.3 + 0.0, 0.0), 1.0);
+    double strip = G1C_FS_StripProgress(self, 0);
+    return d + (d * 0.5 - d) * strip;
+}
+static BOOL G1C_FS_StatusBar(id self, SEL _cmd) { return !G1C_FS_Maximized(self, G1C_FS_Layout(self)); }       // 0x1c75c4034
+static BOOL G1C_FS_DockHidden(id self, SEL _cmd) {                                       // 0x1c75c405c
+    id m = G1C_FS_Model(self, G1C_FS_Layout(self));
+    double bbH = G1C_Resp(m, @selector(boundingBox)) ? G1C_SendRect0(m, @selector(boundingBox)).size.height : 0.0;
+    double contH = G1C_SendRect0(self, @selector(containerViewBounds)).size.height;
+    double dockH = G1B_Dbl0(self, @selector(floatingDockHeight)), top = G1B_Dbl0(self, NSSelectorFromString(@"floatingDockViewTopMargin"));
+    if (G1B_SendB0(self, NSSelectorFromString(@"isSoftwareKeyboardVisible"))) return YES;
+    if ((contH - bbH) < (dockH + top)) return YES;
+    return G1B_SendB0(self, @selector(prefersDockHidden));
+}
+static BOOL G1C_FS_WantsDockAssertion(id self, SEL _cmd) { return !G1C_FS_DockHidden(self, 0); }               // 0x1c75c411c
+static double G1C_FS_DockProgress(id self, SEL _cmd) { return 1.0; }                     // 0x1c75c4138
+static long long G1C_FS_DockUpdateMode(id self, SEL _cmd) { return 3; }                  // 0x1c75c4140
+static BOOL G1C_FS_HomeAffordance(id self, SEL _cmd, id layout) {                        // 0x1c75c43d4
+    return G1C_FS_IsFullScreenLayout(self, 0, layout) && G1B_SendB0(self, @selector(isDisplayEmbedded)) && G1B_SendB0(G1B_Send0(self, @selector(homeGrabberSettings)), @selector(isEnabled));
+}
+static id G1C_FS_VisibleHomeAffordance(id self, SEL _cmd) {                              // 0x1c75c4430
+    id fs = G1C_FS_Layout(self);
+    return G1C_FS_HomeAffordance(self, 0, fs) ? [NSSet setWithObject:fs] : [NSSet set];
+}
+// ---- events ----
+static id G1C_FS_Hover(id self, SEL _cmd, id event) {                                    // 0x1c75c462c
+    id response = G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    if (G1C_FS_WantsHideHover(self, 0) && G1C_Resp(event, @selector(position))) {
+        double x = G1C_SendPoint0(event, @selector(position)).x;
+        id a = G1C_Chamois(self);
+        double sw = G1B_Dbl0(a, @selector(stripWidth));
+        if (x > sw + 0.0001 && x < G1C_SendRect0(self, @selector(containerViewBounds)).size.width - sw - 0.0001) {
+            response = G1B_AppendTo(G1C_NewStripsPresentationResponse(0, 1), response);
+            response = G1B_AppendTo(G1B_NewUpdateLayoutResponse(0xc, 3), response);
+        }
+    }
+    return response;
+}
+static id G1C_FS_ActivateStageResponse(id self) {
+    return G1C_NewPerformActivate(G1C_FS_Layout(self), NO);
+}
+static id G1C_FS_Tap(id self, SEL _cmd, id event) {                                       // 0x1c75c4780
+    id response = G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    if (G1C_FS_GetTapFlag(self, 0) && !G1B_SendB0(event, @selector(isHandled))) {
+        id tapped = G1B_Send0(event, @selector(appLayout));
+        id fs = G1C_FS_Layout(self);
+        if (G1C_FS_OnStage(self, tapped)) {
+            if (G1C_FS_RevealedFromHidden(self, 0)) {
+                response = G1B_AppendTo(G1C_NewStripsPresentationResponse(0, 1), response);
+                response = G1B_AppendTo(G1C_FS_ActivateStageResponse(self), response);
+            } else {
+                long long role = G1B_SendLL0(event, @selector(layoutRole));
+                id item = G1C_Resp(tapped, @selector(itemForLayoutRole:)) ? G1C_SendLL1(tapped, @selector(itemForLayoutRole:), role) : nil;
+                id req = G1C_NewBareRequest();
+                SEL bf = @selector(appLayoutByBringingItemToFront:inAppLayout:);
+                id fronted = G1C_Resp(self, bf) ? G1C_Send2(self, bf, item, tapped) : nil;
+                G1B_SendV1(req, @selector(setAppLayout:), fronted ?: tapped);
+                G1B_SendV1(req, @selector(setActivatingDisplayItem:), item);
+                if (G1C_Resp(event, @selector(source)) && G1B_SendLL0(event, @selector(source)) == 1) G1B_SendVLL(req, @selector(setSource:), 0x33);
+                response = G1B_AppendTo(G1C_NewPerformFromRequest(req, NO), response);
+            }
+        } else {
+            id req = G1C_NewBareRequest();
+            G1B_SendV1(req, @selector(setAppLayout:), tapped);
+            if (G1C_Resp(event, @selector(modifierFlags)) && (G1B_SendLL0(event, @selector(modifierFlags)) & (1 << 17))) G1B_SendVLL(req, NSSelectorFromString(@"setEntityInsertionPolicy:"), 1);
+            if ([G1C_CEId(tapped) isEqualToString:G1C_CEId(fs)]) G1B_SendVLL(req, @selector(setSource:), 0x3f);
+            response = G1B_AppendTo(G1C_NewPerformFromRequest(req, NO), response);
+        }
+        G1C_HandleEvent(event, @"Full Screen Continuous Expose");
+    }
+    return response;
+}
+static id G1C_FS_HeaderTap(id self, SEL _cmd, id event) {                                 // 0x1c75c4a28
+    id response = G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    if (G1C_FS_GetHdrFlag(self, 0) && !G1B_SendB0(event, @selector(isHandled))) {
+        id layout = G1B_Send0(event, @selector(appLayout));
+        long long role = G1B_SendLL0(event, @selector(layoutRole));
+        id item = G1C_Resp(layout, @selector(itemForLayoutRole:)) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
+        id r = nil;
+        if (G1B_SendB1(self, NSSelectorFromString(@"displayItemSupportsMultipleWindowsIndicator:"), item)) {
+            id req = G1C_NewBareRequest();
+            G1B_SendVLL(req, @selector(setSource:), 3);
+            G1B_SendV1(req, @selector(setBundleIdentifierForAppExpose:), G1B_Send0(item, @selector(bundleIdentifier)));
+            r = G1C_NewPerformFromRequest(req, NO);
+        } else {
+            Class pc = NSClassFromString(@"SBPulseDisplayItemSwitcherModifier"), cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
+            SEL ci = NSSelectorFromString(@"initWithModifier:level:");
+            id pulse = (pc && [pc instancesRespondToSelector:@selector(initWithDisplayItem:)]) ? G1B_Send1([pc alloc], @selector(initWithDisplayItem:), item) : nil;
+            r = (pulse && cc && [cc instancesRespondToSelector:ci]) ? ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], ci, pulse, 3) : nil;
+        }
+        response = G1B_AppendTo(r, response);
+        G1C_HandleEvent(event, @"Full Screen Continuous Expose");
+    }
+    return response;
+}
+static id G1C_FS_TapOutside(id self, SEL _cmd, id event) {                                // 0x1c75c4bc0
+    id response = G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    if (G1C_FS_RevealedFromHidden(self, 0)) {
+        response = G1B_AppendTo(G1C_NewStripsPresentationResponse(0, 1), response);
+        response = G1B_AppendTo(G1C_FS_ActivateStageResponse(self), response);
+    }
+    return response;
+}
+static id G1C_FS_SortedKeys(NSDictionary *map) {
+    return [[map allKeys] sortedArrayUsingComparator:^NSComparisonResult(id a, id b) {
+        return [@(G1C_SendD0(map[a], @selector(lastInteractionTime))) compare:@(G1C_SendD0(map[b], @selector(lastInteractionTime)))];
+    }];
+}
+static id G1C_FS_Transition(id self, SEL _cmd, id event) {                               // 0x1c75c4cc8
+    id response = G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), event);
+    id from = G1B_Send0(event, @selector(fromAppLayout)), to = G1B_Send0(event, @selector(toAppLayout));
+    if (G1B_SendLL0(event, @selector(phase)) == 2 && G1C_AsArray(G1B_Send0(to, @selector(allItems))).count > 2 && [from isEqual:to]) {
+        BOOL kb = G1C_Resp(event, NSSelectorFromString(@"isKeyboardShortcutInitiated")) && G1B_SendB0(event, NSSelectorFromString(@"isKeyboardShortcutInitiated"));
+        if (!kb) G1C_FS_ResetZ(self, 0);
+        else {
+            id lastFrom = [G1C_FS_SortedKeys(G1B_Send0(event, @selector(fromDisplayItemLayoutAttributesMap))) lastObject];
+            id lastTo = [G1C_FS_SortedKeys(G1B_Send0(event, @selector(toDisplayItemLayoutAttributesMap))) lastObject];
+            if (![lastFrom isEqual:lastTo]) {
+                NSArray *z = G1B_GET(self, kFsZ);
+                NSUInteger idx = NSNotFound;
+                for (NSUInteger k = 0; k < z.count; k++) if (G1B_SendB1(z[k], @selector(containsItem:), lastFrom)) { idx = k; break; }
+                if (z.count) {
+                    NSUInteger next = (idx + 1) % z.count;
+                    NSUInteger prev1 = ((NSInteger)idx > 0) ? idx : z.count;
+                    BOOL reset;
+                    if (G1B_SendB1(z[next], @selector(containsItem:), lastTo)) reset = NO;
+                    else reset = !G1B_SendB1(z[prev1 - 1], @selector(containsItem:), lastTo);
+                    if (reset) G1C_FS_ResetZ(self, 0);
+                }
+            }
+        }
+    }
+    return response;
+}
+// 16.0-only protocol / event methods of the old inline strip: the strip child answers these in 16.2 -> plain pass-throughs to the chain
+static id G1C_FS_Fwd0(id self, SEL _cmd) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL)) : nil; }
+static id G1C_FS_Fwd1(id self, SEL _cmd, id a) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL, id), a) : nil; }
+static CGPoint G1C_FS_FwdPoint(id self, SEL _cmd) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(CGPoint, gFsSuper, self, _cmd, (struct objc_super *, SEL)) : CGPointZero; }
+static unsigned long long G1C_FS_FwdULL0(id self, SEL _cmd) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(unsigned long long, gFsSuper, self, _cmd, (struct objc_super *, SEL)) : 0; }
+static unsigned long long G1C_FS_FwdULL2(id self, SEL _cmd, long long a, id b) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(unsigned long long, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), a, b) : 0; }
+static double G1C_FS_FwdOpacity(id self, SEL _cmd, long long a, id b, unsigned long long c) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(double, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), a, b, c) : 1.0; }
+static BOOL G1C_FS_FwdBool0(id self, SEL _cmd) { return G1B_HasSuper(gFsSuper, _cmd) ? G1B_SUPER(BOOL, gFsSuper, self, _cmd, (struct objc_super *, SEL)) : NO; }
+
+typedef struct { const char *sel; IMP imp; const char *types; } G1CPatch;
+static void G1C_PatchClass(Class c, const G1CPatch *p, size_t n, const char *tag) {
+    for (size_t i = 0; i < n; i++) {
+        SEL s = sel_registerName(p[i].sel);
+        Method m = class_getInstanceMethod(c, s);
+        const char *t = m ? method_getTypeEncoding(m) : G1B_TypesFor(s, p[i].types);
+        if (!t) t = p[i].types;
+        class_replaceMethod(c, s, p[i].imp, t);
+    }
+    if (BP_LogEnabled()) BP_Log(@"%s: %zu methods converted to the 16.2 form on %s", tag, n, class_getName(c));
+}
+#define R4 "{CGRect={CGPoint=dd}{CGSize=dd}}"
+static void G1C_InstallFullScreen(void) {
+    gFsCls = NSClassFromString(@"SBFullScreenContinuousExposeSwitcherModifier");
+    gFsSuper = gFsCls ? class_getSuperclass(gFsCls) : Nil;
+    if (!gFsCls || !gStripCls || !BP_OnName("g1c_strip")) return;
+    const G1CPatch p[] = {
+        { "initWithFullScreenAppLayout:", (IMP)G1C_FS_Init, "@24@0:8@16" },
+        { "highlightedByTouchAppLayouts", (IMP)G1C_FS_GetTouch, "@16@0:8" }, { "setHighlightedByTouchAppLayouts:", (IMP)G1C_FS_SetTouch, "v24@0:8@16" },
+        { "highlightedByHoverAppLayouts", (IMP)G1C_FS_GetHover, "@16@0:8" }, { "setHighlightedByHoverAppLayouts:", (IMP)G1C_FS_SetHover, "v24@0:8@16" },
+        { "handlesTapAppLayoutEvents", (IMP)G1C_FS_GetTapFlag, "B16@0:8" }, { "setHandlesTapAppLayoutEvents:", (IMP)G1C_FS_SetTapFlag, "v20@0:8B16" },
+        { "handlesTapAppLayoutHeaderEvents", (IMP)G1C_FS_GetHdrFlag, "B16@0:8" }, { "setHandlesTapAppLayoutHeaderEvents:", (IMP)G1C_FS_SetHdrFlag, "v20@0:8B16" },
+        { "continuousExposeStripProgress", (IMP)G1C_FS_StripProgress, "d16@0:8" },
+        { "_continuousExposeStripRevealProgress", (IMP)G1C_FS_RevealProgress, "d16@0:8" },
+        { "_isFullScreenAppLayout:", (IMP)G1C_FS_IsFullScreenLayout, "B24@0:8@16" },
+        { "_isAppLayoutEffectivelyOnStage:", (IMP)G1C_FS_OnStageIMP, "B24@0:8@16" },
+        { "_isStripRevealedFromHidden", (IMP)G1C_FS_RevealedFromHidden, "B16@0:8" },
+        { "_continuousExposeStripEdge", (IMP)G1C_FS_StripEdge, "I16@0:8" },
+        { "_anyItemExceedsWidthThresholdToHideStrip", (IMP)G1C_FS_Exceeds, "B16@0:8" },
+        { "_wantsContinuousExposeHoverGestureForDismissingStrip", (IMP)G1C_FS_WantsHideHover, "B16@0:8" },
+        { "wantsContinuousExposeHoverGesture", (IMP)G1C_FS_WantsHover, "B16@0:8" },
+        { "_resetKeyboardNavigationZOrder", (IMP)G1C_FS_ResetZ, "v16@0:8" },
+        { "activeLeafAppLayoutsReachableByKeyboardShortcut", (IMP)G1C_FS_ActiveLeafs, "@16@0:8" },
+        { "canSelectLeafWithModifierKeysInAppLayout:", (IMP)G1C_FS_CanSelectLeaf, "B24@0:8@16" },
+        { "frameForIndex:", (IMP)G1C_FS_Frame, R4 "24@0:8Q16" }, { "anchorPointForIndex:", (IMP)G1C_FS_Anchor, "{CGPoint=dd}24@0:8Q16" }, { "scaleForIndex:", (IMP)G1C_FS_Scale, "d24@0:8Q16" },
+        { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)G1C_FS_AccFrame, R4 "56@0:8" R4 "16@48" },
+        { "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (IMP)G1C_FS_AccAnchor, "{CGPoint=dd}40@0:8{CGPoint=dd}16@32" },
+        { "frameForLayoutRole:inAppLayout:withBounds:", (IMP)G1C_FS_RoleFrame, R4 "64@0:8q16@24" R4 "32" },
+        { "scaleForLayoutRole:inAppLayout:", (IMP)G1C_FS_RoleScale, "d32@0:8q16@24" },
+        { "visibleAppLayouts", (IMP)G1C_FS_Visible, "@16@0:8" }, { "appLayoutsToCacheSnapshots", (IMP)G1C_FS_CacheSnapshots, "@16@0:8" },
+        { "appLayoutsToCacheFullsizeSnapshots", (IMP)G1C_FS_CacheFullsize, "@16@0:8" }, { "topMostLayoutElements", (IMP)G1C_FS_TopMost, "@16@0:8" },
+        { "cornerRadiiForIndex:", (IMP)G1C_FS_Corner, "{UIRectCornerRadii=dddd}24@0:8Q16" }, { "maskedCornersForIndex:", (IMP)G1C_FS_Masked, "Q24@0:8Q16" },
+        { "shadowOpacityForLayoutRole:atIndex:", (IMP)G1C_FS_ShadowOpacity, "d32@0:8q16Q24" },
+        { "wallpaperGradientAttributesForIndex:", (IMP)G1C_FS_Gradient, "{SBSwitcherGradientWallpaperAttributes=dd}24@0:8Q16" },
+        { "titleAndIconOpacityForIndex:", (IMP)G1C_FS_TitleIcon, "d24@0:8Q16" }, { "perspectiveAngleForAppLayout:", (IMP)G1C_FS_Perspective, "d24@0:8@16" },
+        { "shouldPinLayoutRolesToSpace:", (IMP)G1C_FS_PinRoles, "B24@0:8Q16" }, { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)G1C_FS_AnchorPin, "B24@0:8Q16" },
+        { "shouldAllowGroupOpacityForAppLayout:", (IMP)G1C_FS_NO1, "B24@0:8@16" }, { "spaceAccessoryViewIconHitTestOutsetForAppLayout:", (IMP)G1C_FS_HitTestOutset, "d24@0:8@16" },
+        { "isResizeGrabberVisibleForAppLayout:", (IMP)G1C_FS_NO1, "B24@0:8@16" },
+        { "_layoutRoleIsOccluded:inAppLayout:", (IMP)G1C_FS_Occluded, "B32@0:8q16@24" }, { "touchBehaviorForLayoutRole:inAppLayout:", (IMP)G1C_FS_Touch, "q32@0:8q16@24" },
+        { "isItemResizingAllowedForLayoutRole:inAppLayout:", (IMP)G1C_FS_ResizingAllowed, "B32@0:8q16@24" },
+        { "_shouldEnableItemResizeGrabbersForLayoutRole:inAppLayout:", (IMP)G1C_FS_ShouldEnableGrabbers, "B32@0:8q16@24" },
+        { "activeCornersForTouchResizeForLayoutRole:inAppLayout:", (IMP)G1C_FS_ActiveCorners, "Q32@0:8q16@24" },
+        { "shouldAllowContentViewTouchesForLayoutRole:inAppLayout:", (IMP)G1C_FS_ContentTouches, "B32@0:8q16@24" },
+        { "isLayoutRoleSelectable:inAppLayout:", (IMP)G1C_FS_Selectable, "B32@0:8q16@24" },
+        { "isLayoutRoleEligibleForContentDragSpringLoading:inAppLayout:", (IMP)G1C_FS_SpringLoading, "B32@0:8q16@24" },
+        { "homeScreenDimmingAlpha", (IMP)G1C_FS_HomeDimming, "d16@0:8" }, { "isContainerStatusBarVisible", (IMP)G1C_FS_StatusBar, "B16@0:8" },
+        { "shouldConfigureInAppDockHiddenAssertion", (IMP)G1C_FS_DockHidden, "B16@0:8" }, { "wantsDockBehaviorAssertion", (IMP)G1C_FS_WantsDockAssertion, "B16@0:8" },
+        { "dockProgress", (IMP)G1C_FS_DockProgress, "d16@0:8" }, { "dockUpdateMode", (IMP)G1C_FS_DockUpdateMode, "q16@0:8" },
+        { "isHomeAffordanceSupportedForAppLayout:", (IMP)G1C_FS_HomeAffordance, "B24@0:8@16" }, { "visibleHomeAffordanceLayoutElements", (IMP)G1C_FS_VisibleHomeAffordance, "@16@0:8" },
+        { "handleHoverEvent:", (IMP)G1C_FS_Hover, "@24@0:8@16" }, { "handleTapAppLayoutEvent:", (IMP)G1C_FS_Tap, "@24@0:8@16" },
+        { "handleTapAppLayoutHeaderEvent:", (IMP)G1C_FS_HeaderTap, "@24@0:8@16" }, { "handleTapOutsideToDismissEvent:", (IMP)G1C_FS_TapOutside, "@24@0:8@16" },
+        { "handleTransitionEvent:", (IMP)G1C_FS_Transition, "@24@0:8@16" },
+        // 16.0-only members that would shadow the strip child
+        { "scrollViewContentOffset", (IMP)G1C_FS_FwdPoint, "{CGPoint=dd}16@0:8" }, { "numberOfRowsInGridSwitcher", (IMP)G1C_FS_FwdULL0, "Q16@0:8" },
+        { "continuousExposeIdentifiers", (IMP)G1C_FS_Fwd0, "@16@0:8" }, { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_FS_FwdOpacity, "d40@0:8q16@24Q32" },
+        { "hiddenContentStatusBarPartsForLayoutRole:inAppLayout:", (IMP)G1C_FS_FwdULL2, "Q32@0:8q16@24" }, { "shouldConfigureInAppDockVisibleAssertion", (IMP)G1C_FS_FwdBool0, "B16@0:8" },
+        { "handleEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" }, { "handleTimerEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" },
+        { "handleHighlightEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" }, { "handleSwitcherSettingsChangedEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" },
+    };
+    G1C_PatchClass(gFsCls, p, sizeof p / sizeof p[0], "strip");
+}
+// ============================================================================================================
+// 1i  SBHomeScreenContinuousExposeSwitcherModifier  (16.2 form: SBHomeScreenSwitcherModifier child + the Strip child)                 PORTED
+// ============================================================================================================
+// init 0x1c77f3898 (children: SBHomeScreenSwitcherModifier, then the Strip), continuousExposeStripProgress 0.0 (0x1c77f3e60), isResizeGrabberVisibleForAppLayout: NO,
+// responseForProposedChildResponse:childModifier:event: 0x1c77f393c (+ transformer block 0x1c77f3a6c). Converted in place like the FullScreen floor; the members 16.2 removed
+// (appLayoutsToCacheSnapshots, topMostLayoutElements, dimmingAlphaForLayoutRole:inAppLayout:, scrollViewContentOffset) become pass-throughs, the strip child answers them.
+static Class gHsParent, gSbSwitcherModifierCls;
+static char kHsStrip, kHsHome;
+static id G1C_Hs_Init(id self, SEL _cmd) {
+    id me = G1B_SUPER(id, gSbSwitcherModifierCls, self, @selector(init), (struct objc_super *, SEL));
+    if (!me) return nil;
+    Class hc = NSClassFromString(@"SBHomeScreenSwitcherModifier");
+    id home = hc ? [[hc alloc] init] : nil;
+    if (home) { G1C_SetIvarObj(me, "_homeScreenModifier", home); G1B_SET(me, kHsHome, home); G1B_SendV1(me, @selector(addChildModifier:), home); }
+    id strip = gStripCls ? [[gStripCls alloc] init] : nil;
+    if (strip) { G1C_SetIvarObj(me, "_stripModifier", strip); G1B_SET(me, kHsStrip, strip); G1B_SendV1(me, @selector(addChildModifier:), strip); }
+    return me;
+}
+static double G1C_Hs_Dimming(id self, SEL _cmd, long long role, id layout) { return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(double, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout) : 0.0; }
 static double G1C_Hs_StripProgress(id self, SEL _cmd) { return 0.0; }
 static BOOL G1C_Hs_Grabber(id self, SEL _cmd, id layout) { return NO; }
-static id G1C_Hs_ChildResponse(id self, SEL _cmd, id proposed, id child, id event) {
-    // UNSURE: 16.2 additionally rewrites type-31 (perform transition) responses coming from the peek transition modifier when a peek
-    // ends (appLayoutWithItemsPassingTest: filter, block 0x1c77f3e04). Without the peek-ended event nothing is rewritten here.
-    return G1B_SUPER(id, gHsParent, self, _cmd, (struct objc_super *, SEL, id, id, id), proposed, child, event);
+// the peek-end transformer: a type-31 (add modifier) response of the transition that ends a peek is replaced by the matching zoom / app-to-app transition (level 3)
+static id G1C_Hs_Transform(id self, id event, id resp) {
+    if (G1B_SendLL0(resp, @selector(type)) != 0x1f) return resp;
+    id mod = G1B_Send0(resp, @selector(modifier));
+    Class izc = NSClassFromString(@"SBFullScreenToHomeIconZoomSwitcherModifier"), a2a = NSClassFromString(@"SBContinuousExposeAppToAppModifier");
+    id newMod = nil;
+    id tid = G1B_Send0(event, @selector(transitionID));
+    if (izc && mod && [mod isKindOfClass:izc]) {
+        id layout = G1B_Send0(mod, @selector(appLayout));
+        id from = G1B_Send0(event, @selector(fromAppLayout));
+        id filtered = nil;
+        if (G1C_Resp(layout, @selector(appLayoutWithItemsPassingTest:))) {
+            BOOL (^pass)(id) = ^BOOL(id item) { return !G1B_SendB1(from, @selector(containsItem:), item); };
+            filtered = ((id (*)(id, SEL, id))objc_msgSend)(layout, @selector(appLayoutWithItemsPassingTest:), pass);
+        }
+        CGRect frame = CGRectNull;
+        if (filtered && !G1B_SendB0(event, NSSelectorFromString(@"isIconZoomDisabled")) && G1C_Resp(self, NSSelectorFromString(@"homeScreenIconFrameForAppLayout:")))
+            frame = ((CGRect (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"homeScreenIconFrameForAppLayout:"), filtered);
+        if (!CGRectIsNull(frame)) {
+            SEL ii = NSSelectorFromString(@"initWithTransitionID:appLayout:direction:");
+            if ([izc instancesRespondToSelector:ii]) {
+                newMod = ((id (*)(id, SEL, id, id, long long))objc_msgSend)([izc alloc], ii, tid, filtered, 0);
+                G1B_SendVLL(newMod, NSSelectorFromString(@"setShouldForceDefaultAnchorPointForTransition:"), 1);
+                id loc = G1C_Resp(self, NSSelectorFromString(@"homeScreenIconLocationForAppLayout:")) ? G1B_Send1(self, NSSelectorFromString(@"homeScreenIconLocationForAppLayout:"), filtered) : nil;
+                static BOOL (*contains)(id, id); static dispatch_once_t once;
+                dispatch_once(&once, ^{ contains = (BOOL (*)(id, id))dlsym(RTLD_DEFAULT, "SBIconLocationGroupContainsLocation"); });
+                void *grp = dlsym(RTLD_DEFAULT, "SBIconLocationGroupRoot");           // global NSSet of root locations (0x1d840bbc8)
+                BOOL upd = (contains && grp && loc) ? contains((__bridge id)*(void **)grp, loc) : YES;
+                G1B_SendVLL(newMod, NSSelectorFromString(@"setShouldUpdateIconViewVisibility:"), upd);
+            }
+        }
+    }
+    if (!newMod && a2a) {
+        SEL ai = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:fromInterfaceOrientation:toAppLayout:toInterfaceOrientation:fromDisplayItemLayoutAttributesMap:toDisplayItemLayoutAttributesMap:");
+        if ([a2a instancesRespondToSelector:ai])
+            newMod = ((id (*)(id, SEL, id, id, long long, id, long long, id, id))objc_msgSend)([a2a alloc], ai, tid, G1B_Send0(event, @selector(fromAppLayout)), G1B_SendLL0(event, @selector(fromInterfaceOrientation)),
+                        G1B_Send0(event, @selector(toAppLayout)), G1B_SendLL0(event, @selector(toInterfaceOrientation)), G1B_Send0(event, @selector(fromDisplayItemLayoutAttributesMap)), G1B_Send0(event, @selector(toDisplayItemLayoutAttributesMap)));
+    }
+    Class cc = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
+    SEL ci = NSSelectorFromString(@"initWithModifier:level:");
+    if (!newMod || !cc || ![cc instancesRespondToSelector:ci]) return resp;
+    return ((id (*)(id, SEL, id, long long))objc_msgSend)([cc alloc], ci, newMod, 3);
 }
-
+static id G1C_Hs_ChildResponse(id self, SEL _cmd, id proposed, id child, id event) {
+    id r = G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id, id, id), proposed, child, event);
+    if (G1B_SendLL0(event, @selector(type)) == 1 && G1C_PeekIsValid(G1B_SendLL0(event, @selector(fromPeekConfiguration))) && !G1C_PeekIsValid(G1B_SendLL0(event, @selector(toPeekConfiguration)))
+        && G1C_Resp(r, @selector(responseByTransformingResponseWithTransformer:))) {
+        __unsafe_unretained id us = self;
+        id (^tf)(id) = ^id(id resp) { return G1C_Hs_Transform(us, event, resp); };
+        return ((id (*)(id, SEL, id))objc_msgSend)(r, @selector(responseByTransformingResponseWithTransformer:), tf);
+    }
+    return r;
+}
+static void G1C_InstallHomeScreen(void) {
+    if (!gHsParent || !gStripCls || !BP_OnName("g1c_strip")) return;
+    const G1CPatch p[] = {
+        { "init", (IMP)G1C_Hs_Init, "@16@0:8" },
+        { "continuousExposeStripProgress", (IMP)G1C_Hs_StripProgress, "d16@0:8" },
+        { "isResizeGrabberVisibleForAppLayout:", (IMP)G1C_Hs_Grabber, "B24@0:8@16" },
+        { "responseForProposedChildResponse:childModifier:event:", (IMP)G1C_Hs_ChildResponse, "@40@0:8@16@24@32" },
+        { "appLayoutsToCacheSnapshots", (IMP)G1C_FS_Fwd0, "@16@0:8" }, { "topMostLayoutElements", (IMP)G1C_FS_Fwd0, "@16@0:8" },
+        { "scrollViewContentOffset", (IMP)G1C_FS_FwdPoint, "{CGPoint=dd}16@0:8" },
+    };
+    gSbSwitcherModifierCls = NSClassFromString(@"SBSwitcherModifier");
+    G1C_PatchClass(gHsParent, p, sizeof p / sizeof p[0], "strip(home)");
+    // dimmingAlphaForLayoutRole:inAppLayout: (double, q @) has a different shape
+    SEL ds = NSSelectorFromString(@"dimmingAlphaForLayoutRole:inAppLayout:");
+    Method dm = class_getInstanceMethod(gHsParent, ds);
+    if (dm) class_replaceMethod(gHsParent, ds, (IMP)G1C_Hs_Dimming, method_getTypeEncoding(dm));
+}
+// 16.0-only members that 16.2 removed from the Root and Inline floors (the strip / the VC answer them now): pass-through to the superclass so they stop shadowing the chain.
+static void G1C_ForwardRemoved(Class c, const char *selName, BOOL boolShape) {
+    SEL s = sel_registerName(selName);
+    Method m = c ? class_getInstanceMethod(c, s) : NULL;
+    Class sup = c ? class_getSuperclass(c) : Nil;
+    if (!m) return;
+    Method sm = class_getInstanceMethod(sup, s);
+    if (sm && method_getImplementation(sm) == method_getImplementation(m)) return;            // inherited, not defined here
+    IMP imp;
+    if (boolShape) imp = imp_implementationWithBlock(^BOOL(__unsafe_unretained id me, long long role, id layout) {
+        if (!sm) return NO;
+        struct objc_super sp = { me, sup };
+        return ((BOOL (*)(struct objc_super *, SEL, long long, id))objc_msgSendSuper)(&sp, s, role, layout);
+    });
+    else imp = imp_implementationWithBlock(^id(__unsafe_unretained id me, id a) {
+        if (!sm) return nil;
+        struct objc_super sp = { me, sup };
+        return ((id (*)(struct objc_super *, SEL, id))objc_msgSendSuper)(&sp, s, a);
+    });
+    class_replaceMethod(c, s, imp, method_getTypeEncoding(m));
+}
+static void G1C_InstallRemovedForwarders(void) {
+    if (!gStripCls || !BP_OnName("g1c_strip")) return;
+    Class root = NSClassFromString(@"SBContinuousExposeRootSwitcherModifier"), inl = NSClassFromString(@"SBInlineAppExposeContinuousExposeSwitcherModifier");
+    G1C_ForwardRemoved(root, "appLayoutsForContinuousExposeIdentifier:", NO);
+    G1C_ForwardRemoved(root, "adjustedAppLayoutsForAppLayouts:", NO);
+    G1C_ForwardRemoved(root, "adjustedContinuousExposeIdentifiersForIdentifiers:", NO);
+    G1C_ForwardRemoved(inl, "adjustedContinuousExposeIdentifiersForIdentifiers:", NO);
+    G1C_ForwardRemoved(inl, "shouldSuppressHighlightEffectForLayoutRole:inAppLayout:", YES);
+}
 static BOOL G1C_BuildFloors(void) {
     gInlParent = NSClassFromString(@"SBInlineAppExposeContinuousExposeSwitcherModifier");
     gHsParent = NSClassFromString(@"SBHomeScreenContinuousExposeSwitcherModifier");
@@ -3050,22 +4271,22 @@ static BOOL G1C_BuildFloors(void) {
             { "isItemContainerPointerInteractionEnabled", (IMP)G1C_Inl_Pointer, "B16@0:8" },
             { "frameForIndex:", (IMP)G1C_Inl_FrameForIndex, "{CGRect={CGPoint=dd}{CGSize=dd}}24@0:8Q16" },
             { "_isLayoutRoleOccluded:inAppLayout:", (IMP)G1C_Inl_Occluded, "B32@0:8q16@24" },
+            { "frameForLayoutRole:inAppLayout:withBounds:", (IMP)G1C_Inl_FrameForRole, "{CGRect={CGPoint=dd}{CGSize=dd}}64@0:8q16@24{CGRect={CGPoint=dd}{CGSize=dd}}32" },
+            { "scaleForLayoutRole:inAppLayout:", (IMP)G1C_Inl_ScaleForRole, "d32@0:8q16@24" },
+            { "_scaleForActiveAppLayoutLeafAppLayouts", (IMP)G1C_Inl_ScaleActive, "d16@0:8" },
+            { "_inlineAppExposeAppLayouts", (IMP)G1C_Inl_InlineLayouts, "@16@0:8" },
+            { "homeScreenDimmingAlpha", (IMP)G1C_Inl_HomeDim, "d16@0:8" },
+            { "_canShowReopenClosedWindowsButton", (IMP)G1C_Inl_CanShowSel, "B16@0:8" },
+            { "spaceAccessoryViewIconHitTestOutsetForAppLayout:", (IMP)G1C_Inl_IconOutset, "d24@0:8@16" },
+            { "appExposeAccessoryButtonsBundleIdentifier", (IMP)G1C_Inl_AccBundle, "@16@0:8" },
+            { "appExposeAccessoryButtonsOverrideUserInterfaceStyle", (IMP)G1C_Inl_AccStyle, "q16@0:8" },
+            { "plusButtonAlpha", (IMP)G1C_Inl_PlusAlpha, "d16@0:8" },
+            { "plusButtonStyle", (IMP)G1C_Inl_PlusStyle, "Q16@0:8" },
         };
+        gInlGrand = class_getSuperclass(gInlParent);
         gInlCls = G1B_MakeClass("BP162InlineAppExposeContinuousExposeSwitcherModifier", gInlParent, NULL, 0, m, sizeof m / sizeof m[0], NULL, NULL);
     }
-    if (gHsParent) {
-        const G1BIvar iv[] = { { "_stripModifier", sizeof(id), 3, "@" } };
-        const G1BMethod m[] = {
-            { "init", (IMP)G1C_Hs_Init, "@16@0:8" },
-            { "continuousExposeStripProgress", (IMP)G1C_Hs_StripProgress, "d16@0:8" },
-            { "scrollViewContentOffset", (IMP)G1C_Hs_ContentOffset, "{CGPoint=dd}16@0:8" },
-            { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_Hs_Opacity, "d40@0:8q16@24Q32" },
-            { "isResizeGrabberVisibleForAppLayout:", (IMP)G1C_Hs_Grabber, "B24@0:8@16" },
-            { "responseForProposedChildResponse:childModifier:event:", (IMP)G1C_Hs_ChildResponse, "@40@0:8@16@24@32" },
-        };
-        gHsCls = G1B_MakeClass("BP162HomeScreenContinuousExposeSwitcherModifier", gHsParent, iv, 1, m, sizeof m / sizeof m[0], NULL, NULL);
-    }
-    return gInlCls || gHsCls;
+    return gInlCls != Nil;
 }
 static id G1C_NewInlineAppExpose(id activeLayout, NSString *bundleID) {
     Class c = gInlCls ?: gInlParent;
@@ -3074,8 +4295,7 @@ static id G1C_NewInlineAppExpose(id activeLayout, NSString *bundleID) {
     return G1C_Send2([c alloc], s, activeLayout, bundleID);
 }
 static id G1C_NewHomeModifier(void) {
-    Class c = gHsCls ?: gHsParent;
-    return c ? [[c alloc] init] : nil;
+    return gHsParent ? [[gHsParent alloc] init] : nil;
 }
 
 // ============================================================================================================
@@ -3750,10 +4970,7 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
         }
         case 3: {
             if (!exposeID) {
-                NSString *amb = G1C_Resp(event, @selector(ambiguouslyLaunchedBundleIDIfAny)) ? G1B_Send0(event, @selector(ambiguouslyLaunchedBundleIDIfAny)) : nil;
-                NSString *pile = (floor && G1C_Resp(floor, @selector(appPileBundleIDToBringForwardIfAny))) ? G1B_Send0(floor, @selector(appPileBundleIDToBringForwardIfAny)) : nil;
-                if (floor && [floor isKindOfClass:fsC] && toAL && G1C_Resp(floor, @selector(fullScreenAppLayout)) && [G1B_Send0(floor, @selector(fullScreenAppLayout)) isEqual:toAL]
-                    && (pile == amb || [pile isEqualToString:amb])) return floor;
+                if (floor && [floor isKindOfClass:fsC] && toAL && G1C_Resp(floor, @selector(fullScreenAppLayout)) && [G1B_Send0(floor, @selector(fullScreenAppLayout)) isEqual:toAL]) return floor;      // 16.2 FullScreen has no pile / displacement state
                 id fs = toAL ? G1C_NewFullScreenModifier(toAL) : nil;
                 if (!fs) return %orig;
                 if (floor && [floor isKindOfClass:fsC]) {                                                  // carry the highlight sets
@@ -3762,9 +4979,6 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
                     if (t && [fs respondsToSelector:@selector(setHighlightedByTouchAppLayouts:)]) G1B_SendV1(fs, @selector(setHighlightedByTouchAppLayouts:), t);
                     if (h && [fs respondsToSelector:@selector(setHighlightedByHoverAppLayouts:)]) G1B_SendV1(fs, @selector(setHighlightedByHoverAppLayouts:), h);
                 }
-                if ([fs respondsToSelector:@selector(setAppPileBundleIDToBringForwardIfAny:)]) G1B_SendV1(fs, @selector(setAppPileBundleIDToBringForwardIfAny:), amb);
-                if (floor && [fs respondsToSelector:@selector(setFullScreenAppDisplacementState:)] && G1C_Resp(floor, @selector(fullScreenAppDisplacementState)))
-                    G1B_SendVLL(fs, @selector(setFullScreenAppDisplacementState:), G1B_SendLL0(floor, @selector(fullScreenAppDisplacementState)));
                 return fs;
             }
             Class inl = gInlCls ?: gInlParent;
@@ -4093,7 +5307,7 @@ static void G1C_InstallHomeToGrid(void) {
 //    slot, size 1056x646 with g2defsize) at scale 0.8: right edge -227 + 528 * 0.8 = 195 pt, bottom 210.5 + 323 * 0.8 = 469 pt, top above the screen = exactly the video.
 // Fix: (a) the root's transition child gets flag = flag && !chamois in the 1 -> 1 branch (the only branch 16.2 masks), (b) the modifier's frameForIndex: / scaleForIndex: honour
 // the flag like 16.2. Off switch: Backport162.off.g1c_flyin.   Logging (debug): "GLITCH home gesture ..." lines.
-static IMP gFlyFrameOrig, gFlyScaleOrig, gFlyRootOrig;
+static IMP gFlyFrameOrig, gFlyScaleOrig;
 static Class gFlyCls;
 static NSString *gFlyLastSig[2];
 static BOOL G1C_Fly_Stock(id self) {
@@ -4116,33 +5330,547 @@ static double G1C_Fly_Scale(id self, SEL _cmd, unsigned long long i) {
     if (G1C_Fly_Stock(self)) return ((double (*)(id, SEL, unsigned long long))gFlyScaleOrig)(self, _cmd, i);
     return G1B_SUPER(double, class_getSuperclass(gFlyCls), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
-static id G1C_Fly_Root(id self, SEL _cmd, id event, id gesture) {
-    id r = ((id (*)(id, SEL, id, id))gFlyRootOrig)(self, _cmd, event, gesture);
-    if (!r || !G1C_ON() || !BP_OnName("g1c_flyin") || !gFlyCls || ![r isKindOfClass:gFlyCls]) {
-        if (r && BP_LogEnabled()) BP_Log(@"GLITCH home gesture root: transition child %@ for modes %lld->%lld", G1C_DbgCls(r), G1B_SendLL0(event, @selector(fromEnvironmentMode)), G1B_SendLL0(event, @selector(toEnvironmentMode)));
-        return r;
-    }
-    long long from = G1B_SendLL0(event, @selector(fromEnvironmentMode)), to = G1B_SendLL0(event, @selector(toEnvironmentMode));
-    BOOL chamois = G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled));
-    BOOL was = G1C_IvarBool(r, "_showingOrAnimatingCardsForFlyIn");
-    if (to == 1 && from == 1 && chamois && was) G1C_SetIvarBool(r, "_showingOrAnimatingCardsForFlyIn", NO);     // 16.2 0x1c78ede2c: flag = flyIn ? !chamois : NO (this branch only)
-    if (BP_LogEnabled()) BP_Log(@"GLITCH home gesture root: transition child %@ for modes %lld->%lld chamois=%d flyIn %d -> %d", G1C_DbgCls(r), from, to, chamois, was, G1C_IvarBool(r, "_showingOrAnimatingCardsForFlyIn"));
-    return r;
-}
 static void G1C_InstallFlyInFix(void) {
     gFlyCls = NSClassFromString(@"SBHomeGestureToHomeSwitcherModifier");
-    Class root = NSClassFromString(@"SBHomeGestureRootSwitcherModifier");
-    if (!gFlyCls || !root || !class_getInstanceVariable(gFlyCls, "_showingOrAnimatingCardsForFlyIn")) return;
+    if (!gFlyCls || !class_getInstanceVariable(gFlyCls, "_showingOrAnimatingCardsForFlyIn")) return;
     struct { SEL sel; IMP imp; IMP *orig; Class cls; } t[] = {
         { @selector(frameForIndex:), (IMP)G1C_Fly_Frame, &gFlyFrameOrig, gFlyCls },
         { @selector(scaleForIndex:), (IMP)G1C_Fly_Scale, &gFlyScaleOrig, gFlyCls },
-        { NSSelectorFromString(@"transitionChildModifierForMainTransitionEvent:activeGestureModifier:"), (IMP)G1C_Fly_Root, &gFlyRootOrig, root },
     };
     for (size_t k = 0; k < sizeof t / sizeof t[0]; k++) if (!class_getInstanceMethod(t[k].cls, t[k].sel)) { gFlyCls = Nil; return; }      // not the expected 16.0 shape: stay stock
     for (size_t k = 0; k < sizeof t / sizeof t[0]; k++) {
         Method m = class_getInstanceMethod(t[k].cls, t[k].sel);
         IMP old = class_replaceMethod(t[k].cls, t[k].sel, t[k].imp, method_getTypeEncoding(m));
         *t[k].orig = old ?: method_getImplementation(m);
+    }
+}
+// ============================================================================================================
+// 7.1  Home gesture family and the PIP transitions                                          (switches: g1c_homegesture, g1c_pip)
+// ============================================================================================================
+// 16.2 ported 1:1 (20C65 / 20A8372 addresses in the comments):
+//   SBHomeGestureRootSwitcherModifier.gestureChildModifierForGestureEvent:activeTransitionModifier:  0x1c78edb44 (160 0x1c643c05c)
+//   SBHomeGestureRootSwitcherModifier.transitionChildModifierForMainTransitionEvent:activeGestureModifier: 0x1c78edd24 (160 0x1c643c20c)
+//   SBHomeGestureSwitcherModifier.didMoveToParentModifier: 0x1c74b4138 (insertion over identical 16.0 code), appLayoutsToCacheSnapshots 0x1c74b7b80, appLayoutsToCacheFullsizeSnapshots 0x1c74b7c54
+//   SBReduceMotionHomeGestureSwitcherModifier: scaleForIndex: 0x1c78692d4, cornerRadiiForIndex: 0x1c7869470, homeScreenBackdropBlurType 0x1c78694d8 + shouldProvideBlur / laysOutNeighboringCards
+//   SBFullScreenToHomePIPSwitcherModifier (init 0x1c77ded80, transitionWillBegin 0x1c77def90, clippingFrameForLayoutRole.. 0x1c77df4b8, clipsToBoundsAtIndex: 0x1c77df5f8, visibleAppLayouts 0x1c77df5fc,
+//     anchorPointForIndex: .. adjustedSpaceAccessoryView* 0x1c77df894..0x1c77dfb90, force flag 0x1c77dff8c)
+//   SBPIPRestoreToFullScreenSwitcherModifier (init 0x1c764d4ac, transitionWillBegin 0x1c764d5d0, frameForIndex: 0x1c764d6fc, clippingFrameForIndex: 0x1c764d7d4, clippingFrameForLayoutRole.. 0x1c764d8d8,
+//     _insetFrameForDiffuseShadowRadius: 0x1c764da68, animationAttributesForLayoutElement: 0x1c764dc18, opacityForLayoutRole.. 0x1c764e140, _is{From,To,ToOrFrom}AppLayout[Index]: 0x1c764e1d0..0x1c764e324, flags, anchor family)
+// Methods 16.2 left byte-identical (verified by annotated listing diffs: PIP completesWhenChildrenComplete / didMoveToParentModifier: / handleHideMorphToPIPAppLayoutEvent: / scaleForIndex: / rotationAngleForIndex: /
+// cornerRadiiForIndex: / opacity.. / topMostLayoutElements; PIPRestore scaleForIndex: / visibleAppLayouts / cornerRadiiForIndex:(reordered only) / _layoutSettings) stay the 16.0 methods of the same class. The 16.0
+// private `_isToAppLayout:` / `_isFromAppLayout:` (index form) stay too, because the unchanged 16.0 methods call them; the 16.2 object form `_isToAppLayout:` is a static helper here (nobody else calls it).
+static Class gHgRootC, gHgSwC, gHgRmC, gPipC, gPipRC;
+static IMP gHgRootTransOrig, gHgRootChildOrig, gHgSwDidMoveOrig;
+static BOOL G1C_HG_On(void) { return G1C_ON() && BP_OnName("g1c_homegesture"); }
+static void G1C_SendVRect(id o, SEL s, CGRect r) { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, CGRect))objc_msgSend)(o, s, r); }
+
+// ---- event / response data the 16.0 classes lack ----
+static char kEvPipRole, kSetupBBox;
+static long long G1C_Ev_GetPipRole(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kEvPipRole) longLongValue]; }
+static void G1C_Ev_SetPipRole(id self, SEL _cmd, long long v) { G1B_SET(self, kEvPipRole, @(v)); }
+static CGRect G1C_Setup_GetBBox(id self, SEL _cmd) { NSValue *v = G1B_GET(self, kSetupBBox); return v ? [v CGRectValue] : CGRectZero; }
+static void G1C_Setup_SetBBox(id self, SEL _cmd, CGRect r) { G1B_SET(self, kSetupBBox, [NSValue valueWithCGRect:r]); }
+
+// ---- SBHomeGestureRootSwitcherModifier.gestureChildModifierForGestureEvent:activeTransitionModifier:  (0x1c78edb44) ----
+static id G1C_HGR_GestureChild(id self, SEL _cmd, id event, id active) {
+    if (!G1C_HG_On()) return ((id (*)(id, SEL, id, id))gHgRootChildOrig)(self, _cmd, event, active);
+    id sel = G1B_Send0(self, @selector(selectedAppLayout));
+    long long mode = G1B_SendLL0(self, @selector(currentEnvironmentMode));
+    Class arc = NSClassFromString(@"SBArcSwipeSwitcherModifier");
+    BOOL lastArc = active && arc && [active isKindOfClass:arc], continuing = active != nil;
+    BOOL scrunch = G1B_SendLL0(event, @selector(type)) == 4, reduce = G1B_SendB0(self, @selector(isReduceMotionEnabled));
+    id gid = G1B_Send0(event, @selector(gestureID));
+    BOOL chamois = G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled));
+    if (reduce) {
+        Class c = NSClassFromString(@"SBReduceMotionHomeGestureSwitcherModifier");
+        SEL i = NSSelectorFromString(@"initWithGestureID:selectedAppLayout:startingEnvironmentMode:scrunchInitiated:continuingGesture:lastGestureWasAnArcSwipe:");
+        id o = (c && [c instancesRespondToSelector:i]) ? ((id (*)(id, SEL, id, id, long long, BOOL, BOOL, BOOL))objc_msgSend)([c alloc], i, gid, sel, mode, scrunch, continuing, lastArc) : nil;
+        G1C_SendVB(o, NSSelectorFromString(@"setShouldProvideBlur:"), !chamois);
+        G1C_SendVB(o, NSSelectorFromString(@"setLaysOutNeighboringCards:"), !chamois);
+        return o;
+    }
+    id mm = G1B_Send0(self, NSSelectorFromString(@"_newMultitaskingModifier"));
+    Class c = NSClassFromString(@"SBHomeGestureSwitcherModifier");
+    SEL i = NSSelectorFromString(@"initWithGestureID:selectedAppLayout:startingEnvironmentMode:multitaskingModifier:scrunchInitiated:continuingGesture:lastGestureWasAnArcSwipe:");
+    id o = (c && [c instancesRespondToSelector:i]) ? ((id (*)(id, SEL, id, id, long long, id, BOOL, BOOL, BOOL))objc_msgSend)([c alloc], i, gid, sel, mode, mm, scrunch, continuing, lastArc) : nil;
+    G1C_SendVB(o, NSSelectorFromString(@"setProvidesHomeScreenDimmingAlpha:"), !chamois);
+    return o;
+}
+
+// ---- SBHomeGestureRootSwitcherModifier.transitionChildModifierForMainTransitionEvent:activeGestureModifier:  (0x1c78edd24) ----
+static id G1C_HG_FlyInFallback(id tid) {                                              // 0x1c78ee144
+    Class c = NSClassFromString(@"SBHomeGestureToHomeSwitcherModifier");
+    SEL s = NSSelectorFromString(@"initWithTransitionID:showingOrAnimatingCardsForFlyIn:");
+    return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, BOOL))objc_msgSend)([c alloc], s, tid, YES) : nil;
+}
+static id G1C_HG_Wrap(id tid, id sel, id zoom, long long fromMode, CGPoint velocity, BOOL adjust) {            // 0x1c78ee194 / 0x1c78ee0bc: SBHomeGestureToZoomDownSwitcherModifier
+    Class c = NSClassFromString(@"SBHomeGestureToZoomDownSwitcherModifier");
+    SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:nonGestureInitiatedZoomModifier:effectiveStartingEnvironmentMode:liftOffVelocity:adjustAnimationAttributes:");
+    return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, id, long long, CGPoint, BOOL))objc_msgSend)([c alloc], s, tid, sel, zoom, fromMode, velocity, adjust) : nil;
+}
+static id G1C_PIP_New(id tid, id appLayout, long long role);
+static id G1C_HGR_TransitionChild(id self, SEL _cmd, id event, id gestureMod) {
+    if (!G1C_HG_On()) return ((id (*)(id, SEL, id, id))gHgRootTransOrig)(self, _cmd, event, gestureMod);
+    long long to = G1B_SendLL0(event, @selector(toEnvironmentMode)), from = G1B_SendLL0(event, @selector(fromEnvironmentMode));
+    id tid = G1B_Send0(event, @selector(transitionID)), sel = G1B_Send0(self, @selector(selectedAppLayout));
+    long long cur = G1B_SendLL0(self, @selector(currentEnvironmentMode));
+    long long style = G1B_SendLL0(G1B_Send0(self, @selector(switcherSettings)), NSSelectorFromString(@"effectiveSwitcherStyle"));
+    BOOL reduce = G1B_SendB0(self, @selector(isReduceMotionEnabled)), chamois = G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled)), flyIn = NO;
+    CGPoint velo = CGPointZero, trans = CGPointZero;
+    if (!reduce) {
+        Class hs = NSClassFromString(@"SBHomeGestureSwitcherModifier");
+        if (!gestureMod || !hs || ![gestureMod isKindOfClass:hs]) {                  // 16.2 NSAssert (SBHomeGestureRootSwitcherModifier.m line 0x5f): "the gesture modifier should be an instance of SBHomeGestureSwitcherModifier"
+            if (BP_LogEnabled()) BP_Log(@"GUARD home gesture root: gesture modifier %@ is not an SBHomeGestureSwitcherModifier (16.2 asserts)", G1C_DbgCls(gestureMod));
+            return nil;
+        }
+        flyIn = G1B_SendB0(gestureMod, @selector(isShowingOrAnimatingCardsForFlyIn)) ? !chamois : NO;
+        velo = G1C_SendPoint0(gestureMod, @selector(liftOffVelocityForGestureEnd));
+        trans = G1C_SendPoint0(gestureMod, @selector(liftOffTranslationForGestureEnd));
+    }
+    BOOL pin = G1B_SendB0(self, NSSelectorFromString(@"ensuresSelectedAppLayoutUsesAnchorPointSpacePinning"));
+    SEL setForce = NSSelectorFromString(@"setShouldForceDefaultAnchorPointForTransition:");
+    if (to == 3) {                                                                   // -> app switcher
+        Class c = NSClassFromString(@"SBArcSwipeSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:pinSpaceCornerRadiiToDisplayCornerRadii:");
+        return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, id, BOOL))objc_msgSend)([c alloc], s, tid, G1B_Send0(event, @selector(fromAppLayout)), G1B_Send0(event, @selector(toAppLayout)), !chamois) : nil;
+    }
+    if (to == 2) {                                                                   // -> multitasking (0x1c78edf08)
+        BOOL resigns = G1B_SendB0(self, @selector(resignsTransitionIntoAppSwitcher));
+        if (resigns && style != 1 && !G1C_PeekIsValid(G1B_SendLL0(event, @selector(toPeekConfiguration)))) return nil;
+        id mm = G1B_Send0(self, NSSelectorFromString(@"_newMultitaskingModifier"));
+        Class c = NSClassFromString(@"SBHomeGestureToSwitcherSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:multitaskingModifier:selectedAppLayout:startingEnvironmentMode:liftOffVelocity:liftOffTranslation:adjustAppLayoutsBeforeTransition:");
+        return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, id, long long, CGPoint, CGPoint, BOOL))objc_msgSend)([c alloc], s, tid, mm, sel, cur, velo, trans, chamois) : nil;
+    }
+    if (to != 1) return nil;
+    if (from == 1) {                                                                 // 1 -> 1: the fly-in card
+        Class c = NSClassFromString(@"SBHomeGestureToHomeSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:showingOrAnimatingCardsForFlyIn:");
+        return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, BOOL))objc_msgSend)([c alloc], s, tid, flyIn) : nil;
+    }
+    id zoom = nil; BOOL adjust = YES;
+    if (G1B_SendB0(event, @selector(isMorphToPIPTransition))) {                      // 0x1c78edf94
+        if (!sel) return G1C_HG_FlyInFallback(tid);
+        zoom = G1C_PIP_New(tid, sel, G1B_SendLL0(event, NSSelectorFromString(@"morphingPIPLayoutRole")));
+        if (chamois) G1C_SendVB(zoom, setForce, YES);
+    } else if (((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, NSSelectorFromString(@"shouldZoomToSystemApertureForEvent:activeLayout:"), event, sel)) {                                // shouldZoomToSystemApertureForEvent:activeLayout:  0x1c78edff8
+        if (!sel) return G1C_HG_FlyInFallback(tid);
+        NSArray *ls = G1B_Send0(self, @selector(appLayouts));
+        unsigned long long idx = [ls indexOfObject:sel];
+        CGRect fr = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(frameForIndex:), idx);
+        double sc = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(scaleForIndex:), idx);
+        Class c = NSClassFromString(@"SBFullScreenToHomeSystemApertureSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:direction:expandedCardFrame:cardScale:cardVelocity:");
+        zoom = (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, id, long long, CGRect, double, CGPoint))objc_msgSend)([c alloc], s, tid, nil, sel, 1, fr, sc, velo) : nil;
+        adjust = NO;
+    } else {
+        CGRect icon = G1B_SendB0(event, NSSelectorFromString(@"isIconZoomDisabled")) ? CGRectNull
+                      : ((CGRect (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"homeScreenIconFrameForAppLayout:"), sel);
+        if (CGRectIsNull(icon) || reduce) {                                          // centre zoom down (0x1c78ee0f4): returned as is
+            if (!sel) return G1C_HG_FlyInFallback(tid);
+            double factor = G1B_Dbl0(G1B_Send0(self, NSSelectorFromString(@"homeGestureSettings")), NSSelectorFromString(@"homeGestureCenterZoomDownCenterYOffsetFactor"));
+            Class c = NSClassFromString(@"SBFullScreenToHomeCenterZoomDownSwitcherModifier");
+            SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:offsetYPercentOfScreenHeight:");
+            id cz = (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, double))objc_msgSend)([c alloc], s, tid, sel, factor) : nil;
+            G1C_SendVB(cz, setForce, pin);
+            return cz;
+        }
+        Class c = NSClassFromString(@"SBFullScreenToHomeIconZoomSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:direction:");
+        if (!sel) return G1C_HG_FlyInFallback(tid);
+        zoom = (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, long long))objc_msgSend)([c alloc], s, tid, sel, 1) : nil;
+        G1C_SendVB(zoom, setForce, pin);
+    }
+    return G1C_HG_Wrap(tid, sel, zoom, from, velo, adjust);
+}
+
+// ---- SBHomeGestureSwitcherModifier ----
+// didMoveToParentModifier: (16.2 0x1c74b4138): the 16.0 body (0x1c6038bac) is identical (annotated listing diff) except for ONE insertion in the "starting from home" branch: when the gesture does not provide the
+// home screen dimming alpha (Stage Manager), _toHomeScreenAlpha = [super homeScreenAlpha] and _toHomeScreenBlurProgress = animationSettings.homeScreenBlurProgressForMode:2 replace the values read from the
+// multitasking child. Nothing between the insertion and the end of the method reads those two ivars, so the insertion runs after the (identical) 16.0 code.
+static void G1C_HGS_DidMove(id self, SEL _cmd, id parent) {
+    ((void (*)(id, SEL, id))gHgSwDidMoveOrig)(self, _cmd, parent);
+    if (!G1C_HG_On() || !parent || G1C_IvarLL(self, "_startingEnvironmentMode") != 1 || G1C_IvarBool(self, "_providesHomeScreenDimmingAlpha")) return;
+    G1C_SetIvarD(self, "_toHomeScreenAlpha", G1B_SUPER(double, class_getSuperclass(gHgSwC), self, @selector(homeScreenAlpha), (struct objc_super *, SEL)));
+    id anim = G1B_Send0(G1B_Send0(self, @selector(switcherSettings)), @selector(animationSettings));
+    G1C_SetIvarD(self, "_toHomeScreenBlurProgress", ((double (*)(id, SEL, long long))objc_msgSend)(anim, NSSelectorFromString(@"homeScreenBlurProgressForMode:"), 2));
+}
+// 0x1c74b7b80  (the 16.0 version asserted that _selectedAppLayout is in appLayouts; 16.2 starts at 0)
+static id G1C_HGS_CacheSnapshots(id self, SEL _cmd) {
+    NSArray *ls = G1B_Send0(self, @selector(appLayouts));
+    if (ls.count == 0) return @[];
+    id sel = G1C_IvarObj(self, "_selectedAppLayout");
+    unsigned long long idx = sel ? [ls indexOfObject:sel] : 0;
+    if (idx == NSNotFound) idx = 0;
+    id sw = G1B_Send0(self, @selector(switcherSettings));
+    long long n = G1B_SendLL0(sw, NSSelectorFromString(@"numberOfSnapshotsToAlwaysKeepAround"));
+    if (n == 0) n = G1B_SendLL0(sw, NSSelectorFromString(@"numberOfSnapshotsToCacheInSwitcher"));
+    return ((id (*)(id, SEL, NSRange, long long, BOOL))objc_msgSend)(self, NSSelectorFromString(@"appLayoutsToCacheSnapshotsWithVisibleRange:numberOfSnapshotsToCache:biasForward:"), NSMakeRange(idx, 1), n, YES);
+}
+// 0x1c74b7c54  (NSNotFound -> the first layout only, like "no selection")
+static id G1C_HGS_CacheFullsize(id self, SEL _cmd) {
+    NSArray *ls = G1B_Send0(self, @selector(appLayouts));
+    id sel = G1C_IvarObj(self, "_selectedAppLayout");
+    NSUInteger loc = 0, len = 1;
+    if (sel) {
+        NSUInteger idx = [ls indexOfObject:sel];
+        if (idx == 0) { loc = 0; len = 2; }
+        else if (idx != NSNotFound) { loc = idx - 1; len = 3; }
+    }
+    return [ls subarrayWithRange:NSIntersectionRange(NSMakeRange(loc, len), NSMakeRange(0, ls.count))];
+}
+
+// ---- SBReduceMotionHomeGestureSwitcherModifier ----
+static char kRmBlur, kRmNeighbors;
+static BOOL G1C_Rm_GetBlur(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kRmBlur) boolValue]; }
+static void G1C_Rm_SetBlur(id self, SEL _cmd, BOOL v) { G1B_SET(self, kRmBlur, @(v)); }
+static BOOL G1C_Rm_GetNeighbors(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kRmNeighbors) boolValue]; }
+static void G1C_Rm_SetNeighbors(id self, SEL _cmd, BOOL v) { G1B_SET(self, kRmNeighbors, @(v)); }
+static double G1C_Rm_Scale(id self, SEL _cmd, unsigned long long i) {                 // 0x1c78692d4
+    if (G1C_Rm_GetNeighbors(self, 0)) return 1.0;
+    return G1B_SUPER(double, class_getSuperclass(gHgRmC), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static G1CRadii G1C_Rm_Radii(id self, SEL _cmd, unsigned long long i) {               // 0x1c7869470
+    if (G1C_Rm_GetNeighbors(self, 0)) { double r = G1B_Dbl0(self, NSSelectorFromString(@"displayCornerRadius")); G1CRadii o = { r, r, r, r }; return o; }
+    return G1B_SUPER(G1CRadii, class_getSuperclass(gHgRmC), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static long long G1C_Rm_BlurType(id self, SEL _cmd) {                                 // 0x1c78694d8
+    if (G1C_Rm_GetBlur(self, 0)) return G1C_IvarLL(self, "_startingEnvironmentMode") == 1 ? 2 : 1;
+    return G1B_SUPER(long long, class_getSuperclass(gHgRmC), self, _cmd, (struct objc_super *, SEL));
+}
+
+// ---- SBFullScreenToHomePIPSwitcherModifier ----
+static char kPipRole, kPipForce;
+static Class gPipSuper;
+static id G1C_PIP_New(id tid, id appLayout, long long role) {
+    Class c = NSClassFromString(@"SBFullScreenToHomePIPSwitcherModifier");
+    SEL s4 = NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:layoutRole:"), s3 = NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:");
+    if (c && [c instancesRespondToSelector:s4]) return ((id (*)(id, SEL, id, id, id, long long))objc_msgSend)([c alloc], s4, tid, nil, appLayout, role);
+    return (c && [c instancesRespondToSelector:s3]) ? ((id (*)(id, SEL, id, id, id))objc_msgSend)([c alloc], s3, tid, nil, appLayout) : nil;      // g1c_pip off: the stock 16.0 init
+}
+// 0x1c77ded80: the 16.0 3-argument init (0x1c633b448) is this body without the layout role (annotated listing diff); the role is write-only state in 16.2
+static id G1C_Pip_Init4(id self, SEL _cmd, id tid, id zoom, id appLayout, long long role) {
+    id me = ((id (*)(id, SEL, id, id, id))objc_msgSend)(self, NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:"), tid, zoom, appLayout);
+    if (me) G1B_SET(me, kPipRole, @(role));
+    return me;
+}
+static BOOL G1C_Pip_GetForce(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kPipForce) boolValue]; }
+static void G1C_Pip_SetForce(id self, SEL _cmd, BOOL v) { G1B_SET(self, kPipForce, @(v)); }
+static BOOL G1C_Pip_IsSel(id self, unsigned long long i) { return ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(self, NSSelectorFromString(@"_isIndexSelectedAppLayout:"), i); }
+static id G1C_Pip_WillBegin(id self, SEL _cmd) {                                      // 0x1c77def90
+    id r = G1B_SUPER(id, gPipSuper, self, _cmd, (struct objc_super *, SEL));
+    Class gc = NSClassFromString(@"SBSwitcherModifierEventResponse"), sc = NSClassFromString(@"SBSetupPIPMorphingSwitcherEventResponse");
+    id group = [[gc alloc] init], hide = G1C_NewStripsPresentationResponse(0, 1), setup = [[sc alloc] init];
+    id model = G1B_Send1(self, NSSelectorFromString(@"overlappingModelForAppLayout:"), G1C_IvarObj(self, "_appLayout"));
+    G1C_SendVRect(setup, NSSelectorFromString(@"setAppLayoutBoundingBox:"), model ? G1C_SendRect0(model, NSSelectorFromString(@"boundingBox")) : CGRectZero);
+    id r2 = G1B_Append(hide, r);
+    G1B_SendV1(group, NSSelectorFromString(@"addChildResponse:"), r2);
+    G1B_SendV1(group, NSSelectorFromString(@"addChildResponse:"), G1B_NewUpdateLayoutResponse(2, 2));
+    G1B_SendV1(group, NSSelectorFromString(@"addChildResponse:"), setup);
+    return G1C_AppendResp(r, group);
+}
+static CGRect G1C_Pip_ClipRole(id self, SEL _cmd, long long role, id layout, unsigned long long idx, CGRect bounds) {      // 0x1c77df4b8
+    if (!G1C_Pip_IsSel(self, idx) || G1B_SendB0(self, @selector(isPreparingLayout)))
+        return G1B_SUPER(CGRect, gPipSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long, CGRect), role, layout, idx, bounds);
+    CGRect clip = G1C_SendRect0(self, NSSelectorFromString(@"morphToPIPClippingFrame"));
+    CGRect f = ((CGRect (*)(id, SEL, long long, id, CGRect))objc_msgSend)(self, @selector(frameForLayoutRole:inAppLayout:withBounds:), role, layout, bounds);
+    return CGRectOffset(clip, -f.origin.x, -f.origin.y);
+}
+static BOOL G1C_Pip_Clips(id self, SEL _cmd, unsigned long long i) { return G1C_Pip_IsSel(self, i); }                  // 0x1c77df5f8
+static id G1C_Pip_Visible(id self, SEL _cmd) {                                                                          // 0x1c77df5fc
+    id s = G1B_SUPER(id, gPipSuper, self, _cmd, (struct objc_super *, SEL));
+    return G1B_Send1(s, @selector(setByAddingObject:), G1C_IvarObj(self, "_appLayout"));
+}
+static CGPoint G1C_Pip_Anchor(id self, SEL _cmd, unsigned long long i) {                                               // 0x1c77df894
+    if (G1C_Pip_GetForce(self, 0) && G1C_Pip_IsSel(self, i)) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gPipSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static BOOL G1C_Pip_Pin(id self, SEL _cmd, unsigned long long i) {                                                      // 0x1c77df908 / 0x1c77df97c
+    if (G1C_Pip_GetForce(self, 0) && G1C_Pip_IsSel(self, i)) return YES;
+    return G1B_SUPER(BOOL, gPipSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_Pip_Persp(id self, SEL _cmd, id layout) {                                                             // 0x1c77df9f0
+    if (G1C_Pip_GetForce(self, 0) && [layout isEqual:G1C_IvarObj(self, "_appLayout")]) return 0.0;
+    return G1B_SUPER(double, gPipSuper, self, _cmd, (struct objc_super *, SEL, id), layout);
+}
+static CGRect G1C_Pip_AccFrame(id self, SEL _cmd, CGRect f, id layout) {                                                // 0x1c77dfa80
+    id al = G1C_IvarObj(self, "_appLayout");
+    if (G1C_Pip_GetForce(self, 0) && [layout isEqual:al]) {
+        NSUInteger i = [(NSArray *)G1B_Send0(self, @selector(appLayouts)) indexOfObject:al];
+        return ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(frameForIndex:), i);
+    }
+    return G1B_SUPER(CGRect, gPipSuper, self, _cmd, (struct objc_super *, SEL, CGRect, id), f, layout);
+}
+static CGPoint G1C_Pip_AccAnchor(id self, SEL _cmd, CGPoint p, id layout) {                                             // 0x1c77dfb90
+    if (G1C_Pip_GetForce(self, 0) && [layout isEqual:G1C_IvarObj(self, "_appLayout")]) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gPipSuper, self, _cmd, (struct objc_super *, SEL, CGPoint, id), p, layout);
+}
+
+// ---- SBPIPRestoreToFullScreenSwitcherModifier ----
+static char kPrRole, kPrBBox, kPrShadow, kPrForce;
+static Class gPipRSuper;
+static BOOL G1C_PipR_Flag(id self, char *k) { return [(NSNumber *)objc_getAssociatedObject(self, k) boolValue]; }
+static id G1C_PipR_Init5(id self, SEL _cmd, id tid, id zoom, id from, id to, long long role) {                          // 0x1c764d4ac (16.0 init 0x1c61bf2cc is the same body without the role)
+    id me = ((id (*)(id, SEL, id, id, id, id))objc_msgSend)(self, NSSelectorFromString(@"initWithTransitionID:zoomModifier:fromAppLayout:toAppLayout:"), tid, zoom, from, to);
+    if (me) G1B_SET(me, kPrRole, @(role));
+    return me;
+}
+static BOOL G1C_PipR_GetShadow(id self, SEL _cmd) { return G1C_PipR_Flag(self, &kPrShadow); }
+static void G1C_PipR_SetShadow(id self, SEL _cmd, BOOL v) { G1B_SET(self, kPrShadow, @(v)); }
+static BOOL G1C_PipR_GetForce(id self, SEL _cmd) { return G1C_PipR_Flag(self, &kPrForce); }
+static void G1C_PipR_SetForce(id self, SEL _cmd, BOOL v) { G1B_SET(self, kPrForce, @(v)); }
+static BOOL G1C_PipR_IsToObj(id self, id layout) { return [layout isEqual:G1C_IvarObj(self, "_toAppLayout")]; }                       // 0x1c764e2a8
+static BOOL G1C_PipR_IsFromObj(id self, id layout) { return [layout isEqual:G1C_IvarObj(self, "_fromAppLayout")]; }
+static BOOL G1C_PipR_IsToOrFromObj(id self, SEL _cmd, id layout) { return G1C_PipR_IsFromObj(self, layout) || G1C_PipR_IsToObj(self, layout); }      // 0x1c764e2c0 (from first)
+static id G1C_PipR_LayoutAt(id self, unsigned long long i) { NSArray *ls = G1B_Send0(self, @selector(appLayouts)); return i < ls.count ? ls[i] : nil; }
+static BOOL G1C_PipR_IsFromIdx(id self, SEL _cmd, unsigned long long i) { return G1C_PipR_IsFromObj(self, G1C_PipR_LayoutAt(self, i)); }          // 0x1c764e1d0
+static BOOL G1C_PipR_IsToIdx(id self, SEL _cmd, unsigned long long i) { return G1C_PipR_IsToObj(self, G1C_PipR_LayoutAt(self, i)); }              // 0x1c764e23c
+static BOOL G1C_PipR_IsToOrFromIdx(id self, SEL _cmd, unsigned long long i) { return G1C_PipR_IsToOrFromObj(self, 0, G1C_PipR_LayoutAt(self, i)); }  // 0x1c764e324
+static id G1C_PipR_WillBegin(id self, SEL _cmd) {                                     // 0x1c764d5d0
+    id r = G1B_SUPER(id, gPipRSuper, self, _cmd, (struct objc_super *, SEL));
+    Class gc = NSClassFromString(@"SBSwitcherModifierEventResponse"), sc = NSClassFromString(@"SBSetupPIPMorphingSwitcherEventResponse");
+    id group = [[gc alloc] init], setup = [[sc alloc] init];
+    G1B_SendV1(group, NSSelectorFromString(@"addChildResponse:"), G1B_NewUpdateLayoutResponse(2, 2));
+    id model = G1B_Send1(self, NSSelectorFromString(@"overlappingModelForAppLayout:"), G1C_IvarObj(self, "_toAppLayout"));
+    CGRect bb = model ? G1C_SendRect0(model, NSSelectorFromString(@"boundingBox")) : CGRectZero;
+    G1B_SET(self, kPrBBox, [NSValue valueWithCGRect:bb]);
+    G1C_SendVRect(setup, NSSelectorFromString(@"setAppLayoutBoundingBox:"), bb);
+    G1B_SendV1(group, NSSelectorFromString(@"addChildResponse:"), setup);
+    return G1C_AppendResp(r, group);
+}
+static CGRect G1C_PipR_Frame(id self, SEL _cmd, unsigned long long i) {               // 0x1c764d6fc
+    if (G1C_PipR_IsFromIdx(self, 0, i)) return G1C_SendRect0(self, @selector(containerViewBounds));
+    if (G1B_SendB0(self, @selector(isPreparingLayout)) && G1C_PipR_IsToIdx(self, 0, i)) {
+        NSValue *v = G1B_GET(self, kPrBBox);
+        CGSize sz = v ? [v CGRectValue].size : CGSizeZero;
+        CGPoint c = G1C_SendPoint0(self, NSSelectorFromString(@"morphToPIPTargetCenter"));
+        return CGRectMake(c.x - sz.width * 0.5, c.y - sz.height * 0.5, sz.width, sz.height);      // _SBUnintegralizedRectCenteredAboutPoint(SBRectWithSize(size), center)
+    }
+    return G1B_SUPER(CGRect, gPipRSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static CGRect G1C_PipR_Inset(id self, SEL _cmd, CGRect r) {                           // 0x1c764da68
+    double rad = G1B_Dbl0(G1C_ChamoisSettings(self), NSSelectorFromString(@"diffuseShadowRadius")), d = rad * -2.8;       // 0x1c7a91690
+    return CGRectInset(CGRectMake(0, 0, r.size.width, r.size.height), d, d);
+}
+static CGRect G1C_PipR_ClipIdx(id self, SEL _cmd, unsigned long long i, CGRect bounds) {        // 0x1c764d7d4
+    BOOL prep = G1B_SendB0(self, @selector(isPreparingLayout)), to = G1C_PipR_IsToIdx(self, 0, i);
+    if (prep && to) return G1C_SendRect0(self, NSSelectorFromString(@"morphToPIPClippingFrame"));
+    CGRect f = G1B_SUPER(CGRect, gPipRSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long, CGRect), i, bounds);
+    if (!to) return f;
+    CGRect r = CGRectMake(0, 0, f.size.width, f.size.height);
+    return G1C_PipR_GetShadow(self, 0) ? G1C_PipR_Inset(self, 0, r) : r;
+}
+static CGRect G1C_PipR_ClipRole(id self, SEL _cmd, long long role, id layout, unsigned long long idx, CGRect bounds) {      // 0x1c764d8d8
+    BOOL to = G1C_PipR_IsToObj(self, layout);
+    if (G1B_SendB0(self, @selector(isPreparingLayout)) && to) {
+        CGRect f = ((CGRect (*)(id, SEL, long long, id, CGRect))objc_msgSend)(self, @selector(frameForLayoutRole:inAppLayout:withBounds:), role, layout, bounds);
+        return CGRectOffset(G1C_SendRect0(self, NSSelectorFromString(@"morphToPIPClippingFrame")), -f.origin.x, -f.origin.y);
+    }
+    if (to) {
+        CGRect f = ((CGRect (*)(id, SEL, long long, id, CGRect))objc_msgSend)(self, @selector(frameForLayoutRole:inAppLayout:withBounds:), role, layout, bounds);
+        CGRect r = CGRectMake(0, 0, f.size.width, f.size.height);
+        return G1C_PipR_GetShadow(self, 0) ? G1C_PipR_Inset(self, 0, r) : r;
+    }
+    return G1B_SUPER(CGRect, gPipRSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long, CGRect), role, layout, idx, bounds);
+}
+static BOOL G1C_PipR_Clips(id self, SEL _cmd, unsigned long long i) { return G1C_PipR_IsToIdx(self, 0, i); }                  // 0x1c764daf0
+static id G1C_PipR_Anim(id self, SEL _cmd, id element) {                                                                       // 0x1c764dc18
+    id a = [(id)G1B_SUPER(id, gPipRSuper, self, _cmd, (struct objc_super *, SEL, id), element) mutableCopy];
+    id ls = G1B_Send0(self, NSSelectorFromString(@"_layoutSettings"));
+    G1B_SendV1(a, NSSelectorFromString(@"setLayoutSettings:"), ls);
+    G1B_SendV1(a, NSSelectorFromString(@"setClippingSettings:"), G1B_Send0(self, NSSelectorFromString(@"_layoutSettings")));
+    return a;
+}
+static double G1C_PipR_Opacity(id self, SEL _cmd, long long role, id layout, unsigned long long idx) {                         // 0x1c764e140
+    if (G1C_PipR_IsToOrFromIdx(self, 0, idx)) return 1.0;
+    return G1B_SUPER(double, gPipRSuper, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long), role, layout, idx);
+}
+static CGPoint G1C_PipR_Anchor(id self, SEL _cmd, unsigned long long i) {                                                      // 0x1c764dd18
+    if (G1C_PipR_GetForce(self, 0) && G1C_PipR_IsToOrFromIdx(self, 0, i)) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gPipRSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static BOOL G1C_PipR_Pin(id self, SEL _cmd, unsigned long long i) {                                                            // 0x1c764dd8c / 0x1c764de00
+    if (G1C_PipR_GetForce(self, 0) && G1C_PipR_IsToOrFromIdx(self, 0, i)) return YES;
+    return G1B_SUPER(BOOL, gPipRSuper, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static double G1C_PipR_Persp(id self, SEL _cmd, id layout) {                                                                   // 0x1c764de74
+    if (G1C_PipR_GetForce(self, 0) && G1C_PipR_IsToOrFromObj(self, 0, layout)) return 0.0;
+    return G1B_SUPER(double, gPipRSuper, self, _cmd, (struct objc_super *, SEL, id), layout);
+}
+static CGRect G1C_PipR_AccFrame(id self, SEL _cmd, CGRect f, id layout) {                                                      // 0x1c764defc
+    if (G1C_PipR_GetForce(self, 0) && G1C_PipR_IsToOrFromObj(self, 0, layout)) {
+        NSUInteger i = [(NSArray *)G1B_Send0(self, @selector(appLayouts)) indexOfObject:layout];
+        return ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(self, @selector(frameForIndex:), i);
+    }
+    return G1B_SUPER(CGRect, gPipRSuper, self, _cmd, (struct objc_super *, SEL, CGRect, id), f, layout);
+}
+static CGPoint G1C_PipR_AccAnchor(id self, SEL _cmd, CGPoint p, id layout) {                                                   // 0x1c764e004
+    if (G1C_PipR_GetForce(self, 0) && G1C_PipR_IsToOrFromObj(self, 0, layout)) return CGPointMake(0.5, 0.5);
+    return G1B_SUPER(CGPoint, gPipRSuper, self, _cmd, (struct objc_super *, SEL, CGPoint, id), p, layout);
+}
+
+// 16.2 creators (SBFullScreenFluidSwitcherRootSwitcherModifier.transitionModifierForMainTransitionEvent: 0x1c762c998, _SBHomeScreenFloorSwitcherModifier.handleTransitionEvent: 0x1c750c194) build the nested
+// SBFullScreenToHomeIconZoomSwitcherModifier with setShouldForceDefaultAnchorPointForTransition:isChamoisWindowingUIEnabled and the SBPIPRestoreToFullScreenSwitcherModifier with
+// setShouldForceDefaultAnchorPointForTransition: / setShouldClippingTakeShadowIntoAccount: of the same value. Those two creators are not ported (their other 16.2 deltas belong to the root factory port), the 16.0
+// creators leave the flags NO, so the modifiers apply them when they are attached (the query isChamoisWindowingUIEnabled resolves to the same root / floor value the creator used).
+static IMP gPipDidMoveOrig;
+static void G1C_Pip_DidMove(id self, SEL _cmd, id parent) {
+    ((void (*)(id, SEL, id))gPipDidMoveOrig)(self, _cmd, parent);
+    if (!parent || !BP_OnName("g1c_pip")) return;
+    id zoom = G1C_IvarObj(self, "_zoomModifier");
+    if (zoom) G1C_SendVB(zoom, NSSelectorFromString(@"setShouldForceDefaultAnchorPointForTransition:"), G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled)));
+}
+static void G1C_PipR_DidMove(id self, SEL _cmd, id parent) {
+    G1B_SUPER(void, gPipRSuper, self, _cmd, (struct objc_super *, SEL, id), parent);
+    if (!parent || !BP_OnName("g1c_pip")) return;
+    BOOL chamois = G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled));
+    G1B_SET(self, kPrForce, @(chamois));
+    G1B_SET(self, kPrShadow, @(chamois));
+    id zoom = G1C_IvarObj(self, "_zoomModifier");
+    if (zoom) G1C_SendVB(zoom, NSSelectorFromString(@"setShouldForceDefaultAnchorPointForTransition:"), chamois);
+}
+
+// ---- SBContinuousExposeWindowDropSwitcherModifier (the transition after a window drag; 16.2 added both methods) ----
+static Class gDropC;
+static id G1C_Drop_Transition(id self, SEL _cmd, id event) {                           // 0x1c79a5eb4: a window dropped on the home screen zooms into its icon / centre
+    id r = G1B_SUPER(id, class_getSuperclass(gDropC), self, _cmd, (struct objc_super *, SEL, id), event);
+    if (G1B_SendLL0(event, @selector(toEnvironmentMode)) != 1) return r;
+    BOOL reduce = G1B_SendB0(self, @selector(isReduceMotionEnabled));
+    id from = G1B_Send0(event, @selector(fromAppLayout)), tid = G1B_Send0(self, @selector(transitionID));
+    CGRect icon = G1B_SendB0(event, NSSelectorFromString(@"isIconZoomDisabled")) ? CGRectNull : ((CGRect (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"homeScreenIconFrameForAppLayout:"), from);
+    SEL setForce = NSSelectorFromString(@"setShouldForceDefaultAnchorPointForTransition:");
+    if (CGRectIsNull(icon) || reduce) {
+        if (!from) return r;
+        double factor = G1B_Dbl0(G1B_Send0(self, NSSelectorFromString(@"homeGestureSettings")), NSSelectorFromString(@"homeGestureCenterZoomDownCenterYOffsetFactor"));
+        Class c = NSClassFromString(@"SBFullScreenToHomeCenterZoomDownSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:offsetYPercentOfScreenHeight:");
+        id cz = (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, double))objc_msgSend)([c alloc], s, tid, from, factor) : nil;
+        G1C_SendVB(cz, setForce, YES);
+        if (cz) G1B_SendV1(self, @selector(addChildModifier:), cz);
+    } else {
+        Class c = NSClassFromString(@"SBFullScreenToHomeIconZoomSwitcherModifier");
+        SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:direction:");
+        id iz = (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, long long))objc_msgSend)([c alloc], s, tid, from, 1) : nil;
+        G1C_SendVB(iz, setForce, G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled)));
+        if (iz) G1B_SendV1(self, @selector(addChildModifier:), iz);
+    }
+    return r;
+}
+static BOOL G1C_Drop_UseAnchor(id self, SEL _cmd, unsigned long long i) {              // 0x1c79a5ce8: the dragged window itself is not pinned through the anchor point
+    NSArray *ls = G1B_Send0(self, @selector(appLayouts));
+    id l = i < ls.count ? ls[i] : nil;
+    if (G1C_LayoutHas(l, G1C_IvarObj(self, "_selectedDisplayItem"))) return NO;
+    return G1B_SUPER(BOOL, class_getSuperclass(gDropC), self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+
+// +[SBSwitcherTransitionRequest requestForTapAppLayoutHeaderEvent:]  (16.2 0x1c740d7b8; 16.0 has only requestForTapAppLayoutEvent:)
+static id G1C_Req_TapHeader(id cls, SEL _cmd, id event) {
+    id layout = G1B_Send0(event, @selector(appLayout));
+    long long role = G1B_SendLL0(event, @selector(layoutRole));
+    id req = [[(Class)cls alloc] init];
+    G1B_SendV1(req, @selector(setAppLayout:), layout);
+    G1B_SendV1(req, @selector(setActivatingDisplayItem:), G1C_SendLL1(layout, @selector(itemForLayoutRole:), role));
+    return req;
+}
+static void G1C_InstallHomeGesture(void) {
+    gHgRootC = NSClassFromString(@"SBHomeGestureRootSwitcherModifier");
+    gHgSwC = NSClassFromString(@"SBHomeGestureSwitcherModifier");
+    gHgRmC = NSClassFromString(@"SBReduceMotionHomeGestureSwitcherModifier");
+    gPipC = NSClassFromString(@"SBFullScreenToHomePIPSwitcherModifier");
+    gPipRC = NSClassFromString(@"SBPIPRestoreToFullScreenSwitcherModifier");
+    if (gHgRootC && BP_OnName("g1c_homegesture")) {
+        SEL tc = NSSelectorFromString(@"transitionChildModifierForMainTransitionEvent:activeGestureModifier:"), gc = NSSelectorFromString(@"gestureChildModifierForGestureEvent:activeTransitionModifier:");
+        Method mt = class_getInstanceMethod(gHgRootC, tc), mg = class_getInstanceMethod(gHgRootC, gc);
+        if (mt && mg) {
+            gHgRootTransOrig = class_replaceMethod(gHgRootC, tc, (IMP)G1C_HGR_TransitionChild, method_getTypeEncoding(mt)) ?: method_getImplementation(mt);
+            gHgRootChildOrig = class_replaceMethod(gHgRootC, gc, (IMP)G1C_HGR_GestureChild, method_getTypeEncoding(mg)) ?: method_getImplementation(mg);
+        }
+        if (gHgSwC) {
+            SEL dm = NSSelectorFromString(@"didMoveToParentModifier:");
+            Method m = class_getInstanceMethod(gHgSwC, dm);
+            if (m) gHgSwDidMoveOrig = class_replaceMethod(gHgSwC, dm, (IMP)G1C_HGS_DidMove, method_getTypeEncoding(m)) ?: method_getImplementation(m);
+            const G1CPatch p[] = {
+                { "appLayoutsToCacheSnapshots", (IMP)G1C_HGS_CacheSnapshots, "@16@0:8" },
+                { "appLayoutsToCacheFullsizeSnapshots", (IMP)G1C_HGS_CacheFullsize, "@16@0:8" },
+            };
+            G1C_PatchClass(gHgSwC, p, sizeof p / sizeof p[0], "homegesture");
+        }
+        if (gHgRmC) {
+            const G1CPatch p[] = {
+                { "shouldProvideBlur", (IMP)G1C_Rm_GetBlur, "B16@0:8" }, { "setShouldProvideBlur:", (IMP)G1C_Rm_SetBlur, "v20@0:8B16" },
+                { "laysOutNeighboringCards", (IMP)G1C_Rm_GetNeighbors, "B16@0:8" }, { "setLaysOutNeighboringCards:", (IMP)G1C_Rm_SetNeighbors, "v20@0:8B16" },
+                { "scaleForIndex:", (IMP)G1C_Rm_Scale, "d24@0:8Q16" }, { "cornerRadiiForIndex:", (IMP)G1C_Rm_Radii, "{UIRectCornerRadii=dddd}24@0:8Q16" },
+                { "homeScreenBackdropBlurType", (IMP)G1C_Rm_BlurType, "q16@0:8" },
+            };
+            G1C_PatchClass(gHgRmC, p, sizeof p / sizeof p[0], "reducemotion");
+        }
+    }
+    {
+        Class rq = NSClassFromString(@"SBSwitcherTransitionRequest");
+        if (rq) class_addMethod(object_getClass(rq), NSSelectorFromString(@"requestForTapAppLayoutHeaderEvent:"), (IMP)G1C_Req_TapHeader, "@24@0:8@16");      // no-op when the class already has it
+    }
+    gDropC = NSClassFromString(@"SBContinuousExposeWindowDropSwitcherModifier");
+    if (gDropC && BP_OnName("g1c_homegesture")) {
+        const G1CPatch p[] = {
+            { "handleTransitionEvent:", (IMP)G1C_Drop_Transition, "@24@0:8@16" },
+            { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)G1C_Drop_UseAnchor, "B24@0:8Q16" },
+        };
+        G1C_PatchClass(gDropC, p, sizeof p / sizeof p[0], "windowdrop");
+    }
+    if (BP_OnName("g1c_pip")) {
+        Class ev = NSClassFromString(@"SBTransitionSwitcherModifierEvent"), sc = NSClassFromString(@"SBSetupPIPMorphingSwitcherEventResponse");
+        if (ev && !class_getInstanceMethod(ev, NSSelectorFromString(@"morphingPIPLayoutRole"))) {                   // value written by the 16.2 coordinator (_shouldMorphToPIPForTransitionContext:outForLayoutRole:); write-only inside the modifiers
+            class_addMethod(ev, NSSelectorFromString(@"morphingPIPLayoutRole"), (IMP)G1C_Ev_GetPipRole, "q16@0:8");
+            class_addMethod(ev, NSSelectorFromString(@"setMorphingPIPLayoutRole:"), (IMP)G1C_Ev_SetPipRole, "v24@0:8q16");
+        }
+        if (sc && !class_getInstanceMethod(sc, NSSelectorFromString(@"appLayoutBoundingBox"))) {
+            class_addMethod(sc, NSSelectorFromString(@"appLayoutBoundingBox"), (IMP)G1C_Setup_GetBBox, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8");
+            class_addMethod(sc, NSSelectorFromString(@"setAppLayoutBoundingBox:"), (IMP)G1C_Setup_SetBBox, "v48@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16");
+        }
+        if (gPipC) {
+            gPipSuper = class_getSuperclass(gPipC);
+            const G1CPatch p[] = {
+                { "initWithTransitionID:zoomModifier:appLayout:layoutRole:", (IMP)G1C_Pip_Init4, "@48@0:8@16@24@32q40" },
+                { "transitionWillBegin", (IMP)G1C_Pip_WillBegin, "@16@0:8" },
+                { "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", (IMP)G1C_Pip_ClipRole, R4 "72@0:8q16@24Q32" R4 "40" },
+                { "clipsToBoundsAtIndex:", (IMP)G1C_Pip_Clips, "B24@0:8Q16" }, { "visibleAppLayouts", (IMP)G1C_Pip_Visible, "@16@0:8" },
+                { "anchorPointForIndex:", (IMP)G1C_Pip_Anchor, "{CGPoint=dd}24@0:8Q16" },
+                { "shouldPinLayoutRolesToSpace:", (IMP)G1C_Pip_Pin, "B24@0:8Q16" }, { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)G1C_Pip_Pin, "B24@0:8Q16" },
+                { "perspectiveAngleForAppLayout:", (IMP)G1C_Pip_Persp, "d24@0:8@16" },
+                { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)G1C_Pip_AccFrame, R4 "56@0:8" R4 "16@48" },
+                { "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (IMP)G1C_Pip_AccAnchor, "{CGPoint=dd}40@0:8{CGPoint=dd}16@32" },
+                { "shouldForceDefaultAnchorPointForTransition", (IMP)G1C_Pip_GetForce, "B16@0:8" }, { "setShouldForceDefaultAnchorPointForTransition:", (IMP)G1C_Pip_SetForce, "v20@0:8B16" },
+            };
+            G1C_PatchClass(gPipC, p, sizeof p / sizeof p[0], "pip");
+            SEL dm = NSSelectorFromString(@"didMoveToParentModifier:");
+            Method m = class_getInstanceMethod(gPipC, dm);
+            if (m) gPipDidMoveOrig = class_replaceMethod(gPipC, dm, (IMP)G1C_Pip_DidMove, method_getTypeEncoding(m)) ?: method_getImplementation(m);
+        }
+        if (gPipRC) {
+            gPipRSuper = class_getSuperclass(gPipRC);
+            const G1CPatch p[] = {
+                { "initWithTransitionID:zoomModifier:fromAppLayout:toAppLayout:toLayoutRole:", (IMP)G1C_PipR_Init5, "@56@0:8@16@24@32@40q48" },
+                { "transitionWillBegin", (IMP)G1C_PipR_WillBegin, "@16@0:8" },
+                { "frameForIndex:", (IMP)G1C_PipR_Frame, R4 "24@0:8Q16" },
+                { "clippingFrameForIndex:withBounds:", (IMP)G1C_PipR_ClipIdx, R4 "56@0:8Q16" R4 "24" },
+                { "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", (IMP)G1C_PipR_ClipRole, R4 "72@0:8q16@24Q32" R4 "40" },
+                { "_insetFrameForDiffuseShadowRadius:", (IMP)G1C_PipR_Inset, R4 "48@0:8" R4 "16" },
+                { "clipsToBoundsAtIndex:", (IMP)G1C_PipR_Clips, "B24@0:8Q16" },
+                { "animationAttributesForLayoutElement:", (IMP)G1C_PipR_Anim, "@24@0:8@16" },
+                { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_PipR_Opacity, "d40@0:8q16@24Q32" },
+                { "_isFromAppLayoutIndex:", (IMP)G1C_PipR_IsFromIdx, "B24@0:8Q16" }, { "_isToAppLayoutIndex:", (IMP)G1C_PipR_IsToIdx, "B24@0:8Q16" },
+                { "_isToOrFromAppLayout:", (IMP)G1C_PipR_IsToOrFromObj, "B24@0:8@16" }, { "_isToOrFromAppLayoutIndex:", (IMP)G1C_PipR_IsToOrFromIdx, "B24@0:8Q16" },
+                { "anchorPointForIndex:", (IMP)G1C_PipR_Anchor, "{CGPoint=dd}24@0:8Q16" },
+                { "shouldPinLayoutRolesToSpace:", (IMP)G1C_PipR_Pin, "B24@0:8Q16" }, { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)G1C_PipR_Pin, "B24@0:8Q16" },
+                { "perspectiveAngleForAppLayout:", (IMP)G1C_PipR_Persp, "d24@0:8@16" },
+                { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)G1C_PipR_AccFrame, R4 "56@0:8" R4 "16@48" },
+                { "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (IMP)G1C_PipR_AccAnchor, "{CGPoint=dd}40@0:8{CGPoint=dd}16@32" },
+                { "shouldClippingTakeShadowIntoAccount", (IMP)G1C_PipR_GetShadow, "B16@0:8" }, { "setShouldClippingTakeShadowIntoAccount:", (IMP)G1C_PipR_SetShadow, "v20@0:8B16" },
+                { "shouldForceDefaultAnchorPointForTransition", (IMP)G1C_PipR_GetForce, "B16@0:8" }, { "setShouldForceDefaultAnchorPointForTransition:", (IMP)G1C_PipR_SetForce, "v20@0:8B16" },
+                { "didMoveToParentModifier:", (IMP)G1C_PipR_DidMove, "v24@0:8@16" },
+            };
+            G1C_PatchClass(gPipRC, p, sizeof p / sizeof p[0], "piprestore");
+        }
     }
 }
 // ============================================================================================================
@@ -4154,6 +5882,7 @@ void G1C_Setup(void) {
     G1C_BuildCEToHome();
     G1C_InstallHomeToGrid();
     G1C_InstallFlyInFix();
+    G1C_InstallHomeGesture();
     G1C_BuildGridRoot();
     G1C_BuildTransactions();
     %init(G1C_Txn);
@@ -4167,6 +5896,10 @@ void G1C_Setup(void) {
     G1C_BuildDnd();
     G1C_BuildWindowDragContent();
     G1C_BuildAppSwitcher();
+    G1C_BuildStrip();
+    G1C_InstallFullScreen();
+    G1C_InstallHomeScreen();
+    G1C_InstallRemovedForwarders();
     G1C_BuildFloors();
     G1C_BuildWindowDragFamily();
     %init(G1C_WdEvent);
