@@ -2530,7 +2530,7 @@ static void BP2B_InstallQueryDefaults(void) {
         BP2B_ADD(fs, "spaceAccessoryViewIconHitTestOutsetForAppLayout:", "d24@0:8@16", ^double(id me, id l) { return 10.0; });
         BP2B_ADD(fs, "wantsContinuousExposeHoverGesture", "B16@0:8", ^BOOL(id me) {                // [super wantsContinuousExposeHoverGesture] | strip reveal progress > 0
             Class sm = objc_getClass("SBSwitcherModifier");
-            struct objc_super sup = { me, sm };
+            struct objc_super sup; sup.receiver = me; sup.super_class = sm;   // no braces with commas inside a macro argument
             SEL w = sel_registerName("wantsContinuousExposeHoverGesture");
             BOOL s = ((BOOL (*)(struct objc_super *, SEL))objc_msgSendSuper)(&sup, w);
             double reveal = ((double (*)(struct objc_super *, SEL))objc_msgSendSuper)(&sup, sel_registerName("continuousExposeStripProgress"));      // _continuousExposeStripRevealProgress

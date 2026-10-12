@@ -3533,7 +3533,7 @@ static id G1C_Strip_Ordered(id self, BOOL ignoring) {                           
     }
     return result;
 }
-static id G1C_Strip_Visible(id self, SEL _cmd) { return [G1C_Strip_Ordered(self, NO) set]; }                          // 0x1c75debfc
+static id G1C_Strip_Visible(id self, SEL _cmd) { return [(NSOrderedSet *)G1C_Strip_Ordered(self, NO) set]; }                          // 0x1c75debfc
 static id G1C_Strip_TopMost(id self, SEL _cmd) { return [G1C_Strip_Ordered(self, NO) array]; }                       // 0x1c75df58c
 static id G1C_Strip_Inactive(id self, SEL _cmd) { return [G1C_Strip_Ordered(self, YES) array]; }                      // 0x1c75df5e4 (ignores the strip progress: the strip may be hidden)
 static id G1C_Strip_HandleEvent(id self, SEL _cmd, id event) {                           // 0x1c75df634

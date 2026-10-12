@@ -68,7 +68,9 @@ static BOOL BP_G3_On(const char *name) { return BP_OnName(name); }     // INTEGR
 @end
 
 // Classes we hook (declaration only; no @implementation, nothing is registered with the runtime).
-@interface SBDeviceApplicationSceneHandle : NSObject @end
+@interface SBDeviceApplicationSceneHandle : NSObject
+- (id)sceneIdentifier;
+@end
 @interface SBDeviceApplicationSceneView : UIView @end
 @interface SBTraitsSceneParticipantDelegate : NSObject @end
 @interface SBMedusaDecoratedDeviceApplicationSceneViewController : UIViewController @end
@@ -311,13 +313,13 @@ static id BP_G3_SpringBoardApp(void) {
     if (!insp) {
         insp = [inspC new];
         __weak id w = self;
-        [insp observeSupportedInterfaceOrientationsWithBlock:^(void *unused) {
+        ((void (*)(id, SEL, id))objc_msgSend)(insp, @selector(observeSupportedInterfaceOrientationsWithBlock:), ^(void *unused) {
             id me = w;
             if (!me) return;
             id scene = [me sceneIfExists];
             unsigned long long sup = [[scene uiClientSettings] supportedInterfaceOrientations];
             if (!(sup & (1ull << [me _interfaceOrientationFromUserResizing]))) [me _setInterfaceOrientationFromUserResizing:0];   // _SBFInterfaceOrientationMaskContainsInterfaceOrientation
-        }];
+        });
         objc_setAssociatedObject(self, &kBPG3Inspector, insp, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     ((void (*)(id, SEL, id, void *))objc_msgSend)(insp, NSSelectorFromString(@"inspectDiff:withContext:"), diff, (__bridge void *)ctx);

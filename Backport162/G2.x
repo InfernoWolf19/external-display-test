@@ -1756,7 +1756,7 @@ extern NSArray *BP2B_KeyRecord(id attrs, CGRect bounds);
     return o && BP_G2_Equal(z, o->z) && BP_G2_Equal(recs, o->recs) && CGRectEqualToRect(bounds, o->bounds) && orient == o->orient && dock == o->dock
         && hs == o->hs && hd == o->hd && BP_G2_Equal(dragging, o->dragging);
 }
-- (NSUInteger)hash { return z.hash ^ (recs.count * 31u) ^ (NSUInteger)(bounds.size.width * 7 + bounds.size.height * 13) ^ (NSUInteger)orient ^ (hs ? 0x100 : 0) ^ (hd ? 0x200 : 0) ^ dragging.hash; }
+- (NSUInteger)hash { return z.hash ^ (recs.count * 31u) ^ (NSUInteger)(bounds.size.width * 7 + bounds.size.height * 13) ^ (NSUInteger)orient ^ (hs ? 0x100 : 0) ^ (hd ? 0x200 : 0) ^ [dragging hash]; }
 @end
 
 static const void *kBP_G2_KeyData = &kBP_G2_KeyData;
