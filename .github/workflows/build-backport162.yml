@@ -15,7 +15,11 @@ jobs:
           echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
       - name: Build rootless .deb
         working-directory: Backport162
-        run: make package FINALPACKAGE=1
+        run: |
+          # keep going after a failing file so one run lists every compile error (make stops at the first one otherwise)
+          make -k all FINALPACKAGE=1 2>&1 | tee ../make-k.log || true
+          grep -c "error:" ../make-k.log || true
+          make package FINALPACKAGE=1
       - name: Identify the build
         id: info
         working-directory: Backport162
