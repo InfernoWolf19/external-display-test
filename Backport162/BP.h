@@ -1,5 +1,6 @@
 // Shared between Tweak.x and the other Backport162 source files.
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 
 // Feature switches. Every feature is on by default (except the few marked opt-in in Tweak.x kOptIn);
 // <jbroot>/tmp/Backport162.off.<name> turns one off and <jbroot>/tmp/Backport162.off turns everything off.
@@ -26,3 +27,12 @@ BOOL BP_OnName(const char *name);       // default-on switch by name: not killed
 BOOL BP_OptInName(const char *name);    // opt-in switch by name: BP_OnName(name) and Backport162.on.<name> exists
 void BP_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
 BOOL BP_LogEnabled(void);               // cheap test (cached one second): lets callers skip building log arguments
+
+// Object ivar access that cannot mistake a scalar ivar for an object (object_getIvar on a BOOL / NSInteger / struct-sized ivar returns the raw bits as an
+// "object" and ARC then retains them: SIGSEGV in objc_retain). Both return nil / do nothing unless the ivar exists and is an object, class or block.
+static inline BOOL BP_IvarIsObj(Ivar iv) {
+    const char *e = iv ? ivar_getTypeEncoding(iv) : NULL;
+    return e && (e[0] == '@' || e[0] == '#');
+}
+static inline id BP_ObjIvar(id o, Ivar iv) { return (o && BP_IvarIsObj(iv)) ? object_getIvar(o, iv) : nil; }
+static inline void BP_SetObjIvar(id o, Ivar iv, id v) { if (o && BP_IvarIsObj(iv)) object_setIvar(o, iv, v); }

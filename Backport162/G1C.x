@@ -873,9 +873,9 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     st.idsGeneration += 1;
     // keep the 16.0 state coherent: single ordered set, group cache cleared, 16.0 generation counter bumped
     Ivar ivSet = class_getInstanceVariable(object_getClass(self), "_continuousExposeIdentifiers");
-    if (ivSet) object_setIvar(self, ivSet, [NSOrderedSet orderedSetWithArray:sw ?: @[]]);
+    if (ivSet) BP_SetObjIvar(self, ivSet, [NSOrderedSet orderedSetWithArray:sw ?: @[]]);
     Ivar ivMap = class_getInstanceVariable(object_getClass(self), "_appLayoutsForContinuousExposeIdentifiers");
-    if (ivMap) object_setIvar(self, ivMap, nil);
+    if (ivMap) BP_SetObjIvar(self, ivMap, nil);
     long long g16 = 0;
     if (G1C_IvarRaw(self, "_continuousExposeIdentifiersChangedGenerationCount", &g16, sizeof g16, NO)) { g16 += 1; G1C_IvarRaw(self, "_continuousExposeIdentifiersChangedGenerationCount", &g16, sizeof g16, YES); }
     SEL ini = @selector(initWithPreviousContinuousExposeIdentifiersInSwitcher:previousContinuousExposeIdentifiersInStrip:transitioningFromAppLayout:transitioningToAppLayout:animated:);
@@ -930,10 +930,10 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     SEL complete = @selector(_completeIfNeededIgnoringHover:);
     BOOL doComplete = NO;
     if ((toId == myId) || (toId && [toId isEqual:myId])) {
-        if (ivFront) object_setIvar(self, ivFront, to);
+        if (ivFront) BP_SetObjIvar(self, ivFront, to);
         doComplete = [appLayout isEqual:behind] || [to isEqual:behind];
     } else {
-        if (ivFront) object_setIvar(self, ivFront, nil);
+        if (ivFront) BP_SetObjIvar(self, ivFront, nil);
         doComplete = YES;
     }
     if (doComplete && [self respondsToSelector:complete]) {
@@ -960,7 +960,7 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
         id removed = G1B_Send0(event, @selector(appLayoutsWithRemovalContexts));
         if (front && [removed isKindOfClass:[NSArray class]] && [removed containsObject:front]) {
             Ivar iv = class_getInstanceVariable(object_getClass(self), "_appLayoutToOrderFront");
-            if (iv) object_setIvar(self, iv, nil);
+            if (iv) BP_SetObjIvar(self, iv, nil);
         }
     }
     return %orig;
@@ -2268,7 +2268,7 @@ static id G1C_NewWindowDragContentFor(id gid, id initial, id item) {
 static void G1C_SetIvarObj(id o, const char *name, id v) {
     if (!o) return;
     Ivar iv = class_getInstanceVariable(object_getClass(o), name);
-    if (iv) object_setIvar(o, iv, v);
+    if (iv) BP_SetObjIvar(o, iv, v);
 }
 static BOOL G1C_IsInvalidPoint(CGPoint p) { return p.x == DBL_MAX && p.y == DBL_MAX; }      // SBInvalidPoint = {DBL_MAX, DBL_MAX} (0x1c7a92f20)
 static CGSize G1C_IvarSize(id o, const char *n) { CGSize v = CGSizeZero; G1C_IvarRaw(o, n, &v, sizeof v, NO); return v; }
@@ -5938,7 +5938,7 @@ typedef struct { unsigned long long a, b; } G1CRtTongue;
 // Routing modifier's `_currentModifier` temporarily set to the routed modifier.
 static void G1C_RtSetCurrent(id routing, id m) {
     Ivar iv = class_getInstanceVariable(object_getClass(routing), "_currentModifier");
-    if (iv) object_setIvar(routing, iv, m);
+    if (iv) BP_SetObjIvar(routing, iv, m);
 }
 static void G1C_RtRoute(id routing, id modifier, void (^block)(void)) {                               // _SBRoutingSwitcherModifierRouteToModifier
     id old = G1C_IvarObj(routing, "_currentModifier");

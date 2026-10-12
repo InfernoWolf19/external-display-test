@@ -61,7 +61,7 @@ static BOOL BP_G3B_SetIvar(id obj, const char *name, id val) {          // stron
     if (!iv) return NO;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || enc[0] != '@') return NO;
-    object_setIvar(obj, iv, val);
+    BP_SetObjIvar(obj, iv, val);
     return YES;
 }
 static BOOL BP_G3B_ScalarIvar(id obj, const char *name, long long *out) {   // integer/BOOL ivar by name
@@ -204,7 +204,7 @@ static NSString *BP_G3B_Localized(NSString *key16_2, NSString *key16_0, NSString
         id bm = BP_G3B_Send0(BP_G3B_App(), NSSelectorFromString(@"bannerManager"));
         id bn = BP_G3B_Ivar(me, "_medusaBannerViewController");
         SEL post = NSSelectorFromString(@"postPresentable:withOptions:userInfo:error:");
-        if (bn && [bm respondsToSelector:post]) ((id (*)(id, SEL, id, unsigned long long, id, id *))objc_msgSend)(bm, post, bn, 1, nil, NULL);
+        if (bn && [bm respondsToSelector:post]) ((BOOL (*)(id, SEL, id, unsigned long long, id, id *))objc_msgSend)(bm, post, bn, 1, nil, NULL);
         id dt = objc_getAssociatedObject(me, &kBPG3BDismissTimer);
         if (dismiss > 0 && [dt respondsToSelector:@selector(cancel)]) {
             [dt cancel];
@@ -1592,7 +1592,7 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     Ivar wi = BPG3BO_ArrayIvar(grid, "_widths"), hi = BPG3BO_ArrayIvar(grid, "_heights");
     SEL build = BPS("_buildFixedGridWithScreenScale:");
     if (!fs || !wi || !hi || ![grid respondsToSelector:build]) return;
-    NSArray *w0 = [object_getIvar(grid, wi) copy], *h0 = [object_getIvar(grid, hi) copy];
+    NSArray *w0 = [BP_ObjIvar(grid, wi) copy], *h0 = [BP_ObjIvar(grid, hi) copy];
     if (![w0 isKindOfClass:[NSArray class]] || w0.count == 0 || w0.count != h0.count) return;
     CGSize *p = (CGSize *)((char *)(__bridge void *)grid + ivar_getOffset(fs));
     CGSize orig = *p;
@@ -1601,8 +1601,8 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     ((void (*)(id, SEL, double))objc_msgSend)(grid, build, scale);
     tBPOrthMerge--;
     *p = orig;
-    NSArray *w1 = [object_getIvar(grid, wi) copy], *h1 = [object_getIvar(grid, hi) copy];
-    if (![w1 isKindOfClass:[NSArray class]] || w1.count != h1.count) { object_setIvar(grid, wi, w0); object_setIvar(grid, hi, h0); return; }
+    NSArray *w1 = [BP_ObjIvar(grid, wi) copy], *h1 = [BP_ObjIvar(grid, hi) copy];
+    if (![w1 isKindOfClass:[NSArray class]] || w1.count != h1.count) { BP_SetObjIvar(grid, wi, w0); BP_SetObjIvar(grid, hi, h0); return; }
     // 16.2 _buildFixedGridWithScreenScale: (0x1c791ed14) runs the per-orientation loop for the fixed size and, when supportsOrthogonalSizes, for the transposed
     // size; every candidate size is appended to ONE array (block 0x1c791f5b8, no de-duplication) which is sorted with the global comparator block 0x1c791f640:
     // BSCompareFloats(area(a), area(b)), i.e. ascending by width*height; then widths and heights are split into the two NSNumber arrays.
@@ -1615,8 +1615,8 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     }];
     NSMutableArray *mw = [NSMutableArray new], *mh = [NSMutableArray new];
     for (NSArray *q in pairs) { [mw addObject:q[0]]; [mh addObject:q[1]]; }
-    object_setIvar(grid, wi, [mw copy]);
-    object_setIvar(grid, hi, [mh copy]);
+    BP_SetObjIvar(grid, wi, [mw copy]);
+    BP_SetObjIvar(grid, hi, [mh copy]);
 }
 
 %group G3B_Orient
@@ -1682,14 +1682,14 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     if (tBPOrthDepth <= 0 || !iv || BPG3BO_ULL0(info, BPS("layoutRestrictions")) != 2 || !BP_G3B_On("g3b_grid")) {
         return %orig;
     }
-    id saved = object_getIvar(self, iv);
+    id saved = BP_ObjIvar(self, iv);
     NSMutableDictionary *oc = objc_getAssociatedObject(self, &kBPG3BOrthCache);
     if (!oc) { oc = [NSMutableDictionary new]; objc_setAssociatedObject(self, &kBPG3BOrthCache, oc, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
-    object_setIvar(self, iv, oc);
+    BP_SetObjIvar(self, iv, oc);
     tBPOrthBuild++;
     id g = %orig;
     tBPOrthBuild--;
-    object_setIvar(self, iv, saved);
+    BP_SetObjIvar(self, iv, saved);
     return g;
 }
 - (void)clearCachedGrids {

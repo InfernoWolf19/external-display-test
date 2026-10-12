@@ -813,7 +813,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     NSError *err = nil;
     SEL post = NSSelectorFromString(@"postPresentable:withOptions:userInfo:error:");
     if ([_bannerPoster respondsToSelector:post])
-        ((id (*)(id, SEL, id, unsigned long long, id, NSError **))objc_msgSend)(_bannerPoster, post, _educationBannerViewController, 1, nil, &err);
+        ((BOOL (*)(id, SEL, id, unsigned long long, id, NSError **))objc_msgSend)(_bannerPoster, post, _educationBannerViewController, 1, nil, &err);
     if (err) BP_Log(@"edu: error while presenting education banner: %@", err);
     NSUInteger gen = ++_bannerGeneration;                       // BSAbsoluteMachTimer 3.0 s, leeway 0.05
     __weak typeof(self) ws = self;
@@ -1056,9 +1056,9 @@ static NSHashTable *G4B_PointerScenes(id sceneManager, BOOL create) {
         return;
     }
     Ivar liv = class_getInstanceVariable(object_getClass(self), "_lastPresentationUpdateDisplayConfiguration");
-    id last = liv ? object_getIvar(self, liv) : nil;
+    id last = BP_ObjIvar(self, liv);
     BOOL changed = !(last && [last isEqual:cfg]);
-    if (changed && liv) object_setIvar(self, liv, cfg);
+    if (changed && liv) BP_SetObjIvar(self, liv, cfg);
     NSMutableSet *scenes = [NSMutableSet set];
     NSSet *bound = [sm respondsToSelector:@selector(boundPointerUIScenes)] ? G4B_Obj(sm, @selector(boundPointerUIScenes)) : nil;
     if (bound) [scenes unionSet:bound];
@@ -1177,7 +1177,7 @@ static BOOL G4B_LPMInv(id m) {                               // snapshot taken w
 static BOOL G4B_LPMInvOnQueue(id m) { return [objc_getAssociatedObject(m, kLPMInv) boolValue]; }
 static void G4B_SetObjIvar(id obj, const char *name, id v) {
     Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
-    if (iv) object_setIvar(obj, iv, v);
+    if (iv) BP_SetObjIvar(obj, iv, v);
 }
 static void G4B_OnLPMQueue(id m, dispatch_block_t b) {
     dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(m, "_stateSerialQueue");

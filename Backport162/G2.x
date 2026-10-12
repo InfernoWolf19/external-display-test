@@ -1691,8 +1691,8 @@ static void BP_G2_AdoptAttributeGrid(id grid) {
     Ivar wi = class_getInstanceVariable(k, "_widths"), hi = class_getInstanceVariable(k, "_heights");
     const char *we = wi ? ivar_getTypeEncoding(wi) : NULL, *he = hi ? ivar_getTypeEncoding(hi) : NULL;
     if (!we || !he || we[0] != '@' || he[0] != '@') return;
-    object_setIvar(grid, wi, [w copy]);
-    object_setIvar(grid, hi, [h copy]);
+    BP_SetObjIvar(grid, wi, [w copy]);
+    BP_SetObjIvar(grid, hi, [h copy]);
 }
 
 %group G2Grid

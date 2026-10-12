@@ -38,11 +38,11 @@ static void G1D_GM_Update(id gestureManager, BOOL enabled);           // section
 
 static id G1D_IvarObj(id o, const char *name) {
     Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
-    return iv ? object_getIvar(o, iv) : nil;
+    return BP_ObjIvar(o, iv);
 }
 static void G1D_SetIvarObj(id o, const char *name, id v) {
     Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
-    if (iv) object_setIvar(o, iv, v);
+    if (iv) BP_SetObjIvar(o, iv, v);
 }
 static unsigned long long G1D_IvarULL(id o, const char *name) {
     Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
@@ -859,7 +859,7 @@ enum { G1DStripTongueGestureType = 0x37, G1DStripIndirectGestureType = 0x34, G1D
 
 static id G1D_GMWeak(id gm, const char *name) {
     Ivar iv = gm ? class_getInstanceVariable(object_getClass(gm), name) : NULL;
-    return iv ? object_getIvar(gm, iv) : nil;                    // a weak ivar holds the raw pointer, the runtime zeroes it on dealloc
+    return BP_ObjIvar(gm, iv);                    // a weak ivar holds the raw pointer, the runtime zeroes it on dealloc
 }
 static id G1D_GM_SC(id gm) { return G1D_GMWeak(gm, "_switcherController"); }
 static id G1D_GM_VC(id gm) { return G1D_GMWeak(gm, "_switcherContentController"); }

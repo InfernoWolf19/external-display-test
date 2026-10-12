@@ -728,7 +728,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 - (BOOL)gestureRecognizerShouldBegin:(id)gesture {
     if (BP_On(F_GESTUREGATE) && BP_On(F_ACTIVEDISPLAY)) {
         Ivar iv = class_getInstanceVariable([self class], "_switcherController");     // 16.2 offset 0x10; found by name only
-        id sw = iv ? object_getIvar(self, iv) : nil;
+        id sw = BP_ObjIvar(self, iv);
         id own = [sw respondsToSelector:@selector(windowScene)] ? [sw windowScene] : nil;
         if (BP_PanFromOtherDisplay(gesture, own)) { BP_Log(@"gesture gate: switcher gesture NotForCurrentDisplay"); return NO; }
     }

@@ -539,7 +539,7 @@ static void G1B_BuildEventsAndResponses(void) {
         if (t == G1BRespPresentStripEdgeProtectGrabber && [response respondsToSelector:@selector(isInitialPresentation)]) {
             id sc = nil;
             Ivar iv = class_getInstanceVariable([self class], "_switcherController");
-            if (iv) sc = object_getIvar(self, iv);       // weak ivar: object_getIvar returns the loaded value
+            sc = BP_ObjIvar(self, iv);       // weak ivar: object_getIvar returns the loaded value
             BOOL initial = ((BOOL (*)(id, SEL))objc_msgSend)(response, @selector(isInitialPresentation));
             SEL s = initial ? NSSelectorFromString(@"presentContinuousExposeStripRevealGrabberTongueImmediately")
                             : NSSelectorFromString(@"tickleContinuousExposeStripRevealGrabberTongueIfVisible");
@@ -572,7 +572,7 @@ static void G1B_BuildEventsAndResponses(void) {
         return;
     }
     Ivar iv = class_getInstanceVariable([self class], "_visibleOverlayAccessoryViews");
-    NSDictionary *map = iv ? object_getIvar(self, iv) : nil;
+    NSDictionary *map = BP_ObjIvar(self, iv);
     id layout = [map isKindOfClass:[NSDictionary class]] ? [[map allKeysForObject:view] firstObject] : nil;
     if (!layout) {
         %orig;
@@ -1239,7 +1239,7 @@ static __thread __unsafe_unretained id tAWLayout;           // N: the app layout
 
 static BOOL G1B_AW_Contains(id coord, id layout) {
     Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
-    id arr = iv ? object_getIvar(coord, iv) : nil;
+    id arr = BP_ObjIvar(coord, iv);
     return [arr isKindOfClass:[NSArray class]] && [arr containsObject:layout];
 }
 
@@ -1275,14 +1275,14 @@ static void G1B_AW_Repair(id coord, id layout, const char *how) {
         }
     }
     Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
-    id cur = iv ? object_getIvar(coord, iv) : nil;
+    id cur = BP_ObjIvar(coord, iv);
     if (!iv || (cur && ![cur isKindOfClass:[NSArray class]])) {
         BP_Log(@"addwin net (%s): cannot repair (ivar %p)", how, (void *)iv);
         return;
     }
     NSMutableArray *fixed = [NSMutableArray arrayWithObject:layout];
     if (cur) [fixed addObjectsFromArray:cur];
-    object_setIvar(coord, iv, [fixed copy]);
+    BP_SetObjIvar(coord, iv, [fixed copy]);
     BP_Log(@"addwin net (%s): _appLayouts patched, %lu -> %lu layouts, added %@", how, (unsigned long)G1B_SendLL0(cur, @selector(count)), (unsigned long)fixed.count, layout);
 }
 
@@ -1356,7 +1356,7 @@ static Class gWDSuper;
 static char kWDRadii;
 static id G1B_WD_Ivar(id me, const char *name) {
     Ivar iv = class_getInstanceVariable(object_getClass(me), name);
-    return iv ? object_getIvar(me, iv) : nil;
+    return BP_ObjIvar(me, iv);
 }
 static BOOL G1B_WD_Chamois(id me) { return [me respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && G1B_SendB0(me, @selector(isChamoisWindowingUIEnabled)); }
 static id G1B_WD_Layouts(id me) { return G1B_Send0(me, @selector(appLayouts)); }
@@ -1502,7 +1502,7 @@ static void G1B_BuildWindowDelete(void) {
     BOOL r = %orig;
     if (!c || !r) return r;
     Ivar pool = class_getInstanceVariable(object_getClass(me), "_hiddenRecycledItemContainers");
-    NSArray *recycled = pool ? object_getIvar(me, pool) : nil;
+    NSArray *recycled = BP_ObjIvar(me, pool);
     Class bp = NSClassFromString(@"SBBlurItemContainerParameters");
     SEL un = NSSelectorFromString(@"_unblurItemContainer:blurParameters:withAnimationUpdateMode:");
     SEL dp = NSSelectorFromString(@"defaultCrossblurBlurParameters");
@@ -1643,7 +1643,7 @@ static long long G1B_PlatMode(id self) { return [(NSNumber *)G1B_GET(self, kPlat
     id root = [[neu alloc] init];
     ((void (*)(id, SEL, id, long long, id))objc_msgSend)(me, @selector(addChildModifier:atLevel:key:), root, 0, key);
     Ivar iv = class_getInstanceVariable(platC, "_lastTransitionEvent");
-    id last = iv ? object_getIvar(me, iv) : nil;
+    id last = BP_ObjIvar(me, iv);
     if (last) {
         id e = [last copy];
         Class co = NSClassFromString(@"SBMainSwitcherControllerCoordinator");
@@ -2480,7 +2480,7 @@ static void G1B_GM_TickleStrip(id self, SEL _cmd) {
 // SBSwitcherController (16.2 0x1c7606c3c / 0x1c7606c44): forward to the gesture manager (ivar +0xd8).
 static void G1B_SC_Forward(id self, SEL _cmd) {
     Ivar iv = class_getInstanceVariable(object_getClass(self), "_gestureManager");
-    id gm = iv ? object_getIvar(self, iv) : nil;
+    id gm = BP_ObjIvar(self, iv);
     G1B_SendV0(gm, _cmd);
 }
 static void G1B_InstallConsumerTargets(void) {

@@ -1578,7 +1578,7 @@ static void BP2B_DidSelectContainer(id vc, id container, long long flags) {
     id uid = BP2B_Obj(item, sel_registerName("uniqueIdentifier"));
     id lpm = BP2B_Obj(BP2B_Obj(vc, sel_registerName("_sbWindowScene")), sel_registerName("lockedPointerManager"));
     SEL clientS = sel_registerName("clientWithSceneIdentifier:suppressPreferredLockStatus:");
-    if (uid && [lpm respondsToSelector:clientS]) (void)((id (*)(id, SEL, id, BOOL))objc_msgSend)(lpm, clientS, uid, NO);
+    if (uid && [lpm respondsToSelector:clientS]) ((void (*)(id, SEL, id, BOOL))objc_msgSend)(lpm, clientS, uid, NO);
     NSDictionary *adjustedMap = BP2B_IvarObj(vc, "_leafAppLayoutsToAdjustedAppLayouts");
     id adjusted = adjustedMap[leaf] ?: leaf;
     id root = BP2B_IvarObj(vc, "_rootModifier");
@@ -1742,7 +1742,7 @@ static id BP2B_ConvertCEDragEvent(id vc, id event, id fromContentVC) {
     id n = [ec alloc];
     SEL ini = sel_registerName("initWithGestureID:selectedAppLayout:gestureType:phase:");
     if (![n respondsToSelector:ini]) return event;
-    n = ((id (*)(id, SEL, long long, id, long long, long long))objc_msgSend)(n, ini, BP2B_LL(event, sel_registerName("gestureID")), al, BP2B_LL(event, sel_registerName("gestureType")), BP2B_LL(event, sel_registerName("phase")));
+    n = ((id (*)(id, SEL, id, id, long long, long long))objc_msgSend)(n, ini, BP2B_Obj(event, sel_registerName("gestureID")), al, BP2B_LL(event, sel_registerName("gestureType")), BP2B_LL(event, sel_registerName("phase")));
     ((void (*)(id, SEL, CGPoint))objc_msgSend)(n, sel_registerName("setLocationInContainerView:"), loc);
     if ([n respondsToSelector:sel_registerName("setDraggingFromContinuousExposeStrips:")]) ((void (*)(id, SEL, BOOL))objc_msgSend)(n, sel_registerName("setDraggingFromContinuousExposeStrips:"), BP2B_Bool(event, sel_registerName("isDraggingFromContinuousExposeStrips")));
     if ([n respondsToSelector:sel_registerName("setLocationInSelectedDisplayItem:")]) ((void (*)(id, SEL, CGPoint))objc_msgSend)(n, sel_registerName("setLocationInSelectedDisplayItem:"), BP2B_Point(event, sel_registerName("locationInSelectedDisplayItem")));
