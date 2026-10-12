@@ -4,7 +4,7 @@
 // Integration: call G1D_Setup() from the %ctor after G1B_Setup() / BP2B_Setup() / G1C_Setup() (it adds methods and replaces a few VC methods that G2.x / G2B.m
 // stubbed, so it must run after them; it is harmless when it runs earlier because every installer re-checks what exists).
 // Every part is default-on; Backport162.off.<name> switches one off. Names: g1d (whole file), g1d_model, g1d_request, g1d_removal, g1d_newwindow, g1d_gesture,
-// g1d_vcdrag, g1d_tongue, g1d_pip.
+// g1d_vcdrag, g1d_pointer, g1d_tongue, g1d_gmtouch, g1d_pip, g1d_pipframes, g1d_piprestore, g1d_pipkeyboard, g1d_pipinsets, g1d_extgestures.
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -25,11 +25,14 @@
 
 #define G1D_ON(n) (BP_OnName("g1d") && BP_OnName(n))
 
+static BOOL G1D_TongueUsable(id gestureManager);                      // section 4
+static void G1D_GM_Update(id gestureManager, BOOL enabled);           // section 4
 @interface SBMainSwitcherControllerCoordinator : NSObject @end
 @interface SBSwitcherController : NSObject @end
 @interface SBSwitcherTransitionRequest : NSObject @end
 @interface SBFluidSwitcherViewController : UIViewController @end
 @interface SBFluidSwitcherGestureManager : NSObject @end
+@interface SBMainWorkspace : NSObject @end
 
 // ------------------------------------------------------------------------------------------------ helpers
 
@@ -677,6 +680,7 @@ static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinat
         id coord = G1B_Send0(sc, NSSelectorFromString(@"switcherCoordinator"));
         ((void (*)(id, SEL, id))objc_msgSend)(coord, NSSelectorFromString(@"switcherControllerDidUpdateWindowManagementStyle:"), sc);
     }
+    if (G1D_TongueUsable(self)) { G1D_GM_Update(self, enabled); return; }      // the 16.2 body (section 4)
     %orig;
 }
 %end
@@ -797,6 +801,1041 @@ static void G1D_InstallWindowDragSupport(void) {
 }
 
 // ============================================================================================================
+// 4. SBFluidSwitcherGestureManager: the continuous expose strip reveal grabber tongue (touch edge pull + pointer edge pull)
+// ============================================================================================================
+// 16.0 reveals the strip only with a pointer (SBIndirectPanGestureRecognizer `indirectRevealContinuousExposeStripsGestureRecognizer`, ivar +0x138, action
+// -_handleFluidGesture:, system gesture 0x34). 16.2 replaces it with an SBGrabberTongue (type 0x37, edge = -_continuousExposeStripEdge, name
+// "ContinuousExposeStripRevealGrabberTongue", ivar +0x140) that owns BOTH recognizers: a touch SBScreenEdgePanGestureRecognizer (delegate method
+// -customGestureRecognizerForGrabberTongue:) and the pointer SBIndirectPanGestureRecognizer (-indirectPanGestureRecognizerForGrabberTongue:, system gesture 0x34), the
+// tongue view itself is suppressed because the view controller hosts the SBContinuousExposeStripTongueView (-shouldSuppressTongueViewForGrabberTongue:).
+// 16.2 addresses: -_configureChamoisGestureRecognizersIfNeeded 0x1c78f0c08 (16.0 0x1c643eea4), -updateForChamoisWindowingUIEnabled: 0x1c78f0fe8 (0x1c643f408),
+// -_continuousExposeStripEdge 0x1c78fbe50, -customGestureRecognizerForGrabberTongue: 0x1c78fa7e8, -indirectPanGestureRecognizerForGrabberTongue: 0x1c78faa00 (+ block
+// 0x1c78faca0), -indirectPanSystemGestureTypeForGrabberTongue: 0x1c78fad3c, -shouldSuppressTongueViewForGrabberTongue: 0x1c78fada0, -grabberTongueOrPullEnabled:
+// forGestureRecognizer: 0x1c78fa3c0, -_grabberTongueForGestureRecognizer: 0x1c78fb8c0, -grabberTongue:shouldReceiveTouch: 0x1c72c4d40, -grabberTongue:
+// shouldShowTongueOnFirstSwipeWithEdgeLocation: 0x1c72c90ac, -grabberTongue:shouldAllowSecondSwipeWithEdgeLocation: 0x1c72ca7a0, -grabberTongueBegan/Updated/Ended/
+// CanceledPulling: 0x1c78fa480 / 55c / 630 / 70c, -grabberTongueWillPresent: 0x1c78fae14, -grabberTongueWillDismiss: 0x1c78fb0a4, -_handleContinuousExposeStripReveal
+// Gesture: 0x1c78f27e8, -_shouldBeginContinuousExposeStripRevealGesture: 0x1c78f95c4, -_shouldBeginContinuousExposeStripOverflowGesture: 0x1c78f9738,
+// -_areContinuousExposeStripsAvailableWithReason: 0x1c78fba84, -_areContinuousExposeStripsOccludedOrHiddenWithOutReason: 0x1c78fbc38, -_shouldContinuousExposeStrip
+// OverflowPanGesture:receiveTouch: 0x1c78f5ef0, -_gestureTypeForGestureRecognizer: 0x1c72cad14, -invalidate 0x1c78f16c0, -[SBFluidSwitcherViewController
+// presentContinuousExposeStripEdgeProtectTongue / dismiss...] 0x1c744f4e0 / 0x1c744f540, -isEdgeProtectedForHomeGestureAtEdgeLocation:edge: 0x1c744c954 (16.0
+// 1-argument form 0x1c5fd3a74), -[SBMainDisplaySystemGestureManager _shouldEnableSystemGestureWithType:] 0x1c72e9590 (16.0 0x1c5e76c00).
+// The 16.0 SBGrabberTongue already speaks the same delegate protocol (same init, same install / pull / present callbacks); it only lacks the `name` and `screenEdge`
+// accessors.  The system gesture type 0x37 is unused in 16.0 (16.2 inserted it, which shifts every later type by one), and the 16.0 type tables answer for 0x37 like
+// for the hover gesture 0x33 on the main display after the one-line hook below.
+static char kG1DStripTongue, kG1DTongueName;
+enum { G1DStripTongueGestureType = 0x37, G1DStripIndirectGestureType = 0x34, G1DStripRevealFluidGestureType = 0xb };
+
+static id G1D_GMWeak(id gm, const char *name) {
+    Ivar iv = gm ? class_getInstanceVariable(object_getClass(gm), name) : NULL;
+    return iv ? object_getIvar(gm, iv) : nil;                    // a weak ivar holds the raw pointer, the runtime zeroes it on dealloc
+}
+static id G1D_GM_SC(id gm) { return G1D_GMWeak(gm, "_switcherController"); }
+static id G1D_GM_VC(id gm) { return G1D_GMWeak(gm, "_switcherContentController"); }
+static id G1D_GM_Scene(id gm) { return G1B_Send0(G1D_GM_SC(gm), NSSelectorFromString(@"windowScene")); }
+
+static id G1D_StripTongue(id gm) {
+    id t = G1B_Send0(gm, NSSelectorFromString(@"continuousExposeStripRevealGrabberTongue"));      // G1B's accessor (same object), else our own key
+    return t ?: objc_getAssociatedObject(gm, &kG1DStripTongue);
+}
+static void G1D_SetStripTongue(id gm, id t) {
+    objc_setAssociatedObject(gm, &kG1DStripTongue, t, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    G1B_SendV1(gm, NSSelectorFromString(@"setContinuousExposeStripRevealGrabberTongue:"), t);
+}
+static BOOL G1D_IsStripTongue(id gm, id tongue) { return tongue && tongue == G1D_StripTongue(gm); }
+static BOOL G1D_TongueOn(void) { return G1D_ON("g1d_tongue"); }
+
+// -[SBFluidSwitcherGestureManager _continuousExposeStripEdge] 0x1c78fbe50: right-to-left layout = right edge (8), else left edge (2)
+static unsigned long long G1D_StripEdge(void) {
+    return [[UIApplication sharedApplication] userInterfaceLayoutDirection] == UIUserInterfaceLayoutDirectionRightToLeft ? 8 : 2;
+}
+
+static BOOL G1D_TongueUsable(id gm) {
+    if (!gm || !G1D_TongueOn()) return NO;
+    Class tc = NSClassFromString(@"SBGrabberTongue");
+    if (!tc || ![tc instancesRespondToSelector:NSSelectorFromString(@"initWithDelegate:edge:type:windowScene:")]) return NO;
+    static const char *needed[] = { "_liveWindowResizeGestureRecognizer", "_hoverGestureRecognizer", "_indirectRevealContinuousExposeStripsGestureRecognizer",
+                                    "_indirectRevealContinuousExposeStripOverflowGestureRecognizer", "_dragRevealContinuousExposeStripOverflowGestureRecognizer" };
+    for (size_t i = 0; i < sizeof needed / sizeof needed[0]; i++) if (!class_getInstanceVariable(object_getClass(gm), needed[i])) return NO;
+    return YES;
+}
+
+static BOOL G1D_FloatEqual(double a, double b) {
+    static BOOL (*fn)(double, double); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (BOOL (*)(double, double))dlsym(RTLD_DEFAULT, "BSFloatEqualToFloat"); });
+    return fn ? fn(a, b) : fabs(a - b) < 0.0000001;
+}
+static BOOL G1D_FloatIsZero(double a) {
+    static BOOL (*fn)(double); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (BOOL (*)(double))dlsym(RTLD_DEFAULT, "BSFloatIsZero"); });
+    return fn ? fn(a) : fabs(a) < 0.0000001;
+}
+
+// ---- availability (16.2 0x1c78fba84 / 0x1c78fbc38). The reason strings are logged only.
+static BOOL G1D_StripsAvailable(id gm, NSString **reason) {
+    id sc = G1D_GM_SC(gm);
+    id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
+    SEL chamois = NSSelectorFromString(@"isChamoisWindowingUIEnabled");
+    NSString *r = @"Available"; BOOL ok = YES;
+    if (!G1B_SendB0(sc, chamois)) { ok = NO; r = @"FeatureNotEnabled"; }
+    else if (G1B_SendLL0(state, NSSelectorFromString(@"unlockedEnvironmentMode")) != 3) { ok = NO; r = @"NotInApplication"; }
+    else if (G1B_SendB0(state, NSSelectorFromString(@"isFloatingSwitcherVisible"))) { ok = NO; r = @"FloatingSwitcherVisible"; }
+    else {
+        id participant = G1D_IvarObj(gm, "_zStackParticipant");
+        if (participant && G1B_SendLL0(participant, NSSelectorFromString(@"activationState")) != 0) { ok = NO; r = @"NotForegroundActiveInZStack"; }
+        else if (!G1B_SendB0(sc, chamois)) { ok = NO; r = @"ChamoisNotEnabled"; }
+        else {
+            id layout = G1B_Send0(state, NSSelectorFromString(@"appLayout"));
+            SEL ifr = NSSelectorFromString(@"itemForLayoutRole:");
+            id item = [layout respondsToSelector:ifr] ? ((id (*)(id, SEL, unsigned long long))objc_msgSend)(layout, ifr, 1) : nil;     // _SBLayoutRolePrimary
+            NSString *bundle = G1B_Send0(item, NSSelectorFromString(@"bundleIdentifier"));
+            Class ac = NSClassFromString(@"SBApplicationController");
+            id app = bundle ? G1B_Send1(G1B_Send0((id)ac, NSSelectorFromString(@"sharedInstance")), NSSelectorFromString(@"applicationWithBundleIdentifier:"), bundle) : nil;
+            if (app && G1B_SendB0(app, NSSelectorFromString(@"alwaysMaximizedInChamois"))) { ok = NO; r = @"ApplicationAlwaysMaximized"; }
+        }
+    }
+    if (reason) *reason = r;
+    return ok;
+}
+
+static BOOL G1D_StripsOccludedOrHidden(id gm, NSString **reason) {
+    id sc = G1D_GM_SC(gm), vc = G1D_GM_VC(gm);
+    NSString *r; BOOL result;
+    if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) { r = @"FeatureNotEnabled"; result = NO; }
+    else if (G1B_SendB0(vc, NSSelectorFromString(@"_areContinuousExposeStripsUnoccluded"))) { r = @"StripsManuallyUnoccluded"; result = NO; }
+    else if (G1B_SendB0(vc, NSSelectorFromString(@"prefersStripHidden"))) { r = @"PrefersStripHidden"; result = YES; }
+    else {
+        id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
+        id layout = G1B_Send0(state, NSSelectorFromString(@"appLayout"));
+        id view = G1B_Send0(vc, NSSelectorFromString(@"view"));
+        CGRect bounds = [view respondsToSelector:@selector(bounds)] ? ((CGRect (*)(id, SEL))objc_msgSend)(view, @selector(bounds)) : CGRectZero;
+        id cla = G1B_Send0(vc, NSSelectorFromString(@"chamoisLayoutAttributes"));
+        id ws = G1B_Send0(sc, NSSelectorFromString(@"windowScene"));
+        long long orientation = G1B_SendLL0(state, NSSelectorFromString(@"interfaceOrientation"));
+        id calc = G1D_IvarObj(gm, "_displayItemLayoutAttributesCalculator");
+        id dock = G1B_Send0(ws, NSSelectorFromString(@"floatingDockController"));
+        double dockHeight = G1B_Dbl0(dock, NSSelectorFromString(@"floatingDockHeight"));
+        double scale = G1B_Dbl0(G1B_Send0(ws, NSSelectorFromString(@"screen")), NSSelectorFromString(@"scale"));
+        BOOL hideStrip = G1B_SendB0(vc, NSSelectorFromString(@"prefersStripHidden")), hideDock = G1B_SendB0(vc, NSSelectorFromString(@"prefersDockHidden"));
+        SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:");
+        id model = (calc && [calc respondsToSelector:om])
+            ? ((id (*)(id, SEL, id, long long, id, double, double, CGRect, BOOL, BOOL))objc_msgSend)(calc, om, layout, orientation, cla, dockHeight, scale, bounds, hideStrip, hideDock) : nil;
+        result = !G1B_SendB0(model, NSSelectorFromString(@"isContinuousExposeStripVisible"));
+        r = @"AnyItemExceedStrip";
+    }
+    if (reason) *reason = r;
+    return result;
+}
+
+// 16.2 0x1c78f95c4: begin when the strips are available AND occluded or hidden (the reveal gesture brings them back)
+static BOOL G1D_ShouldBeginStripReveal(id gm, id gr) {
+    NSString *r = nil;
+    if (!G1D_StripsAvailable(gm, &r)) { if (BP_LogEnabled()) BP_Log(@"g1d: Won't begin strip reveal gesture: %@", r); return NO; }
+    NSString *r2 = nil;
+    BOOL hidden = G1D_StripsOccludedOrHidden(gm, &r2);
+    if (BP_LogEnabled()) BP_Log(@"g1d: %s begin strip reveal gesture: occludedOrHidden=%d (%@)", hidden ? "Will" : "Won't", hidden, r2);
+    return hidden;
+}
+// 16.2 0x1c78f9738: the overflow gestures begin when the strips are available and NOT occluded or hidden
+static BOOL G1D_ShouldBeginStripOverflow(id gm, id gr) {
+    NSString *r = nil;
+    if (!G1D_StripsAvailable(gm, &r)) { if (BP_LogEnabled()) BP_Log(@"g1d: Won't begin strip overflow gesture: %@", r); return NO; }
+    NSString *r2 = nil;
+    BOOL hidden = G1D_StripsOccludedOrHidden(gm, &r2);
+    if (BP_LogEnabled()) BP_Log(@"g1d: %s begin strip overflow gesture: occludedOrHidden=%d (%@)", hidden ? "Won't" : "Will", hidden, r2);
+    return !hidden;
+}
+
+// UIKit's _UISystemGestureLocationForTouchInView(gestureRecognizer, touch, view) (16.0 and 16.2 call it the same way)
+static CGPoint G1D_SystemGestureLocation(id gr, id touch, id view) {
+    static CGPoint (*fn)(id, id, id); static dispatch_once_t once;
+    dispatch_once(&once, ^{ fn = (CGPoint (*)(id, id, id))dlsym(RTLD_DEFAULT, "_UISystemGestureLocationForTouchInView"); });
+    if (fn) return fn(gr, touch, view);
+    return [touch respondsToSelector:@selector(locationInView:)] ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(touch, @selector(locationInView:), view) : CGPointZero;
+}
+
+// 16.2 0x1c78f5ef0: the drag overflow recognizer takes the touch of ITS display (16.0 asked the main display gesture manager and the main window scene's layout attributes)
+static BOOL G1D_StripOverflowReceiveTouch(id gm, id gr, id touch) {
+    id sc = G1D_GM_SC(gm);
+    CGPoint loc = [touch respondsToSelector:@selector(locationInView:)] ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(touch, @selector(locationInView:), nil) : CGPointZero;
+    id ws = G1B_Send0(sc, NSSelectorFromString(@"windowScene"));
+    id sgm = G1B_Send0(ws, NSSelectorFromString(@"systemGestureManager"));
+    SEL recv = NSSelectorFromString(@"shouldSystemGestureReceiveTouchWithLocation:"), allowed = NSSelectorFromString(@"isGestureWithTypeAllowed:");
+    BOOL sgReceives = [sgm respondsToSelector:recv] ? ((BOOL (*)(id, SEL, CGPoint))objc_msgSend)(sgm, recv, loc) : NO;
+    BOOL sgAllowed = [sgm respondsToSelector:allowed] ? ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowed, 0x36) : NO;
+    id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
+    long long env = G1B_SendLL0(state, NSSelectorFromString(@"unlockedEnvironmentMode"));
+    id peek = G1B_Send0(state, NSSelectorFromString(@"peekConfiguration"));
+    BOOL chamois = G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
+    if (!(chamois && sgReceives && sgAllowed && env == 3)) return NO;
+    static BOOL (*peekValid)(id); static dispatch_once_t once;
+    dispatch_once(&once, ^{ peekValid = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "SBPeekConfigurationIsValid"); });
+    if (peekValid && peekValid(peek)) return NO;
+    id vc = G1D_GM_VC(gm);
+    id view = G1B_Send0(vc, NSSelectorFromString(@"view"));
+    CGPoint pt = G1D_SystemGestureLocation(gr, touch, view);
+    double stripWidth = G1B_Dbl0(G1B_Send0(vc, NSSelectorFromString(@"chamoisLayoutAttributes")), NSSelectorFromString(@"stripWidth"));
+    if ([[UIApplication sharedApplication] userInterfaceLayoutDirection] == UIUserInterfaceLayoutDirectionRightToLeft) {
+        CGRect fr = ((CGRect (*)(id, SEL))objc_msgSend)(view, @selector(frame));
+        if (pt.x < CGRectGetMaxX(fr) - stripWidth) return NO;
+    } else if (pt.x > stripWidth) return NO;
+    SEL ica = NSSelectorFromString(@"_itemContainerAtLocation:environment:");
+    id hit = [vc respondsToSelector:ica] ? ((id (*)(id, SEL, CGPoint, long long))objc_msgSend)(vc, ica, pt, 0) : nil;
+    return hit == nil;
+}
+
+// 16.2 0x1c78f9a5c -_shouldProtectEdgeLocation:edge:
+static BOOL G1D_ShouldProtectEdge(id gm, double loc, unsigned long long edge) {
+    if (G1B_SendB0(gm, NSSelectorFromString(@"_shouldSuppressEdgeProtect"))) return NO;
+    static BOOL (*isYes)(id), (*isExplicitNo)(id); static dispatch_once_t once;
+    dispatch_once(&once, ^{ isYes = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "BSSettingFlagIsYes"); isExplicitNo = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "BSSettingFlagIsExplicitNo"); });
+    id flag = G1B_Send0(G1D_IvarObj(gm, "_homeGrabberSettings"), NSSelectorFromString(@"edgeProtectOverride"));
+    if (isYes && isYes(flag)) return YES;
+    if (isExplicitNo && isExplicitNo(flag)) return NO;
+    id vc = G1D_GM_VC(gm);
+    SEL s = NSSelectorFromString(@"isEdgeProtectedForHomeGestureAtEdgeLocation:edge:");
+    return [vc respondsToSelector:s] ? ((BOOL (*)(id, SEL, double, unsigned long long))objc_msgSend)(vc, s, loc, edge) : NO;
+}
+
+// 16.2 -grabberTongue:shouldShowTongueOnFirstSwipeWithEdgeLocation: strip branch (0x1c72c91c0): the first swipe on the strip edge shows the tongue (instead of revealing the
+// strip) when a window touches the strip edge and its app defers system gestures on that edge.
+static BOOL G1D_StripFirstSwipe(id gm) {
+    id vc = G1D_GM_VC(gm);
+    unsigned long long edge = G1D_StripEdge();
+    id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
+    id layout = G1B_Send0(state, NSSelectorFromString(@"appLayout"));
+    id containers = G1B_Send0(vc, NSSelectorFromString(@"visibleItemContainers"));
+    id view = G1B_Send0(vc, NSSelectorFromString(@"view"));
+    SEL ifr = NSSelectorFromString(@"itemForLayoutRole:");
+    id found = nil;
+    for (id leaf in (G1B_Send0(layout, NSSelectorFromString(@"leafAppLayouts")) ?: @[])) {
+        id container = G1B_Send1(containers, NSSelectorFromString(@"objectForKey:"), leaf);
+        CGRect f = [container respondsToSelector:@selector(frame)] ? ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)) : CGRectZero;
+        if (edge == 8) {
+            CGRect vf = ((CGRect (*)(id, SEL))objc_msgSend)(view, @selector(frame));
+            if (G1D_FloatEqual(f.origin.x + f.size.width, vf.origin.x + vf.size.width)) { found = leaf; break; }
+        } else if (edge == 2) {
+            if (G1D_FloatIsZero(f.origin.x)) { found = leaf; break; }
+        }
+    }
+    if (!found) return NO;
+    id item = [found respondsToSelector:ifr] ? ((id (*)(id, SEL, unsigned long long))objc_msgSend)(found, ifr, 1) : nil;
+    SEL lri = NSSelectorFromString(@"layoutRoleForItem:");
+    long long role = [layout respondsToSelector:lri] ? ((long long (*)(id, SEL, id))objc_msgSend)(layout, lri, item) : 0;
+    SEL ewr = NSSelectorFromString(@"elementWithRole:");
+    id element = [state respondsToSelector:ewr] ? ((id (*)(id, SEL, long long))objc_msgSend)(state, ewr, role) : nil;
+    id entity = G1B_Send0(element, NSSelectorFromString(@"workspaceEntity"));
+    id deviceEntity = G1B_Send0(entity, NSSelectorFromString(@"deviceApplicationSceneEntity"));
+    if (!deviceEntity) return NO;
+    id handle = G1B_Send0(deviceEntity, NSSelectorFromString(@"sceneHandle"));
+    unsigned long long edges = (unsigned long long)G1B_SendLL0(handle, NSSelectorFromString(@"screenEdgesDeferringSystemGestures"));
+    return (edge & edges) != 0;
+}
+
+// ---- recognizers owned by the strip tongue
+static id G1D_MakeStripEdgePan(id gm) {
+    Class c = NSClassFromString(@"SBScreenEdgePanGestureRecognizer");
+    SEL ini = NSSelectorFromString(@"initWithTarget:action:");
+    if (!c || ![c instancesRespondToSelector:ini]) return nil;
+    id gr = ((id (*)(id, SEL, id, SEL))objc_msgSend)([c alloc], ini, nil, NULL);
+    G1B_SendVLL(gr, NSSelectorFromString(@"setEdges:"), (long long)G1D_StripEdge());
+    G1B_SendV1(gr, NSSelectorFromString(@"setAllowedTouchTypes:"), @[ @0 ]);                 // UITouchTypeDirect (constant array 0x1e18f86e8)
+    G1B_SendV1(gr, NSSelectorFromString(@"setName:"), @"revealContinuousExposeStripsGestureRecognizer");
+    return gr;
+}
+static id G1D_MakeStripIndirectPan(id gm) {
+    Class c = NSClassFromString(@"SBIndirectPanGestureRecognizer");
+    if (!c) return nil;
+    SEL act = NSSelectorFromString(@"_handleContinuousExposeStripRevealGesture:");
+    SEL i3 = NSSelectorFromString(@"initWithTarget:action:edges:"), i4 = NSSelectorFromString(@"initWithTarget:action:edges:systemGestureManager:");
+    unsigned long long edge = G1D_StripEdge();
+    id gr = nil;
+    if ([c instancesRespondToSelector:i3]) gr = ((id (*)(id, SEL, id, SEL, unsigned long long))objc_msgSend)([c alloc], i3, gm, act, edge);
+    else if ([c instancesRespondToSelector:i4]) {                            // 16.0 has only the long form (the old reveal recognizer was created with the scene's system gesture manager)
+        id sgm = G1B_Send0(G1D_GM_Scene(gm), NSSelectorFromString(@"systemGestureManager"));
+        gr = ((id (*)(id, SEL, id, SEL, unsigned long long, id))objc_msgSend)([c alloc], i4, gm, act, edge, sgm);
+    }
+    if (!gr) return nil;
+    G1B_SendV1(gr, NSSelectorFromString(@"setName:"), @"indirectRevealContinuousExposeStripsGestureRecognizer");
+    G1B_SendV1(gr, NSSelectorFromString(@"setDelegate:"), gm);
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(gr, NSSelectorFromString(@"setShouldRequireGestureToStartAtEdge:"), YES);
+    SEL hy = NSSelectorFromString(@"setHysteresis:forInputType:");
+    if ([gr respondsToSelector:hy]) {
+        ((void (*)(id, SEL, double, long long))objc_msgSend)(gr, hy, 30.0, 0);
+        ((void (*)(id, SEL, double, long long))objc_msgSend)(gr, hy, 10.0, 1);
+    }
+    // translation adjustment block 0x1c78faca0 (same body as the 16.0 block of the old reveal recognizer 0x1c643f2d0)
+    __weak id weakVC = G1D_GM_VC(gm);
+    CGPoint (^adjust)(unsigned long long, CGPoint, CGPoint, CGPoint) = ^CGPoint(unsigned long long edgeArg, CGPoint t, CGPoint unused, CGPoint location) {
+        id vc = weakVC;
+        if (!vc) return t;
+        id view = G1B_Send0(vc, NSSelectorFromString(@"view"));
+        CGRect b = [view respondsToSelector:@selector(bounds)] ? ((CGRect (*)(id, SEL))objc_msgSend)(view, @selector(bounds)) : CGRectZero;
+        double v = t.x - fabs(t.y);
+        double x = (location.x >= b.size.width * 0.5) ? fmax(v, 0.0) : fmin(v, 0.0);
+        return CGPointMake(x, t.y);
+    };
+    G1B_SendV1(gr, NSSelectorFromString(@"setTranslationAdjustmentBlock:"), (id)adjust);
+    return gr;
+}
+
+// ---- 16.2 -_configureChamoisGestureRecognizersIfNeeded / -updateForChamoisWindowingUIEnabled: (the 16.0 versions create/register the same recognizers except the reveal one)
+static void G1D_ConfigureStripTongue(id gm) {
+    G1B_SendV1(gm, NSSelectorFromString(@"setIndirectRevealContinuousExposeStripsGestureRecognizer:"), nil);     // 16.0's reveal recognizer: never registered, the tongue's own ones replace it
+    Class tc = NSClassFromString(@"SBGrabberTongue");
+    SEL ini = NSSelectorFromString(@"initWithDelegate:edge:type:windowScene:");
+    id tongue = ((id (*)(id, SEL, id, unsigned long long, unsigned long long, id))objc_msgSend)([tc alloc], ini, gm, G1D_StripEdge(), G1DStripTongueGestureType, G1D_GM_Scene(gm));
+    G1B_SendV1(tongue, NSSelectorFromString(@"setName:"), @"ContinuousExposeStripRevealGrabberTongue");
+    G1D_SetStripTongue(gm, tongue);
+}
+
+static void G1D_GM_Update(id gm, BOOL enabled) {
+    id sc = G1D_GM_SC(gm);
+    id sgm = G1B_Send0(G1D_GM_Scene(gm), NSSelectorFromString(@"systemGestureManager"));
+    id live = G1D_IvarObj(gm, "_liveWindowResizeGestureRecognizer");
+    id liveView = G1B_Send0(live, NSSelectorFromString(@"view"));
+    SEL add = NSSelectorFromString(@"addGestureRecognizer:withType:"), rem = NSSelectorFromString(@"removeGestureRecognizer:");
+    id hover = G1D_IvarObj(gm, "_hoverGestureRecognizer"), overflow = G1D_IvarObj(gm, "_indirectRevealContinuousExposeStripOverflowGestureRecognizer");
+    id drag = G1D_IvarObj(gm, "_dragRevealContinuousExposeStripOverflowGestureRecognizer");
+    if (enabled) {
+        if (liveView) return;
+        G1B_SendV0(gm, NSSelectorFromString(@"_configureChamoisGestureRecognizersIfNeeded"));
+        live = G1D_IvarObj(gm, "_liveWindowResizeGestureRecognizer"); hover = G1D_IvarObj(gm, "_hoverGestureRecognizer");
+        overflow = G1D_IvarObj(gm, "_indirectRevealContinuousExposeStripOverflowGestureRecognizer"); drag = G1D_IvarObj(gm, "_dragRevealContinuousExposeStripOverflowGestureRecognizer");
+        void (^reg)(id, unsigned long long) = ^(id gr, unsigned long long type) {
+            if (gr && [sgm respondsToSelector:add]) ((void (*)(id, SEL, id, unsigned long long))objc_msgSend)(sgm, add, gr, type);
+        };
+        reg(live, 0x22); reg(hover, 0x33); reg(overflow, 0x35); reg(drag, 0x36);
+        id tongue = G1D_StripTongue(gm);
+        id vc = G1D_GM_VC(gm);
+        SEL inst = NSSelectorFromString(@"installInView:withColorStyle:");
+        if ([tongue respondsToSelector:inst]) ((void (*)(id, SEL, id, long long))objc_msgSend)(tongue, inst, G1B_Send0(vc, NSSelectorFromString(@"view")), 0);
+        id indirect = G1B_Send0(tongue, NSSelectorFromString(@"indirectEdgePullGestureRecognizer"));
+        if (overflow && indirect) G1B_SendV1(overflow, NSSelectorFromString(@"requireGestureRecognizerToFail:"), indirect);
+    } else if (liveView) {
+        void (^unreg)(id) = ^(id gr) { if (gr && [sgm respondsToSelector:rem]) ((void (*)(id, SEL, id))objc_msgSend)(sgm, rem, gr); };
+        if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) unreg(live);
+        unreg(hover); unreg(overflow); unreg(drag);
+        G1B_SendV0(G1D_StripTongue(gm), NSSelectorFromString(@"uninstall"));
+    }
+}
+
+// ---- view controller side
+static void G1D_VC_StripTongueEvent(id vc, BOOL presented) {          // 16.2 0x1c744f4e0 / 0x1c744f540
+    Class c = NSClassFromString(@"SBContinuousExposeStripEdgeProtectTongueSwitcherModifierEvent");
+    SEL ini = NSSelectorFromString(@"initWithTonguePresented:");
+    if (!c || ![c instancesRespondToSelector:ini]) return;
+    id ev = ((id (*)(id, SEL, BOOL))objc_msgSend)([c alloc], ini, presented);
+    G1B_SendV1(vc, NSSelectorFromString(@"_dispatchEventAndHandleAction:"), ev);
+}
+
+// 16.2 -[SBFluidSwitcherViewController isEdgeProtectedForHomeGestureAtEdgeLocation:edge:] 0x1c744c954. 16.0 (0x1c5fd3a74) only asked: does any visible container span the
+// location along the bottom edge and does its app protect the edge. 16.2 skips containers that are occluded in the stage, requires the container to touch the asked edge
+// of the container view and handles all four edges (location runs along the edge: x for top/bottom, y for left/right).
+static BOOL G1D_VC_IsEdgeProtected(id vc, double loc, unsigned long long edge) {
+    id ds = G1B_Send0(vc, NSSelectorFromString(@"dataSource"));
+    SEL kb = NSSelectorFromString(@"switcherContentControllerIsKeyboardHomeAffordanceAssertionCurrentlyBeingTaken:");
+    if ([ds respondsToSelector:kb] && ((BOOL (*)(id, SEL, id))objc_msgSend)(ds, kb, vc)) return NO;
+    SEL cvb = NSSelectorFromString(@"containerViewBounds");
+    CGRect bounds = [vc respondsToSelector:cvb] ? ((CGRect (*)(id, SEL))objc_msgSend)(vc, cvb) : CGRectZero;
+    id containers = G1D_IvarObj(vc, "_visibleItemContainers");
+    SEL handleSel = NSSelectorFromString(@"switcherContentController:deviceApplicationSceneHandleForDisplayItem:");
+    SEL occl = NSSelectorFromString(@"isOccludedInContinuousExposeStage");
+    for (id key in [containers respondsToSelector:@selector(keyEnumerator)] ? [[containers keyEnumerator] allObjects] : @[]) {
+        id container = G1B_Send1(containers, NSSelectorFromString(@"objectForKey:"), key);
+        if (G1B_SendB0(container, occl)) continue;
+        CGRect f = [container respondsToSelector:@selector(frame)] ? ((CGRect (*)(id, SEL))objc_msgSend)(container, @selector(frame)) : CGRectZero;
+        BOOL touchesEdge; double along;
+        switch (edge) {
+            case 1:  if (CGRectGetMinX(f) > loc) continue; touchesEdge = CGRectGetMinY(f) <= CGRectGetMinY(bounds); along = CGRectGetMaxX(f); break;
+            case 2:  if (CGRectGetMinY(f) > loc) continue; touchesEdge = CGRectGetMinX(f) <= CGRectGetMinX(bounds); along = CGRectGetMaxY(f); break;
+            case 4:  if (CGRectGetMinX(f) > loc) continue; touchesEdge = CGRectGetMaxY(f) >= CGRectGetMaxY(bounds); along = CGRectGetMaxX(f); break;
+            case 8:  if (CGRectGetMinY(f) > loc) continue; touchesEdge = CGRectGetMaxX(f) >= CGRectGetMaxX(bounds); along = CGRectGetMaxY(f); break;
+            default: continue;
+        }
+        if (!touchesEdge || along < loc) continue;
+        if (![ds respondsToSelector:handleSel]) continue;
+        SEL ifr = NSSelectorFromString(@"itemForLayoutRole:");
+        id item = [key respondsToSelector:ifr] ? ((id (*)(id, SEL, unsigned long long))objc_msgSend)(key, ifr, 1) : nil;
+        id handle = ((id (*)(id, SEL, id, id))objc_msgSend)(ds, handleSel, vc, item);
+        return G1B_SendB0(handle, NSSelectorFromString(@"isEdgeProtectEnabledForHomeGesture"));
+    }
+    return NO;
+}
+
+// SBGrabberTongue: 16.2 adds the `name` and `screenEdge` accessors (0x1c784ccf8 / 0x1c784cd00 / 0x1c784cd08); the ivars exist (screenEdge) or are kept as associated state (name)
+%group G1D_Tongue
+%hook SBGrabberTongue
+%new
+- (unsigned long long)screenEdge { return G1D_IvarULL(self, "_screenEdge"); }
+%new
+- (id)name { return objc_getAssociatedObject(self, &kG1DTongueName); }
+%new
+- (void)setName:(id)name { objc_setAssociatedObject(self, &kG1DTongueName, [name copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+%end
+
+%hook SBFluidSwitcherGestureManager
+- (void)_configureChamoisGestureRecognizersIfNeeded {
+    BOOL first = G1D_TongueUsable(self) && G1D_IvarObj(self, "_liveWindowResizeGestureRecognizer") == nil;       // the 16.0 body returns at once when it exists
+    %orig;
+    if (first) G1D_ConfigureStripTongue(self);
+}
+- (void)invalidate {
+    %orig;
+    id t = G1D_TongueOn() ? G1D_StripTongue(self) : nil;
+    G1B_SendV0(t, NSSelectorFromString(@"invalidate"));                       // 16.2 0x1c78f179c
+}
+
+// 16.2 0x1c78f27e8: the strip reveal gesture action (touch pull, pointer pull)
+%new
+- (void)_handleContinuousExposeStripRevealGesture:(id)gesture {
+    id tongue = ((id (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"_grabberTongueForGestureRecognizer:"), gesture);
+    SEL dis = NSSelectorFromString(@"dismissWithStyle:animated:");
+    if ([tongue respondsToSelector:dis]) ((BOOL (*)(id, SEL, long long, BOOL))objc_msgSend)(tongue, dis, 0, YES);
+    G1B_SendV1(self, NSSelectorFromString(@"_handleFluidGesture:"), gesture);
+}
+
+// overflow gestures: availability / touch rules of 16.2 (the 16.0 versions miss the `hidden` half and use the main display)
+- (BOOL)_shouldBeginRevealContinuousExposeStripOverflowGesture:(id)gesture {
+    if (G1D_TongueUsable(self)) return G1D_ShouldBeginStripOverflow(self, gesture);
+    return %orig;
+}
+- (BOOL)_shouldRevealContinuousExposeStripOverflowPanGesture:(id)gesture receiveTouch:(id)touch {
+    if (G1D_TongueUsable(self)) return G1D_StripOverflowReceiveTouch(self, gesture, touch);
+    return %orig;
+}
+
+// tongue delegate
+- (id)customGestureRecognizerForGrabberTongue:(id)tongue {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) return G1D_MakeStripEdgePan(self);
+    return %orig;
+}
+- (id)indirectPanGestureRecognizerForGrabberTongue:(id)tongue {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) return G1D_MakeStripIndirectPan(self);
+    return %orig;
+}
+- (unsigned long long)indirectPanSystemGestureTypeForGrabberTongue:(id)tongue {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) return G1DStripIndirectGestureType;
+    return %orig;
+}
+- (BOOL)shouldSuppressTongueViewForGrabberTongue:(id)tongue {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) return YES;                   // the view controller hosts the strip tongue view
+    return %orig;
+}
+- (BOOL)grabberTongueOrPullEnabled:(id)tongue forGestureRecognizer:(id)gesture {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) return G1D_ShouldBeginStripReveal(self, gesture);
+    return %orig;
+}
+- (id)_grabberTongueForGestureRecognizer:(id)gesture {
+    id r = %orig;
+    if (r || !gesture || !G1D_TongueOn()) return r;
+    id t = G1D_StripTongue(self);
+    if (t && (gesture == G1B_Send0(t, NSSelectorFromString(@"edgePullGestureRecognizer")) || gesture == G1B_Send0(t, NSSelectorFromString(@"indirectEdgePullGestureRecognizer")))) return t;
+    return r;
+}
+- (unsigned long long)_gestureTypeForGestureRecognizer:(id)gesture {
+    if (gesture && G1D_TongueOn()) {                                                      // an unknown recognizer would hit the 16.0 NSAssert; both tongue recognizers are strip reveal (0xb)
+        id t = G1D_StripTongue(self);
+        if (t && (gesture == G1B_Send0(t, NSSelectorFromString(@"edgePullGestureRecognizer")) || gesture == G1B_Send0(t, NSSelectorFromString(@"indirectEdgePullGestureRecognizer"))))
+            return G1DStripRevealFluidGestureType;
+    }
+    return %orig;
+}
+- (BOOL)grabberTongue:(id)tongue shouldReceiveTouch:(id)touch {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) {
+        if (!G1B_SendB0(G1D_IvarObj(self, "_zStackParticipant"), NSSelectorFromString(@"ownsHomeGesture"))) return NO;
+        if (G1B_SendLL0(G1B_Send0(self, NSSelectorFromString(@"_currentLayoutState")), NSSelectorFromString(@"unlockedEnvironmentMode")) != 3) return NO;
+        if (!G1B_SendB0(tongue, NSSelectorFromString(@"isVisible"))) return YES;
+        SEL el = NSSelectorFromString(@"edgeLocationForTouch:"), rg = NSSelectorFromString(@"isEdgeLocationInGrabberRegion:");
+        double loc = [tongue respondsToSelector:el] ? ((double (*)(id, SEL, id))objc_msgSend)(tongue, el, touch) : 0.0;
+        return [tongue respondsToSelector:rg] ? ((BOOL (*)(id, SEL, double))objc_msgSend)(tongue, rg, loc) : YES;
+    }
+    return %orig;
+}
+- (BOOL)grabberTongue:(id)tongue shouldShowTongueOnFirstSwipeWithEdgeLocation:(double)location {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) return G1D_StripFirstSwipe(self);
+    return %orig;
+}
+- (BOOL)grabberTongue:(id)tongue shouldAllowSecondSwipeWithEdgeLocation:(double)location {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) {
+        unsigned long long edge = (unsigned long long)G1B_SendLL0(tongue, NSSelectorFromString(@"screenEdge"));
+        if (!G1D_ShouldProtectEdge(self, location, edge)) return YES;
+        SEL rg = NSSelectorFromString(@"isEdgeLocationInGrabberRegion:");
+        return [tongue respondsToSelector:rg] ? ((BOOL (*)(id, SEL, double))objc_msgSend)(tongue, rg, location) : YES;
+    }
+    return %orig;
+}
+// the pulls of the strip tongue's touch recognizer are strip reveal gestures
+- (void)grabberTongueBeganPulling:(id)tongue withDistance:(double)distance andVelocity:(double)velocity andGesture:(id)gesture {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) { ((void (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"_handleContinuousExposeStripRevealGesture:"), G1B_Send0(tongue, NSSelectorFromString(@"edgePullGestureRecognizer"))); return; }
+    %orig;
+}
+- (void)grabberTongueUpdatedPulling:(id)tongue withDistance:(double)distance andVelocity:(double)velocity andGesture:(id)gesture {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) { ((void (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"_handleContinuousExposeStripRevealGesture:"), G1B_Send0(tongue, NSSelectorFromString(@"edgePullGestureRecognizer"))); return; }
+    %orig;
+}
+- (void)grabberTongueEndedPulling:(id)tongue withDistance:(double)distance andVelocity:(double)velocity andGesture:(id)gesture {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) { ((void (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"_handleContinuousExposeStripRevealGesture:"), G1B_Send0(tongue, NSSelectorFromString(@"edgePullGestureRecognizer"))); return; }
+    %orig;
+}
+- (void)grabberTongueCanceledPulling:(id)tongue withDistance:(double)distance andVelocity:(double)velocity andGesture:(id)gesture {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) { ((void (*)(id, SEL, id))objc_msgSend)(self, NSSelectorFromString(@"_handleContinuousExposeStripRevealGesture:"), G1B_Send0(tongue, NSSelectorFromString(@"edgePullGestureRecognizer"))); return; }
+    %orig;
+}
+- (void)grabberTongueWillPresent:(id)tongue {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) { G1B_SendV0(G1D_GM_VC(self), NSSelectorFromString(@"presentContinuousExposeStripEdgeProtectTongue")); return; }
+    %orig;
+}
+- (void)grabberTongueWillDismiss:(id)tongue {
+    if (G1D_TongueOn() && G1D_IsStripTongue(self, tongue)) { G1B_SendV0(G1D_GM_VC(self), NSSelectorFromString(@"dismissContinuousExposeStripEdgeProtectTongue")); return; }
+    %orig;
+}
+%end
+
+// the system gesture type of the strip tongue's touch recognizer is enabled on the main display like the hover gesture (16.2: same case of the jump table, 0x1c72e9590)
+%hook SBMainDisplaySystemGestureManager
+- (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
+    if (type == G1DStripTongueGestureType && G1D_TongueOn()) return %orig(0x33);
+    return %orig;
+}
+%end
+
+// -[SBExternalDisplaySystemGestureManager _shouldEnableSystemGestureWithType:] 16.2 0x1c780bf58 (16.0 0x1c6365c28): the set of types the external display arms also holds
+// 0x1e / 0x1f / 0x20 / 0x21 (the SBTransientUIInteractionManager tap to dismiss, indirect pan to dismiss and tap to unhide gestures, registered at 0x1c74f7414 / 0x1c74f77e8 /
+// 0x1c74f75b8 / 0x1c74f764c) and 0x43 (external display cover sheet / lock screen, = 16.0 0x42, handled by the wake gesture code in Tweak.x). The 16.2 table is the 16.0
+// one plus these; every type below 0x37 keeps its number.
+%hook SBExternalDisplaySystemGestureManager
+- (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
+    if (type >= 0x1e && type <= 0x21 && G1D_ON("g1d_extgestures")) return YES;
+    return %orig;
+}
+%end
+
+// view controller side of the strip edge protect tongue and the edge-aware home gesture protection
+%hook SBFluidSwitcherViewController
+%new
+- (void)presentContinuousExposeStripEdgeProtectTongue { G1D_VC_StripTongueEvent(self, YES); }
+%new
+- (void)dismissContinuousExposeStripEdgeProtectTongue { G1D_VC_StripTongueEvent(self, NO); }
+%new
+- (BOOL)isEdgeProtectedForHomeGestureAtEdgeLocation:(double)location edge:(unsigned long long)edge { return G1D_VC_IsEdgeProtected(self, location, edge); }
+- (BOOL)isEdgeProtectedForHomeGestureAtEdgeLocation:(double)location {
+    if (G1D_TongueOn()) return G1D_VC_IsEdgeProtected(self, location, 4);              // 16.0's only callers ask for the bottom edge (UIRectEdgeBottom)
+    return %orig;
+}
+%end
+%end // G1D_Tongue
+
+
+// ============================================================================================================
+// 4b. SBFluidSwitcherGestureManager: touch rules that 16.0 evaluates against the MAIN display (SBMainDisplaySystemGestureManager / _SBIsMainDisplaySystemGestureAllowed)
+// ============================================================================================================
+// 16.2 asks the system gesture manager of the switcher's OWN window scene and the per-scene _SBIsSystemGestureAllowed(windowScene, type) (0x1c74d1424), so a pointer
+// resize or a click on a window of the external display is no longer judged by the iPad's cover sheet / control center / alert state.
+// Ported here: -_shouldLiveResizeGesture:receiveTouch: 0x1c78f5920 (16.0 0x1c6443518), -_shouldTapToBringItemContainerForward:receiveTouch: 0x1c78f5ac0 (0x1c6443604),
+// -_shouldBeginTapToBringItemContainerForwardGesture: 0x1c78f7064 (0x1c644493c), -_handleTapToBringItemContainerForward: 0x1c78f2690 (0x1c6440998).
+// Verified equivalent and left alone: -_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch: (log only), ...WithTouch:receiveTouch: (16.0 asks the view controller's
+// own window scene for the same layout attributes that 16.2 reads from -chamoisLayoutAttributes).
+// Not ported (Medusa only, never active on an external display): the Slide Over move / pin gestures and the Split View unpin gesture (spec 4.4).
+static BOOL G1D_IsSystemGestureAllowed(id ws, unsigned long long type) {                // _SBIsSystemGestureAllowed(ws, type) 0x1c74d1424
+    id sgm = G1B_Send0(ws, NSSelectorFromString(@"systemGestureManager"));
+    SEL allowedSel = NSSelectorFromString(@"isGestureWithTypeAllowed:");
+    BOOL allowed = [sgm respondsToSelector:allowedSel] ? ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowedSel, type) : NO;
+    SEL vis = NSSelectorFromString(@"isVisible"), pres = NSSelectorFromString(@"isPresented"), wsSel = NSSelectorFromString(@"windowScene");
+    id cs = G1B_Send0((id)NSClassFromString(@"SBCoverSheetPresentationManager"), NSSelectorFromString(@"sharedInstance"));
+    BOOL coverSheet = [G1B_Send0(G1B_Send0(cs, NSSelectorFromString(@"coverSheetWindow")), wsSel) isEqual:ws] ? G1B_SendB0(cs, vis) : NO;
+    id cc = G1B_Send0((id)NSClassFromString(@"SBControlCenterController"), NSSelectorFromString(@"sharedInstance"));
+    BOOL controlCenter = [G1B_Send0(G1B_Send0(cc, NSSelectorFromString(@"_controlCenterWindow")), wsSel) isEqual:ws] ? G1B_SendB0(cc, pres) : NO;
+    id wk = G1B_Send0((id)NSClassFromString(@"SBWorkspace"), NSSelectorFromString(@"mainWorkspace"));
+    id tom = G1B_Send0(wk, NSSelectorFromString(@"transientOverlayPresentationManager"));
+    SEL hap = NSSelectorFromString(@"hasActivePresentationForWindowScene:");
+    BOOL transient = [tom respondsToSelector:hap] ? ((BOOL (*)(id, SEL, id))objc_msgSend)(tom, hap, ws) : G1B_SendB0(tom, NSSelectorFromString(@"hasActivePresentation"));
+    id alerts = G1B_Send0((id)NSClassFromString(@"SBAlertItemsController"), NSSelectorFromString(@"sharedInstance"));
+    SEL hva = NSSelectorFromString(@"hasVisibleAlertForWindowScene:");
+    BOOL alert = [alerts respondsToSelector:hva] ? ((BOOL (*)(id, SEL, id))objc_msgSend)(alerts, hva, ws) : G1B_SendB0(alerts, NSSelectorFromString(@"hasVisibleModalAlert"));
+    BOOL switcher = G1B_SendB0(G1B_Send0(ws, NSSelectorFromString(@"switcherController")), NSSelectorFromString(@"isAnySwitcherVisible"));
+    id assistant = G1B_Send0((id)NSClassFromString(@"SBAssistantController"), NSSelectorFromString(@"sharedInstance"));
+    SEL ivw = NSSelectorFromString(@"isVisibleInWindowScene:");
+    BOOL assistantVisible = [assistant respondsToSelector:ivw] ? ((BOOL (*)(id, SEL, id))objc_msgSend)(assistant, ivw, ws) : G1B_SendB0(assistant, vis);
+    BOOL locked = G1B_SendB0(G1B_Send0((id)NSClassFromString(@"SBLockStateAggregator"), NSSelectorFromString(@"sharedInstance")), NSSelectorFromString(@"hasAnyLockState"));
+    return allowed && !(coverSheet || controlCenter || transient || alert || switcher || assistantVisible || locked);
+}
+static BOOL G1D_GM_LocationReceivable(id gm, id touch, id *outScene, id *outSGM, CGPoint *outLoc) {
+    id ws = G1D_GM_Scene(gm);
+    id sgm = G1B_Send0(ws, NSSelectorFromString(@"systemGestureManager"));
+    CGPoint loc = [touch respondsToSelector:@selector(locationInView:)] ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(touch, @selector(locationInView:), nil) : CGPointZero;
+    SEL recv = NSSelectorFromString(@"shouldSystemGestureReceiveTouchWithLocation:");
+    if (outScene) *outScene = ws; if (outSGM) *outSGM = sgm; if (outLoc) *outLoc = loc;
+    return [sgm respondsToSelector:recv] ? ((BOOL (*)(id, SEL, CGPoint))objc_msgSend)(sgm, recv, loc) : NO;
+}
+
+%group G1D_GMTouch
+%hook SBFluidSwitcherGestureManager
+- (BOOL)_shouldLiveResizeGesture:(id)gesture receiveTouch:(id)touch {
+    if (!G1D_ON("g1d_gmtouch")) return %orig;
+    id sc = G1D_GM_SC(self);
+    if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) return NO;
+    id ws = nil, sgm = nil;
+    if (!G1D_GM_LocationReceivable(self, touch, &ws, &sgm, NULL)) return NO;
+    SEL allowedSel = NSSelectorFromString(@"isGestureWithTypeAllowed:");
+    if (![sgm respondsToSelector:allowedSel] || !((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowedSel, 0x22)) return NO;
+    SEL ptr = NSSelectorFromString(@"_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch:"), tch = NSSelectorFromString(@"_shouldLiveResizeItemContainerGestureWithTouch:receiveTouch:");
+    if ([self respondsToSelector:ptr] && ((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, ptr, gesture, touch)) return YES;
+    return [self respondsToSelector:tch] ? ((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, tch, gesture, touch) : NO;
+}
+
+- (BOOL)_shouldTapToBringItemContainerForward:(id)gesture receiveTouch:(id)touch {
+    if (!G1D_ON("g1d_gmtouch")) return %orig;
+    id sc = G1D_GM_SC(self), vc = G1D_GM_VC(self);
+    if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) return NO;
+    BOOL receivable = G1D_GM_LocationReceivable(self, touch, NULL, NULL, NULL);
+    CGPoint pt = G1D_SystemGestureLocation(gesture, touch, G1B_Send0(vc, NSSelectorFromString(@"view")));
+    SEL ica = NSSelectorFromString(@"_itemContainerAtLocation:environment:");
+    id container = [vc respondsToSelector:ica] ? ((id (*)(id, SEL, CGPoint, long long))objc_msgSend)(vc, ica, pt, 1) : nil;
+    id state = G1B_Send0(self, NSSelectorFromString(@"_currentLayoutState"));
+    id containerLayout = G1B_Send0(container, NSSelectorFromString(@"appLayout"));
+    id adjusted = G1B_Send1(vc, NSSelectorFromString(@"adjustedAppLayoutForLeafAppLayout:"), containerLayout);
+    SEL ifr = NSSelectorFromString(@"itemForLayoutRole:");
+    id item = [containerLayout respondsToSelector:ifr] ? ((id (*)(id, SEL, unsigned long long))objc_msgSend)(containerLayout, ifr, 1) : nil;
+    id stateLayout = G1B_Send0(state, NSSelectorFromString(@"appLayout"));
+    id top = [G1B_Send0(stateLayout, NSSelectorFromString(@"zOrderedItems")) firstObject];
+    // 16.2 also refuses while a scene backed banner is presented (_presentedSceneBackedBanners count != 0): the banners are a 16.2 feature that does not exist in 16.0
+    if (!container || item == top || !receivable) return NO;
+    if (!G1B_SendB1(stateLayout, NSSelectorFromString(@"isOrContainsAppLayout:"), containerLayout)) return NO;
+    id apps = G1B_Send0((id)NSClassFromString(@"SBApplicationController"), NSSelectorFromString(@"sharedInstance"));
+    return G1B_SendB1(apps, NSSelectorFromString(@"_appLayoutContainsOnlyResizableApps:"), adjusted);
+}
+
+- (BOOL)_shouldBeginTapToBringItemContainerForwardGesture:(id)gesture {
+    if (!G1D_ON("g1d_gmtouch")) return %orig;
+    id sc = G1D_GM_SC(self);
+    if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) { if (BP_LogEnabled()) BP_Log(@"g1d: Won't begin tap to bring forward: ChamoisNotEnabled"); return NO; }
+    id participant = G1D_IvarObj(self, "_zStackParticipant");
+    if (participant && !G1B_SendB0(participant, NSSelectorFromString(@"ownsHomeGesture"))) return NO;
+    id sgm = G1B_Send0(G1D_GM_Scene(self), NSSelectorFromString(@"systemGestureManager"));
+    SEL allowedSel = NSSelectorFromString(@"isGestureWithTypeAllowed:");
+    if (![sgm respondsToSelector:allowedSel] || !((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowedSel, 0x13)) return NO;
+    id icons = G1B_Send0((id)NSClassFromString(@"SBIconController"), NSSelectorFromString(@"sharedInstance"));
+    if (G1B_SendB0(icons, NSSelectorFromString(@"areAnyIconViewContextMenusShowing"))) return NO;       // 16.2 only: not while an icon context menu is up
+    return G1B_SendLL0(G1B_Send0(self, NSSelectorFromString(@"_currentLayoutState")), NSSelectorFromString(@"unlockedEnvironmentMode")) == 3;
+}
+
+// 16.2 0x1c78f2690: a command-modified tap is no longer filtered out here (16.0 skipped the forward call when -tapWasCommandModified)
+- (void)_handleTapToBringItemContainerForward:(id)gesture {
+    if (!G1D_ON("g1d_gmtouch")) {
+        %orig;
+        return;
+    }
+    if (BP_LogEnabled()) BP_Log(@"g1d: tap to bring forward, command modified: %d", G1B_SendB0(gesture, NSSelectorFromString(@"tapWasCommandModified")));
+    G1B_SendV1(G1D_GM_VC(self), NSSelectorFromString(@"handleTapToBringItemContainerForward:"), gesture);
+}
+%end
+%end // G1D_GMTouch
+
+// VC -handleTapToBringItemContainerForward: 16.2 0x1c7439690 (16.0 0x1c5fc0b10): the tap's modifier flags go to -didSelectContainer:modifierFlags: (shift-select of Stage Manager
+// windows, G2B.m) and the explicit keyboard focus move of 16.0 is gone (the activating entity of the transition request takes the focus, see _configureRequest: above).
+%group G1D_TapForward
+%hook SBFluidSwitcherViewController
+- (void)handleTapToBringItemContainerForward:(id)gesture {
+    SEL didSelect = NSSelectorFromString(@"didSelectContainer:modifierFlags:");
+    if (!G1D_ON("g1d_gmtouch") || ![self respondsToSelector:didSelect]) {
+        %orig;
+        return;
+    }
+    id contentView = G1D_IvarObj(self, "_contentView");
+    CGPoint loc = [gesture respondsToSelector:@selector(locationInView:)] ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(gesture, @selector(locationInView:), contentView) : CGPointZero;
+    SEL ica = NSSelectorFromString(@"_itemContainerAtLocation:environment:");
+    id container = [self respondsToSelector:ica] ? ((id (*)(id, SEL, CGPoint, long long))objc_msgSend)(self, ica, loc, 0) : nil;
+    long long flags = G1B_SendLL0(gesture, NSSelectorFromString(@"modifierFlags"));
+    ((void (*)(id, SEL, id, long long))objc_msgSend)(self, didSelect, container, flags);
+}
+%end
+%end // G1D_TapForward
+
+
+// ============================================================================================================
+// 5. Picture in Picture morph in a Stage Manager window (view controller side)
+// ============================================================================================================
+// 16.2 -[SBFluidSwitcherViewController _performEventResponse:] 0x1c745b6f0 hands the SBSetupPIPMorphingSwitcherEventResponse to
+// -_setupPIPMorphingIfNeededForTransitionContext:response: 0x1c745a944 (16.0: -_setupMorphToPIPIfNeededForTransitionContext: 0x1c5fe130c, same body) which passes the
+// response's appLayoutBoundingBox on to -_setupMorphAnimatorIfNeededForEntity:pipCoordinator:appLayout:appLayoutBoundingBox:uniqueID:direction:gestureInitiated:
+// 0x1c745a420 (16.0 0x1c5fe0e6c without the box). That method stores appLayout / layoutRole / appLayoutBoundingBox on the SBPIPMorphAnimatorController (new properties,
+// 0x1c78c0b2c..0x1c78c0b5c) either at creation (direction 0, createAndRegisterPictureInPictureMorphAnimatorController...appLayout:layoutRole:appLayoutBoundingBox:
+// gestureInitiated:direction: 0x1c792d744) or on the already registered controller (direction != 0). The data source reads them (section 5b).
+static __thread __unsafe_unretained id tPipResponse;                      // the SBSetupPIPMorphingSwitcherEventResponse being performed
+static __thread __unsafe_unretained id tPipSetupLayout;                   // values for the controller while the 16.0 setup body runs
+static __thread long long tPipSetupRole;
+static __thread CGRect tPipSetupBox;
+static __thread BOOL tPipSetupOn;
+static char kPipLayout, kPipRole, kPipBox;
+static void G1D_PIPC_SetLayout(id self, SEL _cmd, id l) { objc_setAssociatedObject(self, &kPipLayout, l, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static id G1D_PIPC_Layout(id self, SEL _cmd) { return objc_getAssociatedObject(self, &kPipLayout); }
+static void G1D_PIPC_SetRole(id self, SEL _cmd, long long r) { objc_setAssociatedObject(self, &kPipRole, @(r), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static long long G1D_PIPC_Role(id self, SEL _cmd) { return [objc_getAssociatedObject(self, &kPipRole) longLongValue]; }
+static void G1D_PIPC_SetBox(id self, SEL _cmd, CGRect r) { objc_setAssociatedObject(self, &kPipBox, [NSValue valueWithBytes:&r objCType:@encode(CGRect)], OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static CGRect G1D_PIPC_Box(id self, SEL _cmd) {
+    NSValue *v = objc_getAssociatedObject(self, &kPipBox); CGRect r = CGRectZero;
+    if (v) [v getValue:&r];
+    return r;
+}
+static void G1D_PIPC_Apply(id controller) {
+    if (!controller || !tPipSetupOn) return;
+    ((void (*)(id, SEL, id))objc_msgSend)(controller, NSSelectorFromString(@"setAppLayout:"), tPipSetupLayout);
+    ((void (*)(id, SEL, long long))objc_msgSend)(controller, NSSelectorFromString(@"setLayoutRole:"), tPipSetupRole);
+    ((void (*)(id, SEL, CGRect))objc_msgSend)(controller, NSSelectorFromString(@"setAppLayoutBoundingBox:"), tPipSetupBox);
+}
+static void G1D_InstallPIPAnimatorProperties(void) {
+    Class c = NSClassFromString(@"SBPIPMorphAnimatorController");
+    if (!c) return;
+    class_addMethod(c, NSSelectorFromString(@"setAppLayout:"), (IMP)G1D_PIPC_SetLayout, "v24@0:8@16");
+    class_addMethod(c, NSSelectorFromString(@"appLayout"), (IMP)G1D_PIPC_Layout, "@16@0:8");
+    class_addMethod(c, NSSelectorFromString(@"setLayoutRole:"), (IMP)G1D_PIPC_SetRole, "v24@0:8q16");
+    class_addMethod(c, NSSelectorFromString(@"layoutRole"), (IMP)G1D_PIPC_Role, "q16@0:8");
+    class_addMethod(c, NSSelectorFromString(@"setAppLayoutBoundingBox:"), (IMP)G1D_PIPC_SetBox, "v48@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16");
+    class_addMethod(c, NSSelectorFromString(@"appLayoutBoundingBox"), (IMP)G1D_PIPC_Box, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8");
+}
+
+%group G1D_PIP
+%hook SBFluidSwitcherViewController
+- (void)_performEventResponse:(id)response {
+    Class pc = NSClassFromString(@"SBSetupPIPMorphingSwitcherEventResponse");
+    if (pc && [response isKindOfClass:pc] && G1D_ON("g1d_pip")) {
+        id saved = tPipResponse;
+        tPipResponse = response;
+        %orig;
+        tPipResponse = saved;
+        return;
+    }
+    %orig;
+}
+- (void)_setupMorphAnimatorIfNeededForEntity:(id)entity pipCoordinator:(id)coordinator appLayout:(id)appLayout uniqueID:(id)uniqueID direction:(long long)direction gestureInitiated:(BOOL)gesture {
+    id response = tPipResponse;
+    if (!response || !G1D_ON("g1d_pip")) {
+        %orig;
+        return;
+    }
+    // 16.2 hands appLayout / layoutRole / appLayoutBoundingBox to the controller before anything can ask for them: on creation (init) or right after the lookup of the
+    // registered one. The 16.0 body creates / looks the controller up itself, so the three values wait in thread local state until SBPIPController returns it (below).
+    id handle = G1B_Send0(entity, NSSelectorFromString(@"sceneHandle"));
+    NSString *sceneId = G1B_Send0(handle, NSSelectorFromString(@"sceneIdentifier"));
+    id item = nil;
+    for (id it in (G1B_Send0(appLayout, NSSelectorFromString(@"allItems")) ?: @[]))      // 16.2 block 0x1c745a8d0: item.uniqueIdentifier == entity.sceneHandle.sceneIdentifier
+        if ([[G1B_Send0(it, NSSelectorFromString(@"uniqueIdentifier")) description] isEqualToString:sceneId]) { item = it; break; }
+    SEL lri = NSSelectorFromString(@"layoutRoleForItem:");
+    SEL bb = NSSelectorFromString(@"appLayoutBoundingBox");
+    id savedLayout = tPipSetupLayout; long long savedRole = tPipSetupRole; CGRect savedBox = tPipSetupBox; BOOL savedOn = tPipSetupOn;
+    tPipSetupLayout = appLayout;
+    tPipSetupRole = [appLayout respondsToSelector:lri] ? ((long long (*)(id, SEL, id))objc_msgSend)(appLayout, lri, item) : 0;
+    tPipSetupBox = [response respondsToSelector:bb] ? ((CGRect (*)(id, SEL))objc_msgSend)(response, bb) : CGRectZero;
+    tPipSetupOn = YES;
+    %orig;
+    tPipSetupLayout = savedLayout; tPipSetupRole = savedRole; tPipSetupBox = savedBox; tPipSetupOn = savedOn;
+}
+%end
+
+%hook SBPIPController
+- (id)createAndRegisterPictureInPictureMorphAnimatorControllerWithTargetProcessIdentifier:(int)pid uuid:(id)uuid scenePersistenceIdentifier:(id)persistence direction:(long long)direction gestureInitiated:(BOOL)gesture {
+    id c = %orig;
+    G1D_PIPC_Apply(c);
+    return c;
+}
+- (id)pictureInPictureMorphAnimatorControllerForProcessIdentifier:(int)pid scenePersistenceIdentifier:(id)persistence {
+    id c = %orig;
+    G1D_PIPC_Apply(c);
+    return c;
+}
+%end
+%end // G1D_PIP
+
+// ============================================================================================================
+// 5b. Picture in Picture morph: data source, animator controller and view morph animator
+// ============================================================================================================
+// 16.2 SBPIPMorphAnimatorDataSource (the 16.0 one is initialised with pid / persistence id / gesture flag, 16.2 with the morph animator controller and reads those from it):
+//   -sourceContentContainerFrameForAnimator: 0x1c783031c  new (replaces sourceAppLayoutFrameForAnimator: 0x1c60b7e50): the item's frame in the main app layout of the display
+//      (-[SBSwitcherController frameForItemWithRole:inMainAppLayout:interfaceOrientation:]) moved by the app layout bounding box origin
+//   -sourceContentFrameForAnimator: 0x1c782fdc0 (16.0 0x1c60b7c28): fits the PIP into that container (16.0: window frame converted by the animator, landscape swap), initial frames are cached per morph
+//   -sourceSubviewFrame:inScreenSpaceForAnimator: 0x1c7830450 new, -shouldProvideSourceClippingFrameInFixedCoordinateSpace: 0x1c782fda4 new,
+//   -_appLayoutBoundingBoxForAnimator: 0x1c782fd24 new, -_isChamoisWindowingUIEnabledForAnimator: 0x1c782fcd0 new,
+//   -sourceBlackCurtainCornerRadiusForAnimator: 0x1c78307f8 (16.0 0x1c60b827c, + the Stage Manager branch).
+//   -targetFinalFrameForAnimator: 0x1c78304b0 only changed where the gesture flag comes from: left alone.
+// SBPIPMorphAnimatorController -willRemoveTargeMatchMoveAnimationAtFrame:withinSourceFrame: 0x1c78c09c0 (16.0 0x1c6413054) converts both frames to screen space first.
+// SBViewMorphAnimator: -_sourceContentFrameForSourceView:withTargetDataSource: (16.0 0x1c61f36a4) and -_sourceAppLayoutFrameForSourceView:withTargetDataSource: (0x1c61f3964)
+//   converted the data source's window frames into the superview of the source view; 16.2 uses the data source frames as they are (the container frame inset by -1,
+//   0x1c7681eac) and -_checkAnimationsDependencies: 0x1c7683580 re-parents the black curtain keeping its frame. -_source:finalCenterWithFinalScale:contentFrame:targetFinalFrame:
+//   0x1c7681f9c only gained logging.  The SBPIPController side (-homeScreenInitialPIPFrameForWindowScene:... etc.) is section 5c.
+static id G1D_PIPDS_Controller(id ds) {                                           // the morph animator controller the 16.2 data source holds (+0x20)
+    id pip = G1D_IvarObj(ds, "_pipController");
+    id persistence = G1D_IvarObj(ds, "_scenePersistenceIdentifier");
+    int pid = (int)(G1D_IvarULL(ds, "_targetProcessIdentifier") & 0xffffffffu);
+    SEL find = NSSelectorFromString(@"pictureInPictureMorphAnimatorControllerForProcessIdentifier:scenePersistenceIdentifier:");
+    return [pip respondsToSelector:find] ? ((id (*)(id, SEL, int, id))objc_msgSend)(pip, find, pid, persistence) : nil;
+}
+static BOOL G1D_PIPDS_Chamois(id animator) {
+    return G1B_SendB0(G1B_Send0(G1B_Send0(animator, NSSelectorFromString(@"windowScene")), NSSelectorFromString(@"switcherController")), NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
+}
+static CGRect G1D_PIPDS_Box(id ds, id animator) {
+    if (!G1D_PIPDS_Chamois(animator)) return CGRectZero;
+    id c = G1D_PIPDS_Controller(ds);
+    return [c respondsToSelector:NSSelectorFromString(@"appLayoutBoundingBox")] ? ((CGRect (*)(id, SEL))objc_msgSend)(c, NSSelectorFromString(@"appLayoutBoundingBox")) : CGRectZero;
+}
+static CGRect G1D_PIPDS_ContainerFrame(id ds, id animator) {
+    CGRect box = G1D_PIPDS_Box(ds, animator);
+    id c = G1D_PIPDS_Controller(ds);
+    id sc = G1B_Send0(G1B_Send0(animator, NSSelectorFromString(@"windowScene")), NSSelectorFromString(@"switcherController"));
+    SEL fr = NSSelectorFromString(@"frameForItemWithRole:inMainAppLayout:interfaceOrientation:");
+    long long role = G1B_SendLL0(c, NSSelectorFromString(@"layoutRole"));
+    id layout = G1B_Send0(c, NSSelectorFromString(@"appLayout"));
+    long long orientation = G1B_SendLL0(animator, NSSelectorFromString(@"toOrientation"));
+    CGRect f = [sc respondsToSelector:fr] ? ((CGRect (*)(id, SEL, long long, id, long long))objc_msgSend)(sc, fr, role, layout, orientation) : CGRectZero;
+    return CGRectOffset(f, -box.origin.x, -box.origin.y);
+}
+static id G1D_PIPApplicationForPID(id pip, int pid) {                          // _SBPIPApplicationForProcessIdentifier 0x1c60b4008 / 0x1c78301f4
+    for (id app in (G1B_Send0(pip, NSSelectorFromString(@"pictureInPictureApplications")) ?: @[]))
+        if ((int)G1B_SendLL0(app, NSSelectorFromString(@"processIdentifier")) == pid) return app;
+    return nil;
+}
+static char kPipInitialFrames;
+
+%group G1D_PIPDS
+%hook SBPIPMorphAnimatorDataSource
+%new
+- (CGRect)sourceContentContainerFrameForAnimator:(id)animator { return G1D_PIPDS_ContainerFrame(self, animator); }
+%new
+- (CGRect)sourceSubviewFrame:(CGRect)frame inScreenSpaceForAnimator:(id)animator {
+    CGRect box = G1D_PIPDS_Box(self, animator);
+    return CGRectOffset(frame, box.origin.x, box.origin.y);
+}
+%new
+- (BOOL)shouldProvideSourceClippingFrameInFixedCoordinateSpace:(id)animator { return !G1D_PIPDS_Chamois(animator); }
+
+- (CGRect)sourceContentFrameForAnimator:(id)animator {
+    if (!G1D_ON("g1d_pipframes")) return %orig;
+    CGRect container = G1D_PIPDS_ContainerFrame(self, animator);
+    long long direction = G1B_SendLL0(animator, NSSelectorFromString(@"direction"));
+    id pegasus = G1D_IvarObj(self, "_pegasusController");
+    id persistence = G1D_IvarObj(self, "_scenePersistenceIdentifier");
+    int pid = (int)(G1D_IvarULL(self, "_targetProcessIdentifier") & 0xffffffffu);
+    id app = G1D_PIPApplicationForPID(pegasus, pid);
+    CGRect result;
+    if (direction != 0) {                                                             // restoring from PIP: fit the PIP into the container, centred
+        SEL pref = NSSelectorFromString(@"preferredContentSizeForActivePictureInPictureWithApplication:sceneSessionPersistentIdentifier:");
+        CGSize size = [pegasus respondsToSelector:pref] ? ((CGSize (*)(id, SEL, id, id))objc_msgSend)(pegasus, pref, app, persistence) : CGSizeZero;
+        if (size.width == 0 || size.height == 0) {
+            id pip = G1D_IvarObj(self, "_pipController");
+            SEL any = NSSelectorFromString(@"anyContentViewPresentedOnWindowScene:");
+            id view = [pip respondsToSelector:any] ? ((id (*)(id, SEL, id))objc_msgSend)(pip, any, G1B_Send0(animator, NSSelectorFromString(@"windowScene"))) : nil;
+            CGRect vf = [view respondsToSelector:@selector(frame)] ? ((CGRect (*)(id, SEL))objc_msgSend)(view, @selector(frame)) : CGRectZero;
+            size = CGSizeMake(fmax(vf.size.width, 1.0), fmax(vf.size.height, 1.0));
+        }
+        double scale = fmin(container.size.width / size.width, container.size.height / size.height);
+        size = CGSizeMake(size.width * scale, size.height * scale);
+        CGPoint center = CGPointMake(CGRectGetMidX(container), CGRectGetMidY(container));
+        result = CGRectMake(center.x - size.width / 2, center.y - size.height / 2, size.width, size.height);
+    } else {                                                                          // morphing to PIP: the PIP's initial frame, cached per morph, relative to the container
+        SEL initial = NSSelectorFromString(@"initialFrameForInteractivePictureInPictureAnimationEnteringBackgroundForApplication:sceneSessionPersistentIdentifier:");
+        CGRect f = [pegasus respondsToSelector:initial] ? ((CGRect (*)(id, SEL, id, id))objc_msgSend)(pegasus, initial, app, persistence) : CGRectZero;
+        NSValue *value = [NSValue valueWithBytes:&f objCType:@encode(CGRect)];
+        id uuid = G1B_Send0(animator, NSSelectorFromString(@"uuid"));
+        if (uuid) {
+            NSMutableDictionary *cache = objc_getAssociatedObject(self, &kPipInitialFrames);
+            if (!cache) { cache = [NSMutableDictionary dictionary]; objc_setAssociatedObject(self, &kPipInitialFrames, cache, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+            NSValue *cached = cache[uuid];
+            if (cached) value = cached; else cache[uuid] = value;
+        }
+        CGRect r = CGRectZero; [value getValue:&r];
+        result = CGRectIsEmpty(r) ? CGRectNull : CGRectOffset(r, container.origin.x, container.origin.y);
+    }
+    if (BP_LogEnabled()) BP_Log(@"g1d: pip -sourceContentFrameForAnimator: %@ (direction %lld, container %@)", NSStringFromCGRect(result), direction, NSStringFromCGRect(container));
+    return result;
+}
+
+- (CGFloat)sourceBlackCurtainCornerRadiusForAnimator:(id)animator {
+    if (!G1D_ON("g1d_pipframes")) return %orig;
+    static double (*displayRadius)(void); static BOOL (*isZero)(double); static dispatch_once_t once;
+    dispatch_once(&once, ^{ displayRadius = (double (*)(void))dlsym(RTLD_DEFAULT, "SBScreenDisplayCornerRadius"); isZero = (BOOL (*)(double))dlsym(RTLD_DEFAULT, "BSFloatIsZero"); });
+    if (!displayRadius) return %orig;
+    double d = displayRadius();
+    if (isZero ? isZero(d) : fabs(d) < 0.000001) return 0;
+    if (G1D_PIPDS_Chamois(animator)) {
+        id screen = G1B_Send0(G1B_Send0(animator, NSSelectorFromString(@"windowScene")), NSSelectorFromString(@"screen"));
+        return G1B_Dbl0(G1B_Send0(screen, NSSelectorFromString(@"traitCollection")), NSSelectorFromString(@"displayCornerRadius"));
+    }
+    return %orig;                                                                     // 16.0 and 16.2 agree here: SBMedusaDomain rootSettings cornerRadiusForInnerCorners
+}
+%end
+
+%hook SBPIPMorphAnimatorController
+- (void)willRemoveTargeMatchMoveAnimationAtFrame:(CGRect)frame withinSourceFrame:(CGRect)sourceFrame {
+    if (G1D_ON("g1d_pipframes")) {
+        id animator = G1B_Send0(self, NSSelectorFromString(@"viewMorphAnimator"));
+        id ds = G1B_Send0(animator, NSSelectorFromString(@"targetDataSource"));
+        SEL conv = NSSelectorFromString(@"sourceSubviewFrame:inScreenSpaceForAnimator:");
+        if ([ds respondsToSelector:conv]) {
+            frame = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(ds, conv, frame, animator);
+            sourceFrame = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(ds, conv, sourceFrame, animator);
+        }
+    }
+    %orig(frame, sourceFrame);
+}
+%end
+
+%hook SBViewMorphAnimator
+- (CGRect)_sourceContentFrameForSourceView:(id)sourceView withTargetDataSource:(id)ds {
+    if (!G1D_ON("g1d_pipframes")) return %orig;
+    SEL s = NSSelectorFromString(@"sourceContentFrameForAnimator:");
+    return (ds && [ds respondsToSelector:s]) ? ((CGRect (*)(id, SEL, id))objc_msgSend)(ds, s, self) : CGRectNull;
+}
+- (CGRect)_sourceAppLayoutFrameForSourceView:(id)sourceView withTargetDataSource:(id)ds {
+    if (!G1D_ON("g1d_pipframes")) return %orig;
+    SEL s = NSSelectorFromString(@"sourceContentContainerFrameForAnimator:");
+    if (!ds || ![ds respondsToSelector:s]) return %orig;
+    return CGRectInset(((CGRect (*)(id, SEL, id))objc_msgSend)(ds, s, self), -1, -1);   // 0x1c7681eac
+}
+- (void)_checkAnimationsDependencies:(id)dependencies {
+    if (!G1D_ON("g1d_pipframes")) {
+        %orig;
+        return;
+    }
+    UIView *curtain = G1D_IvarObj(self, "_sourceBlackCurtainView");
+    UIView *oldSuper = curtain.superview;
+    CGRect oldFrame = curtain.frame;
+    %orig;
+    UIView *newSuper = curtain.superview;
+    if (curtain && oldSuper && newSuper && oldSuper != newSuper)                      // 16.2 0x1c76837a8..0x1c7683800: re-parenting keeps the frame on screen
+        curtain.frame = [oldSuper convertRect:oldFrame toView:newSuper];
+}
+%end
+%end // G1D_PIPDS
+
+// ============================================================================================================
+// 5c. SBPIPController: the pieces of the PIP controller that look at ONE display in 16.0
+// ============================================================================================================
+// -restoreContentViewController:appSceneEntity:morphAnimatorConfigurationBlock:completion: 16.2 0x1c792a2a4 (16.0 0x1c6474958): the restore transition request is created with
+//   -[SBMainWorkspace createRequestWithOptions:displayConfiguration:] for the display of the PIP scene ([[entity sceneHandle] displayIdentity].currentConfiguration)
+//   (16.0: -createRequestWithOptions:, i.e. the main display); the rest of the body is identical (verified by selector sequence).
+// -keyboardFocusController:externalSceneDidAcquireFocus: 16.2 0x1c792efa4 (16.0 0x1c647944c): the environment mode remembered for the keyboard focus change is the one of the
+//   switcher controller of the window scene that owns the scene (16.0: the main switcher coordinator's).
+// Checked and left alone (selector sequences identical or only logging / resource usage timeouts / System Aperture): _acquireStashAssertion..., _createNewWindowForContainer
+//   ViewController:onWindowScene:, _setAdapter:, updateZStackParticipantPreferencesIfNeeded:windowScene:, containerViewController:userDidUpdateStashState: (resources usage
+//   reduction timeout override), _updateZStackIfNeededForDisappearingContainerViewController: (System Aperture), _moveContext:toWindowScene: (off screen hyperregion composers).
+static __thread __unsafe_unretained id tPipRestoreEntity;
+%group G1D_PIPCtl
+%hook SBPIPController
+- (void)restoreContentViewController:(id)contentViewController appSceneEntity:(id)entity morphAnimatorConfigurationBlock:(id)configBlock completion:(id)completion {
+    id saved = tPipRestoreEntity;
+    tPipRestoreEntity = G1D_ON("g1d_piprestore") ? entity : nil;
+    %orig;
+    tPipRestoreEntity = saved;
+}
+- (void)keyboardFocusController:(id)controller externalSceneDidAcquireFocus:(id)scene {
+    if (!G1D_ON("g1d_pipkeyboard") || !class_getInstanceVariable(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged")) {
+        %orig;
+        return;
+    }
+    UIApplication *app = [UIApplication sharedApplication];
+    id ws = G1B_Send1(G1B_Send0(app, NSSelectorFromString(@"windowSceneManager")), NSSelectorFromString(@"windowSceneForSceneIdentifier:"), G1B_Send0(scene, NSSelectorFromString(@"identifier")));
+    if (!ws) return;                                                                  // 16.2 leaves the remembered mode alone
+    id sc = G1B_Send0(ws, NSSelectorFromString(@"switcherController"));
+    if (!sc) NSLog(@"expected a switcherController!");
+    Ivar iv = class_getInstanceVariable(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged");
+    *(long long *)((uint8_t *)(__bridge void *)self + ivar_getOffset(iv)) = G1B_SendLL0(sc, NSSelectorFromString(@"unlockedEnvironmentMode"));
+}
+%end
+
+// -_updatePictureInPictureOverlayInsetsOnWindowScene:withCurrentLayoutState:shouldUpdate: 16.2 0x1c792dd08 (16.0 0x1c6478320): the environment mode and layout role queries go to the
+// switcher controller of the window scene (16.0: [SBMainSwitcherControllerCoordinator sharedInstanceIfExists], the main display). The only other 16.2 change, the Spotlight
+// predicate, only reaches non iPad idioms (the iPad path sets the flag to 0). The 16.0 body is kept and the very same two sends are answered by the scene's controller
+// (it responds to -unlockedEnvironmentMode and -layoutContainsRole: with the same meaning).
+static __thread __unsafe_unretained id tOverlayInsetsSC;
+%hook SBPIPController
+- (UIEdgeInsets)_updatePictureInPictureOverlayInsetsOnWindowScene:(id)scene withCurrentLayoutState:(BOOL)current shouldUpdate:(BOOL)update {
+    id saved = tOverlayInsetsSC;
+    tOverlayInsetsSC = G1D_ON("g1d_pipinsets") ? G1B_Send0(scene, NSSelectorFromString(@"switcherController")) : nil;
+    UIEdgeInsets r = %orig;
+    tOverlayInsetsSC = saved;
+    return r;
+}
+%end
+%hook SBMainSwitcherControllerCoordinator
++ (id)sharedInstanceIfExists {
+    id sc = tOverlayInsetsSC;
+    return sc ?: %orig;
+}
+%end
+
+%hook SBMainWorkspace
+- (id)createRequestWithOptions:(unsigned long long)options {
+    id entity = tPipRestoreEntity;
+    if (entity) {
+        tPipRestoreEntity = nil;                                                      // only the request of the restore transition itself
+        id identity = G1B_Send0(G1B_Send0(entity, NSSelectorFromString(@"sceneHandle")), NSSelectorFromString(@"displayIdentity"));
+        id config = G1B_Send0(identity, NSSelectorFromString(@"currentConfiguration"));
+        SEL s = NSSelectorFromString(@"createRequestWithOptions:displayConfiguration:");
+        if (config && [self respondsToSelector:s]) return ((id (*)(id, SEL, unsigned long long, id))objc_msgSend)(self, s, options, config);
+    }
+    return %orig;
+}
+%end
+%end // G1D_PIPCtl
+
+// ============================================================================================================
+// 3. SBFluidSwitcherViewController: the pointer crossing the boundary between two displays
+// ============================================================================================================
+// 16.2 -[SBFluidSwitcherViewController pointerDidMoveToFromWindowScene:toWindowScene:] (0x1c745f938): the view controller is an observer of the
+// SBSystemPointerInteractionManager (registered in -initWithSwitcherController:... 0x1c743475c, removed in -invalidate 0x1c743be28). When the pointer leaves or
+// enters the display of its switcher controller it dispatches SBPointerCrossedDisplayBoundarySwitcherModifierEvent(direction, edge): direction 1 = left this
+// display, 0 = entered it; edge = edge of the OTHER display relative to this one according to -[SBExternalDisplayService preferredArrangementOfDisplay:relativeTo:]
+// (ported in G4B.x). 16.0 has no SBSystemPointerInteractionManager; the observer list lives on the multi display user interaction coordinator (Group4Focus.x) that
+// reports the very same transition (16.2 0x1c795e838 -_pointerMovedInScene:), and the view controllers register there at the same two places.
+static id G1D_PointerCoordinator(void) {
+    UIApplication *app = [UIApplication sharedApplication];
+    SEL s = NSSelectorFromString(@"multiDisplayUserInteractionCoordinator");
+    return [app respondsToSelector:s] ? G1B_Send0(app, s) : nil;
+}
+static id G1D_ExternalDisplayService(void) {
+    UIApplication *app = [UIApplication sharedApplication];
+    SEL s = NSSelectorFromString(@"externalDisplayService");
+    return [app respondsToSelector:s] ? G1B_Send0(app, s) : nil;
+}
+static id G1D_FBSIdentity(id windowScene) { return G1B_Send0(windowScene, NSSelectorFromString(@"_fbsDisplayIdentity")); }
+
+static void G1D_VC_PointerMoved(id self, SEL _cmd, id from, id to) {
+    if (!G1D_ON("g1d_pointer")) return;
+    id sc = G1B_Send0(self, NSSelectorFromString(@"switcherController")) ?: G1D_IvarObj(self, "_switcherController");
+    id mine = G1B_Send0(sc, sWindowScene);
+    if (!mine || !from || !to) return;                                                   // 16.2: all three must be non-nil
+    unsigned long long direction;
+    id display, relative;
+    if (mine == from)      { direction = 1; display = G1D_FBSIdentity(to);   relative = G1D_FBSIdentity(from); }
+    else if (mine == to)   { direction = 0; display = G1D_FBSIdentity(from); relative = G1D_FBSIdentity(to); }
+    else return;
+    id service = G1D_ExternalDisplayService();
+    SEL arr = NSSelectorFromString(@"preferredArrangementOfDisplay:relativeTo:");
+    id arrangement = (service && [service respondsToSelector:arr]) ? ((id (*)(id, SEL, id, id))objc_msgSend)(service, arr, display, relative) : nil;
+    unsigned int edge = [arrangement respondsToSelector:@selector(edge)] ? ((unsigned int (*)(id, SEL))objc_msgSend)(arrangement, @selector(edge)) : 0;   // nil arrangement: edge 0
+    Class ec = NSClassFromString(@"SBPointerCrossedDisplayBoundarySwitcherModifierEvent");
+    SEL ini = NSSelectorFromString(@"initWithDirection:edge:");
+    if (!ec || ![ec instancesRespondToSelector:ini]) return;
+    id ev = ((id (*)(id, SEL, unsigned long long, unsigned int))objc_msgSend)([ec alloc], ini, direction, edge);
+    if (ev) G1B_SendV1(self, NSSelectorFromString(@"_dispatchEventAndHandleAction:"), ev);
+}
+
+%group G1D_VCPointer
+%hook SBFluidSwitcherViewController
+- (id)initWithSwitcherController:(id)controller rootModifier:(id)modifier liveContentOverlayCoordinator:(id)coordinator delegate:(id)delegate dataSource:(id)source debugName:(id)name {
+    id me = %orig;
+    if (me && G1D_ON("g1d_pointer")) G1B_SendV1(G1D_PointerCoordinator(), NSSelectorFromString(@"addPointerInteractionObserver:"), me);
+    return me;
+}
+- (void)invalidate {
+    if (G1D_ON("g1d_pointer")) G1B_SendV1(G1D_PointerCoordinator(), NSSelectorFromString(@"removePointerInteractionObserver:"), self);
+    %orig;
+}
+%new
+- (void)pointerDidMoveToFromWindowScene:(id)from toWindowScene:(id)to { G1D_VC_PointerMoved(self, _cmd, from, to); }
+%end
+%end
+
+// ============================================================================================================
 // setup
 // ============================================================================================================
 void G1D_Setup(void) {
@@ -806,5 +1845,13 @@ void G1D_Setup(void) {
     %init(G1D_Model);
     %init(G1D_Coord);
     %init(G1D_Gesture);
+    %init(G1D_VCPointer);
+    %init(G1D_Tongue);
+    %init(G1D_GMTouch);
+    %init(G1D_TapForward);
+    G1D_InstallPIPAnimatorProperties();
+    %init(G1D_PIP);
+    %init(G1D_PIPDS);
+    %init(G1D_PIPCtl);
 }
 #pragma clang diagnostic pop
