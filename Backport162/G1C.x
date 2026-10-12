@@ -5928,16 +5928,10 @@ static void G1C_InstallHomeGesture(void) {
 // ============================================================================================================
 // 0b  SBRoutingSwitcherModifier: the 13 routed queries 16.2 added                                                          PORTED
 // ============================================================================================================
-// ROOT CAUSE of "[g2b] chain terminal reached for adjustedIdentifiersInStrip / InSwitcher (no modifier implements it)" on EVERY ids update and of the strip being emptied by a window drag.
-// The root of the stack is SBiPadOSPlatformSwitcherModifier -> SBMainSwitcherRoutingSwitcherModifier -> SBRoutingSwitcherModifier. The Routing modifier does NOT take part in the
-// ordinary query chain: it owns the subtrees (-[SBRoutingSwitcherModifier _modifiers]: main CE root / floating) as its routing targets and answers every query by routing it
-// explicitly (16.0 has 198 such methods, 16.2 has 13 more). Without them a query that reaches the Routing modifier falls through to the chain end (G2B's SBDefaultImplementations terminal:
-// the right algorithm but run in the platform root's context, where during a window drag the Filtering wrapper has reduced -appLayouts to the dragged window -> strip [] / switcher [Filza]),
-// and the persistent AppSwitcherCE child of the CE root (the 16.2 implementer of both id-list queries) is never asked. The same hole made isContinuousExposeStripVisible,
-// wantsContinuousExposeHoverGesture, proposedAppLayoutForContinuousExposeWindowDrag, the keyboard-shortcut lists, canSelectLeaf..., shouldAllowGroupOpacity..., the accessory hit-test
-// outset / scale, the clipping frame and the strip tongue attributes answer from the terminal instead of from the stage / strip modifiers.
-// Faithful port of the 13 methods (16.2 addresses below). Each one runs `_SBRoutingSwitcherModifierRouteToModifier[ContainingAppLayout|ContainingIndex]` (exported by 16.0 SpringBoard
-// with the same signature, it temporarily sets _currentModifier) and reads the answer of the routed modifier out of a __block variable.
+// Faithful port of the 13 routed queries 16.2 added to SBRoutingSwitcherModifier (it owns the routed subtrees in `_modifiers` and answers every query by routing it explicitly;
+// 16.0 has 198 such methods, 16.2 13 more). NOTE: this is NOT the cause of "[g2b] chain terminal reached ..." - Stage Manager's platform root has the CE root as its direct child, the
+// Routing modifier only exists inside SBFilteringSwitcherModifier (window drag) and the classic Main root (see G1C_UndoDefaultTerminals for the real cause). The three routing
+// helpers are ported 1:1 below (16.2 0x1c75209ec / 0x1c7521034 / 0x1c752236c): RouteToModifier / ...ContainingAppLayout / ...ContainingIndex.
 typedef struct { unsigned long long a, b; } G1CRtTongue;
 // The three routing helpers are PRIVATE C functions of SpringBoard (not in the export trie: dlsym cannot find them - that is why the first version of this section never took effect on
 // the device). They are small, so they are ported 1:1 (16.2 0x1c75209ec / 0x1c7521034 / 0x1c752236c; 16.0 0x1c609d860 / 0x1c609ddec / 0x1c609f440): all three run a block with the

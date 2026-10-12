@@ -90,15 +90,18 @@ About 30 distinct fallbacks / invented values / wrong ports were found and repla
   and turns a result that IS the receiver into nil (16.2 0x1c7895274 returns the handler's result, nil for no handler); logged under BP_LogEnabled.
   Audit of every response-returning IMP of the Strip / FullScreen / Home / Destination / Inline / AppSwitcher / WindowDrag ports: all return `super`'s response, a response built by
   the G1B_NewXxx / G1C_NewXxx helpers or nil; no IMP returns self, a child modifier or the strip.
-* **Strip vanishes during a window drag / "chain terminal reached" 262x** (G1C.x section `0b`, switch `g1c_routing`). `SBRoutingSwitcherModifier` is not part of the ordinary query chain: it
-  owns the routed subtrees (`_modifiers`, main CE root / floating) and answers each query explicitly (16.0: 198 methods). 16.2 added 13 (adjusted strip / switcher ids, strip tongue
-  attributes, wantsContinuousExposeHoverGesture, isContinuousExposeStripVisible, proposedAppLayoutForContinuousExposeWindowDrag, active / inactive keyboard lists, canSelectLeaf...,
-  shouldAllowGroupOpacity..., spaceAccessoryViewIconHitTestOutset..., adjustedSpaceAccessoryViewScale:forAppLayout:, clippingFrameForLayoutRole:...). 20A8372 has none of them, so each of
-  these queries fell through to the chain end (G2B's SBDefaultImplementations terminal) instead of reaching the persistent AppSwitcherCE child of the CE root (the real 16.2 implementer of
-  both id lists) and the Stage Manager / strip modifiers. The terminal runs the right algorithm in the wrong context: at the end of the platform root's chain the Filtering wrapper of the
-  window-drag root (SBFilteringSwitcherModifier initWithAppLayouts:@[dragged]) has reduced `appLayouts` to the dragged window, hence strip [] / switcher [Filza] at drag start (log
-  07:51:16.744) and the strip sliding away. The 13 methods are added to the 16.0 Routing class exactly as 16.2 (addresses in the source): RouteToModifier / ...ContainingAppLayout /
-  ...ContainingIndex are exported by 16.0 SpringBoard with the same signature. Routing kinds: ids -> `[delegate scrollModifierForRoutingModifier:]`; tongue attributes ->
-  `homeScreenModifierForRoutingModifier:`; keyboard lists -> every modifier, `_arrayByCombiningArrays`; hover gesture / strip visible -> OR over every modifier; proposed drag layout -> first
-  non-nil; accessory scale / hit-test outset / canSelectLeaf / groupOpacity -> modifier containing the layout (defaults 0 / 0 / NO / NO); clipping frame -> modifier containing the index
-  (default CGRectNull). Last-line guard (logged): missing helper symbols -> chain as before. G2B's terminals stay as last-line guards (the log line says when one is still reached).
+* **"chain terminal reached" on every ids update (device logs f8d059f3 / 24e400bd).** Real cause: the persistent AppSwitcherCE child of the CE root (level 6/7, the 16.2 implementer of both id-list
+  queries) comes LATER in the DFS query chain (children ordered by ascending level) than the SBDefaultImplementationsSwitcherModifier children that floors add to themselves, and G2B's
+  "terminal" methods made that Default an implementer. 16.2's Default implements none of those six queries. `G1C_UndoDefaultTerminals` (switch `g1c_defaults`) restores the inherited trampoline
+  IMP on Default for the six selectors (adjusted strip / switcher ids, active / inactive keyboard lists, canSelectLeaf..., shouldAllowGroupOpacity...) so the chain reaches AppSwitcherCE.
+  (Stage Manager has no SBRoutingSwitcherModifier on the path: the platform root's child is the CE root; Routing lives in SBFilteringSwitcherModifier and the classic Main root.)
+  The 13 Routing methods (section 0b, switch `g1c_routing`, helpers ported 1:1, no dlsym) are still installed because the drag's Filtering wrapper routes through them; first use of each is logged.
+* **Floating dock disappears / reappears on window open / close.** 16.0 FS answered `shouldConfigureInAppDockVisibleAssertion` = !(_anyDisplayItemsExceedDock || keyboard) (0x1c613f9a0); 16.2 removed
+  it (new consumer `_updateFloatingDockBehaviorAssertion` 0x1c745a058 uses wantsDockBehaviorAssertion / dockUpdateMode) but the 16.0 VC consumer still running
+  (`_configureApplicationAndTransientOverlayDockBehaviorAssertionsForContext:` 0x1c5fc8890) asks for hidden AND visible assertion. The strip port forwarded the visible one down the chain (no answer) so the
+  in-app dock assertion was dropped. `G1C_FS_DockVisible` restores it (bounding-box form shared with the 16.2 hidden-assertion formula).
+* **Strip hiding threshold.** 16.0 (`widthThresholdToHideContinuousExposeStripsForStageWithItemCount:` 0x1c64138a0) and 16.2 (`_widthThresholdForModel:` 0x1c73caf94, ported in G2) share the formula
+  s = min(stripWidth, (W - minimumDefaultWindowSize.width) / 2); threshold = W - 2 * (items > 1 ? s : s / 2). On the 1194 wide screen (stripWidth 138, minimum default width 1056): s = 69, threshold 1056
+  (two or more windows on stage) or 1125 (one window). 16.2 adds a first test: usesStripAreaForOverlapping && items >= 2 && total column width > W - 3 * screenEdgePadding -> threshold 0 (strip hidden).
+  Hiding = any item width >= threshold (model.isContinuousExposeStripVisible 0x1c797a558); strip origin x = progress * (stripWidth + screenEdgePadding) - stripWidth, progress = [super reveal] while hidden else 1.
+  Our port is identical; a sliver of the strip at the left edge therefore means reveal progress > 0 (log line `g1c: strip hidden: ... reveal=` added to show it).
