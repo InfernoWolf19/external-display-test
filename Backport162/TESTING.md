@@ -82,10 +82,11 @@ Mark each item: OK / BUG (what happened) / N/A.
 - [ ] Switch between the app's windows, close one, close all, reopen.
 - [ ] An app that does not support multiple windows: Add Another Window shows the 'multiple windows not supported' message and does not crash.
 
-## 10. Picture in Picture, Slide Over, Split View
+## 10. Picture in Picture
 - [ ] Start a video in Safari/YouTube, go home: PiP appears; return to the app: PiP restores smoothly (PiP morph).
-- [ ] PiP while a window is open; PiP on rotation.
-- [ ] Slide Over / Split View if you use them from the dock: no crash.
+- [ ] When the app backgrounds, the PiP window must not shift position at all before settling (known: it moves slightly then settles).
+- [ ] PiP while a window is open; PiP on rotation; drag the PiP to each corner; PiP with the keyboard up.
+- [ ] Note: Split View and Slide Over do not exist while Stage Manager is on (Apple: Stage Manager replaces them), so the 3-dots menu correctly has no Slide Over / Split View items. Not a test item.
 
 ## 11. Orientation
 - [ ] Rotate with 1, 3 windows open and with the switcher open: layout recovers, no crash.
