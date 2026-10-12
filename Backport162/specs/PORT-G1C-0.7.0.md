@@ -77,3 +77,28 @@ New: `g1c_strip` (Strip / FullScreen / Home conversion and the removed-member fo
 
 ## 8. Counts
 About 30 distinct fallbacks / invented values / wrong ports were found and replaced in this round (identity stubs, 1-argument size queries, strip-class-absent path, Destination composition, 12 Inline items, DnD dimming, Home gesture root + gesture child, Reduce Motion x3, HomeGestureSwitcher x3, WindowDrop x2, drag modifier x3, PIP / PIP restore). PORTED: all of them; open items are section 6.1-6.4 (owned elsewhere).
+
+## 9. Round 3: modifier returned as a response / Routing queries (device test b6a81f4 and 01771d6)
+
+* **Crash `-[SBStripContinuousExposeSwitcherModifier responseByTransformingResponseWithTransformer:]`** (G1C.x section `0`, group `G1C_EventDefault`). 16.0 `-[SBSwitcherModifier _handleEvent:]`
+  (0x1c63e8a98) holds self in x20 and switches on the event type (cases 0..35). For every type > 35 it branches (b.hi 0x1c63e8b50) to the common exit 0x1c63e8b28 with x20 still = self and
+  RETURNS SELF: the "response" of an unhandled type 36 / 37 / 38 event is the modifier. G1B's routing hook of that method (0.1) returns `orig` for every modifier without a
+  `handle<X>Event:` (the Strip, the FullScreenAppLayout child, ...), so a header tap (37) / pointer-crossed-display (38) / strip-edge-tongue (36) event made every child return itself,
+  `SBChainableModifier -handleEvent:` (0x1c6428274) added those modifiers to the composite response (`addChildResponse:`), and the composite's
+  `responseByTransformingResponseWithTransformer:` (called from `SBFluidSwitcherRootSwitcherModifier responseForProposedChildResponse:childModifier:event:`) messaged a modifier.
+  The exception is what made "drag a window" and "tap a strip app" do nothing (events 36/38 go through the same path, the dispatch aborts). Fix: our hook wraps whatever is below it
+  and turns a result that IS the receiver into nil (16.2 0x1c7895274 returns the handler's result, nil for no handler); logged under BP_LogEnabled.
+  Audit of every response-returning IMP of the Strip / FullScreen / Home / Destination / Inline / AppSwitcher / WindowDrag ports: all return `super`'s response, a response built by
+  the G1B_NewXxx / G1C_NewXxx helpers or nil; no IMP returns self, a child modifier or the strip.
+* **Strip vanishes during a window drag / "chain terminal reached" 262x** (G1C.x section `0b`, switch `g1c_routing`). `SBRoutingSwitcherModifier` is not part of the ordinary query chain: it
+  owns the routed subtrees (`_modifiers`, main CE root / floating) and answers each query explicitly (16.0: 198 methods). 16.2 added 13 (adjusted strip / switcher ids, strip tongue
+  attributes, wantsContinuousExposeHoverGesture, isContinuousExposeStripVisible, proposedAppLayoutForContinuousExposeWindowDrag, active / inactive keyboard lists, canSelectLeaf...,
+  shouldAllowGroupOpacity..., spaceAccessoryViewIconHitTestOutset..., adjustedSpaceAccessoryViewScale:forAppLayout:, clippingFrameForLayoutRole:...). 20A8372 has none of them, so each of
+  these queries fell through to the chain end (G2B's SBDefaultImplementations terminal) instead of reaching the persistent AppSwitcherCE child of the CE root (the real 16.2 implementer of
+  both id lists) and the Stage Manager / strip modifiers. The terminal runs the right algorithm in the wrong context: at the end of the platform root's chain the Filtering wrapper of the
+  window-drag root (SBFilteringSwitcherModifier initWithAppLayouts:@[dragged]) has reduced `appLayouts` to the dragged window, hence strip [] / switcher [Filza] at drag start (log
+  07:51:16.744) and the strip sliding away. The 13 methods are added to the 16.0 Routing class exactly as 16.2 (addresses in the source): RouteToModifier / ...ContainingAppLayout /
+  ...ContainingIndex are exported by 16.0 SpringBoard with the same signature. Routing kinds: ids -> `[delegate scrollModifierForRoutingModifier:]`; tongue attributes ->
+  `homeScreenModifierForRoutingModifier:`; keyboard lists -> every modifier, `_arrayByCombiningArrays`; hover gesture / strip visible -> OR over every modifier; proposed drag layout -> first
+  non-nil; accessory scale / hit-test outset / canSelectLeaf / groupOpacity -> modifier containing the layout (defaults 0 / 0 / NO / NO); clipping frame -> modifier containing the index
+  (default CGRectNull). Last-line guard (logged): missing helper symbols -> chain as before. G2B's terminals stay as last-line guards (the log line says when one is still reached).

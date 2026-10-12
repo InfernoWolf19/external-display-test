@@ -44,6 +44,7 @@
 @interface SBContinuousExposeRootSwitcherModifier : NSObject @end
 @interface SBFullScreenContinuousExposeSwitcherModifier : NSObject @end
 @interface SBItemResizeGestureSwitcherModifier : NSObject @end
+@interface SBSwitcherModifier : NSObject @end
 // END INTEGRATION interfaces
 
 extern Class gFilteringCls, gOverrideIdsCls, gOverrideIdsSuper, gGrabberRespCls, gOrientRespCls, gInvalidateRespCls, gF2SCls, gXBCls, gDndToAppCls;     // G1B.x
@@ -4939,6 +4940,28 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     return out;
 }
 
+// ============================================================================================================
+// 0  -[SBSwitcherModifier _handleEvent:] default exit  (16.0 returns SELF for event types > 35)                         PORTED (crash fix)
+// ============================================================================================================
+// ROOT CAUSE of "-[SBStripContinuousExposeSwitcherModifier responseByTransformingResponseWithTransformer:]: unrecognized selector".
+// 16.0 -[SBSwitcherModifier _handleEvent:] (0x1c63e8a98) keeps self in x20 and switches on the event type (cases 0...35). For every type > 35 it branches (b.hi 0x1c63e8b50) to the common
+// exit 0x1c63e8b28 with x20 STILL = self, and returns it: the "response" of an unhandled type 36 / 37 / 38 event is the MODIFIER itself (16.2 0x1c7895274 returns the handler's result, nil
+// when there is none). G1B routes those new types to handle<X>Event: and returns `orig` for every modifier that has no such handler - the Strip, the FullScreenAppLayout child, ... - so a
+// header tap (37) / pointer-crossed-display (38) / edge-protect-tongue (36) event made the whole child tree return modifiers as responses, and SBChainableModifier -handleEvent: composed
+// them into the composite whose responseByTransformingResponseWithTransformer: then died. Ours wraps whatever is below (G1B's routing hook or the original): a result that is the
+// receiver is the 16.0 quirk, the 16.2 value is nil. Never a legitimate response (a modifier is not a response), so this is exactly the one place the value is wrong.
+%group G1C_EventDefault
+%hook SBSwitcherModifier
+- (id)_handleEvent:(id)event {
+    id r = %orig;
+    if (r != (id)self) return r;
+    static int logged;
+    if (BP_LogEnabled() && logged++ < 20) BP_Log(@"g1c: _handleEvent: type %lld returned the modifier itself (16.0 default exit of SBSwitcherModifier _handleEvent:) -> nil as 16.2 [%@]", G1B_SendLL0(event, @selector(type)), NSStringFromClass(object_getClass(self)));
+    return nil;
+}
+%end
+%end
+
 %group G1C_Root
 %hook SBContinuousExposeRootSwitcherModifier
 
@@ -5874,9 +5897,197 @@ static void G1C_InstallHomeGesture(void) {
     }
 }
 // ============================================================================================================
+// 0b  SBRoutingSwitcherModifier: the 13 routed queries 16.2 added                                                          PORTED
+// ============================================================================================================
+// ROOT CAUSE of "[g2b] chain terminal reached for adjustedIdentifiersInStrip / InSwitcher (no modifier implements it)" on EVERY ids update and of the strip being emptied by a window drag.
+// The root of the stack is SBiPadOSPlatformSwitcherModifier -> SBMainSwitcherRoutingSwitcherModifier -> SBRoutingSwitcherModifier. The Routing modifier does NOT take part in the
+// ordinary query chain: it owns the subtrees (-[SBRoutingSwitcherModifier _modifiers]: main CE root / floating) as its routing targets and answers every query by routing it
+// explicitly (16.0 has 198 such methods, 16.2 has 13 more). Without them a query that reaches the Routing modifier falls through to the chain end (G2B's SBDefaultImplementations terminal:
+// the right algorithm but run in the platform root's context, where during a window drag the Filtering wrapper has reduced -appLayouts to the dragged window -> strip [] / switcher [Filza]),
+// and the persistent AppSwitcherCE child of the CE root (the 16.2 implementer of both id-list queries) is never asked. The same hole made isContinuousExposeStripVisible,
+// wantsContinuousExposeHoverGesture, proposedAppLayoutForContinuousExposeWindowDrag, the keyboard-shortcut lists, canSelectLeaf..., shouldAllowGroupOpacity..., the accessory hit-test
+// outset / scale, the clipping frame and the strip tongue attributes answer from the terminal instead of from the stage / strip modifiers.
+// Faithful port of the 13 methods (16.2 addresses below). Each one runs `_SBRoutingSwitcherModifierRouteToModifier[ContainingAppLayout|ContainingIndex]` (exported by 16.0 SpringBoard
+// with the same signature, it temporarily sets _currentModifier) and reads the answer of the routed modifier out of a __block variable.
+typedef void (*G1CRouteFn)(id routing, id modifier, void (^block)(void));
+typedef void (*G1CRouteLayoutFn)(id routing, id appLayout, void (^block)(id modifier));
+typedef void (*G1CRouteIndexFn)(id routing, unsigned long long index, void (^block)(id modifier));
+typedef struct { unsigned long long a, b; } G1CRtTongue;
+static void *G1C_RtSym(const char *name) {
+    void *p = dlsym(RTLD_DEFAULT, name);                      // the C name starts with an underscore (Mach-O: two)
+    if (!p) p = dlsym(RTLD_DEFAULT, [[NSString stringWithFormat:@"_%s", name] UTF8String]);
+    return p;
+}
+static G1CRouteFn G1C_RtRoute(void) { static G1CRouteFn f; static dispatch_once_t o; dispatch_once(&o, ^{ f = (G1CRouteFn)G1C_RtSym("SBRoutingSwitcherModifierRouteToModifier"); }); return f; }
+static G1CRouteLayoutFn G1C_RtRouteLayout(void) { static G1CRouteLayoutFn f; static dispatch_once_t o; dispatch_once(&o, ^{ f = (G1CRouteLayoutFn)G1C_RtSym("SBRoutingSwitcherModifierRouteToModifierContainingAppLayout"); }); return f; }
+static G1CRouteIndexFn G1C_RtRouteIndex(void) { static G1CRouteIndexFn f; static dispatch_once_t o; dispatch_once(&o, ^{ f = (G1CRouteIndexFn)G1C_RtSym("SBRoutingSwitcherModifierRouteToModifierContainingIndex"); }); return f; }
+static Class gRtCls;
+// last-line guard (logged): the three exported routing helpers are always present in 16.0 SpringBoard; without them the query goes down the chain like before.
+#define G1C_RT_NEED(FN) do { if (!(FN)) { if (BP_LogEnabled()) BP_Log(@"g1c: routing helper missing for %@ -> chain", NSStringFromSelector(_cmd)); goto chain; } } while (0)
+static id G1C_RtDelegate(id self) { return G1C_IvarObj(self, "_delegate"); }
+// _arrayByCombiningArrays (0x1c751fcc8): nil+x -> x, x+nil -> x, else a new array a + b
+static id G1C_RtCombine(id a, id b) {
+    if (!a && b) return b;
+    if (a && !b) return a;
+    NSMutableArray *m = [NSMutableArray array];
+    if (a) [m addObjectsFromArray:a];
+    if (b) [m addObjectsFromArray:b];
+    return m;
+}
+static id G1C_RtArrays(id self, SEL _cmd) {                                                                      // 0x1c7532594 (active) / 0x1c7532824 (inactive)
+    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
+    {
+        id combined = nil; BOOL first = YES;
+        for (id m in G1C_IvarObj(self, "_modifiers")) {
+            __block id r = nil;
+            route(self, m, ^{ r = G1B_Send0(m, _cmd); });
+            combined = first ? r : G1C_RtCombine(combined, r);
+            first = NO;
+        }
+        return combined;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL)) : nil;
+}
+static BOOL G1C_RtAny(id self, SEL _cmd) {                                                                       // 0x1c7535678 (hover gesture) / 0x1c7535894 (strip visible): OR of all modifiers
+    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
+    {
+        BOOL res = NO, first = YES;
+        for (id m in G1C_IvarObj(self, "_modifiers")) {
+            __block BOOL b = NO;
+            route(self, m, ^{ b = G1B_SendB0(m, _cmd); });
+            res = first ? (b != NO) : (res | b);
+            first = NO;
+        }
+        return res;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(BOOL, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL)) : NO;
+}
+static id G1C_RtProposed(id self, SEL _cmd) {                                                                    // 0x1c7535ab0: the first non-nil answer
+    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
+    {
+        id res = nil;
+        for (id m in G1C_IvarObj(self, "_modifiers")) {
+            __block id r = nil;
+            route(self, m, ^{ r = G1B_Send0(m, _cmd); });
+            if (!res) res = r;
+        }
+        return res;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL)) : nil;
+}
+static id G1C_RtAdjStrip(id self, SEL _cmd, id prev) {                                                          // 0x1c7532ca4
+    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
+    {
+        id delegate = G1C_RtDelegate(self);
+        id scroll = G1C_Resp(delegate, @selector(scrollModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(scrollModifierForRoutingModifier:), self) : nil;
+        __block id result = nil;
+        route(self, scroll, ^{ result = G1B_Send1(scroll, _cmd, prev); });
+        return result;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id), prev) : nil;
+}
+static id G1C_RtAdjSwitcher(id self, SEL _cmd, id prev, id strip) {                                              // 0x1c7532ab4
+    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
+    {
+        id delegate = G1C_RtDelegate(self);
+        id scroll = G1C_Resp(delegate, @selector(scrollModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(scrollModifierForRoutingModifier:), self) : nil;
+        __block id result = nil;
+        route(self, scroll, ^{ result = G1C_Send2(scroll, _cmd, prev, strip); });
+        return result;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id, id), prev, strip) : nil;
+}
+static G1CRtTongue G1C_RtTongue(id self, SEL _cmd) {                                                             // 0x1c75354f4: routed to the home screen modifier
+    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
+    {
+        id delegate = G1C_RtDelegate(self);
+        id home = G1C_Resp(delegate, @selector(homeScreenModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(homeScreenModifierForRoutingModifier:), self) : nil;
+        __block G1CRtTongue r = { 0, 0 };
+        __unsafe_unretained id us = self;
+        route(self, home, ^{
+            id d = G1C_RtDelegate(us);
+            id h = G1C_Resp(d, @selector(homeScreenModifierForRoutingModifier:)) ? G1B_Send1(d, @selector(homeScreenModifierForRoutingModifier:), us) : nil;
+            if (G1C_Resp(h, _cmd)) r = ((G1CRtTongue (*)(id, SEL))objc_msgSend)(h, _cmd);
+        });
+        return r;
+    }
+chain:
+    return (G1CRtTongue){ 0, 0 };
+}
+static double G1C_RtScale(id self, SEL _cmd, double scale, id layout) {                                          // 0x1c752610c
+    G1CRouteLayoutFn route = G1C_RtRouteLayout(); G1C_RT_NEED(route);
+    {
+        __block double r = 0.0;
+        route(self, layout, ^(id m) { r = ((double (*)(id, SEL, double, id))objc_msgSend)(m, _cmd, scale, layout); });
+        return r;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(double, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, double, id), scale, layout) : 0.0;
+}
+static double G1C_RtHitOutset(id self, SEL _cmd, id layout) {                                                    // 0x1c752b8ac
+    G1CRouteLayoutFn route = G1C_RtRouteLayout(); G1C_RT_NEED(route);
+    {
+        __block double r = 0.0;
+        route(self, layout, ^(id m) { r = ((double (*)(id, SEL, id))objc_msgSend)(m, _cmd, layout); });
+        return r;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(double, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id), layout) : 0.0;
+}
+static BOOL G1C_RtBoolLayout(id self, SEL _cmd, id layout) {                                                     // 0x1c752b9d0 (canSelectLeaf...) / 0x1c752baec (shouldAllowGroupOpacity...)
+    G1CRouteLayoutFn route = G1C_RtRouteLayout(); G1C_RT_NEED(route);
+    {
+        __block BOOL r = NO;
+        route(self, layout, ^(id m) { r = G1B_SendB1(m, _cmd, layout); });
+        return r;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(BOOL, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id), layout) : NO;
+}
+static CGRect G1C_RtClipping(id self, SEL _cmd, long long role, id layout, unsigned long long index, CGRect bounds) {   // 0x1c75255d4
+    G1CRouteIndexFn route = G1C_RtRouteIndex(); G1C_RT_NEED(route);
+    {
+        __block CGRect r = CGRectNull;
+        route(self, index, ^(id m) { r = ((CGRect (*)(id, SEL, long long, id, unsigned long long, CGRect))objc_msgSend)(m, _cmd, role, layout, index, bounds); });
+        return r;
+    }
+chain:
+    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(CGRect, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long, CGRect), role, layout, index, bounds) : CGRectNull;
+}
+static void G1C_InstallRouting(void) {
+    if (!BP_OnName("g1c_routing")) return;
+    gRtCls = NSClassFromString(@"SBRoutingSwitcherModifier");
+    if (!gSbSwitcherModifierCls) gSbSwitcherModifierCls = NSClassFromString(@"SBSwitcherModifier");
+    if (!gRtCls || !gSbSwitcherModifierCls) return;
+    if (!G1C_RtRoute() || !G1C_RtRouteLayout() || !G1C_RtRouteIndex()) { if (BP_LogEnabled()) BP_Log(@"g1c: SBRoutingSwitcherModifier routing helpers not found, the 13 routed queries are not installed"); return; }
+    const G1CPatch p[] = {
+        { "activeLeafAppLayoutsReachableByKeyboardShortcut", (IMP)G1C_RtArrays, "@16@0:8" },
+        { "inactiveAppLayoutsReachableByKeyboardShortcut", (IMP)G1C_RtArrays, "@16@0:8" },
+        { "adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:", (IMP)G1C_RtAdjStrip, "@24@0:8@16" },
+        { "adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:", (IMP)G1C_RtAdjSwitcher, "@32@0:8@16@24" },
+        { "continuousExposeStripTongueAttributes", (IMP)G1C_RtTongue, "{SBSwitcherContinuousExposeStripTongueAttributes=QQ}16@0:8" },
+        { "wantsContinuousExposeHoverGesture", (IMP)G1C_RtAny, "B16@0:8" },
+        { "isContinuousExposeStripVisible", (IMP)G1C_RtAny, "B16@0:8" },
+        { "proposedAppLayoutForContinuousExposeWindowDrag", (IMP)G1C_RtProposed, "@16@0:8" },
+        { "adjustedSpaceAccessoryViewScale:forAppLayout:", (IMP)G1C_RtScale, "d32@0:8d16@24" },
+        { "spaceAccessoryViewIconHitTestOutsetForAppLayout:", (IMP)G1C_RtHitOutset, "d24@0:8@16" },
+        { "canSelectLeafWithModifierKeysInAppLayout:", (IMP)G1C_RtBoolLayout, "B24@0:8@16" },
+        { "shouldAllowGroupOpacityForAppLayout:", (IMP)G1C_RtBoolLayout, "B24@0:8@16" },
+        { "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", (IMP)G1C_RtClipping, "{CGRect={CGPoint=dd}{CGSize=dd}}72@0:8q16@24Q32{CGRect={CGPoint=dd}{CGSize=dd}}40" },
+    };
+    G1C_PatchClass(gRtCls, p, sizeof p / sizeof p[0], "routing");
+}
+
+// ============================================================================================================
 // setup
 // ============================================================================================================
 void G1C_Setup(void) {
+    G1C_InstallRouting();
     G1C_InstallEventPredicates();
     G1C_BuildGridGesture();
     G1C_BuildCEToHome();
@@ -5903,6 +6114,7 @@ void G1C_Setup(void) {
     G1C_BuildFloors();
     G1C_BuildWindowDragFamily();
     %init(G1C_WdEvent);
+    %init(G1C_EventDefault);
     %init(G1C_Root);
     %init(G1C_Producers);
     %init(G1C_OverflowRoot);

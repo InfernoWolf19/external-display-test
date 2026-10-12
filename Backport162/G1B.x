@@ -82,8 +82,9 @@ static SEL G1B_HandlerForEventType(long long t) {
 - (id)_handleEvent:(id)event {
     id orig = %orig;
     if (!G1B_ON() || !event || ![event respondsToSelector:@selector(type)]) return orig;
-    SEL h = G1B_HandlerForEventType(G1B_SendLL0(event, @selector(type)));
-    if (!h || ![self respondsToSelector:h]) return orig;
+    long long et = G1B_SendLL0(event, @selector(type));
+    SEL h = G1B_HandlerForEventType(et);
+    if (!h || ![self respondsToSelector:h]) return et > 35 ? nil : orig;     // 16.0 returns the modifier itself for types > 35 (a bogus "response"); 16.2 returns nil
     // 16.2 _handleEvent: (0x1c7895274) first calls [super _handleEvent:] and discards the result, then returns the handler's result.
     return G1B_Send1(self, h, event);
 }
