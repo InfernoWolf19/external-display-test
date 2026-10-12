@@ -1021,9 +1021,11 @@ static BOOL G1D_StripOverflowReceiveTouch(id gm, id gr, id touch) {
 // 16.2 0x1c78f9a5c -_shouldProtectEdgeLocation:edge:
 static BOOL G1D_ShouldProtectEdge(id gm, double loc, unsigned long long edge) {
     if (G1B_SendB0(gm, NSSelectorFromString(@"_shouldSuppressEdgeProtect"))) return NO;
-    static BOOL (*isYes)(id), (*isExplicitNo)(id); static dispatch_once_t once;
-    dispatch_once(&once, ^{ isYes = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "BSSettingFlagIsYes"); isExplicitNo = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "BSSettingFlagIsExplicitNo"); });
-    id flag = G1B_Send0(G1D_IvarObj(gm, "_homeGrabberSettings"), NSSelectorFromString(@"edgeProtectOverride"));
+    // -[SBFHomeGrabberSettings edgeProtectOverride] returns a BSSettingFlag (long long, NOT an object): 16.2 passes x0 straight to BSSettingFlagIsYes / BSSettingFlagIsExplicitNo (0x1c78f9a8c-0x1c78f9aa8).
+    static BOOL (*isYes)(long long), (*isExplicitNo)(long long); static dispatch_once_t once;
+    dispatch_once(&once, ^{ isYes = (BOOL (*)(long long))dlsym(RTLD_DEFAULT, "BSSettingFlagIsYes"); isExplicitNo = (BOOL (*)(long long))dlsym(RTLD_DEFAULT, "BSSettingFlagIsExplicitNo");
+        if ((!isYes || !isExplicitNo) && BP_LogEnabled()) BP_Log(@"g1d: BSSettingFlagIsYes/IsExplicitNo not exported (%p %p): edgeProtectOverride is ignored", isYes, isExplicitNo); });
+    long long flag = G1B_SendLL0(G1D_IvarObj(gm, "_homeGrabberSettings"), NSSelectorFromString(@"edgeProtectOverride"));
     if (isYes && isYes(flag)) return YES;
     if (isExplicitNo && isExplicitNo(flag)) return NO;
     id vc = G1D_GM_VC(gm);
