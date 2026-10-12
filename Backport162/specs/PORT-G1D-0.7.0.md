@@ -4,12 +4,12 @@
 and compared by selector sequence / listing; `G1D.x` passes `logos.pl` and a clang `-fsyntax-only -fobjc-arc` check against stub headers.
 
 Everything is default-on. Kill switches (`Backport162.off.<name>`): `g1d` (whole file) and `g1d_model`, `g1d_request`, `g1d_removal`, `g1d_newwindow`, `g1d_gesture`,
-`g1d_vcdrag`, `g1d_pointer`, `g1d_tongue`, `g1d_gmtouch`, `g1d_pip`, `g1d_pipframes`, `g1d_piprestore`, `g1d_pipkeyboard`, `g1d_pipinsets`, `g1d_extgestures`.
+`g1d_vcdrag`, `g1d_pointer`, `g1d_tongue`, `g1d_gmtouch`, `g1d_windowdrag`, `g1d_pip`, `g1d_pipframes`, `g1d_piprestore`, `g1d_pipkeyboard`, `g1d_pipinsets`, `g1d_extgestures`.
 
 Wiring (lead): add `G1D.x` to the Makefile, declare `void G1D_Setup(void);` in `Tweak.x` and call it AFTER `G1B_Setup()`, `BP2B_Setup()` and `G1C_Setup()` (it relies on the
 accessors G1B adds for the strip tongue and on `didSelectContainer:modifierFlags:` from G2B; every use re-checks `respondsToSelector:` so an earlier call only loses features).
 
-## 1. Fallbacks / stand-ins found in the existing code and what replaced them (14)
+## 1. Fallbacks / stand-ins found in the existing code and what replaced them (16, plus one bug of this file's own)
 1. `-_adjustedGestureEventForGestureEvent:fromGestureManager:` (G2B.m stand-in): ignored the manager and passed `me`, so a window drag over a second display was never converted
    into the coordinates of the switcher that handles it. Replaced by the 16.2 body (section 2.3).
 2. `draggingAppLayoutsForContinuousExposeWindowDrag` / `proposedAppLayoutsForContinuousExposeWindowDrag` (G2.x stubs): answered for the one display. Real coordinator state (2.2).
@@ -27,6 +27,12 @@ accessors G1B adds for the strip tongue and on `didSelectContainer:modifierFlags
     PIP restore and no per-display environment mode (section 6).
 13. `isEdgeProtectedForHomeGestureAtEdgeLocation:` was bottom edge only and ignored occluded windows (4.4).
 14. External display gesture manager did not arm the 16.2 transient UI types 0x1e-0x21 (4.6).
+15. The Stage Manager window drag touch rules: the 16.0 `_shouldSplitViewApplicationUnpinGesture:receiveTouch:` / `_shouldBeginSplitViewApplicationUnpinGesture:` judge the main display, ignore
+    window z order and cannot grab a strip window of another display; `SBFluidSwitcherPanGestureRecognizer` lacks `initialTouchLeafAppLayout` (4.7).
+16. `SBWindowDragGestureWorkspaceTransaction` lacked `sizeOfSelectedDisplayItem`: G1C's event producer (`_currentGestureEventForGesture:`) only copies it when the transaction responds, so the
+    window size of the drag event was never filled in (silent skip); no `_finishWithGesture:` guard (the lost drag end / failed begin path) (4.7).
+17. Bug in this file's own earlier code, fixed: `peekConfiguration` is an NSInteger, it had been read into an `id` (ARC retain of 2 / 3 while a peek is active) and passed to a dlsym'd
+    `SBPeekConfigurationIsValid` that is not exported; replaced by the 3 instruction local function (4.3).
 
 ## 2. PORTED: coordinator and cross display window drag
 ### 2.1 Model (`g1d_model`)
@@ -99,6 +105,26 @@ asked edge of `containerViewBounds`, all four edges. The 16.0 selector forwards 
 `SBExternalDisplaySystemGestureManager` 0x1c780bf58 arms 0x1e-0x21 in addition to the 16.0 set (`SBTransientUIInteractionManager` tap-to-dismiss / indirect pan / tap-to-unhide); 0x43 is the
 renumbered 0x42 that Tweak.x already enables.
 
+### 4.7 Stage Manager window drag (`g1d_windowdrag`)
+The drag (gesture type 9) is the recognizer 16.0 names `_unpinSplitViewApplicationGestureRecognizer`. 16.2 decides which window was grabbed ONCE, in
+`_shouldSplitViewApplicationUnpinGesture:receiveTouch:` (16.2 0x1c78f46e8, 16.0 0x1c6442888), and keeps it in the new recognizer property `initialTouchLeafAppLayout` (associated object; cleared in
+`-reset`, 0x1c763f334). Consumers: `_shouldBeginSplitViewApplicationUnpinGesture:` (0x1c78f92b8, 16.0 0x1c6446a7c) and `-[SBWindowDragGestureWorkspaceTransaction _beginWithGesture:]` (0x1c733da30,
+16.0 0x1c5eca434), which in 16.0 each re-derived the window from the touch location against the main display (`_leafAppLayoutForItemContainerAtLocation:environment:`).
+* receiveTouch: gate = scene's system gesture manager `shouldSystemGestureReceiveTouchWithLocation:` + `_SBIsSystemGestureAllowed(scene, 0x16)` + `!_isBannerOccludingRegionAtReferencePoint:` +
+  `unlockedEnvironmentMode == 3` + `!SBPeekConfigurationIsValid`. Then over `[[state appLayout] zOrderedItems]` (front to back): container containing the item (block 0x1c78f4e1c), role 0 skipped,
+  x extent of the frame, hit rect (Stage Manager: container width x nub height; touch: reaches one nub height above the window; pointer (`_isPointerTouch`): inside the window; floating role 4: edge swipe
+  wide width and 2 nubs; Medusa configurations: the jump table 0x1c78f4e08 including the RTL edge role rules), windows in front occlude (their frames are collected, the CGRegion became an array of
+  rects), and when no stage window is hit but the touch lands in a visible container whose role is 0 (a strip window; `hitTest:` + `isDescendantOfView:`, block 0x1c78f4e60) that one is grabbed.
+  Result goes to `initialTouchLeafAppLayout`. `_SBRectContainsPoint` is inclusive on all four edges (SpringBoardUIServices 0x1a4509f6c).
+* shouldBegin: same 16.0 rules (multi window support of the app for the scene's style and display identity, deferred edges, Guided Access) with the leaf from the recognizer and
+  `adjustedAppLayoutForLeafAppLayout:` as precondition.
+* Transaction begin: the recognizer's leaf (when `adjustedAppLayoutForLeafAppLayout:` accepts it) else the 16.0 floating / location path against the switcher controller OF THE VIEW CONTROLLER
+  (16.0 used the transaction's window scene); on failure the recognizer is bounced (`setEnabled:` NO / YES) and the transaction finishes with -1 instead of continuing with a nil layout;
+  `_draggingFromContinuousExposeStrips`, `_locationInSelectedDisplayItem` as in 16.0 and the new `sizeOfSelectedDisplayItem`
+  (= size of `frameForItemWithRole:1 inMainAppLayout:selected interfaceOrientation:` of the switcher controller). `_finishWithGesture:` runs the base class only when a layout was selected.
+  The base `[super _beginWithGesture:]` is called through `objc_msgSendSuper`.
+Not ported: the 16.2 `os_log` calls (replaced by `BP_Log`). The Slide Over move / pin recognizers keep their 16.0 rules (Medusa only).
+
 ## 5. Verified equivalent, deliberately NOT ported
 * `_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch:` (log only), `...WithTouch:receiveTouch:` (16.0 asks the VC's own window scene for the attributes 16.2 reads from
   `-chamoisLayoutAttributes`), `_shouldBeginHoverGesture:`, `gestureRecognizer:shouldReceiveTouch:` (dispatch shape only), `initWithSwitcherController:delegate:`, `setActiveGestureTransaction:`,
@@ -106,9 +132,10 @@ renumbered 0x42 that Tweak.x already enables.
 * Coordinator tap/click delegate methods (16.2 only broadcasts to the controllers; same effect as 16.0's `_switcherControllerForGestureManager:`).
 * SBGrabberTongue `_createTongueAndGestureRecognizersIfNecessaryWithColorStyle:` / `uninstall` / `_handlePullGesture:`: 16.2 uses `name` for recognizer names and drops the main display manager
   fallback (the tongue always has a window scene here).
-* Medusa only (Slide Over / Split View, never active on an external display): `_shouldFloatingApplicationMoveGesture:/PinGesture:receiveTouch:` (16.2 asks the scene's manager), `_shouldSplitView
-  ApplicationUnpinGesture:receiveTouch:` (0x1c78f46e8, 138 vs 57 instructions: the Stage Manager hit region of the nub, `initialTouchLeafAppLayout`), `_shouldBeginSplitViewApplicationUnpinGesture:`,
+* Medusa only (Slide Over, never active on an external display): `_shouldFloatingApplicationMoveGesture:/PinGesture:receiveTouch:` (16.2 asks the scene's manager),
   `_shouldAllowFloatingApplicationGesture:...`, `_configureFloatingApplicationGestureRecognizers` (names, one more registration). They keep the 16.0 behaviour on the iPad display.
+  (`_shouldSplitViewApplicationUnpinGesture:receiveTouch:` and `_shouldBeginSplitViewApplicationUnpinGesture:` were listed here in an earlier draft: they are the Stage Manager window drag rules
+  and are ported, section 4.7.)
 * System Aperture / scene backed banners (iPhone only or 16.2 only): `_updateSystemApertureZStackPolicyAssistantWithLayoutState:`, `bannerManager:will(Present|Dismiss)...`, `presentedSceneBackedBanners`
   (the tap-to-bring-forward test also looks at the banner count; with no banner feature the count is always 0).
 * `SBPIPController`: `_acquireStashAssertion...`, `_createNewWindowForContainerViewController:onWindowScene:`, `_setAdapter:`, `updateZStackParticipantPreferencesIfNeeded:windowScene:` (identical),
@@ -145,9 +172,14 @@ display; `keyboardFocusController:externalSceneDidAcquireFocus:` 0x1c792efa4 rem
   when the pointer's Began arrives on B, so the 16.2 behaviour lives in the event routing below SpringBoard (backboardd pointer capture / UIKit touch delivery). Not fixable here without
   rewriting touch windows by hand (the coordinates would be in B's space); no mitigation was added so that no masked state survives.
 * 16.2 error branch of `transitionDidEnd` (`-[provider setPreviousLayoutState:]`): the 16.0 provider has no such API.
-* `SBFIsChamoisWindowingUIAvailable`, `_SBIsSystemGestureAllowed`, `_SBPIPApplicationForProcessIdentifier`: private C functions of the 16.2 binary; re-implemented locally (same bodies).
+* `SBFIsChamoisWindowingUIAvailable`, `_SBIsSystemGestureAllowed`, `_SBPIPApplicationForProcessIdentifier`, `_SBPeekConfigurationIsValid`, `SBMainDisplayLayoutStateFloatingConfigurationIsStashed`,
+  `_SBRectContainsPoint`, `SBGuidedAccessIsActive`: private C functions of the 16.2 binary; re-implemented locally (same bodies, checked by disassembly).
+* The base class `SBFluidSwitcherGestureWorkspaceTransaction` restructure (per switcher controller layout state maps, ancillary layout transactions, `handleTransitionRequestFor...fromGestureManager:`) is not in
+  this file (G1C owns it).
 
 ## 8. Unsure (static only)
+* Window drag (4.7): medium. The control flow of receiveTouch / shouldBegin / begin is a line by line transcription, but the captured view of the strip hit test block (0x1c78f4e60) is inferred
+  to be the view controller's view, and the occlusion region is approximated by rectangles.
 * Tongue (high confidence on structure, medium on feel): the tongue's own pull thresholds are the 16.0 SBGrabberTongue ones (class differs only in names). The touch recognizer's system gesture
   type 0x37 relies on the 16.0 type tables answering like for 0x33 (verified in `_shouldEnableSystemGestureWithType:` and `_isTouchGestureWithType:`).
 * PIP data source: container frame math is a direct transcription; the consumer of `shouldProvideSourceClippingFrameInFixedCoordinateSpace:` was not found in SpringBoard (provided anyway).
@@ -157,5 +189,6 @@ display; `keyboardFocusController:externalSceneDidAcquireFocus:` 0x1c792efa4 rem
 ## 9. What other agents / the lead must do
 * Lead: wire `G1D_Setup()` (above). G1C: `kReqActItem` in `G1C_Req_ForTap` can go (accessor exists). G2B: the `_adjustedGestureEventForGestureEvent:fromGestureManager:` and the two
   `...ForContinuousExposeWindowDrag` stand-ins are replaced by `class_replaceMethod` in `G1D_InstallWindowDragSupport()`; G2B may delete them (G1D must run after it while they exist).
+* G1C: its `_currentGestureEventForGesture:` hook copies `sizeOfSelectedDisplayItem` from the transaction when the transaction responds; with `g1d_windowdrag` it now does (item 16). Nothing to change there.
 * Tweak.x already hooks `SBExternalDisplaySystemGestureManager _shouldEnableSystemGestureWithType:` for 0x42; the G1D hook is independent (different types) and chains.
 * Group4Focus.x must keep `multiDisplayUserInteractionCoordinator` and `add/removePointerInteractionObserver:` (G1D uses them for the VC pointer observer).

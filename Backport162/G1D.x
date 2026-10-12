@@ -4,7 +4,7 @@
 // Integration: call G1D_Setup() from the %ctor after G1B_Setup() / BP2B_Setup() / G1C_Setup() (it adds methods and replaces a few VC methods that G2.x / G2B.m
 // stubbed, so it must run after them; it is harmless when it runs earlier because every installer re-checks what exists).
 // Every part is default-on; Backport162.off.<name> switches one off. Names: g1d (whole file), g1d_model, g1d_request, g1d_removal, g1d_newwindow, g1d_gesture,
-// g1d_vcdrag, g1d_pointer, g1d_tongue, g1d_gmtouch, g1d_pip, g1d_pipframes, g1d_piprestore, g1d_pipkeyboard, g1d_pipinsets, g1d_extgestures.
+// g1d_vcdrag, g1d_pointer, g1d_tongue, g1d_gmtouch, g1d_windowdrag, g1d_pip, g1d_pipframes, g1d_piprestore, g1d_pipkeyboard, g1d_pipinsets, g1d_extgestures.
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -945,6 +945,11 @@ static BOOL G1D_ShouldBeginStripOverflow(id gm, id gr) {
     return !hidden;
 }
 
+// _SBPeekConfigurationIsValid(NSInteger) is byte-identical in 16.0 (0x1c6289f84) and 16.2 (0x1c77229fc): (configuration & ~1) == 2. The private symbol is not exported, so
+// it is re-implemented. SBMainDisplayLayoutStateFloatingConfigurationIsStashed (16.2 0x1c7722a84, 16.0 0x1c628a00c) is (configuration - 3) < 2.
+static BOOL G1D_PeekValid(long long configuration) { return (configuration & ~1LL) == 2; }
+static BOOL G1D_FloatingConfigurationIsStashed(long long configuration) { return (unsigned long long)(configuration - 3) < 2; }
+
 // UIKit's _UISystemGestureLocationForTouchInView(gestureRecognizer, touch, view) (16.0 and 16.2 call it the same way)
 static CGPoint G1D_SystemGestureLocation(id gr, id touch, id view) {
     static CGPoint (*fn)(id, id, id); static dispatch_once_t once;
@@ -964,12 +969,10 @@ static BOOL G1D_StripOverflowReceiveTouch(id gm, id gr, id touch) {
     BOOL sgAllowed = [sgm respondsToSelector:allowed] ? ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowed, 0x36) : NO;
     id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
     long long env = G1B_SendLL0(state, NSSelectorFromString(@"unlockedEnvironmentMode"));
-    id peek = G1B_Send0(state, NSSelectorFromString(@"peekConfiguration"));
+    long long peek = G1B_SendLL0(state, NSSelectorFromString(@"peekConfiguration"));        // an NSInteger, not an object
     BOOL chamois = G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
     if (!(chamois && sgReceives && sgAllowed && env == 3)) return NO;
-    static BOOL (*peekValid)(id); static dispatch_once_t once;
-    dispatch_once(&once, ^{ peekValid = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "SBPeekConfigurationIsValid"); });
-    if (peekValid && peekValid(peek)) return NO;
+    if (G1D_PeekValid(peek)) return NO;
     id vc = G1D_GM_VC(gm);
     id view = G1B_Send0(vc, NSSelectorFromString(@"view"));
     CGPoint pt = G1D_SystemGestureLocation(gr, touch, view);
@@ -1335,7 +1338,7 @@ static BOOL G1D_VC_IsEdgeProtected(id vc, double loc, unsigned long long edge) {
 // -_shouldBeginTapToBringItemContainerForwardGesture: 0x1c78f7064 (0x1c644493c), -_handleTapToBringItemContainerForward: 0x1c78f2690 (0x1c6440998).
 // Verified equivalent and left alone: -_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch: (log only), ...WithTouch:receiveTouch: (16.0 asks the view controller's
 // own window scene for the same layout attributes that 16.2 reads from -chamoisLayoutAttributes).
-// Not ported (Medusa only, never active on an external display): the Slide Over move / pin gestures and the Split View unpin gesture (spec 4.4).
+// Not ported (Medusa only, never active on an external display): the Slide Over move / pin gestures (spec 4.4). The Split View unpin pair is the Stage Manager window drag: section 4c.
 static BOOL G1D_IsSystemGestureAllowed(id ws, unsigned long long type) {                // _SBIsSystemGestureAllowed(ws, type) 0x1c74d1424
     id sgm = G1B_Send0(ws, NSSelectorFromString(@"systemGestureManager"));
     SEL allowedSel = NSSelectorFromString(@"isGestureWithTypeAllowed:");
@@ -1450,6 +1453,306 @@ static BOOL G1D_GM_LocationReceivable(id gm, id touch, id *outScene, id *outSGM,
 }
 %end
 %end // G1D_TapForward
+
+
+// ============================================================================================================
+// 4c. Stage Manager window drag (gesture type 9): touch rules of the drag recognizer and the drag's workspace transaction
+// ============================================================================================================
+// The window drag is driven by the recognizer that 16.0 names _unpinSplitViewApplicationGestureRecognizer (a SBFluidSwitcherPanGestureRecognizer; its delegate methods are
+// -_shouldSplitViewApplicationUnpinGesture:receiveTouch: and -_shouldBeginSplitViewApplicationUnpinGesture:, 16.0 0x1c6442888 / 0x1c6446a7c, 16.2 0x1c78f46e8 / 0x1c78f92b8).
+// 16.2 decides WHICH window the touch grabbed once, in receiveTouch, and stores it in the recognizer (new property -initialTouchLeafAppLayout, ivar +0x8 of
+// SBFluidSwitcherPanGestureRecognizer, cleared in -reset 0x1c763f334); shouldBegin and the workspace transaction (-[SBWindowDragGestureWorkspaceTransaction
+// _beginWithGesture:] 16.2 0x1c733da30) then reuse that answer, so a window of ANOTHER display (or one of the strip) can be dragged, and the transaction learns the window's
+// size (-sizeOfSelectedDisplayItem, new in 16.2, consumed by G1C's modifier event producer). 16.0 re-derived the window from the touch location in every step against the
+// main display only.
+// receiveTouch (16.2): gate = per-scene system gesture manager shouldReceive + _SBIsSystemGestureAllowed(scene, 0x16) + no banner under the point + unlocked environment 3 +
+// no peek. Then, walking the stage layout's items front to back, the item's container hit rect (Stage Manager: the full container width, the nub height; a touch gets a rect
+// that reaches one nub height above the window, a pointer does not; floating windows always the wide edge swipe width) is tested against the touch, containers in front occlude
+// (their frames are collected in a region, 16.0 had no z order), and when no stage window is hit the touch may still land in a strip window (hit test + isDescendantOfView,
+// "drag a window out of the strip"). The non Stage Manager Medusa width rules (Split View / Slide Over) are ported as well; the 16.2 jump table is at 0x1c78f4e08.
+// shouldBegin (16.2): identical to 16.0 except for where the leaf layout comes from (initialTouchLeafAppLayout + -adjustedAppLayoutForLeafAppLayout:) and the calculator ivar.
+// -[SBWindowDragGestureWorkspaceTransaction _finishWithGesture:] (16.2 0x1c733df84) only runs when a window was selected (16.0 had no override, and the base class
+// asserted on a nil selected layout: the "lost drag end" crash path when the begin failed).
+static char kG1DInitialTouchLeaf, kG1DDragItemSize;
+static id G1D_Pan_GetLeaf(id self, SEL _cmd) { return objc_getAssociatedObject(self, &kG1DInitialTouchLeaf); }
+static void G1D_Pan_SetLeaf(id self, SEL _cmd, id leaf) { objc_setAssociatedObject(self, &kG1DInitialTouchLeaf, leaf, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static CGSize G1D_Txn_GetSize(id self, SEL _cmd) {
+    NSValue *v = objc_getAssociatedObject(self, &kG1DDragItemSize);
+    return v ? [v CGSizeValue] : CGSizeZero;
+}
+static void G1D_InstallWindowDragProperties(void) {
+    Class pan = NSClassFromString(@"SBFluidSwitcherPanGestureRecognizer");
+    if (pan) {
+        if (!class_getInstanceMethod(pan, NSSelectorFromString(@"initialTouchLeafAppLayout"))) class_addMethod(pan, NSSelectorFromString(@"initialTouchLeafAppLayout"), (IMP)G1D_Pan_GetLeaf, "@16@0:8");
+        if (!class_getInstanceMethod(pan, NSSelectorFromString(@"setInitialTouchLeafAppLayout:"))) class_addMethod(pan, NSSelectorFromString(@"setInitialTouchLeafAppLayout:"), (IMP)G1D_Pan_SetLeaf, "v24@0:8@16");
+    }
+    Class txn = NSClassFromString(@"SBWindowDragGestureWorkspaceTransaction");
+    if (txn && !class_getInstanceMethod(txn, NSSelectorFromString(@"sizeOfSelectedDisplayItem")))
+        class_addMethod(txn, NSSelectorFromString(@"sizeOfSelectedDisplayItem"), (IMP)G1D_Txn_GetSize, "{CGSize=dd}16@0:8");
+}
+
+static id G1D_InitialLeaf(id gr) { return objc_getAssociatedObject(gr, &kG1DInitialTouchLeaf); }
+static void G1D_SetInitialLeaf(id gr, id leaf) { objc_setAssociatedObject(gr, &kG1DInitialTouchLeaf, leaf, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static id G1D_ItemForRole(id layout, long long role) {
+    SEL s = NSSelectorFromString(@"itemForLayoutRole:");
+    return [layout respondsToSelector:s] ? ((id (*)(id, SEL, long long))objc_msgSend)(layout, s, role) : nil;
+}
+static long long G1D_RoleForItem(id layout, id item) {
+    SEL s = NSSelectorFromString(@"layoutRoleForItem:");
+    return (item && [layout respondsToSelector:s]) ? ((long long (*)(id, SEL, id))objc_msgSend)(layout, s, item) : 0;
+}
+static CGRect G1D_FrameOf(id o) {
+    return [o respondsToSelector:@selector(frame)] ? ((CGRect (*)(id, SEL))objc_msgSend)(o, @selector(frame)) : CGRectZero;
+}
+static CGRect G1D_BoundsOf(id o) {
+    return [o respondsToSelector:@selector(bounds)] ? ((CGRect (*)(id, SEL))objc_msgSend)(o, @selector(bounds)) : CGRectZero;
+}
+// _SBRectContainsPoint (SpringBoardUIServices 0x1a4509f6c: all four edges are inclusive, a null rect contains nothing)
+static BOOL G1D_RectContainsPointInclusive(CGRect r, CGPoint p) {
+    return !CGRectIsNull(r) && p.x >= CGRectGetMinX(r) && p.x <= CGRectGetMaxX(r) && p.y >= CGRectGetMinY(r) && p.y <= CGRectGetMaxY(r);
+}
+static CGPoint G1D_LocationInView(id touchOrGesture, id view) {
+    return [touchOrGesture respondsToSelector:@selector(locationInView:)] ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(touchOrGesture, @selector(locationInView:), view) : CGPointZero;
+}
+// the visible item container whose app layout contains the item (block 0x1c78f4e1c)
+static id G1D_ContainerContainingItem(id vc, id item) {
+    id containers = G1B_Send0(G1B_Send0(vc, NSSelectorFromString(@"visibleItemContainers")), NSSelectorFromString(@"allValues"));
+    for (id c in (containers ?: @[])) if (G1B_SendB1(G1B_Send0(c, NSSelectorFromString(@"appLayout")), NSSelectorFromString(@"containsItem:"), item)) return c;
+    return nil;
+}
+
+// hit rect of one container (16.2 0x1c78f4a74 - 0x1c78f4c50)
+static CGRect G1D_WD_HitRect(id touch, CGRect f, long long role, BOOL chamois, id stateLayout, id state) {
+    double nub = G1B_Dbl0((id)NSClassFromString(@"SBNubView"), NSSelectorFromString(@"height"));
+    id settings = G1B_Send0((id)NSClassFromString(@"SBMedusaDomain"), NSSelectorFromString(@"rootSettings"));
+    double wide = G1B_Dbl0(settings, NSSelectorFromString(@"wideEdgeSwipeHitTestWidth")), narrow = G1B_Dbl0(settings, NSSelectorFromString(@"narrowEdgeSwipeHitTestWidth"));
+    double width;
+    if (chamois) width = f.size.width;
+    else if (role == 4) width = wide;
+    else {
+        long long cfg = G1B_SendLL0(stateLayout, NSSelectorFromString(@"configuration")), floating = G1B_SendLL0(state, NSSelectorFromString(@"floatingConfiguration"));
+        double w = 0;
+        switch (cfg) {
+            case 0: case 1: case 3: w = wide; break;
+            case 2: w = role == 1 ? narrow : wide; break;
+            case 4: w = role == 1 ? wide : narrow; break;
+            default: w = 0; break;
+        }
+        BOOL rtl = [[UIApplication sharedApplication] userInterfaceLayoutDirection] == UIUserInterfaceLayoutDirectionRightToLeft;
+        long long edgeRole = rtl ? 2 : 1, oppositeRole = rtl ? 1 : 2;
+        if (role == edgeRole && cfg != 1 && floating == 1) width = 0;
+        else width = (floating == 2 && cfg != 1 && role == oppositeRole) ? 0 : w;
+    }
+    double y = f.origin.y, h = nub;
+    if (role == 4) { y = f.origin.y - nub; h = nub * 2; }
+    else if (chamois) {
+        BOOL pointer = G1B_SendB0(touch, NSSelectorFromString(@"_isPointerTouch"));
+        if (!pointer) { y = f.origin.y - nub; h = nub * 2; }
+    }
+    return CGRectMake(CGRectGetMidX(f) - width * 0.5, y, width, h);
+}
+
+// -_shouldSplitViewApplicationUnpinGesture:receiveTouch: (16.2 0x1c78f46e8)
+static BOOL G1D_WD_ReceiveTouch(id gm, id gr, id touch) {
+    id vc = G1D_GM_VC(gm), sc = G1D_GM_SC(gm);
+    id view = G1B_Send0(vc, NSSelectorFromString(@"view"));
+    CGPoint pt = G1D_SystemGestureLocation(gr, touch, view);
+    id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
+    CGPoint wloc = G1D_LocationInView(touch, nil);
+    id ws = G1B_Send0(sc, NSSelectorFromString(@"windowScene"));
+    id sgm = G1B_Send0(ws, NSSelectorFromString(@"systemGestureManager"));
+    SEL recv = NSSelectorFromString(@"shouldSystemGestureReceiveTouchWithLocation:"), ban = NSSelectorFromString(@"_isBannerOccludingRegionAtReferencePoint:");
+    BOOL receives = [sgm respondsToSelector:recv] ? ((BOOL (*)(id, SEL, CGPoint))objc_msgSend)(sgm, recv, wloc) : NO;
+    BOOL allowed = G1D_IsSystemGestureAllowed(ws, 0x16);
+    BOOL banner = [gm respondsToSelector:ban] ? ((BOOL (*)(id, SEL, CGPoint))objc_msgSend)(gm, ban, wloc) : NO;
+    BOOL chamois = G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
+    id stateLayout = G1B_Send0(state, NSSelectorFromString(@"appLayout"));
+    long long env = G1B_SendLL0(state, NSSelectorFromString(@"unlockedEnvironmentMode"));
+    long long peek = G1B_SendLL0(state, NSSelectorFromString(@"peekConfiguration"));
+    if (!(receives && allowed && !banner && env == 3 && !G1D_PeekValid(peek))) {
+        G1D_SetInitialLeaf(gr, nil);
+        return NO;
+    }
+    NSMutableArray *occluders = [NSMutableArray array];       // CGRegion of the frames of the windows in front
+    id hit = nil;
+    for (id item in (G1B_Send0(stateLayout, NSSelectorFromString(@"zOrderedItems")) ?: @[])) {
+        id container = G1D_ContainerContainingItem(vc, item);
+        if (!container) continue;
+        CGRect f = G1D_FrameOf(container);
+        long long role = G1D_RoleForItem(stateLayout, G1D_ItemForRole(G1B_Send0(container, NSSelectorFromString(@"appLayout")), 1));
+        if (role == 0) continue;
+        BOOL reject = YES;
+        if (pt.x >= CGRectGetMinX(f) && pt.x <= CGRectGetMaxX(f) && G1D_RectContainsPointInclusive(G1D_WD_HitRect(touch, f, role, chamois, stateLayout, state), pt)) {
+            reject = NO;
+            if (chamois) for (NSValue *o in occluders) if (G1D_RectContainsPointInclusive([o CGRectValue], pt)) { reject = YES; break; }
+        }
+        if (!reject) { hit = container; break; }
+        if (chamois) [occluders addObject:[NSValue valueWithCGRect:f]];
+    }
+    if (!hit && chamois) {                                              // a window of the strip (not in the stage layout): block 0x1c78f4e60
+        SEL ht = NSSelectorFromString(@"hitTest:withEvent:"), desc = NSSelectorFromString(@"isDescendantOfView:");
+        id containers = G1B_Send0(G1B_Send0(vc, NSSelectorFromString(@"visibleItemContainers")), NSSelectorFromString(@"allValues"));
+        for (id c in (containers ?: @[])) {
+            id leaf = G1B_Send0(c, NSSelectorFromString(@"appLayout"));
+            if (G1D_RoleForItem(stateLayout, G1D_ItemForRole(leaf, 1)) != 0) continue;
+            id hv = [view respondsToSelector:ht] ? ((id (*)(id, SEL, CGPoint, id))objc_msgSend)(view, ht, pt, nil) : nil;
+            if (hv && [hv respondsToSelector:desc] && ((BOOL (*)(id, SEL, id))objc_msgSend)(hv, desc, c)) { hit = c; break; }
+        }
+    }
+    G1D_SetInitialLeaf(gr, G1B_Send0(hit, NSSelectorFromString(@"appLayout")));
+    if (BP_LogEnabled()) BP_Log(@"g1d: window drag receiveTouch at %@ -> %@", NSStringFromCGPoint(pt), hit ? G1D_InitialLeaf(gr) : @"no window");
+    return hit != nil;
+}
+
+// -_shouldBeginSplitViewApplicationUnpinGesture: (16.2 0x1c78f92b8)
+static BOOL G1D_WD_ShouldBegin(id gm, id gr) {
+    id state = G1B_Send0(gm, NSSelectorFromString(@"_currentLayoutState"));
+    id vc = G1D_GM_VC(gm), sc = G1D_GM_SC(gm);
+    id leaf = G1D_InitialLeaf(gr);
+    id adjusted = G1B_Send1(vc, NSSelectorFromString(@"adjustedAppLayoutForLeafAppLayout:"), leaf);
+    if (!leaf || !adjusted) return NO;
+    id item = G1D_ItemForRole(leaf, 1);
+    id apps = G1B_Send0((id)NSClassFromString(@"SBApplicationController"), NSSelectorFromString(@"sharedInstance"));
+    id app = G1B_Send1(apps, NSSelectorFromString(@"applicationWithBundleIdentifier:"), G1B_Send0(item, NSSelectorFromString(@"bundleIdentifier")));
+    id element = G1B_Send1(state, NSSelectorFromString(@"elementWithIdentifier:"), G1B_Send0(item, NSSelectorFromString(@"uniqueIdentifier")));
+    id handle = G1B_Send0(G1B_Send0(G1B_Send0(element, NSSelectorFromString(@"workspaceEntity")), NSSelectorFromString(@"deviceApplicationSceneEntity")), NSSelectorFromString(@"sceneHandle"));
+    id stateLayout = G1B_Send0(state, NSSelectorFromString(@"appLayout"));
+    id ws = G1B_Send0(sc, NSSelectorFromString(@"windowScene"));
+    long long orientation = G1B_SendLL0(state, NSSelectorFromString(@"interfaceOrientation"));
+    id calc = G1D_IvarObj(gm, "_displayItemLayoutAttributesCalculator");
+    SEL frameSel = NSSelectorFromString(@"frameForLayoutRole:inAppLayout:containerOrientation:windowScene:");
+    CGRect frame = [calc respondsToSelector:frameSel] ? ((CGRect (*)(id, SEL, long long, id, long long, id))objc_msgSend)(calc, frameSel, 1, stateLayout, orientation, ws) : CGRectZero;
+    CGRect bounds = G1D_BoundsOf(G1B_Send0(vc, NSSelectorFromString(@"view")));
+    BOOL sameSize = G1D_FloatEqual(frame.size.width, bounds.size.width) && G1D_FloatEqual(frame.size.height, bounds.size.height);     // BSSizeEqualToSize
+    BOOL chamois = G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
+    long long style = G1B_SendLL0(ws, NSSelectorFromString(@"windowManagementStyle"));
+    id identity = G1B_Send0(ws, NSSelectorFromString(@"displayIdentity"));
+    SEL sup = NSSelectorFromString(@"supportsMultiWindowLayoutsForSwitcherWindowManagementStyle:displayIdentity:");
+    BOOL supports = [app respondsToSelector:sup] ? ((BOOL (*)(id, SEL, long long, id))objc_msgSend)(app, sup, style, identity) : NO;
+    BOOL ok = NO;
+    if (supports) {
+        unsigned long long edges = (unsigned long long)G1B_SendLL0(handle, NSSelectorFromString(@"screenEdgesDeferringSystemGestures"));
+        BOOL deferred = (edges & 1) != 0;
+        if (!deferred || (chamois && !sameSize)) {
+            id ga = G1B_Send0((id)NSClassFromString(@"SBGuidedAccessListener"), NSSelectorFromString(@"sharedGuidedAccessListener"));
+            ok = !G1B_SendB0(ga, NSSelectorFromString(@"isGuidedAccessActive"));
+        }
+    }
+    if (!ok && BP_LogEnabled()) BP_Log(@"g1d: Won't begin window drag gesture (supportsMulti=%d)", supports);
+    return ok;
+}
+
+// -[SBWindowDragGestureWorkspaceTransaction _beginWithGesture:] (16.2 0x1c733da30, 16.0 0x1c5eca434)
+static void G1D_SetIvarBool(id o, const char *name, BOOL v) {
+    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    if (iv) *(BOOL *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) = v;
+}
+static void G1D_SetIvarPoint(id o, const char *name, CGPoint v) {
+    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    if (iv) *(CGPoint *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) = v;
+}
+static void G1D_WD_Begin(id txn, id gesture, Class sup) {
+    id vc = G1B_Send0(txn, NSSelectorFromString(@"switcherViewController"));
+    id sc = G1B_Send0(vc, NSSelectorFromString(@"switcherController"));
+    if (!sc) sc = G1B_Send0(G1B_Send0(txn, NSSelectorFromString(@"windowScene")), NSSelectorFromString(@"switcherController"));
+    id layoutState = G1B_Send0(G1B_Send0(vc, NSSelectorFromString(@"layoutContext")), NSSelectorFromString(@"layoutState"));
+    id contentView = G1B_Send0(vc, NSSelectorFromString(@"contentView")), view = G1B_Send0(vc, NSSelectorFromString(@"view"));
+    CGPoint loc = G1D_LocationInView(gesture, contentView);
+    Class panClass = NSClassFromString(@"SBFluidSwitcherPanGestureRecognizer");
+    BOOL isPan = panClass && [gesture isKindOfClass:panClass];
+    if (isPan) {
+        SEL itl = NSSelectorFromString(@"initialTouchLocation");
+        if ([gesture respondsToSelector:itl]) loc = ((CGPoint (*)(id, SEL))objc_msgSend)(gesture, itl);
+    }
+    CGRect vb = G1D_BoundsOf(view);
+    if (loc.y > vb.size.height - 1) loc.y = vb.size.height - 1;
+    id selected = nil;
+    id leaf = isPan ? G1D_InitialLeaf(gesture) : nil;
+    if (leaf && G1B_Send1(vc, NSSelectorFromString(@"adjustedAppLayoutForLeafAppLayout:"), leaf)) selected = leaf;
+    if (!selected) {
+        SEL lcr = NSSelectorFromString(@"layoutContainsRole:");
+        long long floatingCfg = G1B_SendLL0(layoutState, NSSelectorFromString(@"floatingConfiguration"));
+        if ([layoutState respondsToSelector:lcr] && ((BOOL (*)(id, SEL, long long))objc_msgSend)(layoutState, lcr, 3) && !G1D_FloatingConfigurationIsStashed(floatingCfg)) {
+            double narrow = G1B_Dbl0(G1B_Send0((id)NSClassFromString(@"SBMedusaDomain"), NSSelectorFromString(@"rootSettings")), NSSelectorFromString(@"narrowEdgeSwipeHitTestWidth"));
+            SEL ff = NSSelectorFromString(@"frameForFloatingAppLayoutInInterfaceOrientation:floatingConfiguration:");
+            long long orientation = G1B_SendLL0(layoutState, NSSelectorFromString(@"interfaceOrientation"));
+            CGRect fr = [sc respondsToSelector:ff] ? ((CGRect (*)(id, SEL, long long, long long))objc_msgSend)(sc, ff, orientation, floatingCfg) : CGRectZero;
+            CGRect band = CGRectMake(fr.origin.x + (fr.size.width - narrow) * 0.5, 0, narrow, fr.size.height);
+            if (CGRectContainsPoint(band, loc)) selected = G1B_Send0(layoutState, NSSelectorFromString(@"floatingAppLayout"));
+        }
+    }
+    if (!selected) {
+        SEL adj = NSSelectorFromString(@"_adjustedAppLayoutForItemContainerAtLocation:environment:"), lf = NSSelectorFromString(@"_leafAppLayoutForItemContainerAtLocation:environment:");
+        id adjusted = [vc respondsToSelector:adj] ? ((id (*)(id, SEL, CGPoint, long long))objc_msgSend)(vc, adj, loc, 0) : nil;
+        selected = G1D_MsgLL(adjusted, NSSelectorFromString(@"leafAppLayoutForRole:"), 4);
+        if (!selected) selected = [vc respondsToSelector:lf] ? ((id (*)(id, SEL, CGPoint, long long))objc_msgSend)(vc, lf, loc, 0) : nil;
+        if (!selected) {                                                // 16.2 logs a fault, bounces the recognizer and fails the transaction
+            BP_Log(@"g1d: %@ no app layout for the window drag at %@, failing the gesture", NSStringFromClass(object_getClass(txn)), NSStringFromCGPoint(loc));
+            if ([gesture respondsToSelector:@selector(setEnabled:)]) {
+                ((void (*)(id, SEL, BOOL))objc_msgSend)(gesture, @selector(setEnabled:), NO);
+                ((void (*)(id, SEL, BOOL))objc_msgSend)(gesture, @selector(setEnabled:), YES);
+            }
+            SEL fin = NSSelectorFromString(@"finishWithCompletionType:");
+            if ([txn respondsToSelector:fin]) ((void (*)(id, SEL, long long))objc_msgSend)(txn, fin, -1);
+            return;
+        }
+    }
+    G1B_SendV1(txn, NSSelectorFromString(@"setSelectedAppLayout:"), selected);
+    if (G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) {
+        id stateLayout = G1B_Send0(layoutState, NSSelectorFromString(@"appLayout"));
+        BOOL inStage = G1B_SendB1(stateLayout, NSSelectorFromString(@"containsItem:"), G1D_ItemForRole(selected, 1));
+        G1D_SetIvarBool(txn, "_draggingFromContinuousExposeStrips", !inStage);
+        id container = nil;
+        id all = G1B_Send0(G1B_Send0(vc, NSSelectorFromString(@"visibleItemContainers")), NSSelectorFromString(@"allValues"));
+        for (id c in (all ?: @[])) if ([G1B_Send0(c, NSSelectorFromString(@"appLayout")) isEqual:selected]) { container = c; break; }
+        SEL cp = NSSelectorFromString(@"convertPoint:fromView:");
+        G1D_SetIvarPoint(txn, "_locationInSelectedDisplayItem", [container respondsToSelector:cp] ? ((CGPoint (*)(id, SEL, CGPoint, id))objc_msgSend)(container, cp, loc, contentView) : CGPointZero);
+        SEL fr = NSSelectorFromString(@"frameForItemWithRole:inMainAppLayout:interfaceOrientation:");
+        if ([sc respondsToSelector:fr]) {
+            CGRect itemFrame = ((CGRect (*)(id, SEL, long long, id, long long))objc_msgSend)(sc, fr, 1, selected, G1B_SendLL0(layoutState, NSSelectorFromString(@"interfaceOrientation")));
+            objc_setAssociatedObject(txn, &kG1DDragItemSize, [NSValue valueWithCGSize:itemFrame.size], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
+    G1B_SUPER(void, sup, txn, NSSelectorFromString(@"_beginWithGesture:"), (struct objc_super *, SEL, id), gesture);
+}
+
+%group G1D_WindowDrag
+%hook SBFluidSwitcherGestureManager
+- (BOOL)_shouldSplitViewApplicationUnpinGesture:(id)gesture receiveTouch:(id)touch {
+    if (!G1D_ON("g1d_windowdrag")) return %orig;
+    return G1D_WD_ReceiveTouch(self, gesture, touch);
+}
+- (BOOL)_shouldBeginSplitViewApplicationUnpinGesture:(id)gesture {
+    if (!G1D_ON("g1d_windowdrag")) return %orig;
+    return G1D_WD_ShouldBegin(self, gesture);
+}
+%end
+%hook SBFluidSwitcherPanGestureRecognizer
+- (void)reset {
+    %orig;
+    G1D_SetInitialLeaf(self, nil);                                  // 16.2 0x1c763f334 clears the new property
+}
+%end
+%hook SBWindowDragGestureWorkspaceTransaction
+- (void)_beginWithGesture:(id)gesture {
+    if (!G1D_ON("g1d_windowdrag")) {
+        %orig;
+        return;
+    }
+    G1D_WD_Begin(self, gesture, class_getSuperclass(%c(SBWindowDragGestureWorkspaceTransaction)));
+}
+- (void)_finishWithGesture:(id)gesture {
+    if (!G1D_ON("g1d_windowdrag")) {
+        %orig;
+        return;
+    }
+    if (G1B_Send0(self, NSSelectorFromString(@"selectedAppLayout"))) {
+        %orig;
+    }
+}
+%end
+%end // G1D_WindowDrag
+
 
 
 // ============================================================================================================
@@ -1849,6 +2152,8 @@ void G1D_Setup(void) {
     %init(G1D_Tongue);
     %init(G1D_GMTouch);
     %init(G1D_TapForward);
+    G1D_InstallWindowDragProperties();
+    %init(G1D_WindowDrag);
     G1D_InstallPIPAnimatorProperties();
     %init(G1D_PIP);
     %init(G1D_PIPDS);
