@@ -2210,6 +2210,42 @@ static void G1D_VC_PointerMoved(id self, SEL _cmd, id from, id to) {
 %end
 %end
 
+// ============================================================================================================
+// 7. SBFluidSwitcherViewController: the in-app "dock hidden" assertion of the Stage Manager floor (dock stayed visible over the keyboard / over a window covering it)
+// ============================================================================================================
+// FloatingDockController keeps its behaviour assertions in 13 level slots; -_deriveActiveAssertion:dockProgress: (16.2 0x1c76ea47c, 16.0 0x1c6254e44) takes the HIGHEST
+// non-empty level and, inside a level, the LAST added assertion. The switcher's visible assertion that -_updateFloatingDockBehaviorAssertion (identical in 16.0 0x1c5fe0a84 and
+// 16.2 0x1c745a058) creates from the floor's wantsDockBehaviorAssertion is progress 1 at level 9. 16.2's -_configureApplicationAndTransientOverlayDockBehaviorAssertionsForContext:
+// (0x1c74414e4, run on every keyboard visibility change and transition) creates the in-app HIDDEN assertion (progress 0, animated, gesture possible, reason "in app") at level 9 too,
+// added later, so it wins while -shouldConfigureInAppDockHiddenAssertion is YES (software keyboard visible, window covering the dock, ...) and is invalidated when it turns NO.
+// The 16.0 body (0x1c5fc8890) creates the same assertion at level 5, which the level 9 visible assertion outranks: with the keyboard up (or a window over the dock) the dock stayed
+// presented, over the lower keyboard rows (the dock window level is base+25, the hosted keyboard window base+20) until the next event removed the visible assertion.
+// The 16.0 body stays as is (transient overlay part, folder branch, invalidation when no longer hidden); a level 5 hidden assertion it just created is replaced by the 16.2 one at
+// level 9 (new one first, then the old one is invalidated, so the dock progress never flickers).
+%group G1D_DockHidden
+%hook SBFluidSwitcherViewController
+- (void)_configureApplicationAndTransientOverlayDockBehaviorAssertionsForContext:(id)context {
+    %orig;
+    if (!G1D_ON("g1d_dockhidden")) return;
+    id root = G1D_IvarObj(self, "_rootModifier");
+    SEL hiddenSel = NSSelectorFromString(@"shouldConfigureInAppDockHiddenAssertion");
+    if (!root || ![root respondsToSelector:hiddenSel] || !G1B_SendB0(root, hiddenSel)) return;
+    SEL getSel = NSSelectorFromString(@"inAppFloatingDockBehaviorAssertion"), setSel = NSSelectorFromString(@"setInAppFloatingDockBehaviorAssertion:");
+    id old = G1B_Send0(self, getSel);
+    if (!old || G1B_SendLL0(old, NSSelectorFromString(@"level")) == 9) return;
+    Class ac = NSClassFromString(@"SBFloatingDockBehaviorAssertion");
+    SEL ini = NSSelectorFromString(@"initWithFloatingDockController:visibleProgress:animated:gesturePossible:atLevel:reason:withCompletion:");
+    id dock = G1B_Send0(self, NSSelectorFromString(@"_floatingDockController"));
+    if (!ac || !dock || ![ac instancesRespondToSelector:ini] || ![self respondsToSelector:setSel]) return;
+    id fresh = ((id (*)(id, SEL, id, double, BOOL, BOOL, unsigned long long, id, id))objc_msgSend)([ac alloc], ini, dock, 0.0, YES, YES, 9ULL, @"in app", nil);
+    if (!fresh) return;
+    G1B_SendV1(self, setSel, fresh);
+    G1B_SendV0(old, NSSelectorFromString(@"invalidate"));
+    if (BP_LogEnabled()) BP_Log(@"dock: in-app hidden assertion level %lld -> 9 (16.2)", (long long)G1B_SendLL0(old, NSSelectorFromString(@"level")));
+}
+%end
+%end
+
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
@@ -2229,5 +2265,6 @@ void G1D_Setup(void) {
     %init(G1D_PIPDS);
     %init(G1D_PIPCtl);
     %init(G1D_DockFocus);
+    %init(G1D_DockHidden);
 }
 #pragma clang diagnostic pop

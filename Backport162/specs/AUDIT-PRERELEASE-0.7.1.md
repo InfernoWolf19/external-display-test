@@ -57,7 +57,7 @@ the ARC rows above and AUDIT-MEMORY-0.6.2). To be device-tested: repeat the tap 
 * Reveal: finger path (edge pan + `_handleContinuousExposeStripRevealGesture:` -> `_handleFluidGesture:` type 0xb) matches 16.2 0x1c78f27e8; `G1C_FS_RevealedFromHidden` /
   `G1C_FS_WantsHideHover` / `G1C_FS_StripEdge` match 16.2. The peeking left-edge card is not leftover reveal progress: it is the hidden strip's resting origin (`G1C_Strip_OriginX`
   uses the reveal progress only through `G1C_FS_Reveal`, which is 0 after dismissal; `G1C_FS_RevealedFromHidden` returns NO at 0). Not reproducible statically.
-* Pointer / trackpad: the pointer recognizer (`G1D_MakeStripIndirectPan`: edges = strip edge, hysteresis 30/10, `setShouldRequireGestureToStartAtEdge:YES`, translation adjust block 0x1c78faca0,
+* Pointer / trackpad (coordinator, build 07f50ba: NOT a bug, the pointer reveals the strip by moving to the left edge = 16.2 hover reveal; the list below is kept for the record): the pointer recognizer (`G1D_MakeStripIndirectPan`: edges = strip edge, hysteresis 30/10, `setShouldRequireGestureToStartAtEdge:YES`, translation adjust block 0x1c78faca0,
   system gesture type 0x34 via `indirectPanSystemGestureTypeForGrabberTongue:`), the hover recognizer (0x33) and `wantsContinuousExposeHoverGesture` (FS, Strip, Hs, Rt) were
   compared with 16.2 and match. Nondeterministic / device-only candidates for "pointer does not reveal while the finger does": (1) `G1D_ShouldBeginStripReveal` / `grabberTongueOrPullEnabled:` evaluates the
   first-swipe tongue rule (`G1D_StripFirstSwipe`: a window touching the strip edge whose app defers the edge gesture) and shows the tongue instead of revealing: by design in 16.2 as well, the second swipe
@@ -77,7 +77,10 @@ are 16.2's own compiled constants (mode 0 = Unspecified). They are consumed safe
 ARC / return shape: 6 (#4, #5, #6, #7, #8, #15).  nil / ivar / bounds: 3 (#2, #9, #10).  hang / deadlock: 2 (#11, #13).  Crash root causes: 3 (#1, #4 = crash B, #14 for the keyboard).
 
 ## Residuals (not resolvable statically)
-* Pointer reveal failure and strip flakiness: candidate lists in C; need device logs with `BP_LogEnabled`.
+* Strip flakiness: candidate list in C; need device logs with `BP_LogEnabled`. (Pointer reveal: not a bug, see C.)
 * G4B `focuslock` wrapper remains the invented "want" filter; 16.2's real policy (two objc_direct methods) is not ported. With #14 the dock no longer takes the lock; typing in other cases to be checked.
 * Crash B: #4 is the statically proven over-release; confirm on device.
 * Linux stub headers cannot compile most files; verified by logos.pl (all 10 .x files pass) + clang syntax checks of G1C.x / G1D.x (stub warnings only).
+
+## Update (build 07f50ba)
+Row 16 (keyboard / dock collision, `G1D_DockHidden`): see specs/AUDIT-KEYBOARD-DOCK-0.7.2.md.
