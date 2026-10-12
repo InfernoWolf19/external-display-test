@@ -297,13 +297,14 @@ static __thread BOOL gBPG3BInBuildMenu;
         SEL act = [c respondsToSelector:@selector(action)] ? ((SEL (*)(id, SEL))objc_msgSend)(c, @selector(action)) : NULL;
         if (act && act == strip) { changed = YES; continue; }
         if (act && act == appWin) {
-            Class cmdC = NSClassFromString(@"UICommand"), altC = NSClassFromString(@"UICommandAlternate");
+            Class cmdC = NSClassFromString(@"UIKeyCommand"), altC = NSClassFromString(@"UICommandAlternate");
             NSBundle *b = [NSBundle mainBundle];
             NSString *next = [b localizedStringForKey:@"NEXT_APP_WINDOW_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
             NSString *prev = [b localizedStringForKey:@"PREVIOUS_APP_WINDOW_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
             id alt = [altC alternateWithTitle:prev action:appWin modifierFlags:0x20000];
-            id cmd = ((id (*)(id, SEL, id, id, SEL, id, long long, id, id))objc_msgSend)(cmdC,
-                NSSelectorFromString(@"commandWithTitle:image:action:input:modifierFlags:propertyList:alternates:"), next, nil, appWin, @"`", (long long)0x100000, nil, @[ alt ]);
+            SEL mk = NSSelectorFromString(@"commandWithTitle:image:action:input:modifierFlags:propertyList:alternates:");
+            id cmd = ([cmdC respondsToSelector:mk] && alt)
+                ? ((id (*)(id, SEL, id, id, SEL, id, long long, id, id))objc_msgSend)(cmdC, mk, next, nil, appWin, @"`", (long long)0x100000, nil, @[ alt ]) : nil;   // nil -> keep the 16.0 command
             moved = cmd ?: c;
             changed = YES;
             continue;
