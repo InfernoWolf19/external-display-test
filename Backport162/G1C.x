@@ -3945,6 +3945,18 @@ static BOOL G1C_FS_DockHidden(id self, SEL _cmd) {                              
     if ((contH - bbH) < (dockH + top)) return YES;
     return G1B_SendB0(self, @selector(prefersDockHidden));
 }
+// 16.0 -shouldConfigureInAppDockVisibleAssertion (0x1c613f9a0) = !(_anyDisplayItemsExceedDock || isSoftwareKeyboardVisible). 16.2 removed it (the new VC consumer
+// _updateFloatingDockBehaviorAssertion 0x1c745a058 uses wantsDockBehaviorAssertion / dockUpdateMode instead) but the 16.0 VC consumer that is still running
+// (-_configureApplicationAndTransientOverlayDockBehaviorAssertionsForContext: 0x1c5fc8890) asks the root for both the hidden and the VISIBLE assertion: forwarding
+// the visible one down the chain (no answer) dropped the in-app floating dock assertion -> the dock disappeared / reappeared on every window open / close.
+static BOOL G1C_FS_DockVisible(id self, SEL _cmd) {
+    id m = G1C_FS_Model(self, G1C_FS_Layout(self));
+    double bbH = G1C_Resp(m, @selector(boundingBox)) ? G1C_SendRect0(m, @selector(boundingBox)).size.height : 0.0;
+    double contH = G1C_SendRect0(self, @selector(containerViewBounds)).size.height;
+    double dockH = G1B_Dbl0(self, @selector(floatingDockHeight)), top = G1B_Dbl0(self, NSSelectorFromString(@"floatingDockViewTopMargin"));
+    BOOL exceed = (contH - bbH) < (dockH + top);
+    return !(exceed || G1B_SendB0(self, NSSelectorFromString(@"isSoftwareKeyboardVisible")));
+}
 static BOOL G1C_FS_WantsDockAssertion(id self, SEL _cmd) { return !G1C_FS_DockHidden(self, 0); }               // 0x1c75c411c
 static double G1C_FS_DockProgress(id self, SEL _cmd) { return 1.0; }                     // 0x1c75c4138
 static long long G1C_FS_DockUpdateMode(id self, SEL _cmd) { return 3; }                  // 0x1c75c4140
@@ -4139,7 +4151,7 @@ static void G1C_InstallFullScreen(void) {
         // 16.0-only members that would shadow the strip child
         { "scrollViewContentOffset", (IMP)G1C_FS_FwdPoint, "{CGPoint=dd}16@0:8" }, { "numberOfRowsInGridSwitcher", (IMP)G1C_FS_FwdULL0, "Q16@0:8" },
         { "continuousExposeIdentifiers", (IMP)G1C_FS_Fwd0, "@16@0:8" }, { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1C_FS_FwdOpacity, "d40@0:8q16@24Q32" },
-        { "hiddenContentStatusBarPartsForLayoutRole:inAppLayout:", (IMP)G1C_FS_FwdULL2, "Q32@0:8q16@24" }, { "shouldConfigureInAppDockVisibleAssertion", (IMP)G1C_FS_FwdBool0, "B16@0:8" },
+        { "hiddenContentStatusBarPartsForLayoutRole:inAppLayout:", (IMP)G1C_FS_FwdULL2, "Q32@0:8q16@24" }, { "shouldConfigureInAppDockVisibleAssertion", (IMP)G1C_FS_DockVisible, "B16@0:8" },
         { "handleEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" }, { "handleTimerEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" },
         { "handleHighlightEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" }, { "handleSwitcherSettingsChangedEvent:", (IMP)G1C_FS_Fwd1, "@24@0:8@16" },
     };
