@@ -4,7 +4,7 @@
 // Integration: call G1D_Setup() from the %ctor after G1B_Setup() / BP2B_Setup() / G1C_Setup() (it adds methods and replaces a few VC methods that G2.x / G2B.m
 // stubbed, so it must run after them; it is harmless when it runs earlier because every installer re-checks what exists).
 // Every part is default-on; Backport162.off.<name> switches one off. Names: g1d (whole file), g1d_model, g1d_request, g1d_removal, g1d_newwindow, g1d_gesture,
-// g1d_vcdrag, g1d_pointer, g1d_tongue, g1d_gmtouch, g1d_windowdrag, g1d_pip, g1d_pipframes, g1d_piprestore, g1d_pipkeyboard, g1d_pipinsets, g1d_extgestures.
+// g1d_vcdrag, g1d_pointer, g1d_tongue, g1d_gmtouch, g1d_windowdrag, g1d_updatemode, g1d_pip, g1d_pipframes, g1d_piprestore, g1d_pipkeyboard, g1d_pipinsets, g1d_extgestures.
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -799,6 +799,38 @@ static void G1D_InstallWindowDragSupport(void) {
     class_replaceMethod(vc, NSSelectorFromString(@"draggingAppLayoutsForContinuousExposeWindowDrag"), (IMP)G1D_VC_DraggingLayouts, "@16@0:8");
     class_replaceMethod(vc, NSSelectorFromString(@"proposedAppLayoutsForContinuousExposeWindowDrag"), (IMP)G1D_VC_ProposedLayouts, "@16@0:8");
 }
+
+// ============================================================================================================
+// 2b. SBFluidSwitcherViewController -_performModifierUpdateLayoutResponse: with an UNSPECIFIED update mode
+// ============================================================================================================
+// 16.2 (0x1c745c7dc) wraps the update in -_performWithFixedUpdateMode:usingBlock: only when the response's updateMode is not 0 and otherwise runs the very same block directly.
+// 16.0 (0x1c5fe30b8) always wraps, i.e. it fixes the update mode to 0 (SBAnimationUpdateModeUnspecified) and the layout / style animation then dies in sb_animateWithSettings with
+// "needs a explicit update mode, not SBAnimationUpdateModeUnspecified" for every attribute that has no mode of its own. 16.2 modifiers (the strip's highlight / handle-event responses,
+// SBUpdateLayoutSwitcherEventResponse with mode 0, ported verbatim by G1C) rely on this: pressing / dragging a strip window crashed SpringBoard. The thread local is set only for the
+// dynamic extent of the response (the 16.2 branch), a mode 0 request from anywhere else keeps the 16.0 behaviour.
+static __thread BOOL tInUpdateLayoutResponse;
+%group G1D_VCUpdateMode
+%hook SBFluidSwitcherViewController
+- (void)_performModifierUpdateLayoutResponse:(id)response {
+    if (!G1D_ON("g1d_updatemode") || G1B_SendLL0(response, NSSelectorFromString(@"updateMode")) != 0) {
+        %orig;
+        return;
+    }
+    BOOL saved = tInUpdateLayoutResponse;
+    tInUpdateLayoutResponse = YES;
+    %orig;
+    tInUpdateLayoutResponse = saved;
+}
+- (void)_performWithFixedUpdateMode:(long long)mode usingBlock:(id)block {
+    if (mode == 0 && tInUpdateLayoutResponse && block) {
+        tInUpdateLayoutResponse = NO;
+        ((void (^)(void))block)();
+        return;
+    }
+    %orig;
+}
+%end
+%end
 
 // ============================================================================================================
 // 4. SBFluidSwitcherGestureManager: the continuous expose strip reveal grabber tongue (touch edge pull + pointer edge pull)
@@ -1625,8 +1657,8 @@ static BOOL G1D_WD_ShouldBegin(id gm, id gr) {
     CGRect bounds = G1D_BoundsOf(G1B_Send0(vc, NSSelectorFromString(@"view")));
     BOOL sameSize = G1D_FloatEqual(frame.size.width, bounds.size.width) && G1D_FloatEqual(frame.size.height, bounds.size.height);     // BSSizeEqualToSize
     BOOL chamois = G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
-    long long style = G1B_SendLL0(ws, NSSelectorFromString(@"windowManagementStyle"));
-    id identity = G1B_Send0(ws, NSSelectorFromString(@"displayIdentity"));
+    long long style = G1B_SendLL0(sc, NSSelectorFromString(@"windowManagementStyle"));       // both belong to the SWITCHER CONTROLLER (SBWindowScene has neither); asking the scene gave style 0 / no identity
+    id identity = G1B_Send0(sc, NSSelectorFromString(@"displayIdentity"));                    // and made shouldBegin refuse every window drag
     SEL sup = NSSelectorFromString(@"supportsMultiWindowLayoutsForSwitcherWindowManagementStyle:displayIdentity:");
     BOOL supports = [app respondsToSelector:sup] ? ((BOOL (*)(id, SEL, long long, id))objc_msgSend)(app, sup, style, identity) : NO;
     BOOL ok = NO;
@@ -2148,6 +2180,7 @@ void G1D_Setup(void) {
     %init(G1D_Model);
     %init(G1D_Coord);
     %init(G1D_Gesture);
+    %init(G1D_VCUpdateMode);
     %init(G1D_VCPointer);
     %init(G1D_Tongue);
     %init(G1D_GMTouch);

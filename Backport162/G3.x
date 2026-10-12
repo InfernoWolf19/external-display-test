@@ -520,6 +520,33 @@ static id BP_G3_KVC(id obj, NSString *key) {      // ivar by name, never throws
 - (void)_windowManagementStyleDidChange:(NSNotification *)n;
 @end
 
+@interface SBTopAffordanceViewController : NSObject @end
+@interface NSObject (BPG3Zoom)
+- (void)setTitle:(NSString *)t;
+- (id)_localizedMenuTitleForKey:(NSString *)k;
+@end
+
+// Zoom / Unzoom menu title.  16.2 -[SBTopAffordanceViewController updateContextMenuWithLayoutRole:...isZoomed:] (0x1c790cac4) picks the title key
+// TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_ZOOM / ..._UNZOOM by isZoomed and the image by isZoomed on EVERY update (setTitle: on the existing action);
+// 16.0 (0x1c6459bd0) sets the title once (key TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION) and only refreshes the image.  The 16.2 keys are not in the 16.0
+// SpringBoard.loctable; when absent the 16.0 key is used for Zoom and "Unzoom" (the key's wording) for the zoomed state.
+%group G3_ZoomTitle
+%hook SBTopAffordanceViewController
+- (void)updateContextMenuWithLayoutRole:(long long)r spaceConfiguration:(long long)s floatingConfiguration:(long long)f interfaceOrientation:(long long)o isZoomed:(BOOL)z {
+    %orig;
+    if (!BP_G3_On("g3c")) return;
+    id action = BP_G3_Ivar(self, "_maximizationAction");
+    if (!action || ![action respondsToSelector:@selector(setTitle:)]) return;
+    NSString *key162 = z ? @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_UNZOOM" : @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_ZOOM";
+    NSString *t = [self respondsToSelector:@selector(_localizedMenuTitleForKey:)] ? [self _localizedMenuTitleForKey:key162] : nil;
+    if (![t isKindOfClass:[NSString class]] || !t.length || [t isEqualToString:key162]) {
+        t = z ? @"Unzoom" : [self _localizedMenuTitleForKey:@"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION"];
+    }
+    if ([t isKindOfClass:[NSString class]] && t.length) [action setTitle:t];
+}
+%end
+%end // G3_ZoomTitle
+
 %group G3_DecoratedVC
 
 %hook SBMedusaDecoratedDeviceApplicationSceneViewController
@@ -779,6 +806,7 @@ void BP_G3_Setup(void) {
     %init(G3_Handle);
     %init(G3_Snapshot);
     %init(G3_DecoratedVC);
+    %init(G3_ZoomTitle);
     %init(G3_Switcher);
     %init(G3_Embedded);
 }

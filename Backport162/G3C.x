@@ -20,7 +20,8 @@
 //                 a = [a attributesByModifyingAttributedUserSizeBeforeOverlapping:SBDisplayItemAttributedSizeUnspecified()];     // NEW
 //                 [ctx setRequestedLayoutAttributes:a forEntity:e]; [ctx setFencesAnimations:YES]; }]; }
 //             validator:nil];
-// There is no AllowingSmallestSize toggle in 16.2 (16.0 toggled the policy only).
+// The literal 16.2 block has no AllowingSmallestSize toggle (16.0 toggled the policy only); the un-zoom direction (second press) is added on top, see G3C_ZoomRequest
+// (re-investigation 0.7.1: no 16.2 code path could be found that leaves the zoomed state, the title/image logic is the only isZoomed consumer).
 //
 // Keyboard shortcut: -[SpringBoard _handleToggleMaximizationKeyShortcut:] (16.0 0x1c5ee5a54; renamed _handleEnterFullScreenKeyShortcut: in 16.2,
 // 0x1c7359b1c, same body) -> SBSwitcherController performKeyboardShortcutAction:0x11 -> coordinator -> SBFluidSwitcherViewController
@@ -63,6 +64,7 @@
 - (void)setEntities:(id)entities withPolicy:(long long)policy centerEntity:(id)center floatingEntity:(id)floating;
 - (void)_setRequestedFrontmostEntity:(id)entity;
 - (id)requestedLayoutAttributesForEntity:(id)entity;
+- (long long)sizingPolicy;
 - (void)setRequestedLayoutAttributes:(id)attrs forEntity:(id)entity;
 - (void)setFencesAnimations:(BOOL)fences;
 - (void)setRequestedPeekConfiguration:(long long)peek;
@@ -90,14 +92,30 @@ static BPG3CAttrSize G3C_Unspecified(void) {
 
 // SBDisplayItemSizingPolicyAllowingLargestSize(mask)  16.2 0x1c795431c == 16.0 0x1c649d490
 static long long G3C_LargestPolicy(unsigned long long mask) { return (mask & 4) ? 2 : (long long)((mask >> 1) & 1); }
+// SBDisplayItemSizingPolicyAllowingSmallestSize(mask)  16.2 0x1c79542fc == 16.0 0x1c649d470
+static long long G3C_SmallestPolicy(unsigned long long mask) { return (mask & 1) ? 0 : ((mask & 2) ? 1 : (long long)((mask >> 1) & 2)); }
 
-// The body of 16.2 block 0x1c77cd2e8.  Returns NO (and logs) only when a selector the faithful path needs is missing (last-line guard).
+static char kG3CPreZoomSize;                                            // NSData(BPG3CAttrSize) of the window before it was zoomed, on the scene handle
+
+// Zoom / Unzoom request (body of 16.2 block 0x1c77cd2e8 plus the un-zoom direction, see below).
+//
+// What 16.2 does (re-investigated 0.7.1): the block ALWAYS requests (Largest, Unspecified, Unspecified); there is no AllowingSmallestSize call in it, in the
+// handler, or anywhere else (the only 16.2 callers of 0x1c79542fc / 0x1c795431c are the resize modifier, setLayoutRole:...sizingPolicy: and this block), no new
+// reader of sizingPolicy exists, and the layout-state/calculator code that consumes the request is the same as 16.0 apart from the frame code (policy 2 resolves
+// to the container only for an Unspecified size).  _isZoomed (= policy == Largest) only drives the menu title/image.  So the literal 16.2 code can zoom but
+// never leaves the zoomed state through this item.  The product behaviour (second press windows the app again, title UNZOOM) is therefore reproduced here as
+// the 16.0 toggle direction applied on top of the 16.2 attribute computation:
+//   * current policy == Largest(mask)  ->  policy = Smallest(mask), size = the window size remembered when it was zoomed (if it was not full size) else
+//                                          Unspecified (the calculator then resolves the 16.2 default window size), user size Unspecified
+//   * otherwise                        ->  remember the current attributed size, then exactly the 16.2 request (Largest, Unspecified, Unspecified)
+// Last-line guards (missing selector because group 2b is off) log under BP_LogEnabled() and use the 16.0 data model.
 static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
     Class entC = NSClassFromString(@"SBDeviceApplicationSceneEntity");
     SEL initS = @selector(initWithApplicationSceneHandle:);
     SEL supS = NSSelectorFromString(@"_supportedSizingPoliciesForContentOrientation:containerOrientation:");
     SEL asS = NSSelectorFromString(@"attributesByModifyingAttributedSize:");
     SEL usS = NSSelectorFromString(@"attributesByModifyingAttributedUserSizeBeforeOverlapping:");
+    SEL getS = NSSelectorFromString(@"attributedSize");
     if (!entC || ![entC instancesRespondToSelector:initS] || ![ctx respondsToSelector:@selector(setEntities:withPolicy:centerEntity:floatingEntity:)]
         || ![handle respondsToSelector:supS]) {
         BP_Log(@"[g3c] zoom: required 16.2 selector missing (entity %d setEntities %d supportedPolicies %d)", entC != nil, [ctx respondsToSelector:@selector(setEntities:withPolicy:centerEntity:floatingEntity:)], [handle respondsToSelector:supS]);
@@ -110,18 +128,37 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
     long long contentOri = [handle currentInterfaceOrientation];
     long long containerOri = [[windowScene switcherController] interfaceOrientation];
     unsigned long long mask = ((unsigned long long (*)(id, SEL, long long, long long))objc_msgSend)(handle, supS, contentOri, containerOri);
-    id a = [ctx requestedLayoutAttributesForEntity:entity];
-    a = [a attributesByModifyingSizingPolicy:G3C_LargestPolicy(mask)];
-    if ([a respondsToSelector:asS] && [a respondsToSelector:usS]) {
-        a = ((id (*)(id, SEL, BPG3CAttrSize))objc_msgSend)(a, asS, G3C_Unspecified());
+    id cur = [ctx requestedLayoutAttributesForEntity:entity];
+    long long largest = G3C_LargestPolicy(mask);
+    BOOL zoomed = [cur sizingPolicy] == largest;
+    BOOL api = [cur respondsToSelector:asS] && [cur respondsToSelector:usS];
+    BPG3CAttrSize size = G3C_Unspecified();
+    long long policy = largest;
+    if (zoomed) {
+        policy = G3C_SmallestPolicy(mask);
+        NSData *d = objc_getAssociatedObject(handle, &kG3CPreZoomSize);
+        if (d.length == sizeof(BPG3CAttrSize)) {
+            BPG3CAttrSize saved; [d getBytes:&saved length:sizeof saved];
+            BOOL full = saved.normalizedSize.width == 1.0 && saved.normalizedSize.height == 1.0;     // a full size policy-0 window would be re-derived to Maximized (16.2 0x1c7954330)
+            BOOL unspec = saved.normalizedSize.width == 0 && saved.normalizedSize.height == 0;
+            if (!full && !unspec) size = saved;
+        }
+        objc_setAssociatedObject(handle, &kG3CPreZoomSize, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    } else if (api && [cur respondsToSelector:getS]) {
+        BPG3CAttrSize now = ((BPG3CAttrSize (*)(id, SEL))objc_msgSend)(cur, getS);
+        objc_setAssociatedObject(handle, &kG3CPreZoomSize, [NSData dataWithBytes:&now length:sizeof now], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    id a = [cur attributesByModifyingSizingPolicy:policy];
+    if (api) {
+        a = ((id (*)(id, SEL, BPG3CAttrSize))objc_msgSend)(a, asS, size);
         a = ((id (*)(id, SEL, BPG3CAttrSize))objc_msgSend)(a, usS, G3C_Unspecified());
     } else {
         BP_Log(@"[g3c] zoom: attributed-size API missing, 16.0 data model (size 0 == Unspecified) used");
-        a = ((id (*)(id, SEL, CGSize))objc_msgSend)(a, @selector(attributesByModifyingSize:), CGSizeZero);
+        a = ((id (*)(id, SEL, CGSize))objc_msgSend)(a, @selector(attributesByModifyingSize:), size.normalizedSize);
         SEL u0 = NSSelectorFromString(@"attributesByModifyingUserConfiguredSizeBeforeOverlapping:");
         if ([a respondsToSelector:u0]) a = ((id (*)(id, SEL, CGSize))objc_msgSend)(a, u0, CGSizeZero);
     }
-    BP_Log(@"[g3c] zoom: policy mask %llu -> %lld (content %lld container %lld), size Unspecified", mask, G3C_LargestPolicy(mask), contentOri, containerOri);
+    BP_Log(@"[g3c] %s: policy mask %llu, current %lld -> %lld, size {%g, %g}, content %lld container %lld", zoomed ? "unzoom" : "zoom", mask, (long long)[cur sizingPolicy], policy, size.normalizedSize.width, size.normalizedSize.height, contentOri, containerOri);
     [ctx setRequestedLayoutAttributes:a forEntity:entity];
     [ctx setFencesAnimations:YES];
     return YES;
