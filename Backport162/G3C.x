@@ -65,6 +65,9 @@
 - (void)_setRequestedFrontmostEntity:(id)entity;
 - (id)requestedLayoutAttributesForEntity:(id)entity;
 - (long long)sizingPolicy;
+- (id)layoutState;
+- (id)displayItemRepresentation;
+- (id)layoutAttributesForItem:(id)item;
 - (void)setRequestedLayoutAttributes:(id)attrs forEntity:(id)entity;
 - (void)setFencesAnimations:(BOOL)fences;
 - (void)setRequestedPeekConfiguration:(long long)peek;
@@ -94,6 +97,28 @@ static BPG3CAttrSize G3C_Unspecified(void) {
 static long long G3C_LargestPolicy(unsigned long long mask) { return (mask & 4) ? 2 : (long long)((mask >> 1) & 1); }
 // SBDisplayItemSizingPolicyAllowingSmallestSize(mask)  16.2 0x1c79542fc == 16.0 0x1c649d470
 static long long G3C_SmallestPolicy(unsigned long long mask) { return (mask & 1) ? 0 : ((mask & 2) ? 1 : (long long)((mask >> 1) & 2)); }
+
+// The COMMITTED attributes of the window (what is displayed), never the pending/requested ones: the current layout state of the window scene's switcher
+// controller, app layout (or floating app layout) containing the window's display item.  The context's requestedLayoutAttributesForEntity: (filled by
+// _setRequestedFrontmostEntity: from the previous layout state's element dictionary) holds the REQUESTED attributes of the last transition, which the calculator
+// may have re-derived afterwards (device log 0c1bc38: requested policy 2, displayed snap-to-grid), so it is only used as the base of the new request.
+static id G3C_CommittedAttrs(id windowScene, id handle) {
+    id sc = [windowScene respondsToSelector:@selector(switcherController)] ? [windowScene switcherController] : nil;
+    id ls = [sc respondsToSelector:@selector(layoutState)] ? [sc layoutState] : nil;
+    id item = [handle respondsToSelector:@selector(displayItemRepresentation)] ? [handle displayItemRepresentation] : nil;
+    if (!ls || !item) return nil;
+    for (NSString *n in @[ @"appLayout", @"floatingAppLayout" ]) {
+        SEL s = NSSelectorFromString(n);
+        id layout = [ls respondsToSelector:s] ? ((id (*)(id, SEL))objc_msgSend)(ls, s) : nil;
+        id a = [layout respondsToSelector:@selector(layoutAttributesForItem:)] ? [layout layoutAttributesForItem:item] : nil;
+        if (a) return a;
+    }
+    return nil;
+}
+static long long G3C_CommittedPolicy(id windowScene, id handle) {
+    id a = G3C_CommittedAttrs(windowScene, handle);
+    return a ? [a sizingPolicy] : -1;
+}
 
 static char kG3CPreZoomSize;                                            // NSData(BPG3CAttrSize) of the window before it was zoomed, on the scene handle
 
@@ -128,9 +153,10 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
     long long contentOri = [handle currentInterfaceOrientation];
     long long containerOri = [[windowScene switcherController] interfaceOrientation];
     unsigned long long mask = ((unsigned long long (*)(id, SEL, long long, long long))objc_msgSend)(handle, supS, contentOri, containerOri);
-    id cur = [ctx requestedLayoutAttributesForEntity:entity];
+    id cur = [ctx requestedLayoutAttributesForEntity:entity];                  // base of the request only
     long long largest = G3C_LargestPolicy(mask);
-    BOOL zoomed = [cur sizingPolicy] == largest;
+    long long committed = G3C_CommittedPolicy(windowScene, handle);           // the displayed state decides the direction
+    BOOL zoomed = committed >= 0 ? committed == largest : [cur sizingPolicy] == largest;
     BOOL api = [cur respondsToSelector:asS] && [cur respondsToSelector:usS];
     BPG3CAttrSize size = G3C_Unspecified();
     long long policy = largest;
@@ -158,10 +184,37 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
         SEL u0 = NSSelectorFromString(@"attributesByModifyingUserConfiguredSizeBeforeOverlapping:");
         if ([a respondsToSelector:u0]) a = ((id (*)(id, SEL, CGSize))objc_msgSend)(a, u0, CGSizeZero);
     }
-    BP_Log(@"[g3c] %s: policy mask %llu, current %lld -> %lld, size {%g, %g}, content %lld container %lld", zoomed ? "unzoom" : "zoom", mask, (long long)[cur sizingPolicy], policy, size.normalizedSize.width, size.normalizedSize.height, contentOri, containerOri);
+    BP_Log(@"[g3c] %s: policy mask %llu, committed %lld requested-base %lld -> %lld, size {%g, %g}, content %lld container %lld", zoomed ? "unzoom" : "zoom", mask, committed, (long long)[cur sizingPolicy], policy, size.normalizedSize.width, size.normalizedSize.height, contentOri, containerOri);
     [ctx setRequestedLayoutAttributes:a forEntity:entity];
     [ctx setFencesAnimations:YES];
     return YES;
+}
+
+// One Zoom/Unzoom transition request.  Verification (0.7.2): the committed layout is read again when the transition has had time to finish; if the committed
+// policy did not change although the request was built (the transition was swallowed/overridden, device log 0c1bc38 press 1) and no newer press happened, the
+// same request is issued once more (it recomputes the direction from the committed state, so it can never undo a request that did apply).
+static uint64_t gG3CPressGen;
+static void G3C_SendZoom(id workspace, id cfg, long long source, id handle, id windowScene, int attempt) {
+    uint64_t gen = ++gG3CPressGen;
+    long long before = G3C_CommittedPolicy(windowScene, handle);
+    id builder = ^(id req) {                                                // 16.2 block 0x1c77cd238
+        [req setSource:source];
+        [req modifyApplicationContext:^(id ctx) {                           // 16.2 block 0x1c77cd2e8
+            (void)G3C_ZoomRequest(ctx, handle, windowScene);
+        }];
+    };
+    [workspace requestTransitionWithOptions:0 displayConfiguration:cfg builder:builder validator:nil];
+    if (attempt >= 1) return;
+    __weak id wh = handle, wws = windowScene, wwk = workspace;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        id h = wh, ws = wws, wk = wwk;
+        if (!h || !ws || !wk || gen != gG3CPressGen) return;                // a newer press owns the state
+        long long after = G3C_CommittedPolicy(ws, h);
+        if (before >= 0 && after == before) {
+            BP_Log(@"[g3c] zoom request had no effect (committed policy still %lld), repeating once", after);
+            G3C_SendZoom(wk, cfg, source, h, ws, attempt + 1);
+        }
+    });
 }
 
 %group G3C_Zoom
@@ -201,13 +254,7 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
         [workspace requestTransitionWithOptions:0 displayConfiguration:cfg builder:addBuilder validator:nil];
         return;
     }
-    id builder = ^(id req) {                                                // 16.2 block 0x1c77cd238
-        [req setSource:source];
-        [req modifyApplicationContext:^(id ctx) {                           // 16.2 block 0x1c77cd2e8
-            (void)G3C_ZoomRequest(ctx, handle, windowScene);
-        }];
-    };
-    [workspace requestTransitionWithOptions:0 displayConfiguration:cfg builder:builder validator:nil];
+    G3C_SendZoom(workspace, cfg, source, handle, windowScene, 0);
 }
 
 %end
