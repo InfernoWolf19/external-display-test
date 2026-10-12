@@ -857,6 +857,10 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     }
     NSArray *prevSw = st.idsInSwitcher ?: @[], *prevStrip = st.idsInStrip ?: @[];
     id root = G1C_IvarObj(self, "_rootModifier");
+    if (BP_LogEnabled()) {                                              // one-time dump of the live modifier tree (levels, keys, classes): shows where the id queries are answered
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ if (G1C_Resp(root, @selector(stackDescription))) BP_Log(@"g1c: modifier stack at the first ids update:\n%@", G1B_Send0(root, @selector(stackDescription))); });
+    }
     NSArray *strip = G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:"), prevStrip, nil, NO);
     NSArray *sw = strip ? G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:"), prevSw, strip, YES) : nil;
     if (!strip || !sw) {                                               // last-line guard: the root's query chain always ends in G2's BP_G2_Adjusted*Ids now
@@ -3696,7 +3700,20 @@ static double G1C_FS_RevealProgress(id self, SEL _cmd) {                        
 }
 static double G1C_FS_Reveal(id s) { return G1C_FS_RevealProgress(s, 0); }
 static double G1C_FS_StripProgress(id self, SEL _cmd) {                                // 0x1c75c2d14
-    if (G1C_FS_Exceeds(self, 0) || G1B_SendB0(self, @selector(prefersStripHidden))) return G1C_FS_Reveal(self);
+    if (G1C_FS_Exceeds(self, 0) || G1B_SendB0(self, @selector(prefersStripHidden))) {
+        double r = G1C_FS_Reveal(self);
+        if (BP_LogEnabled()) {                                                         // diagnostics: why the strip is (partly) hidden, logged when the reveal value changes
+            static double last = -1; static BOOL lastEx;
+            BOOL ex = G1C_FS_Exceeds(self, 0);
+            if (!G1C_FloatEq(r, last) || ex != lastEx) {
+                last = r; lastEx = ex;
+                id m = G1C_FS_Model(self, G1C_FS_Layout(self));
+                BP_Log(@"g1c: strip hidden: exceedsWidth=%d prefersStripHidden=%d reveal=%.4f threshold=%.1f container=%.1f", ex, G1B_SendB0(self, @selector(prefersStripHidden)), r,
+                       m ? G1C_DM_WidthThresholdToHideStrip(m) : -1.0, G1C_SendRect0(self, @selector(containerViewBounds)).size.width);
+            }
+        }
+        return r;
+    }
     return 1.0;
 }
 static BOOL G1C_FS_RevealedFromHidden(id self, SEL _cmd) {                              // 0x1c75c54c4
@@ -5909,21 +5926,57 @@ static void G1C_InstallHomeGesture(void) {
 // outset / scale, the clipping frame and the strip tongue attributes answer from the terminal instead of from the stage / strip modifiers.
 // Faithful port of the 13 methods (16.2 addresses below). Each one runs `_SBRoutingSwitcherModifierRouteToModifier[ContainingAppLayout|ContainingIndex]` (exported by 16.0 SpringBoard
 // with the same signature, it temporarily sets _currentModifier) and reads the answer of the routed modifier out of a __block variable.
-typedef void (*G1CRouteFn)(id routing, id modifier, void (^block)(void));
-typedef void (*G1CRouteLayoutFn)(id routing, id appLayout, void (^block)(id modifier));
-typedef void (*G1CRouteIndexFn)(id routing, unsigned long long index, void (^block)(id modifier));
 typedef struct { unsigned long long a, b; } G1CRtTongue;
-static void *G1C_RtSym(const char *name) {
-    void *p = dlsym(RTLD_DEFAULT, name);                      // the C name starts with an underscore (Mach-O: two)
-    if (!p) p = dlsym(RTLD_DEFAULT, [[NSString stringWithFormat:@"_%s", name] UTF8String]);
-    return p;
+// The three routing helpers are PRIVATE C functions of SpringBoard (not in the export trie: dlsym cannot find them - that is why the first version of this section never took effect on
+// the device). They are small, so they are ported 1:1 (16.2 0x1c75209ec / 0x1c7521034 / 0x1c752236c; 16.0 0x1c609d860 / 0x1c609ddec / 0x1c609f440): all three run a block with the
+// Routing modifier's `_currentModifier` temporarily set to the routed modifier.
+static void G1C_RtSetCurrent(id routing, id m) {
+    Ivar iv = class_getInstanceVariable(object_getClass(routing), "_currentModifier");
+    if (iv) object_setIvar(routing, iv, m);
 }
-static G1CRouteFn G1C_RtRoute(void) { static G1CRouteFn f; static dispatch_once_t o; dispatch_once(&o, ^{ f = (G1CRouteFn)G1C_RtSym("SBRoutingSwitcherModifierRouteToModifier"); }); return f; }
-static G1CRouteLayoutFn G1C_RtRouteLayout(void) { static G1CRouteLayoutFn f; static dispatch_once_t o; dispatch_once(&o, ^{ f = (G1CRouteLayoutFn)G1C_RtSym("SBRoutingSwitcherModifierRouteToModifierContainingAppLayout"); }); return f; }
-static G1CRouteIndexFn G1C_RtRouteIndex(void) { static G1CRouteIndexFn f; static dispatch_once_t o; dispatch_once(&o, ^{ f = (G1CRouteIndexFn)G1C_RtSym("SBRoutingSwitcherModifierRouteToModifierContainingIndex"); }); return f; }
+static void G1C_RtRoute(id routing, id modifier, void (^block)(void)) {                               // _SBRoutingSwitcherModifierRouteToModifier
+    id old = G1C_IvarObj(routing, "_currentModifier");
+    G1C_RtSetCurrent(routing, modifier);
+    block();
+    G1C_RtSetCurrent(routing, old);
+}
+static id G1C_RtDelegate(id self);
+static void G1C_RtRouteLayout(id routing, id layout, void (^block)(id m)) {                           // ...ContainingAppLayout: [delegate routingModifier:self modifierForAppLayout:layout]
+    id old = G1C_IvarObj(routing, "_currentModifier");
+    id delegate = G1C_RtDelegate(routing);
+    SEL s = @selector(routingModifier:modifierForAppLayout:);
+    id m = G1C_Resp(delegate, s) ? G1C_Send2(delegate, s, routing, layout) : nil;
+    G1C_RtSetCurrent(routing, m);
+    block(m);
+    G1C_RtSetCurrent(routing, old);
+}
+static void G1C_RtRouteIndex(id routing, unsigned long long index, void (^block)(id m, unsigned long long local)) {   // ...ContainingIndex
+    id old = G1C_IvarObj(routing, "_currentModifier");
+    unsigned long long base = 0;
+    id found = nil;
+    SEL li = NSSelectorFromString(@"_lastIndexForModifier:");
+    for (id m in G1C_IvarObj(routing, "_modifiers")) {
+        unsigned long long cap = G1C_Resp(routing, li) ? (unsigned long long)G1C_SendLLId(routing, li, m) : NSNotFound;
+        if (cap == NSNotFound) continue;                                      // 0x7fffffffffffffff
+        if (cap >= index) { found = m; break; }
+        base = cap + 1;
+    }
+    if (!found) {                                                              // 16.2 asserts ("couldn't find a modifier among (...) for index"); a logged last-line guard here
+        if (BP_LogEnabled()) BP_Log(@"g1c: routing: no modifier for index %llu (16.2 asserts)", index);
+        return;
+    }
+    G1C_RtSetCurrent(routing, found);
+    block(found, index - base);
+    G1C_RtSetCurrent(routing, old);
+}
+static void G1C_RtNote(SEL s) {                                                                            // first use of each routed query is logged (install-time logging happens before the log is on)
+    static NSMutableSet *seen; static dispatch_once_t o; dispatch_once(&o, ^{ seen = [NSMutableSet set]; });
+    if (!BP_LogEnabled()) return;
+    NSString *n = NSStringFromSelector(s);
+    @synchronized (seen) { if ([seen containsObject:n]) return; [seen addObject:n]; }
+    BP_Log(@"g1c: routing: first routed answer for %@", n);
+}
 static Class gRtCls;
-// last-line guard (logged): the three exported routing helpers are always present in 16.0 SpringBoard; without them the query goes down the chain like before.
-#define G1C_RT_NEED(FN) do { if (!(FN)) { if (BP_LogEnabled()) BP_Log(@"g1c: routing helper missing for %@ -> chain", NSStringFromSelector(_cmd)); goto chain; } } while (0)
 static id G1C_RtDelegate(id self) { return G1C_IvarObj(self, "_delegate"); }
 // _arrayByCombiningArrays (0x1c751fcc8): nil+x -> x, x+nil -> x, else a new array a + b
 static id G1C_RtCombine(id a, id b) {
@@ -5935,136 +5988,122 @@ static id G1C_RtCombine(id a, id b) {
     return m;
 }
 static id G1C_RtArrays(id self, SEL _cmd) {                                                                      // 0x1c7532594 (active) / 0x1c7532824 (inactive)
-    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
-    {
-        id combined = nil; BOOL first = YES;
-        for (id m in G1C_IvarObj(self, "_modifiers")) {
-            __block id r = nil;
-            route(self, m, ^{ r = G1B_Send0(m, _cmd); });
-            combined = first ? r : G1C_RtCombine(combined, r);
-            first = NO;
-        }
-        return combined;
+    G1C_RtNote(_cmd);
+    id combined = nil; BOOL first = YES;
+    for (id m in G1C_IvarObj(self, "_modifiers")) {
+        __block id r = nil;
+        G1C_RtRoute(self, m, ^{ r = G1B_Send0(m, _cmd); });
+        combined = first ? r : G1C_RtCombine(combined, r);
+        first = NO;
     }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL)) : nil;
+    return combined;
 }
 static BOOL G1C_RtAny(id self, SEL _cmd) {                                                                       // 0x1c7535678 (hover gesture) / 0x1c7535894 (strip visible): OR of all modifiers
-    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
-    {
-        BOOL res = NO, first = YES;
-        for (id m in G1C_IvarObj(self, "_modifiers")) {
-            __block BOOL b = NO;
-            route(self, m, ^{ b = G1B_SendB0(m, _cmd); });
-            res = first ? (b != NO) : (res | b);
-            first = NO;
-        }
-        return res;
+    G1C_RtNote(_cmd);
+    BOOL res = NO, first = YES;
+    for (id m in G1C_IvarObj(self, "_modifiers")) {
+        __block BOOL b = NO;
+        G1C_RtRoute(self, m, ^{ b = G1B_SendB0(m, _cmd); });
+        res = first ? (b != NO) : (res | b);
+        first = NO;
     }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(BOOL, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL)) : NO;
+    return res;
 }
 static id G1C_RtProposed(id self, SEL _cmd) {                                                                    // 0x1c7535ab0: the first non-nil answer
-    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
-    {
-        id res = nil;
-        for (id m in G1C_IvarObj(self, "_modifiers")) {
-            __block id r = nil;
-            route(self, m, ^{ r = G1B_Send0(m, _cmd); });
-            if (!res) res = r;
-        }
-        return res;
+    G1C_RtNote(_cmd);
+    id res = nil;
+    for (id m in G1C_IvarObj(self, "_modifiers")) {
+        __block id r = nil;
+        G1C_RtRoute(self, m, ^{ r = G1B_Send0(m, _cmd); });
+        if (!res) res = r;
     }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL)) : nil;
+    return res;
+}
+static id G1C_RtScrollModifier(id self) {
+    id delegate = G1C_RtDelegate(self);
+    return G1C_Resp(delegate, @selector(scrollModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(scrollModifierForRoutingModifier:), self) : nil;
 }
 static id G1C_RtAdjStrip(id self, SEL _cmd, id prev) {                                                          // 0x1c7532ca4
-    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
-    {
-        id delegate = G1C_RtDelegate(self);
-        id scroll = G1C_Resp(delegate, @selector(scrollModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(scrollModifierForRoutingModifier:), self) : nil;
-        __block id result = nil;
-        route(self, scroll, ^{ result = G1B_Send1(scroll, _cmd, prev); });
-        return result;
-    }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id), prev) : nil;
+    G1C_RtNote(_cmd);
+    id scroll = G1C_RtScrollModifier(self);
+    __block id result = nil;
+    G1C_RtRoute(self, scroll, ^{ result = G1B_Send1(scroll, _cmd, prev); });
+    return result;
 }
 static id G1C_RtAdjSwitcher(id self, SEL _cmd, id prev, id strip) {                                              // 0x1c7532ab4
-    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
-    {
-        id delegate = G1C_RtDelegate(self);
-        id scroll = G1C_Resp(delegate, @selector(scrollModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(scrollModifierForRoutingModifier:), self) : nil;
-        __block id result = nil;
-        route(self, scroll, ^{ result = G1C_Send2(scroll, _cmd, prev, strip); });
-        return result;
-    }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(id, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id, id), prev, strip) : nil;
+    G1C_RtNote(_cmd);
+    id scroll = G1C_RtScrollModifier(self);
+    __block id result = nil;
+    G1C_RtRoute(self, scroll, ^{ result = (scroll && [scroll respondsToSelector:_cmd]) ? G1C_Send2(scroll, _cmd, prev, strip) : nil; });
+    return result;
 }
 static G1CRtTongue G1C_RtTongue(id self, SEL _cmd) {                                                             // 0x1c75354f4: routed to the home screen modifier
-    G1CRouteFn route = G1C_RtRoute(); G1C_RT_NEED(route);
-    {
-        id delegate = G1C_RtDelegate(self);
-        id home = G1C_Resp(delegate, @selector(homeScreenModifierForRoutingModifier:)) ? G1B_Send1(delegate, @selector(homeScreenModifierForRoutingModifier:), self) : nil;
-        __block G1CRtTongue r = { 0, 0 };
-        __unsafe_unretained id us = self;
-        route(self, home, ^{
-            id d = G1C_RtDelegate(us);
-            id h = G1C_Resp(d, @selector(homeScreenModifierForRoutingModifier:)) ? G1B_Send1(d, @selector(homeScreenModifierForRoutingModifier:), us) : nil;
-            if (G1C_Resp(h, _cmd)) r = ((G1CRtTongue (*)(id, SEL))objc_msgSend)(h, _cmd);
-        });
-        return r;
-    }
-chain:
-    return (G1CRtTongue){ 0, 0 };
+    G1C_RtNote(_cmd);
+    id delegate = G1C_RtDelegate(self);
+    SEL hs = @selector(homeScreenModifierForRoutingModifier:);
+    id home = G1C_Resp(delegate, hs) ? G1B_Send1(delegate, hs, self) : nil;
+    __block G1CRtTongue r = { 0, 0 };
+    __unsafe_unretained id us = self;
+    G1C_RtRoute(self, home, ^{
+        id d = G1C_RtDelegate(us);
+        id h = G1C_Resp(d, hs) ? G1B_Send1(d, hs, us) : nil;
+        if (G1C_Resp(h, _cmd)) r = ((G1CRtTongue (*)(id, SEL))objc_msgSend)(h, _cmd);
+    });
+    return r;
 }
 static double G1C_RtScale(id self, SEL _cmd, double scale, id layout) {                                          // 0x1c752610c
-    G1CRouteLayoutFn route = G1C_RtRouteLayout(); G1C_RT_NEED(route);
-    {
-        __block double r = 0.0;
-        route(self, layout, ^(id m) { r = ((double (*)(id, SEL, double, id))objc_msgSend)(m, _cmd, scale, layout); });
-        return r;
-    }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(double, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, double, id), scale, layout) : 0.0;
+    G1C_RtNote(_cmd);
+    __block double r = 0.0;
+    G1C_RtRouteLayout(self, layout, ^(id m) { r = ((double (*)(id, SEL, double, id))objc_msgSend)(m, _cmd, scale, layout); });
+    return r;
 }
 static double G1C_RtHitOutset(id self, SEL _cmd, id layout) {                                                    // 0x1c752b8ac
-    G1CRouteLayoutFn route = G1C_RtRouteLayout(); G1C_RT_NEED(route);
-    {
-        __block double r = 0.0;
-        route(self, layout, ^(id m) { r = ((double (*)(id, SEL, id))objc_msgSend)(m, _cmd, layout); });
-        return r;
-    }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(double, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id), layout) : 0.0;
+    G1C_RtNote(_cmd);
+    __block double r = 0.0;
+    G1C_RtRouteLayout(self, layout, ^(id m) { r = ((double (*)(id, SEL, id))objc_msgSend)(m, _cmd, layout); });
+    return r;
 }
 static BOOL G1C_RtBoolLayout(id self, SEL _cmd, id layout) {                                                     // 0x1c752b9d0 (canSelectLeaf...) / 0x1c752baec (shouldAllowGroupOpacity...)
-    G1CRouteLayoutFn route = G1C_RtRouteLayout(); G1C_RT_NEED(route);
-    {
-        __block BOOL r = NO;
-        route(self, layout, ^(id m) { r = G1B_SendB1(m, _cmd, layout); });
-        return r;
-    }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(BOOL, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, id), layout) : NO;
+    G1C_RtNote(_cmd);
+    __block BOOL r = NO;
+    G1C_RtRouteLayout(self, layout, ^(id m) { r = G1B_SendB1(m, _cmd, layout); });
+    return r;
 }
 static CGRect G1C_RtClipping(id self, SEL _cmd, long long role, id layout, unsigned long long index, CGRect bounds) {   // 0x1c75255d4
-    G1CRouteIndexFn route = G1C_RtRouteIndex(); G1C_RT_NEED(route);
-    {
-        __block CGRect r = CGRectNull;
-        route(self, index, ^(id m) { r = ((CGRect (*)(id, SEL, long long, id, unsigned long long, CGRect))objc_msgSend)(m, _cmd, role, layout, index, bounds); });
-        return r;
+    G1C_RtNote(_cmd);
+    __block CGRect r = CGRectNull;
+    G1C_RtRouteIndex(self, index, ^(id m, unsigned long long local) { r = ((CGRect (*)(id, SEL, long long, id, unsigned long long, CGRect))objc_msgSend)(m, _cmd, role, layout, local, bounds); });
+    return r;
+}
+// ROOT CAUSE (device log f8d059f3, 68 of 68 ids updates reach "[g2b] chain terminal"): the persistent AppSwitcherCE child of the CE root (16.2 implementer of both id-list queries) is
+// DFS-later in the query chain than the SBDefaultImplementationsSwitcherModifier children that the floors / the strip add to themselves (16.0 AppSwitcherCE.init adds a Default child at
+// level 1, the FullScreen floor tree has one too), and G2B's "chain terminal" methods made THAT modifier an implementer. 16.2's Default implements none of these six queries, so there it
+// is skipped and the chain reaches the AppSwitcherCE. (SBRoutingSwitcherModifier is not even on the Stage Manager path: the platform root's child is the CE root itself, the Routing
+// modifier only lives inside SBFilteringSwitcherModifier and the classic Main root, so section 0b alone could never change this log.) Undo G2B's six terminals on Default: restore the
+// inherited trampoline IMP, which the per-class query cache (+newCacheWithSelectorList: compares instanceMethodForSelector: with the base class) treats as "does not implement".
+static void G1C_UndoDefaultTerminals(void) {
+    if (!BP_OnName("g1c_defaults")) return;
+    Class d = NSClassFromString(@"SBDefaultImplementationsSwitcherModifier"), base = NSClassFromString(@"SBSwitcherModifier");
+    if (!d || !base) return;
+    NSArray *sels = @[ @"adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:",
+                       @"adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:",
+                       @"activeLeafAppLayoutsReachableByKeyboardShortcut", @"inactiveAppLayoutsReachableByKeyboardShortcut",
+                       @"canSelectLeafWithModifierKeysInAppLayout:", @"shouldAllowGroupOpacityForAppLayout:" ];
+    int n = 0;
+    for (NSString *name in sels) {
+        SEL s = NSSelectorFromString(name);
+        Method bm = class_getInstanceMethod(base, s), dm = class_getInstanceMethod(d, s);
+        if (!bm || !dm || method_getImplementation(dm) == method_getImplementation(bm)) continue;
+        class_replaceMethod(d, s, method_getImplementation(bm), method_getTypeEncoding(bm));
+        n++;
     }
-chain:
-    return G1B_HasSuper(gSbSwitcherModifierCls, _cmd) ? G1B_SUPER(CGRect, gSbSwitcherModifierCls, self, _cmd, (struct objc_super *, SEL, long long, id, unsigned long long, CGRect), role, layout, index, bounds) : CGRectNull;
+    BP_Log(@"g1c: defaults: %d G2B terminal(s) removed from SBDefaultImplementationsSwitcherModifier (16.2 does not default these 6 queries)", n);
 }
 static void G1C_InstallRouting(void) {
     if (!BP_OnName("g1c_routing")) return;
     gRtCls = NSClassFromString(@"SBRoutingSwitcherModifier");
     if (!gSbSwitcherModifierCls) gSbSwitcherModifierCls = NSClassFromString(@"SBSwitcherModifier");
-    if (!gRtCls || !gSbSwitcherModifierCls) return;
-    if (!G1C_RtRoute() || !G1C_RtRouteLayout() || !G1C_RtRouteIndex()) { if (BP_LogEnabled()) BP_Log(@"g1c: SBRoutingSwitcherModifier routing helpers not found, the 13 routed queries are not installed"); return; }
+    if (!gRtCls) return;
     const G1CPatch p[] = {
         { "activeLeafAppLayoutsReachableByKeyboardShortcut", (IMP)G1C_RtArrays, "@16@0:8" },
         { "inactiveAppLayoutsReachableByKeyboardShortcut", (IMP)G1C_RtArrays, "@16@0:8" },
@@ -6081,12 +6120,15 @@ static void G1C_InstallRouting(void) {
         { "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", (IMP)G1C_RtClipping, "{CGRect={CGPoint=dd}{CGSize=dd}}72@0:8q16@24Q32{CGRect={CGPoint=dd}{CGSize=dd}}40" },
     };
     G1C_PatchClass(gRtCls, p, sizeof p / sizeof p[0], "routing");
+    BP_Log(@"g1c: routing: %zu routed queries installed on %s (ivars _modifiers %d _delegate %d _currentModifier %d, own helpers, no dlsym)", sizeof p / sizeof p[0], class_getName(gRtCls),
+           class_getInstanceVariable(gRtCls, "_modifiers") != NULL, class_getInstanceVariable(gRtCls, "_delegate") != NULL, class_getInstanceVariable(gRtCls, "_currentModifier") != NULL);
 }
 
 // ============================================================================================================
 // setup
 // ============================================================================================================
 void G1C_Setup(void) {
+    G1C_UndoDefaultTerminals();
     G1C_InstallRouting();
     G1C_InstallEventPredicates();
     G1C_BuildGridGesture();
