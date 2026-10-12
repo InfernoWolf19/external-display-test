@@ -1709,7 +1709,8 @@ static id G1B_S2AE_Init(id self, SEL _cmd, id tid, id bid, unsigned long long di
     G1B_SET(me, kS2AEBid, [bid copy]);
     if (gS2AEDirOff >= 0) *(unsigned long long *)((uint8_t *)(__bridge void *)me + gS2AEDirOff) = dir;
     G1B_SET(me, kS2AEMod, mod);
-    G1B_SET(me, kS2AEReason, [NSString stringWithFormat:@"SBContinuousExposeSwitcherToAppExposeSwitcherModifier:%@", [[NSUUID UUID] UUIDString]]);
+    NSString *s2aeReason = [NSString stringWithFormat:@"SBContinuousExposeSwitcherToAppExposeSwitcherModifier:%@", [[NSUUID UUID] UUIDString]];
+    G1B_SET(me, kS2AEReason, s2aeReason);
     Class rc = NSClassFromString(@"SBRouteToAppExposeSwitcherModifier");
     SEL ri = @selector(initWithTransitionID:appExposeModifier:);
     id route = (rc && [rc instancesRespondToSelector:ri]) ? ((id (*)(id, SEL, id, id))objc_msgSend)([rc alloc], ri, tid, [mod copy]) : nil;
