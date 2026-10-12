@@ -835,7 +835,7 @@ static id BPKB_WindowSceneManager(void) { return BP_G3B_Send0(BP_G3B_App(), NSSe
 - (id)newMedusaHostedKeyboardWindowLevelAssertionWithPriority:(unsigned long long)p windowLevel:(double)l {   // 16.2 0x1c762726c
     if (BPKB_UsesInputSystemUI() || !_window) return nil;
     SEL s = NSSelectorFromString(@"newWindowLevelAssertionWithPriority:windowLevel:");
-    return [_window respondsToSelector:s] ? ((id (*)(id, SEL, unsigned long long, double))objc_msgSend)(_window, s, p, l) : nil;
+    return [_window respondsToSelector:s] ? ((__attribute__((ns_returns_retained)) id (*)(id, SEL, unsigned long long, double))objc_msgSend)(_window, s, p, l) : nil;     // new-family: +1 from the callee, passed on as +1
 }
 - (BOOL)isKeyboardVisibleForSpringBoard {                         // 16.2 0x1c76272dc (= 16.0 SBMainDisplaySceneManager _isKeyboardVisibleForSpringBoard 0x1c63d6dfc)
     if (BPKB_UsesInputSystemUI()) {
@@ -1044,7 +1044,10 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
 - (id)newMedusaHostedKeyboardWindowLevelAssertionWithPriority:(unsigned long long)priority windowLevel:(double)level {
     if (!BP_G3B_On("g3b_kbwindow")) return %orig;
     BPMedusaHostedKeyboardWindowController *c = BPKB_ControllerForWindowScene(BPKB_MainWindowScene(self));
-    return c ? [c newMedusaHostedKeyboardWindowLevelAssertionWithPriority:priority windowLevel:level] : %orig;
+    if (!c) return %orig;
+    id r = [c newMedusaHostedKeyboardWindowLevelAssertionWithPriority:priority windowLevel:level];     // +1 (new family)
+    if (r) CFRetain((__bridge CFTypeRef)r);       // a Logos hook is a plain C function (+0 return): the extra retain hands the +1 the stock caller expects over to it (the ARC autorelease at return balances the local's +1)
+    return r;
 }
 %end
 

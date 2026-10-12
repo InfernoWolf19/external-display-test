@@ -33,6 +33,7 @@ static void G1D_GM_Update(id gestureManager, BOOL enabled);           // section
 @interface SBFluidSwitcherViewController : UIViewController @end
 @interface SBFluidSwitcherGestureManager : NSObject @end
 @interface SBMainWorkspace : NSObject @end
+@interface SBFloatingDockController : NSObject @end
 
 // ------------------------------------------------------------------------------------------------ helpers
 
@@ -46,7 +47,15 @@ static void G1D_SetIvarObj(id o, const char *name, id v) {
 }
 static unsigned long long G1D_IvarULL(id o, const char *name) {
     Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
-    return iv ? *(unsigned long long *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : 0;
+    if (!iv) return 0;
+    const uint8_t *p = (const uint8_t *)(__bridge void *)o + ivar_getOffset(iv);
+    const char *e = ivar_getTypeEncoding(iv);                       // read exactly the ivar's size (an int ivar read as 8 bytes returned the neighbour's bits too)
+    switch (e ? e[0] : 'Q') {
+        case 'c': case 'C': case 'B': return *(const uint8_t *)p;
+        case 's': case 'S': return *(const uint16_t *)p;
+        case 'i': case 'I': return *(const uint32_t *)p;
+        default: return *(const unsigned long long *)p;
+    }
 }
 static id G1D_Msg1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
 static id G1D_Msg2(id o, SEL s, id a, id b) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id, id))objc_msgSend)(o, s, a, b) : nil; }
@@ -351,9 +360,10 @@ static long long G1D_OrdinalMask(id coord, id sc) {
                     if (!split) continue;
                     if (!medusaList) medusaList = [appLayouts mutableCopy];
                     NSUInteger idx = [medusaList indexOfObject:l];
+                    if (idx == NSNotFound) continue;                  // an equal layout was already replaced: inserting at NSNotFound + i raises NSRangeException
                     [medusaList removeObject:l];
                     NSUInteger i = 0;
-                    for (id s in split) { [medusaList insertObject:s atIndex:idx + i]; i++; }
+                    for (id s in split) { [medusaList insertObject:s atIndex:MIN(idx + i, medusaList.count)]; i++; }
                 }
             }
             if (medusaList) [G1D_CompatMap(me, YES) setObject:medusaList forKey:ws];
@@ -2175,6 +2185,31 @@ static void G1D_VC_PointerMoved(id self, SEL _cmd, id from, id to) {
 // ============================================================================================================
 // setup
 // ============================================================================================================
+// ============================================================================================================
+// 6. SBFloatingDockController: which dock behaviour assertions lock keyboard focus to SpringBoard (hardware keyboard could not type while the Stage Manager dock was visible)
+// ============================================================================================================
+// -_updateFocusAssertion (identical in 16.0 0x1c6254fe0 and 16.2 0x1c76ea75c) takes -[SBWorkspaceKeyboardFocusController lockFocusToSpringBoardWindowScene:forReason:@"FloatingDock"]
+// while the dock is presented and -_isActiveAssertionInOrAboveApp (16.0 0x1c62550dc) / -_isActiveAssertionInDesiredLevel (16.2 0x1c76ea858) says YES. The 16.0 predicate is
+// `level > 4` (Stage Manager) or `level > 4 || in an app` (Medusa); the 16.2 one raises the Stage Manager threshold to 0xb:
+//     threshold = isChamoisWindowingUIEnabled ? 0xb : 5;  r = level >= threshold;  if (!chamois) r |= unlockedEnvironmentMode == 3.
+// The in-app dock visibility assertions of Stage Manager have level 5 / 6 (16.0 consumer, still running) or 9 (16.2), i.e. below 0xb: with the 16.2 predicate the visible dock never takes the
+// keyboard focus from the front window; only the user interactions at level 0xb (modifyProgress:interactive:) and 0xc (setup) do.
+%group G1D_DockFocus
+%hook SBFloatingDockController
+- (BOOL)_isActiveAssertionInOrAboveApp {
+    if (!G1D_ON("g1d_dockfocus")) return %orig;
+    id ws = G1D_IvarObj(self, "_windowScene");
+    id sc = G1B_Send0(ws, NSSelectorFromString(@"switcherController"));
+    id assertion = G1D_IvarObj(self, "_activeAssertion");
+    BOOL chamois = G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"));
+    unsigned long long level = (unsigned long long)G1B_SendLL0(assertion, NSSelectorFromString(@"level"));
+    BOOL r = level >= (chamois ? 0xbULL : 5ULL);
+    if (!chamois) r = r || G1B_SendLL0(sc, NSSelectorFromString(@"unlockedEnvironmentMode")) == 3;
+    return r;
+}
+%end
+%end
+
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
@@ -2193,5 +2228,6 @@ void G1D_Setup(void) {
     %init(G1D_PIP);
     %init(G1D_PIPDS);
     %init(G1D_PIPCtl);
+    %init(G1D_DockFocus);
 }
 #pragma clang diagnostic pop

@@ -382,7 +382,15 @@ static id G1C_GridRoot_Gesture(id self, SEL _cmd, id event) {
     G1C_GR_Guard(self, event);
     return G1B_SUPER(id, gGridRootSuper, self, _cmd, (struct objc_super *, SEL, id), event);
 }
-static id G1C_GridRoot_NewMulti(id self, SEL _cmd) { id m = G1B_GET(self, kGridRootMulti); return m ? [m copy] : nil; }
+// `_newMultitaskingModifier` is a NEW-family selector (ARC ignores the leading underscore): the callers (stock ARC code) own the result (+1). A plain C IMP returns +0
+// (autoreleased), which made the callers over-release the copy. ns_returns_retained makes ARC hand the copy's +1 to the caller.
+static __attribute__((ns_returns_retained)) id G1C_GridRoot_NewMulti(id self, SEL _cmd) { id m = G1B_GET(self, kGridRootMulti); return m ? [m copy] : nil; }
+// Caller side of the NEW-family `_newMultitaskingModifier` (+1): the cast type carries ns_returns_retained so that ARC consumes the owned reference.
+static id G1C_NewMultiOf(id root) {
+    SEL s = NSSelectorFromString(@"_newMultitaskingModifier");
+    if (!root || ![root respondsToSelector:s]) return nil;
+    return ((__attribute__((ns_returns_retained)) id (*)(id, SEL))objc_msgSend)(root, s);
+}
 static id G1C_GridRoot_GestureChild(id self, SEL _cmd, id event, id activeTransition) {
     id gid = (event && [event respondsToSelector:@selector(gestureID)]) ? G1B_Send0(event, @selector(gestureID)) : nil;
     Class g = gGridGestCls ?: gGridGestBase;
@@ -416,7 +424,7 @@ static id G1C_GridRoot_TransitionChild(id self, SEL _cmd, id event, id activeGes
     if (!event || ![event respondsToSelector:@selector(fromEnvironmentMode)]) return nil;
     if (G1B_SendLL0(event, @selector(fromEnvironmentMode)) != 2 || G1B_SendLL0(event, @selector(toEnvironmentMode)) != 1) return nil;
     Class ceC = NSClassFromString(@"SBAppSwitcherContinuousExposeSwitcherModifier");
-    id multi = G1B_Send0(self, @selector(_newMultitaskingModifier));
+    id multi = G1C_NewMultiOf(self);
     id ce = (ceC && multi && [multi isKindOfClass:ceC]) ? multi : nil;                    // _SBSafeCast
     SEL ini = @selector(initWithTransitionID:direction:continuousExposeModifier:);
     if (!ce || !gCEToHomeCls || ![gCEToHomeCls instancesRespondToSelector:ini]) return nil;
@@ -2867,7 +2875,7 @@ static id G1C_Wdr_Transition(id self, SEL _cmd, id event) {
         Class al = NSClassFromString(@"SBAppLayout");
         id home = (al && [al respondsToSelector:@selector(homeScreenAppLayout)]) ? G1B_Send0((id)al, @selector(homeScreenAppLayout)) : nil;
         SEL mo = NSSelectorFromString(@"appLayoutByModifyingPreferredDisplayOrdinal:");
-        if (home && [home respondsToSelector:mo] && G1C_Resp(event, @selector(displayOrdinal))) home = G1C_SendLL1(home, mo, G1B_SendLL0(event, @selector(displayOrdinal)));
+        if (home && [home respondsToSelector:mo] && G1C_Resp(self, @selector(displayOrdinal))) home = G1C_SendLL1(home, mo, G1B_SendLL0(self, @selector(displayOrdinal)));     // 16.2 0x1c74614dc: `displayOrdinal` is a CONTEXT query of the modifier (x20 = self), not of the event
         to = home;
     }
     G1C_SetIvarObj(self, "_initialAppLayout", to);
@@ -5441,7 +5449,7 @@ static id G1C_HGR_GestureChild(id self, SEL _cmd, id event, id active) {
         G1C_SendVB(o, NSSelectorFromString(@"setLaysOutNeighboringCards:"), !chamois);
         return o;
     }
-    id mm = G1B_Send0(self, NSSelectorFromString(@"_newMultitaskingModifier"));
+    id mm = G1C_NewMultiOf(self);
     Class c = NSClassFromString(@"SBHomeGestureSwitcherModifier");
     SEL i = NSSelectorFromString(@"initWithGestureID:selectedAppLayout:startingEnvironmentMode:multitaskingModifier:scrunchInitiated:continuingGesture:lastGestureWasAnArcSwipe:");
     id o = (c && [c instancesRespondToSelector:i]) ? ((id (*)(id, SEL, id, id, long long, id, BOOL, BOOL, BOOL))objc_msgSend)([c alloc], i, gid, sel, mode, mm, scrunch, continuing, lastArc) : nil;
@@ -5489,7 +5497,7 @@ static id G1C_HGR_TransitionChild(id self, SEL _cmd, id event, id gestureMod) {
     if (to == 2) {                                                                   // -> multitasking (0x1c78edf08)
         BOOL resigns = G1B_SendB0(self, @selector(resignsTransitionIntoAppSwitcher));
         if (resigns && style != 1 && !G1C_PeekIsValid(G1B_SendLL0(event, @selector(toPeekConfiguration)))) return nil;
-        id mm = G1B_Send0(self, NSSelectorFromString(@"_newMultitaskingModifier"));
+        id mm = G1C_NewMultiOf(self);
         Class c = NSClassFromString(@"SBHomeGestureToSwitcherSwitcherModifier");
         SEL s = NSSelectorFromString(@"initWithTransitionID:multitaskingModifier:selectedAppLayout:startingEnvironmentMode:liftOffVelocity:liftOffTranslation:adjustAppLayoutsBeforeTransition:");
         return (c && [c instancesRespondToSelector:s]) ? ((id (*)(id, SEL, id, id, id, long long, CGPoint, CGPoint, BOOL))objc_msgSend)([c alloc], s, tid, mm, sel, cur, velo, trans, chamois) : nil;

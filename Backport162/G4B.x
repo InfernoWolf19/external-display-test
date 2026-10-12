@@ -764,7 +764,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     id cfg = [[cfgC alloc] init];
     id ep = [[_listener endpoint] respondsToSelector:@selector(_endpoint)] ? G4B_Obj([_listener endpoint], @selector(_endpoint)) : nil;
     if (ep) ((void (*)(id, SEL, id))objc_msgSend)(cfg, NSSelectorFromString(@"setXpcEndpoint:"), ep);
-    _alertHandle = ((id (*)(id, SEL, id, id))objc_msgSend)((id)handleC, NSSelectorFromString(@"newHandleWithDefinition:configurationContext:"), def, cfg);
+    _alertHandle = ((__attribute__((ns_returns_retained)) id (*)(id, SEL, id, id))objc_msgSend)((id)handleC, NSSelectorFromString(@"newHandleWithDefinition:configurationContext:"), def, cfg);     // new-family: +1
     id act = [[actC alloc] init];
     NSString *kType = G4B_SymString("SBEducationRemoteViewControllerEducationTypeKey");
     NSString *kHw = G4B_SymString("SBEducationRemoteViewControllerHasPointerAndKeyboardConnectedKey");
@@ -1167,11 +1167,19 @@ static const void *kLPMSupC  = &kLPMSupC;       // on SBFluidSwitcherItemContain
 @end
 
 static id G4B_LPMScene(id m) { return ((G4BWeakBox *)objc_getAssociatedObject(m, kLPMScene)).obj; }
+// dispatch_sync on a serial queue from a block that already runs on that queue (or on a queue that targets it) deadlocks forever, which on the main thread is exactly the
+// "no successful checkins from SpringBoard in 180 seconds" watchdog. The queue gets a queue-specific marker; a caller that already runs on it executes the block inline.
+static const void *kLPMQueueMark = &kLPMQueueMark;
+static void G4B_SyncOnQueue(dispatch_queue_t q, dispatch_block_t body) {
+    if (!q) { body(); return; }
+    if (dispatch_get_specific(kLPMQueueMark) == (__bridge void *)q) { body(); return; }
+    dispatch_queue_set_specific(q, kLPMQueueMark, (__bridge void *)q, NULL);
+    dispatch_sync(q, body);
+}
 static BOOL G4B_LPMInv(id m) {                               // snapshot taken with dispatch_sync on the manager's queue, like 16.2
     dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(m, "_stateSerialQueue");
     __block BOOL inv = NO;
-    if (q) dispatch_sync(q, ^{ inv = [objc_getAssociatedObject(m, kLPMInv) boolValue]; });
-    else inv = [objc_getAssociatedObject(m, kLPMInv) boolValue];
+    G4B_SyncOnQueue(q, ^{ inv = [objc_getAssociatedObject(m, kLPMInv) boolValue]; });
     return inv;
 }
 static BOOL G4B_LPMInvOnQueue(id m) { return [objc_getAssociatedObject(m, kLPMInv) boolValue]; }
@@ -1261,7 +1269,7 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
         if ([h respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)h invalidate];
         objc_setAssociatedObject(s, kLPMInv, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     };
-    if (q) dispatch_sync(q, body); else body();
+    G4B_SyncOnQueue(q, body);
 }
 // 16.2 clientWithSceneIdentifier:suppressPreferredLockStatus: (0x1c76b8fc4)
 %new
@@ -1269,7 +1277,7 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
     dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(self, "_stateSerialQueue");
     if (!q || !sid) return;
     __block BOOL inv = NO;
-    dispatch_sync(q, ^{
+    G4B_SyncOnQueue(q, ^{
         inv = G4B_LPMInvOnQueue(self);
         if (inv) return;
         NSMutableSet *set = objc_getAssociatedObject(self, kLPMSup);
@@ -1470,10 +1478,8 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
         if ([c respondsToSelector:@selector(setPreferredPointerLockStatusSuppressed:)]) ((void (*)(id, SEL, BOOL))objc_msgSend)(c, @selector(setPreferredPointerLockStatusSuppressed:), suppress);
     }
 }
-- (void)didSelectContainer:(id)container modifierFlags:(long long)flags {
-    G4B_UnsuppressLockForContainer(self, container);
-    %orig;
-}
+// (-didSelectContainer:modifierFlags: is wrapped at run time in G4B_WrapDidSelectContainer(): that method does not exist in 16.0, only G2B adds it, and a Logos hook of a missing
+//  method would call a NULL %orig.)
 // 16.0 only has the one-argument form (the two-argument one exists when G2B adds it); both must release the suppression (review C8)
 - (void)didSelectContainer:(id)container {
     G4B_UnsuppressLockForContainer(self, container);
@@ -1844,6 +1850,21 @@ static void G4B_AttachBannerProtocols(void) {
 // Install order = the order of the md SUMMARY. Each group is installed only if its switch is on at launch (the hooks also
 // re-check at call time, so a later "off" file still takes effect).
 // Call from Tweak.x's %ctor after BP_BuildMatches() and the existing %init / BP_G4_Setup().
+static IMP gG4BOrigDidSelect2;
+static void G4B_WrapDidSelectContainer(void) {      // 16.2 didSelectContainer:modifierFlags: also releases the pointer-lock suppression of the selected window (review C8)
+    Class vc = NSClassFromString(@"SBFluidSwitcherViewController");
+    SEL sel = NSSelectorFromString(@"didSelectContainer:modifierFlags:");
+    Method m = vc ? class_getInstanceMethod(vc, sel) : NULL;
+    if (!m || gG4BOrigDidSelect2) return;           // not there (the group that adds it is off): nothing to wrap
+    IMP orig = method_getImplementation(m);
+    gG4BOrigDidSelect2 = orig;
+    IMP wrap = imp_implementationWithBlock(^(id me, id container, long long flags) {
+        G4B_UnsuppressLockForContainer(me, container);
+        ((void (*)(id, SEL, id, long long))orig)(me, sel, container, flags);
+    });
+    class_replaceMethod(vc, sel, wrap, method_getTypeEncoding(m));
+}
+
 void G4B_Setup(void) {
     if (!G4B_BuildMatches()) return;
     G4B_RegisterArrangementItem();
@@ -1853,7 +1874,7 @@ void G4B_Setup(void) {
     if (G4B_On("clonemirror")) { %init(G4B_Clone); }
     if (G4B_On("presubset")) { %init(G4B_PreSubset); }
     if (G4B_On("edu"))       { %init(G4B_Edu); }
-    if (G4B_On("lockedptr2")) { %init(G4B_LockedPtr); }
+    if (G4B_On("lockedptr2")) { %init(G4B_LockedPtr); G4B_WrapDidSelectContainer(); }
     if (G4B_On("migrate"))   { %init(G4B_Migrate); }
     if (G4B_On("focuslock")) { %init(G4B_FocusLock); }
     BP_Log(@"group4b installed");
