@@ -4,12 +4,12 @@
 and compared by selector sequence / listing; `G1D.x` passes `logos.pl` and a clang `-fsyntax-only -fobjc-arc` check against stub headers.
 
 Everything is default-on. Kill switches (`Backport162.off.<name>`): `g1d` (whole file) and `g1d_model`, `g1d_request`, `g1d_removal`, `g1d_newwindow`, `g1d_gesture`,
-`g1d_vcdrag`, `g1d_pointer`, `g1d_tongue`, `g1d_gmtouch`, `g1d_windowdrag`, `g1d_pip`, `g1d_pipframes`, `g1d_piprestore`, `g1d_pipkeyboard`, `g1d_pipinsets`, `g1d_extgestures`.
+`g1d_vcdrag`, `g1d_pointer`, `g1d_tongue`, `g1d_gmtouch`, `g1d_windowdrag`, `g1d_updatemode`, `g1d_pip`, `g1d_pipframes`, `g1d_piprestore`, `g1d_pipkeyboard`, `g1d_pipinsets`, `g1d_extgestures`.
 
 Wiring (lead): add `G1D.x` to the Makefile, declare `void G1D_Setup(void);` in `Tweak.x` and call it AFTER `G1B_Setup()`, `BP2B_Setup()` and `G1C_Setup()` (it relies on the
 accessors G1B adds for the strip tongue and on `didSelectContainer:modifierFlags:` from G2B; every use re-checks `respondsToSelector:` so an earlier call only loses features).
 
-## 1. Fallbacks / stand-ins found in the existing code and what replaced them (16, plus one bug of this file's own)
+## 1. Fallbacks / stand-ins found in the existing code and what replaced them (17, plus two bugs of this file's own)
 1. `-_adjustedGestureEventForGestureEvent:fromGestureManager:` (G2B.m stand-in): ignored the manager and passed `me`, so a window drag over a second display was never converted
    into the coordinates of the switcher that handles it. Replaced by the 16.2 body (section 2.3).
 2. `draggingAppLayoutsForContinuousExposeWindowDrag` / `proposedAppLayoutsForContinuousExposeWindowDrag` (G2.x stubs): answered for the one display. Real coordinator state (2.2).
@@ -31,7 +31,12 @@ accessors G1B adds for the strip tongue and on `didSelectContainer:modifierFlags
     window z order and cannot grab a strip window of another display; `SBFluidSwitcherPanGestureRecognizer` lacks `initialTouchLeafAppLayout` (4.7).
 16. `SBWindowDragGestureWorkspaceTransaction` lacked `sizeOfSelectedDisplayItem`: G1C's event producer (`_currentGestureEventForGesture:`) only copies it when the transaction responds, so the
     window size of the drag event was never filled in (silent skip); no `_finishWithGesture:` guard (the lost drag end / failed begin path) (4.7).
-17. Bug in this file's own earlier code, fixed: `peekConfiguration` is an NSInteger, it had been read into an `id` (ARC retain of 2 / 3 while a peek is active) and passed to a dlsym'd
+17. `-[SBFluidSwitcherViewController _performModifierUpdateLayoutResponse:]`: 16.2 (0x1c745c7dc) only wraps the update in `_performWithFixedUpdateMode:usingBlock:` when the response's updateMode is not 0;
+    16.0 (0x1c5fe30b8) always wraps and so fixes the mode to SBAnimationUpdateModeUnspecified. 16.2 modifiers send `SBUpdateLayoutSwitcherEventResponse` with mode 0 (the strip's handleEvent / highlight
+    responses, G1C `G1C_Strip_HandleHighlight` `(0xc, 0)`), so pressing or dragging a strip window threw NSInternalInconsistencyException from `sb_animateWithSettings`
+    (device crash: `_dispatchEventAndHandleAction:` -> `_performEventResponse:` -> `_performModifierUpdateLayoutResponse:` -> `_performWithFixedUpdateMode:` -> `_updateLayoutWithCompletion:` block).
+    Fixed in section 2.5 (`g1d_updatemode`). This was not a settings object built by a port: the response is legitimate, the 16.0 consumer lacked the 16.2 branch.
+18. Bug in this file's own earlier code, fixed: `peekConfiguration` is an NSInteger, it had been read into an `id` (ARC retain of 2 / 3 while a peek is active) and passed to a dlsym'd
     `SBPeekConfigurationIsValid` that is not exported; replaced by the 3 instruction local function (4.3).
 
 ## 2. PORTED: coordinator and cross display window drag
@@ -64,6 +69,10 @@ for window drag events). The 16.0 handlers run with `-[SBFluidSwitcherGesture ge
   that contains each item (`g1d_model`). The 16.2 error branch `[provider setPreviousLayoutState:]` is not ported (no 16.0 provider API).
 * `windowSceneDidConnect:` runs `Did` right before `setupSwitcherWindowIfNeeded`; `-[SBSwitcherController setChamoisWindowingUIEnabled:]` runs `Will` then (inside
   `-[SBFluidSwitcherGestureManager updateForChamoisWindowingUIEnabled:]`) `Did`. G3.x's direct `failMultitaskingGesturesForReason` call equals the body of `Will`.
+
+### 2.5 Update layout responses with mode 0 (`g1d_updatemode`)
+Hook on the VC: `_performModifierUpdateLayoutResponse:` sets a thread local for its dynamic extent when `[response updateMode] == 0`; `_performWithFixedUpdateMode:usingBlock:` runs the block directly
+(no temporary fixed-mode child modifier) when called with mode 0 inside that extent, which is exactly the 16.2 control flow (blocks 0x1c745c940 = 16.0 block 0x1c5fe319c, bodies identical).
 
 ## 3. PORTED: pointer crossing the display boundary (`g1d_pointer`)
 VC `pointerDidMoveToFromWindowScene:toWindowScene:` 0x1c745f938 builds `SBPointerCrossedDisplayBoundarySwitcherModifierEvent(direction, edge)`: direction 1 when this display is the
@@ -116,7 +125,8 @@ The drag (gesture type 9) is the recognizer 16.0 names `_unpinSplitViewApplicati
   wide width and 2 nubs; Medusa configurations: the jump table 0x1c78f4e08 including the RTL edge role rules), windows in front occlude (their frames are collected, the CGRegion became an array of
   rects), and when no stage window is hit but the touch lands in a visible container whose role is 0 (a strip window; `hitTest:` + `isDescendantOfView:`, block 0x1c78f4e60) that one is grabbed.
   Result goes to `initialTouchLeafAppLayout`. `_SBRectContainsPoint` is inclusive on all four edges (SpringBoardUIServices 0x1a4509f6c).
-* shouldBegin: same 16.0 rules (multi window support of the app for the scene's style and display identity, deferred edges, Guided Access) with the leaf from the recognizer and
+* shouldBegin: (bug fixed after the first device run: `windowManagementStyle` / `displayIdentity` must be asked of the SWITCHER CONTROLLER, as 16.2 does; asking the window scene yielded style 0 and
+  no identity, `supportsMultiWindowLayoutsForSwitcherWindowManagementStyle:displayIdentity:` answered NO and every window drag was refused.) Same 16.0 rules (multi window support of the app for the scene's style and display identity, deferred edges, Guided Access) with the leaf from the recognizer and
   `adjustedAppLayoutForLeafAppLayout:` as precondition.
 * Transaction begin: the recognizer's leaf (when `adjustedAppLayoutForLeafAppLayout:` accepts it) else the 16.0 floating / location path against the switcher controller OF THE VIEW CONTROLLER
   (16.0 used the transaction's window scene); on failure the recognizer is bounced (`setEnabled:` NO / YES) and the transaction finishes with -1 instead of continuing with a nil layout;
