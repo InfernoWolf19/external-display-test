@@ -66,6 +66,19 @@
 // 0.1  event types 36 / 37 / 38 reach 16.0 modifiers  (PORTABLE)
 // ============================================================================================================
 // 16.0 -[SBSwitcherModifier _handleEvent:] ignores types > 35. Route them to handle<X>Event: when the modifier implements it.
+//
+// ROOT CAUSE of the SpringBoard crash "objc_retain / objc_release on a FREED object inside -[SBChainableModifier enumerateChildModifiersWithBlock:]" (device crash records
+// c3e82660 / 6e36f52e, builds d89e4f3 and 0c1bc38; specs/AUDIT-RETAIN-CRASH-0.7.3.md): the 16.0 body of -[SBSwitcherModifier _handleEvent:] (0x1c63e8a98) keeps `self` in x20 and
+// the switch over the event type (cases 0...35, jump table at 0x1c63e8dac, no entry points at the default) writes the handler's OWNED (+1) result into x20 before the common exit
+// 0x1c63e8b28 (`release event; mov x0, x20; b objc_autoreleaseReturnValue`). For every type > 35 (`b.hi 0x1c63e8b50`) x20 is still `self`, which this function never retained:
+// the exit consumes a reference it does not own. 16.0 never sends such an event, so the path was dead there; with the port's events 36 (strip tongue), 37 (header tap) and 38
+// (pointer crossed display boundary) EVERY modifier of the tree that receives the event loses one reference (immediately through the ARC local of the caller's
+// retainAutoreleasedReturnValue handshake, or at the next pool pop): modifiers whose only owner is their predecessor's strong -nextQueryModifier link are deallocated in the middle
+// of SBChainableModifier -handleEvent:'s child enumeration while that link still points at them, and the next enumeration step (-retain of `x22.nextQueryModifier`) hits freed
+// memory. This is why the crash needs a type-36/37/38 event (tap on a strip title, pointer crossing between displays, strip tongue) and why it moves around the tree.
+// The earlier "return nil instead of self" fix (G1C 0) only changed the RETURN value; the reference was already gone. The 16.0 body must never run for those types: 16.2's
+// version (0x1c7895274) is `[super _handleEvent:]` (SBChainableModifier: returns nil, result discarded) followed by the handler's own result (nil without a handler), which is
+// exactly what the hook below does for every type > 35, whatever the feature switches (the stock body is wrong for them, with or without our handlers).
 enum { G1BEventStripEdgeProtectTongue = 36, G1BEventTapAppLayoutHeader = 37, G1BEventPointerCrossedDisplayBoundary = 38 };
 
 static SEL G1B_HandlerForEventType(long long t) {
@@ -80,13 +93,20 @@ static SEL G1B_HandlerForEventType(long long t) {
 %group G1B_Base
 %hook SBSwitcherModifier
 - (id)_handleEvent:(id)event {
-    id orig = %orig;
-    if (!G1B_ON() || !event || ![event respondsToSelector:@selector(type)]) return orig;
-    long long et = G1B_SendLL0(event, @selector(type));
-    SEL h = G1B_HandlerForEventType(et);
-    if (!h || ![self respondsToSelector:h]) return et > 35 ? nil : orig;     // 16.0 returns the modifier itself for types > 35 (a bogus "response"); 16.2 returns nil
-    // 16.2 _handleEvent: (0x1c7895274) first calls [super _handleEvent:] and discards the result, then returns the handler's result.
-    return G1B_Send1(self, h, event);
+    long long et = (event && [event respondsToSelector:@selector(type)]) ? G1B_SendLL0(event, @selector(type)) : 0;
+    if (et > 35) {
+        // 16.2 _handleEvent: (0x1c7895274): [super _handleEvent:] with the result discarded, then the handler's result. NEVER the 16.0 body (see the section header: over-release of self).
+        Class sup = class_getSuperclass(NSClassFromString(@"SBSwitcherModifier"));
+        if (G1B_HasSuper(sup, _cmd)) (void)G1B_SUPER(id, sup, self, _cmd, (struct objc_super *, SEL, id), event);
+        SEL h = G1B_HandlerForEventType(et);
+        BOOL handled = G1B_ON() && h && [self respondsToSelector:h];
+        if (BP_LogEnabled()) {
+            static int logged;
+            if (logged++ < 40) BP_Log(@"g1b: _handleEvent: type %lld on %@ -> %@ (the 16.0 body is skipped: its default exit over-releases the modifier)", et, NSStringFromClass(object_getClass(self)), handled ? NSStringFromSelector(h) : @"no handler, nil");
+        }
+        return handled ? G1B_Send1(self, h, event) : nil;
+    }
+    return %orig;
 }
 %end
 %end

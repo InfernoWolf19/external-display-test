@@ -4987,6 +4987,10 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 // header tap (37) / pointer-crossed-display (38) / edge-protect-tongue (36) event made the whole child tree return modifiers as responses, and SBChainableModifier -handleEvent: composed
 // them into the composite whose responseByTransformingResponseWithTransformer: then died. Ours wraps whatever is below (G1B's routing hook or the original): a result that is the
 // receiver is the 16.0 quirk, the 16.2 value is nil. Never a legitimate response (a modifier is not a response), so this is exactly the one place the value is wrong.
+// 0.7.3: THIS HOOK ALONE WAS NOT ENOUGH. The same default exit also returns `self` through objc_autoreleaseReturnValue without ever having retained it, i.e. the stock body over-releases
+// the receiving modifier once per type > 35 event (the real cause of the freed-modifier crash in enumerateChildModifiersWithBlock:, specs/AUDIT-RETAIN-CRASH-0.7.3.md). The 16.0 body is
+// now never run for those types (G1B.x section 0.1 does what 16.2 does itself: [super _handleEvent:] + handler), so `r == self` cannot happen any more. This hook stays as the
+// last-line guard for a stock body reached by some other path (logged; the reference cannot be repaired from here, the value is only turned into nil).
 %group G1C_EventDefault
 %hook SBSwitcherModifier
 - (id)_handleEvent:(id)event {
