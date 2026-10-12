@@ -573,6 +573,45 @@ static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinat
     }
 }
 
+// ---- PiP morph producers (16.2 0x1c76d4ea0 / 0x1c76d50e0, caller -transitionEventForContext:identifier:phase:animated: 0x1c76d3e1c) ----
+// 16.2 asks "morph from PiP" first (request source 0x2d; the role of the activating entity is the PiP's layout role) and only when that is NO "morph to PiP" (the 16.0
+// conditions, plus the entity that SBAutoPIPWorkspaceTransaction found: its layout role). The role goes to the event (morphingPIPLayoutRole), both flags are then
+// exclusive. 16.0 evaluated the two independently and had no role.
+%new
+- (BOOL)_shouldMorphFromPIPForTransitionContext:(id)context outForLayoutRole:(long long *)outRole {
+    long long source = G1B_SendLL0(G1B_Send0(context, NSSelectorFromString(@"request")), @selector(source));
+    if (outRole) *outRole = source == 0x2d ? G1B_SendLL0(G1B_Send0(context, NSSelectorFromString(@"requestedActivatingWorkspaceEntity")), NSSelectorFromString(@"layoutRole")) : 0;
+    return source == 0x2d;
+}
+%new
+- (BOOL)_shouldMorphToPIPForTransitionContext:(id)context outForLayoutRole:(long long *)outRole {
+    if (outRole) *outRole = 0;
+    SEL old = NSSelectorFromString(@"_shouldMorphToPIPForTransitionContext:");
+    BOOL r = [self respondsToSelector:old] ? ((BOOL (*)(id, SEL, id))objc_msgSend)(self, old, context) : NO;     // the 16.0 body = 16.2's conditions up to the auto PiP query
+    if (!r || !outRole) return r;
+    Class apt = NSClassFromString(@"SBAutoPIPWorkspaceTransaction");
+    SEL q = NSSelectorFromString(@"shouldAutoPIPEnteringBackgroundForRequest:foundEntity:transitionStyle:");
+    if (![apt respondsToSelector:q]) return r;
+    __autoreleasing id entity = nil; long long style = 0;
+    ((BOOL (*)(id, SEL, id, id __autoreleasing *, long long *))objc_msgSend)((id)apt, q, G1B_Send0(context, NSSelectorFromString(@"request")), &entity, &style);
+    if (entity) *outRole = G1B_SendLL0(entity, NSSelectorFromString(@"layoutRole"));
+    return r;
+}
+- (id)transitionEventForContext:(id)context identifier:(id)identifier phase:(unsigned long long)phase animated:(BOOL)animated {
+    id ev = %orig;
+    if (!ev || !context || !G1D_ON("g1d_pip") || ![ev respondsToSelector:@selector(setMorphToPIPTransition:)]) return ev;
+    id me = (id)self;
+    long long role = 0;
+    BOOL from = ((BOOL (*)(id, SEL, id, long long *))objc_msgSend)(me, NSSelectorFromString(@"_shouldMorphFromPIPForTransitionContext:outForLayoutRole:"), context, &role);
+    BOOL to = NO;
+    if (!from) to = ((BOOL (*)(id, SEL, id, long long *))objc_msgSend)(me, NSSelectorFromString(@"_shouldMorphToPIPForTransitionContext:outForLayoutRole:"), context, &role);
+    G1B_SendVLL(ev, @selector(setMorphFromPIPTransition:), from);
+    G1B_SendVLL(ev, @selector(setMorphToPIPTransition:), to);
+    SEL sr = NSSelectorFromString(@"setMorphingPIPLayoutRole:");
+    if ([ev respondsToSelector:sr]) G1B_SendVLL(ev, sr, role);
+    return ev;
+}
+
 // ---- 16.2 mode 1 -> 3 part of -layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext: (0x1c76cb178, display ordinal check at 0x1c76cbbcc) ----
 // When the transition goes from the home screen (mode 1) to Stage Manager (mode 3) and the new app layout is not in the model, the layout is added only if every one of its
 // items lives, in the model, in a layout with the same preferred display ordinal (16.0 added it unconditionally). Implemented on the single add of that part.

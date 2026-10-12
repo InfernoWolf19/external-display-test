@@ -56,6 +56,9 @@
 @interface SBWindowDeleteSwitcherModifier : NSObject @end
 @interface SBTransitionSwitcherModifierEvent : NSObject @end
 @interface SBFullScreenToHomeIconZoomSwitcherModifier : NSObject @end
+@interface SBFullScreenFluidSwitcherRootSwitcherModifier : NSObject @end
+@interface _SBHomeScreenFloorSwitcherModifier : NSObject @end
+@interface SBCrossfadeDosidoSwitcherModifier : NSObject @end
 @interface SBFullScreenToHomeSlideOverSwitcherModifier : NSObject @end
 // END INTEGRATION interfaces
 
@@ -2011,6 +2014,436 @@ static void G1B_BuildAnchorPin(void) {
 }
 
 // ============================================================================================================
+// Creators of the home / app transitions, reproduced from 16.2 (20C65):
+//   -[SBFullScreenFluidSwitcherRootSwitcherModifier transitionModifierForMainTransitionEvent:]  0x1c762c998 (16.0 0x1c61a1440)
+//   -[_SBHomeScreenFloorSwitcherModifier handleTransitionEvent:]                                 0x1c750c194 (16.0 0x1c60890fc)
+// Deltas 16.0 -> 16.2 (the rest is the same decision tree): the chamois flag (-isChamoisWindowingUIEnabled of the root) is read first and drives
+// setShouldForceDefaultAnchorPointForTransition: on the slide-over / icon-zoom / center-zoom-down children, the 4-argument
+// SBSplitDisplayItemPulseTransitionSwitcherModifier init (chamoisWindowingUIEnabled:), setFullScreenTransition:(!chamois) on SBCrossfadeDosidoSwitcherModifier and the PIP
+// restore toLayoutRole: / force / clip-shadow flags; new early exit isEnteringAnyPeekEvent for app -> home; isCenterWindowToSlideOverEvent /
+// isCenterWindowToNewSplitViewEvent are checked before the existing-split-view / removal events; isGestureInitiated / isMorphFromPIPTransition before the split-view peek
+// exits; the floor's icon zoom gets shouldUpdateIconViewVisibility (not in the floating dock) and shouldDisableAsyncRendering (move displays).
+// G1C.x applies the same flag values to nested icon zoom / PIP restore children when they are attached (G1C_Pip_DidMove / G1C_PipR_DidMove): for children built here the
+// values are already set (idempotent, same value), so that attach-time application is redundant for them (see specs/PORT-G1B-0.7.0.md).
+// ============================================================================================================
+typedef __attribute__((ns_returns_retained)) id (*G1BNewFn)(id, SEL);
+static id G1B_FR_Alloc(const char *cls, SEL init) {
+    Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
+    if (!c || ![c instancesRespondToSelector:init]) { BP_Log(@"g1b: creator: %s does not answer %@", cls, NSStringFromSelector(init)); return nil; }
+    return [c alloc];
+}
+#define FR_S(...) ((id (*)(id, SEL, __VA_ARGS__))objc_msgSend)
+static void G1B_FR_SetBool(id m, NSString *sel, BOOL v) { SEL s = NSSelectorFromString(sel); if (m && [m respondsToSelector:s]) ((void (*)(id, SEL, BOOL))objc_msgSend)(m, s, v); }
+static void G1B_FR_SetForce(id m, BOOL v) { G1B_FR_SetBool(m, @"setShouldForceDefaultAnchorPointForTransition:", v); }
+static id G1B_FR_N1(const char *cls, NSString *sel, id a) { SEL s = NSSelectorFromString(sel); id m = G1B_FR_Alloc(cls, s); return m ? FR_S(id)(m, s, a) : nil; }
+static id G1B_FR_N2(const char *cls, NSString *sel, id a, id b) { SEL s = NSSelectorFromString(sel); id m = G1B_FR_Alloc(cls, s); return m ? FR_S(id, id)(m, s, a, b) : nil; }
+static id G1B_FR_N3(const char *cls, NSString *sel, id a, id b, id c) { SEL s = NSSelectorFromString(sel); id m = G1B_FR_Alloc(cls, s); return m ? FR_S(id, id, id)(m, s, a, b, c) : nil; }
+static id G1B_FR_IconZoom(id tid, id layout, long long dir, BOOL chamois) {
+    SEL i = @selector(initWithTransitionID:appLayout:direction:);
+    id m = G1B_FR_Alloc("SBFullScreenToHomeIconZoomSwitcherModifier", i);
+    m = m ? FR_S(id, id, long long)(m, i, tid, layout, dir) : nil;
+    G1B_FR_SetForce(m, chamois);
+    return m;
+}
+static id G1B_FR_PIPRestore(id tid, id zoom, id from, id to, long long role, BOOL chamois) {
+    SEL i5 = NSSelectorFromString(@"initWithTransitionID:zoomModifier:fromAppLayout:toAppLayout:toLayoutRole:"), i4 = NSSelectorFromString(@"initWithTransitionID:zoomModifier:fromAppLayout:toAppLayout:");
+    Class c = NSClassFromString(@"SBPIPRestoreToFullScreenSwitcherModifier");
+    id m = nil;
+    if (c && [c instancesRespondToSelector:i5]) m = FR_S(id, id, id, id, long long)([c alloc], i5, tid, zoom, from, to, role);
+    else if (c && [c instancesRespondToSelector:i4]) m = FR_S(id, id, id, id)([c alloc], i4, tid, zoom, from, to);          // the role is write-only in the 16.0 shape
+    G1B_FR_SetForce(m, chamois);
+    G1B_FR_SetBool(m, @"setShouldClippingTakeShadowIntoAccount:", chamois);
+    return m;
+}
+static id G1B_FR_PIP(id tid, id zoom, id layout, long long role) {
+    SEL i4 = NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:layoutRole:"), i3 = NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:");
+    Class c = NSClassFromString(@"SBFullScreenToHomePIPSwitcherModifier");
+    if (c && [c instancesRespondToSelector:i4]) return FR_S(id, id, id, long long)([c alloc], i4, tid, zoom, layout, role);
+    if (c && [c instancesRespondToSelector:i3]) return FR_S(id, id, id)([c alloc], i3, tid, zoom, layout);
+    return nil;
+}
+static id G1B_FR_Crossfade(id tid, id from, id to, BOOL chamois) {
+    id m = G1B_FR_N3("SBCrossfadeDosidoSwitcherModifier", @"initWithTransitionID:fromAppLayout:toAppLayout:", tid, from, to);
+    G1B_FR_SetBool(m, @"setFullScreenTransition:", !chamois);
+    return m;
+}
+static id G1B_FR_SlideOver(id tid, id layout, long long dir) {
+    SEL i = @selector(initWithTransitionID:appLayout:direction:);
+    id m = G1B_FR_Alloc("SBFullScreenToHomeSlideOverSwitcherModifier", i);
+    return m ? FR_S(id, id, long long)(m, i, tid, layout, dir) : nil;
+}
+static id G1B_FR_NewMulti(id root) {
+    SEL s = NSSelectorFromString(@"_newMultitaskingModifier");
+    return [root respondsToSelector:s] ? ((G1BNewFn)objc_msgSend)(root, s) : nil;
+}
+static BOOL G1B_FR_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }   // _SBPeekConfigurationIsValid, byte-identical 16.0 0x1c6289f84 / 16.2 0x1c77229fc
+static id G1B_FR_AddModifier(id m, id resp) {
+    Class ac = NSClassFromString(@"SBAddModifierSwitcherEventResponse");
+    SEL ai = NSSelectorFromString(@"initWithModifier:level:");
+    id add = (m && ac && [ac instancesRespondToSelector:ai]) ? FR_S(id, long long)([ac alloc], ai, m, 3) : nil;
+    return add ? G1B_AppendTo(add, resp) : resp;
+}
+static id G1B_FR_SystemAperture(id me, id event, id tid, id zoom, id layout, id velocityFrom, long long dir) {
+    id velVal = ((id (*)(id, SEL, id, id))objc_msgSend)(me, NSSelectorFromString(@"currentVelocityValueForVisibleAppLayout:key:"), velocityFrom, @"position");
+    CGPoint vel = [velVal CGPointValue];
+    unsigned long long idx = [(NSArray *)G1B_WD_Layouts(me) indexOfObject:layout];
+    CGRect f = ((CGRect (*)(id, SEL, unsigned long long))objc_msgSend)(me, @selector(frameForIndex:), idx);
+    double sc = ((double (*)(id, SEL, unsigned long long))objc_msgSend)(me, @selector(scaleForIndex:), idx);
+    SEL s = NSSelectorFromString(@"initWithTransitionID:zoomModifier:appLayout:direction:expandedCardFrame:cardScale:cardVelocity:");
+    id m = G1B_FR_Alloc("SBFullScreenToHomeSystemApertureSwitcherModifier", s);
+    return m ? ((id (*)(id, SEL, id, id, id, long long, CGRect, double, CGPoint))objc_msgSend)(m, s, tid, zoom, layout, dir, f, sc, vel) : nil;
+}
+
+#define FR_EV(sel) G1B_SendB0(event, NSSelectorFromString(@sel))
+#define FR_BSEQ(a, b) ((a) == (b) || [(a) isEqual:(b)])
+enum { kFRRolePrimary = 1, kFRRoleSide = 2, kFRMaskCenter = 0x10, kFRMaskPrimarySide = 0x6 };   // _SBLayoutRole* / _SBLayoutRoleMask* values (16.2 __const 0x1c7a93390..0x1c7a933e8)
+
+%group G1B_FluidRoot
+%hook SBFullScreenFluidSwitcherRootSwitcherModifier
+- (id)transitionModifierForMainTransitionEvent:(id)event {
+    if (!G1B_ON() || !event) return %orig;
+    id me = (id)self;
+    BOOL chamois = G1B_WD_Chamois(me);
+    long long te = G1B_SendLL0(event, @selector(toEnvironmentMode)), fe = G1B_SendLL0(event, @selector(fromEnvironmentMode));
+    id to = G1B_Send0(event, @selector(toAppLayout)), from = G1B_Send0(event, @selector(fromAppLayout)), tid = G1B_Send0(event, @selector(transitionID));
+    long long style = G1B_SendLL0(G1B_Send0(me, @selector(switcherSettings)), NSSelectorFromString(@"effectiveSwitcherStyle"));
+    long long fromPeek = G1B_SendLL0(event, NSSelectorFromString(@"fromPeekConfiguration")), toPeek = G1B_SendLL0(event, NSSelectorFromString(@"toPeekConfiguration"));
+    if (G1B_Send0(event, @selector(toAppExposeBundleID)) && te == 2) return nil;
+    if (FR_EV("isBannerUnfurlTransition")) {
+        id ctx = G1B_Send0(event, NSSelectorFromString(@"bannerUnfurlSourceContext"));
+        if (ctx) {
+            if (fe != 2 && fe != 3) return nil;
+            SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:bannerUnfurlSourceContext:");
+            id m = G1B_FR_Alloc("SBBannerUnfurlToFullScreenSwitcherModifier", s);
+            return m ? FR_S(id, id, id, id)(m, s, tid, fe == 3 ? from : nil, to, ctx) : nil;
+        }
+    }
+    if (FR_EV("isBreadcrumbTransition") && fe == 3 && te == 1) {
+        id m = G1B_FR_SlideOver(tid, from, 1);
+        if (chamois) G1B_FR_SetForce(m, YES);
+        return m;
+    }
+    if (te == 3) {
+        if (fe == 1) return nil;
+        if (fe == 2) {                                                   // switcher -> app
+            if (style == 1) {
+                if (FR_EV("isContinuityTransition") && !G1B_SendB1(me, NSSelectorFromString(@"isAppLayoutVisibleInSwitcherBounds:"), to)) {
+                    Class fc = NSClassFromString(@"SBFullScreenAppLayoutSwitcherModifier");
+                    id full = (fc && [fc instancesRespondToSelector:NSSelectorFromString(@"initWithActiveAppLayout:")]) ? G1B_Send1([fc alloc], NSSelectorFromString(@"initWithActiveAppLayout:"), to) : nil;
+                    SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:deckModifier:fullscreenModifier:");
+                    id m = G1B_FR_Alloc("SBDeckContinuityToFullScreenSwitcherModifier", s);
+                    return m ? FR_S(id, id, id, id)(m, s, tid, to, G1B_FR_NewMulti(me), full) : nil;
+                }
+                SEL s = NSSelectorFromString(@"initWithTransitionID:direction:fullScreenAppLayout:deckModifier:");
+                id m = G1B_FR_Alloc("SBDeckToFullScreenSwitcherModifier", s);
+                return m ? FR_S(id, long long, id, id)(m, s, tid, 0, to, G1B_FR_NewMulti(me)) : nil;
+            }
+            SEL s = NSSelectorFromString(@"initWithTransitionID:direction:fullScreenAppLayout:gridModifier:");
+            id m = G1B_FR_Alloc("SBGridToFullScreenSwitcherModifier", s);
+            Class gc = NSClassFromString(@"SBGridSwitcherModifier");
+            return m ? FR_S(id, long long, id, id)(m, s, tid, 0, to, gc ? [[gc alloc] init] : nil) : nil;
+        }
+        if (fe != 3) return nil;
+        // full screen -> full screen
+        if (from && to && [from isEqual:to] && G1B_SendLL0(event, @selector(fromInterfaceOrientation)) != G1B_SendLL0(event, @selector(toInterfaceOrientation))) {
+            SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:fromInterfaceOrientation:toInterfaceOrientation:");
+            id m = G1B_FR_Alloc("SBRotationSwitcherModifier", s);
+            return m ? FR_S(id, id, long long, long long)(m, s, tid, G1B_Send0(event, @selector(toAppLayout)), G1B_SendLL0(event, @selector(fromInterfaceOrientation)), G1B_SendLL0(event, @selector(toInterfaceOrientation))) : nil;
+        }
+        if (FR_EV("isMainPulseEvent")) {
+            id act = G1B_Send0(event, NSSelectorFromString(@"activatingAppLayout"));
+            if (act == to) return G1B_FR_N2("SBPulseTransitionSwitcherModifier", @"initWithTransitionID:appLayout:", tid, to);
+            id item = act ? ((id (*)(id, SEL, long long))objc_msgSend)(act, @selector(itemForLayoutRole:), kFRRolePrimary) : nil;
+            long long role = item ? ((long long (*)(id, SEL, id))objc_msgSend)(to, @selector(layoutRoleForItem:), item) : 0;
+            SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:layoutRole:chamoisWindowingUIEnabled:");
+            id m = G1B_FR_Alloc("SBSplitDisplayItemPulseTransitionSwitcherModifier", s);
+            return m ? FR_S(id, id, long long, BOOL)(m, s, tid, to, role, chamois) : nil;
+        }
+        BOOL fromValid = G1B_FR_PeekValid(fromPeek), toValid = G1B_FR_PeekValid(toPeek);
+        if (!fromValid && toValid && from == to) return nil;
+        if (fromValid && !toValid && from == to) {
+            id m = G1B_FR_SlideOver(tid, G1B_Send0(event, @selector(toAppLayout)), 0);
+            G1B_FR_SetBool(m, @"setShouldBlurUnreadyScenes:", YES);
+            if (chamois) G1B_FR_SetForce(m, YES);
+            return m;
+        }
+        if (FR_EV("isSlideOverToFullScreenEvent")) return nil;
+        if ([from isEqual:to]) {
+            if (FR_EV("toFloatingSwitcherVisible")) return nil;
+            if (!FR_EV("fromFloatingSwitcherVisible")) return nil;
+            return G1B_FR_N1("SBAppUnderFloatingSwitcherTransitionSwitcherModifier", @"initWithTransitionID:", tid);
+        }
+        if (FR_EV("isGestureInitiated")) return nil;
+        if (FR_EV("isMorphFromPIPTransition")) {
+            id zoom = G1B_FR_IconZoom(tid, to, 0, chamois);
+            return G1B_FR_PIPRestore(tid, zoom, from, to, G1B_SendLL0(event, NSSelectorFromString(@"morphingPIPLayoutRole")), chamois);
+        }
+        if (FR_EV("isEnteringSplitViewPeekEvent") || FR_EV("isAnySplitViewToOrFromSlideOverEvent")) return nil;
+        if (FR_EV("isCenterWindowToFullScreenEvent")) return G1B_FR_N2("SBCenterWindowToFullScreenSwitcherModifier", @"initWithTransitionID:fullScreenWithCenterAppLayout:", tid, from);
+        if (FR_EV("isCenterWindowToSlideOverEvent")) return nil;
+        if (FR_EV("isCenterWindowToNewSplitViewEvent")) return G1B_FR_N3("SBCenterWindowToNewSplitViewSwitcherModifier", @"initWithTransitionID:fromFullScreenAppLayout:toSpaceAppLayout:", tid, from, to);
+        if (FR_EV("isCenterWindowToExistingSplitViewEvent")) return G1B_FR_N3("SBCenterWindowToExistingSplitViewSwitcherModifier", @"initWithTransitionID:fromAppLayout:toAppLayout:", tid, from, to);
+        if (FR_EV("isCenterWindowRemovalEvent")) {
+            id ctx = ((id (*)(id, SEL, id))objc_msgSend)(event, NSSelectorFromString(@"removalContextForAppLayout:"), from);
+            long long st = G1B_SendLL0(ctx, NSSelectorFromString(@"animationStyle"));
+            id ditem = G1B_Send0(ctx, NSSelectorFromString(@"displayItem"));
+            long long role = ditem ? ((long long (*)(id, SEL, id))objc_msgSend)(from, @selector(layoutRoleForItem:), ditem) : 0;
+            if (role == 0) return nil;                                   // _SBLayoutRoleUndefined
+            const char *cn = st == 2 ? "SBWindowCommitSwitcherModifier" : st == 3 ? "SBWindowDeclineSwitcherModifier" : "SBWindowDeleteSwitcherModifier";
+            SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:layoutRole:");
+            id m = G1B_FR_Alloc(cn, s);
+            return m ? FR_S(id, id, long long)(m, s, tid, from, role) : nil;
+        }
+        if (FR_EV("isSplitViewToCenterWindowEvent")) return G1B_FR_N3("SBSplitViewToCenterWindowSwitcherModifier", @"initWithTransitionID:fromAppLayout:toAppLayout:", tid, from, to);
+        if (FR_EV("isSlideOverToCenterWindowEvent")) return nil;
+        if (FR_EV("isFullScreenToCenterWindowEvent")) return G1B_FR_N2("SBCenterWindowToFullScreenSwitcherModifier", @"initWithTransitionID:fullScreenWithCenterAppLayout:", tid, G1B_Send0(event, @selector(toAppLayout)));
+        BOOL morphInApp = FR_EV("isMorphFromInAppView");
+        if (FR_EV("isPresentingPageCenterWindowEvent") && (FR_EV("isNewSceneTransition") || morphInApp)) {
+            SEL s = NSSelectorFromString(@"initWithTransitionID:toAppLayout:isMorph:");
+            id m = G1B_FR_Alloc("SBCenterWindowPagePresentationSwitcherModifier", s);
+            return m ? FR_S(id, id, BOOL)(m, s, tid, to, morphInApp) : nil;
+        }
+        if (FR_EV("isReplaceCenterWindowWithNewCenterWindowEvent")) {
+            if (FR_EV("isShelfTransition")) return nil;
+            SEL s = NSSelectorFromString(@"initWithTransitionID:toAppLayout:isMorph:");
+            id m = G1B_FR_Alloc("SBCenterWindowPagePresentationSwitcherModifier", s);
+            return m ? FR_S(id, id, BOOL)(m, s, tid, to, NO) : nil;
+        }
+        if (!to) return nil;
+        id (*item)(id, SEL, long long) = (id (*)(id, SEL, long long))objc_msgSend;
+        id primaryFrom = item(from, @selector(itemForLayoutRole:), kFRRolePrimary), primaryTo = item(to, @selector(itemForLayoutRole:), kFRRolePrimary);
+        id sideTo = item(to, @selector(itemForLayoutRole:), kFRRoleSide), sideFrom = item(from, @selector(itemForLayoutRole:), kFRRoleSide);
+        if (sideFrom && !sideTo && (FR_BSEQ(sideFrom, primaryTo) || FR_BSEQ(primaryFrom, primaryTo))) {
+            long long removeRole = FR_BSEQ(sideFrom, primaryTo) ? kFRRolePrimary : kFRRoleSide;
+            long long as = G1B_SendLL0(((id (*)(id, SEL, id))objc_msgSend)(event, NSSelectorFromString(@"removalContextForAppLayout:"), from), NSSelectorFromString(@"animationStyle"));
+            SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:layoutRoleToRemove:animationStyle:");
+            id m = G1B_FR_Alloc("SBSplitRemovalSwitcherModifier", s);
+            return m ? FR_S(id, id, id, long long, long long)(m, s, tid, from, to, removeRole, as) : nil;
+        }
+        SEL hs = NSSelectorFromString(@"hasSameItemsInLayoutRoles:asAppLayout:");
+        typedef BOOL (*HasSame)(id, SEL, unsigned long long, id);
+        if (!((HasSame)objc_msgSend)(from, hs, kFRMaskCenter, to) && ((HasSame)objc_msgSend)(from, hs, kFRMaskPrimarySide, to)
+            && !G1B_Send0(event, @selector(toAppExposeBundleID)) && G1B_Send0(event, @selector(fromAppExposeBundleID))) return nil;
+        if (FR_EV("prefersCrossfadeTransition")) return G1B_FR_Crossfade(tid, from, to, chamois);
+        BOOL pad = G1B_SendB0(me, NSSelectorFromString(@"isDevicePad"));
+        if (pad && FR_EV("isFullScreenToSplitViewEvent")) {
+            id inner = G1B_FR_N3("SBFullScreenToSplitViewSwitcherModifier", @"initWithTransitionID:fromAppLayout:toAppLayout:", tid, from, to);
+            return G1B_FR_N2("SBSplitDisplayItemSwitcherModifier", @"initWithDisplayItem:wrappingModifier:", sideTo, inner);
+        }
+        if (FR_EV("isSwappingFullScreenAppSidesEvent")) {
+            id focused = G1B_Send0(me, NSSelectorFromString(@"leafAppLayoutForKeyboardFocusedScene"));
+            id leaf = ((id (*)(id, SEL, long long))objc_msgSend)(from, NSSelectorFromString(@"leafAppLayoutForRole:"), kFRRolePrimary);
+            long long keep = (leaf == focused) ? kFRRolePrimary : kFRRoleSide;
+            SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:layoutRoleToKeepOnTop:");
+            id m = G1B_FR_Alloc("SBSwapFullScreenAppSidesSwitcherModifier", s);
+            return m ? FR_S(id, id, id, long long)(m, s, tid, from, to, keep) : nil;
+        }
+        if (FR_EV("isCenterWindowZoomingUpFromShelfEvent")) return nil;
+        long long dd = G1B_SendLL0(event, NSSelectorFromString(@"dosidoTransitionDirection"));
+        if (!(pad && dd == 0)) {
+            BOOL breadcrumbOrSide = FR_EV("isBreadcrumbTransition") || dd == 2;
+            SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:direction:");
+            id m = G1B_FR_Alloc("SBDosidoSwitcherModifier", s);
+            m = m ? FR_S(id, id, id, long long)(m, s, tid, from, to, breadcrumbOrSide) : nil;
+            G1B_FR_SetBool(m, @"setShouldSuppressScaleAnimation:", dd != 0);
+            return m;
+        }
+        BOOL a = FR_BSEQ(sideFrom, sideTo) && primaryTo && !FR_BSEQ(primaryFrom, primaryTo) && sideTo;
+        BOOL b = FR_BSEQ(primaryFrom, primaryTo) && sideTo && !FR_BSEQ(sideFrom, sideTo);
+        if (a || b) {
+            SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:layoutRole:");
+            id m = G1B_FR_Alloc("SBSplitDisplayItemCrossblurSwitcherModifier", s);
+            return m ? FR_S(id, id, id, long long)(m, s, tid, from, to, b ? kFRRoleSide : kFRRolePrimary) : nil;
+        }
+        SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:direction:");
+        id m = G1B_FR_Alloc("SBCrossblurDosidoSwitcherModifier", s);
+        return m ? FR_S(id, id, id, long long)(m, s, tid, from, to, (long long)FR_EV("isBreadcrumbTransition")) : nil;
+    }
+    if (te == 2) {
+        if (fe == 2) return G1B_FR_N1("SBGridSwipeUpToSwitcherSwitcherModifier", @"initWithTransitionID:", tid);
+        SEL s = NSSelectorFromString(@"initWithTransitionID:direction:multitaskingModifier:");
+        if (fe == 1) {
+            if (style != 1) return nil;
+            id m = G1B_FR_Alloc("SBHomeToDeckSwitcherModifier", s);
+            return m ? FR_S(id, long long, id)(m, s, tid, 1, G1B_FR_NewMulti(me)) : nil;
+        }
+        if (fe != 3) return nil;
+        if (G1B_FR_PeekValid(toPeek)) {
+            id m = G1B_FR_Alloc("SBHomeToGridSwitcherModifier", s);
+            return m ? FR_S(id, long long, id)(m, s, tid, 1, G1B_FR_NewMulti(me)) : nil;
+        }
+        if (style != 1) return nil;
+        SEL ds = NSSelectorFromString(@"initWithTransitionID:direction:fullScreenAppLayout:deckModifier:");
+        id m = G1B_FR_Alloc("SBDeckToFullScreenSwitcherModifier", ds);
+        return m ? FR_S(id, long long, id, id)(m, ds, tid, 1, from, G1B_FR_NewMulti(me)) : nil;
+    }
+    if (te != 1) return nil;
+    if (fe == 2) {
+        SEL s = NSSelectorFromString(@"initWithTransitionID:direction:multitaskingModifier:");
+        if (G1B_FR_PeekValid(toPeek)) {
+            id m = G1B_FR_Alloc("SBHomeToGridSwitcherModifier", s);
+            return m ? FR_S(id, long long, id)(m, s, tid, 0, G1B_FR_NewMulti(me)) : nil;
+        }
+        if (style != 1) return nil;
+        id m = G1B_FR_Alloc("SBHomeToDeckSwitcherModifier", s);
+        return m ? FR_S(id, long long, id)(m, s, tid, 0, G1B_FR_NewMulti(me)) : nil;
+    }
+    if (fe != 3) return nil;
+    // app -> home
+    if (FR_EV("isEnteringSlideOverPeekEvent") || FR_EV("isEnteringAnyPeekEvent")) return nil;
+    if (FR_EV("prefersCrossfadeTransition")) return G1B_FR_Crossfade(tid, from, to, chamois);
+    if (FR_EV("isExitingSplitViewPeekToHomeScreenEvent")) {
+        SEL s = NSSelectorFromString(@"initWithTransitionID:peekingAppLayout:peekConfiguration:spaceConfiguration:");
+        id m = G1B_FR_Alloc("SBPeekToOffscreenSwitcherModifier", s);
+        return m ? FR_S(id, id, long long, long long)(m, s, tid, from, fromPeek, G1B_SendLL0(event, NSSelectorFromString(@"fromSpaceConfiguration"))) : nil;
+    }
+    if (!from) return nil;
+    id removal = ((id (*)(id, SEL, id))objc_msgSend)(me, NSSelectorFromString(@"_entityRemovalModifierForMainTransitionEvent:"), event);
+    if (removal) return removal;
+    CGRect icon = FR_EV("isIconZoomDisabled") ? CGRectNull : ((CGRect (*)(id, SEL, id))objc_msgSend)(me, NSSelectorFromString(@"homeScreenIconFrameForAppLayout:"), from);
+    if (FR_EV("isMorphToPIPTransition")) {
+        id zoom = G1B_FR_IconZoom(tid, from, 1, chamois);
+        return G1B_FR_PIP(tid, zoom, from, G1B_SendLL0(event, NSSelectorFromString(@"morphingPIPLayoutRole")));
+    }
+    SEL zs = NSSelectorFromString(@"shouldZoomToSystemApertureForEvent:activeLayout:");
+    if ([me respondsToSelector:zs] && ((BOOL (*)(id, SEL, id, id))objc_msgSend)(me, zs, event, G1B_Send0(event, @selector(fromAppLayout))))
+        return G1B_FR_SystemAperture(me, event, tid, G1B_FR_IconZoom(tid, from, 1, chamois), from, from, 1);
+    if (CGRectIsNull(icon) || FR_EV("isMoveDisplaysTransition")) {
+        double off = G1B_Dbl0(G1B_Send0(me, @selector(switcherSettings)), NSSelectorFromString(@"switcherCenterYOffsetPercentOfScreenHeight"));
+        SEL s = NSSelectorFromString(@"initWithTransitionID:appLayout:offsetYPercentOfScreenHeight:");
+        id m = G1B_FR_Alloc("SBFullScreenToHomeCenterZoomDownSwitcherModifier", s);
+        m = m ? ((id (*)(id, SEL, id, id, double))objc_msgSend)(m, s, tid, from, off) : nil;
+        if (chamois) G1B_FR_SetForce(m, YES);
+        return m;
+    }
+    return G1B_FR_IconZoom(tid, from, 1, chamois);
+}
+%end
+%end
+
+%group G1B_HomeFloor
+%hook _SBHomeScreenFloorSwitcherModifier
+- (id)handleTransitionEvent:(id)event {
+    if (!G1B_ON()) return %orig;
+    id me = (id)self;
+    Class floorC = NSClassFromString(@"_SBHomeScreenFloorSwitcherModifier"), sup = class_getSuperclass(floorC);
+    id r = G1B_HasSuper(sup, _cmd) ? G1B_SUPER(id, sup, me, _cmd, (struct objc_super *, SEL, id), event) : nil;
+    if (!event || G1B_SendLL0(event, @selector(phase)) != 1 || G1B_SendB0(event, @selector(isHandled))) return r;
+    id tid = G1B_Send0(event, @selector(transitionID)), from = G1B_Send0(event, @selector(fromAppLayout)), to = G1B_Send0(event, @selector(toAppLayout));
+    BOOL chamois = G1B_WD_Chamois(me);
+    if (G1B_SendLL0(event, @selector(toEnvironmentMode)) != 3) return r;
+    CGRect icon = FR_EV("isIconZoomDisabled") ? CGRectNull : ((CGRect (*)(id, SEL, id))objc_msgSend)(me, NSSelectorFromString(@"homeScreenIconFrameForAppLayout:"), to);
+    id m = nil;
+    id ctx = FR_EV("isBannerUnfurlTransition") ? G1B_Send0(event, NSSelectorFromString(@"bannerUnfurlSourceContext")) : nil;
+    if (ctx) {
+        SEL s = NSSelectorFromString(@"initWithTransitionID:fromAppLayout:toAppLayout:bannerUnfurlSourceContext:");
+        m = G1B_FR_Alloc("SBBannerUnfurlToFullScreenSwitcherModifier", s);
+        m = m ? FR_S(id, id, id, id)(m, s, tid, nil, to, ctx) : nil;
+    } else if (FR_EV("isMorphFromPIPTransition")) {
+        id zoom = G1B_FR_IconZoom(tid, to, 0, chamois);
+        m = G1B_FR_PIPRestore(tid, zoom, nil, to, G1B_SendLL0(event, NSSelectorFromString(@"morphingPIPLayoutRole")), chamois);
+    } else if (FR_EV("isZoomFromSystemApertureTransition")) {
+        m = G1B_FR_SystemAperture(me, event, tid, G1B_FR_IconZoom(tid, to, 0, NO), to, from, 0);          // 16.2 0x1c750c3a8: no flag on this zoom
+    } else {
+        id toFloat = G1B_Send0(event, @selector(toFloatingAppLayout)), fromFloat = G1B_Send0(event, @selector(fromFloatingAppLayout));
+        if (FR_EV("isExitingSlideOverPeekToAppEvent") && !FR_BSEQ(toFloat, fromFloat)) {
+            SEL s = NSSelectorFromString(@"initWithTransitionID:slideOverAppLayout:fullScreenAppLayout:replacingMainAppLayout:");
+            m = G1B_FR_Alloc("SBSlideOverToFullScreenSwitcherModifier", s);
+            m = m ? FR_S(id, id, id, BOOL)(m, s, tid, fromFloat, to, NO) : nil;
+        } else if (FR_EV("isExitingSlideOverPeekToHomeScreenEvent")) {
+            return r;
+        } else if (G1B_SendB0(me, NSSelectorFromString(@"isDevicePad")) && FR_EV("isSpotlightTransition")) {
+            m = G1B_FR_N2("SBSpotlightCrossblurToFullscreenSwitcherModifier", @"initWithTransitionID:toAppLayout:", tid, to);
+        } else if (!CGRectIsNull(icon)) {
+            m = G1B_FR_IconZoom(tid, to, 0, NO);
+            if (chamois) {
+                G1B_FR_SetForce(m, YES);
+                id loc = ((id (*)(id, SEL, id))objc_msgSend)(me, NSSelectorFromString(@"homeScreenIconLocationForAppLayout:"), to);
+                typedef BOOL (*ContainsFn)(id, id); static ContainsFn contains; static void **groupSym; static dispatch_once_t once;
+                dispatch_once(&once, ^{ contains = (ContainsFn)dlsym(RTLD_DEFAULT, "SBIconLocationGroupContainsLocation"); groupSym = (void **)dlsym(RTLD_DEFAULT, "SBIconLocationGroupFloatingDock"); });
+                BOOL inDock = NO;
+                if (contains && groupSym && *groupSym) inDock = contains((__bridge id)*groupSym, loc);
+                else BP_Log(@"g1b: floor icon zoom: SBIconLocationGroupContainsLocation / SBIconLocationGroupFloatingDock unresolved");
+                G1B_FR_SetBool(m, @"setShouldUpdateIconViewVisibility:", !inDock);
+                if (FR_EV("isMoveDisplaysTransition")) G1B_FR_SetBool(m, @"setShouldDisableAsyncRendering:", YES);
+            }
+            if (G1B_SendLL0(event, @selector(fromEnvironmentMode)) == 1 && FR_EV("isEnteringAnyPeekEvent")) G1B_FR_SetBool(m, @"setShouldUpdateIconViewVisibility:", NO);
+        } else if (FR_EV("prefersCrossfadeTransition")) {
+            m = G1B_FR_Crossfade(tid, from, to, chamois);
+        } else {
+            if (!to) return r;
+            m = G1B_FR_SlideOver(tid, to, 0);
+            if (G1B_SendLL0(event, NSSelectorFromString(@"dosidoTransitionDirection")) == 2) G1B_FR_SetBool(m, @"setStartingScreenEdge:", YES);
+            if (chamois) G1B_FR_SetForce(m, YES);
+        }
+    }
+    return m ? G1B_FR_AddModifier(m, r) : r;
+}
+%end
+%end
+
+// SBCrossfadeDosidoSwitcherModifier (16.2 0x1c7835230..): `_fullScreenTransition` (new BOOL, set to !chamois by the creators) decides whether the from / to layouts are laid
+// out full screen (the 16.0 behaviour) or by the real (Stage Manager) layout; new `_isToOrFromAppLayoutAtIndex:` (0x1c7835c7c).
+static char kXfFS;
+static BOOL G1B_Xf_GetFS(id self, SEL _cmd) { return [(NSNumber *)G1B_GET(self, kXfFS) boolValue]; }
+static void G1B_Xf_SetFS(id self, SEL _cmd, BOOL v) { G1B_SET(self, kXfFS, @(v)); }
+static BOOL G1B_Xf_ToOrFrom(id self, SEL _cmd, unsigned long long i) {
+    return ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(self, NSSelectorFromString(@"_isFromAppLayoutAtIndex:"), i)
+        || ((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(self, NSSelectorFromString(@"_isToAppLayoutAtIndex:"), i);
+}
+%group G1B_Crossfade
+%hook SBCrossfadeDosidoSwitcherModifier
+- (CGRect)frameForIndex:(unsigned long long)i {
+    if (!G1B_ON()) return %orig;
+    if (G1B_Xf_GetFS((id)self, 0) && G1B_Xf_ToOrFrom((id)self, 0, i)) return %orig;       // 16.0 body: from / to -> containerViewBounds
+    return G1B_SUPER(CGRect, class_getSuperclass(NSClassFromString(@"SBCrossfadeDosidoSwitcherModifier")), (id)self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+- (double)scaleForIndex:(unsigned long long)i {
+    if (!G1B_ON()) return %orig;
+    if (G1B_Xf_GetFS((id)self, 0) && G1B_Xf_ToOrFrom((id)self, 0, i)) return 1.0;
+    return G1B_SUPER(double, class_getSuperclass(NSClassFromString(@"SBCrossfadeDosidoSwitcherModifier")), (id)self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+%end
+%end
+
+// SBSplitDisplayItemPulseTransitionSwitcherModifier (16.2 0x1c77d836c..): new ivar `_isChamoisWindowingUIEnabled` (+0x68), the 4-argument init, the getter
+// (overrides the query for the modifier's own subtree) and appLayoutsToResignActive (@{} under Stage Manager). A pulse built by a 16.0 creator has no flag set: it then
+// answers with the chain's value (what every 16.2 creator passes).
+static char kSplitPulseChamois;
+static BOOL G1B_SP_GetChamois(id self, SEL _cmd) {
+    NSNumber *n = G1B_GET(self, kSplitPulseChamois);
+    if (n) return n.boolValue;
+    Class sup = class_getSuperclass(NSClassFromString(@"SBSplitDisplayItemPulseTransitionSwitcherModifier"));
+    return G1B_HasSuper(sup, _cmd) ? G1B_SUPER(BOOL, sup, self, _cmd, (struct objc_super *, SEL)) : NO;
+}
+static id G1B_SP_Init4(id self, SEL _cmd, id tid, id layout, long long role, BOOL chamois) {
+    SEL i3 = NSSelectorFromString(@"initWithTransitionID:appLayout:layoutRole:");
+    id me = ((id (*)(id, SEL, id, id, long long))objc_msgSend)(self, i3, tid, layout, role);
+    if (me) G1B_SET(me, kSplitPulseChamois, @(chamois));
+    return me;
+}
+static id G1B_SP_ResignActive(id self, SEL _cmd) {
+    if (G1B_SP_GetChamois(self, 0)) return @{};
+    Class sup = class_getSuperclass(NSClassFromString(@"SBSplitDisplayItemPulseTransitionSwitcherModifier"));
+    return G1B_HasSuper(sup, _cmd) ? G1B_SUPER(id, sup, self, _cmd, (struct objc_super *, SEL)) : nil;
+}
+static void G1B_BuildCreatorTargets(void) {
+    const G1BMethod xf[] = {
+        { "isFullScreenTransition", (IMP)G1B_Xf_GetFS, "B16@0:8" }, { "setFullScreenTransition:", (IMP)G1B_Xf_SetFS, "v20@0:8B16" },
+        { "_isToOrFromAppLayoutAtIndex:", (IMP)G1B_Xf_ToOrFrom, "B24@0:8Q16" },
+    };
+    const G1BMethod sp[] = {
+        { "initWithTransitionID:appLayout:layoutRole:chamoisWindowingUIEnabled:", (IMP)G1B_SP_Init4, "@44@0:8@16@24q32B40" },
+        { "isChamoisWindowingUIEnabled", (IMP)G1B_SP_GetChamois, "B16@0:8" },
+        { "appLayoutsToResignActive", (IMP)G1B_SP_ResignActive, "@16@0:8" },
+    };
+    G1B_AddMethods(NSClassFromString(@"SBCrossfadeDosidoSwitcherModifier"), xf, sizeof xf / sizeof xf[0]);
+    G1B_AddMethods(NSClassFromString(@"SBSplitDisplayItemPulseTransitionSwitcherModifier"), sp, sizeof sp / sizeof sp[0]);
+}
+#undef FR_EV
+#undef FR_BSEQ
+
+// ============================================================================================================
 // 16.2 methods that the G1B response consumers (1.7 / 1.10) call and that 16.0 does not have (the consumers used to skip silently when the selector was missing).
 // ============================================================================================================
 // -[SBMainSwitcherControllerCoordinator switcherContentController:setInterfaceOrientationFromUserResizing:forDisplayItem:] (16.2 0x1c76d71d0): store the orientation the
@@ -2082,6 +2515,7 @@ void G1B_Setup(void) {
     G1B_BuildSwitcherToAppExpose();
     G1B_BuildWindowDelete();
     G1B_InstallChamoisFilter();
+    G1B_BuildCreatorTargets();
     G1B_BuildAnchorPin();
     G1B_InstallConsumerTargets();
     G1B_InstallTransitionEventFlags();
@@ -2094,6 +2528,9 @@ void G1B_Setup(void) {
     %init(G1B_ItemContainer);                // 16.2 unblur after prepareForReuse
     %init(G1B_IconZoom);                     // 16.2 async rendering / dock behaviour of the icon zoom
     %init(G1B_SlideOverZoom);                // 16.2 slide-over zoom scale / visible layouts
+    %init(G1B_Crossfade);                    // 16.2 full-screen-transition flag of the crossfade
+    %init(G1B_FluidRoot);                    // 16.2 creator 0x1c762c998
+    %init(G1B_HomeFloor);                    // 16.2 creator 0x1c750c194
     %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
