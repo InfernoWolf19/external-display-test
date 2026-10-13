@@ -2307,6 +2307,7 @@ static NSString *G1D_TraceResp(id r) {
 // modifier is removed at phase 3, the 0.2 s timer then fires at a chain that no longer contains the modifier that answers it, and the switcher stays open
 // until a click.  Whoever is still in the chain answers it now, exactly as the transition modifier would have (same reason test, same response).
 static NSHashTable *gG1DLiveEmptyTransitions;
+static id G1D_EmptyLock(void) { static id l; static dispatch_once_t o; dispatch_once(&o, ^{ l = [NSObject new]; }); return l; }
 static __unsafe_unretained id gG1DLastEmptyDismissEvent;
 static BOOL G1D_IsEmptyTransition(id m) {
     static Class a, b, c;
@@ -2319,7 +2320,7 @@ static BOOL G1D_IsEmptyTransition(id m) {
 - (id)transitionWillBegin {
     id r = %orig;
     if (G1D_IsEmptyTransition(self)) {
-        @synchronized ([SBTransitionSwitcherModifier class]) {
+        @synchronized (G1D_EmptyLock()) {
             if (!gG1DLiveEmptyTransitions) gG1DLiveEmptyTransitions = [NSHashTable weakObjectsHashTable];
             [gG1DLiveEmptyTransitions addObject:self];
         }
@@ -2328,7 +2329,7 @@ static BOOL G1D_IsEmptyTransition(id m) {
 }
 - (id)transitionDidEnd {
     id r = %orig;
-    @synchronized ([SBTransitionSwitcherModifier class]) { [gG1DLiveEmptyTransitions removeObject:self]; }
+    @synchronized (G1D_EmptyLock()) { [gG1DLiveEmptyTransitions removeObject:self]; }
     return r;
 }
 %end
@@ -2338,7 +2339,7 @@ static BOOL G1D_IsEmptyTransition(id m) {
     if (!event || event == gG1DLastEmptyDismissEvent || ![event respondsToSelector:@selector(reason)]) return r;
     NSString *reason = [event reason];
     if (![reason isKindOfClass:[NSString class]] || ![reason hasPrefix:@"DismissForEmptySwitcher-"]) return r;
-    @synchronized ([SBTransitionSwitcherModifier class]) { if (gG1DLiveEmptyTransitions.count) return r; }       // a transition modifier is alive: it answers
+    @synchronized (G1D_EmptyLock()) { if (gG1DLiveEmptyTransitions.count) return r; }       // a transition modifier is alive: it answers
     NSUInteger n = 1;
     @try { n = [(NSArray *)[(id)self valueForKey:@"appLayouts"] count]; } @catch (NSException *e) { n = 1; }
     if (n) return r;
@@ -2346,7 +2347,7 @@ static BOOL G1D_IsEmptyTransition(id m) {
     id d = dc ? [[dc alloc] init] : nil;
     if (!d) return r;
     gG1DLastEmptyDismissEvent = event;
-    if (BP_LogEnabled()) BP_Log(@"g1d: empty switcher dismiss timer arrived after its transition modifier was gone (%@ on %@) -> dismissing", reason, [self class]);
+    if (BP_LogEnabled()) BP_Log(@"g1d: empty switcher dismiss timer arrived after its transition modifier was gone (%@ on %@) -> dismissing", reason, NSStringFromClass(object_getClass(self)));
     return G1B_AppendTo(d, r);
 }
 %end
