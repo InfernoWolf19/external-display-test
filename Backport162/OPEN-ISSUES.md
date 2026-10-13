@@ -1,6 +1,6 @@
 # Backport162 - open issues (single source of truth; updated every time something changes)
 
-Last CI-green build: `de3d8dd` (0.7.3). Last build the user ran: `c83357c` (retain-crash fix; add-window still failed there).
+Last CI-green build: `5f87250` (0.7.3). Last build the user ran: `c83357c` (retain-crash fix; add-window still failed there).
 
 ## Crashes / hangs
 1. **Retain crash (use-after-free)** when tapping the left strip area and when moving the pointer onto the extended display. Same bug, two entry paths. Earlier `_newMultitaskingModifier` +1 fix did NOT cure it. STATUS: agent investigating from the user's backtraces (specs/AUDIT-RETAIN-CRASH-0.7.3.md when done).
@@ -37,3 +37,9 @@ Last CI-green build: `de3d8dd` (0.7.3). Last build the user ran: `c83357c` (reta
 - Add Another Window: the app picked while the stage peeks now JOINS the stage (16.2 end-of-peek branch, `g3c_endpeek`, specs/ADDWINDOW-PICK-0.7.4.md). Log lines `[g3c] endpeek: ...`. Not ported from that branch: request == previous stage / nothing real / Home while peeking (stock code runs), shift-click insertion policy, SBMainWorkspaceLayoutStateContingencyPlan, chamois-aware recents lookup.
 - External display: empty switcher auto-dismiss now answered after the transition modifier is gone (`g1d_emptydismiss`); closing the last card on the external display does not dismiss (log shows no removal events; `g1c: app switcher removal event` lines added to find out why).
 - External display has no switcher blur: the blur call goes to a shared singleton for the main display's home screen; identical in 16.0 and 16.2.
+
+## Added after 0.7.3 first build (device-unverified)
+- External display could not move/resize windows or drag from the strip: the manager of that display never answered `-shouldSystemGestureReceiveTouchWithLocation:` (new in 16.2 on SBSystemGestureManager). Ported (`g1d_sgmreceive`), also ANDs the PiP-content check into the Main flavour.
+- Add-window crash 3->4 windows: the 16.0 routing modifier maps a child's last filtered layout back with indexOfObject:; the merged stage layout mixed peeked and other items so neither half was in the list. Layouts mixing peeked items now route whole to the content modifier (G1B filtering). `g1d_routingfresh` was tried and removed (did not help: log b12000a1).
+- Empty switcher on the external display auto-dismisses (`g1d_emptydismiss`, confirmed in log 5081160a). Two-finger trackpad swipe-up to close a card on the external display: card kill scroll view trace added (`exttrace: card ...`), result pending.
+- Pointer stuck as resize arrows on the external display: not investigated (likely the same refused gestures).
