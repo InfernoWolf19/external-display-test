@@ -1615,6 +1615,8 @@ static BOOL G1D_WD_ReceiveTouch(id gm, id gr, id touch) {
     long long peek = G1B_SendLL0(state, NSSelectorFromString(@"peekConfiguration"));
     if (!(receives && allowed && !banner && env == 3 && !G1D_PeekValid(peek))) {
         G1D_SetInitialLeaf(gr, nil);
+        if (BP_LogEnabled() && view && ((CGRect (*)(id, SEL))objc_msgSend)(view, @selector(bounds)).size.width > 1400)      // the external display: report why the window drag refuses the touch
+            BP_Log(@"g1d: window drag receiveTouch REFUSED at %@ (window loc %@): receives %d allowed(0x16) %d banner %d env %lld peek %lld scene %@ sgm %@", NSStringFromCGPoint(pt), NSStringFromCGPoint(wloc), receives, allowed, banner, env, peek, ws, [sgm class]);
         return NO;
     }
     NSMutableArray *occluders = [NSMutableArray array];       // CGRegion of the frames of the windows in front
@@ -1764,6 +1766,7 @@ static void G1D_WD_Begin(id txn, id gesture, Class sup) {
 %hook SBFluidSwitcherGestureManager
 - (BOOL)_shouldSplitViewApplicationUnpinGesture:(id)gesture receiveTouch:(id)touch {
     if (!G1D_ON("g1d_windowdrag")) return %orig;
+    if (BP_LogEnabled()) { CGPoint wl = G1D_LocationInView(touch, nil); if (wl.x > 1250) BP_Log(@"g1d: window drag gesture asked about a touch at %@ (gesture manager %p, scene %@)", NSStringFromCGPoint(wl), self, G1D_GM_Scene(self)); }
     return G1D_WD_ReceiveTouch(self, gesture, touch);
 }
 - (BOOL)_shouldBeginSplitViewApplicationUnpinGesture:(id)gesture {
