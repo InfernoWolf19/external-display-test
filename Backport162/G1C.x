@@ -5139,12 +5139,25 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     id to = G1B_Send0(event, @selector(toAppLayout)), from = G1B_Send0(event, @selector(fromAppLayout));
     BOOL animated = G1B_SendB0(event, @selector(isAnimated));
     long long phase = G1B_SendLL0(event, @selector(phase));
-    if (to && from) { if (phase == 2 || !animated) G1B_SET(self, kRootEffStage, to); }
-    else if (!to && from) { if (phase == 3 || !animated) G1B_SET(self, kRootEffStage, nil); }
-    else if (to && !from) { if (phase == 1 || !animated) G1B_SET(self, kRootEffStage, to); }
-    else if (phase == 1 || !animated) G1B_SET(self, kRootEffStage, nil);
+    BOOL fire = NO;
+    if (to && from) { if (phase == 2 || !animated) { G1B_SET(self, kRootEffStage, to); fire = YES; } }
+    else if (!to && from) { if (phase == 3 || !animated) { G1B_SET(self, kRootEffStage, nil); fire = YES; } }
+    else if (to && !from) { if (phase == 1 || !animated) { G1B_SET(self, kRootEffStage, to); fire = YES; } }
+    else if (phase == 1 || !animated) { G1B_SET(self, kRootEffStage, nil); fire = YES; }
     if (BP_LogEnabled()) BP_Log(@"GLITCH stage bookkeeping: phase=%lld animated=%d from=%@ to=%@ -> effective stage layout=%@", phase, animated, G1C_DbgLayout(from), G1C_DbgLayout(to), G1C_DbgLayout(G1B_GET(self, kRootEffStage)));
-    return r;      // 16.2 also returns an Invalidate response here; the 16.0 controller already updates the identifiers inline (blocks 0x1c5fc50c4 / 0x1c5fc5d9c)
+    // 16.2 0x1c78192e8..0x1c78193f0: right AFTER the stage bookkeeping the handler appends SBInvalidateContinuousExposeIdentifiersEventResponse(from, to, animated) to [super handleEvent:]'s
+    // result (_SBAppendSwitcherModifierResponse 0x1c773a35c), so the strip / switcher identifier lists are recomputed with the NEW stage layout in the same phase (the strip then
+    // slides, animated for an animated transition).  The 16.0 controller updates the identifiers inline BEFORE this handler runs (blocks 0x1c5fc50c4 / 0x1c5fc5d9c), i.e. while the
+    // stage still holds the old layout: the strip kept the old window until the final non-animated update at the end of the transition and popped (the 0.1 s flicker after an
+    // app-to-app switch, log 19479b05 20:35:59-20:36:00: "ids update from=Reynard to=Filza animated=1 strip [.. Filza ..] -> [.. Filza ..]", then at phase 3 end "[.. Filza ..] -> [.. Reynard ..]").
+    if (fire && gInvalidateRespCls && BP_OnName("g1c_invalidate")) {
+        SEL ii = @selector(initWithTransitioningFromAppLayout:transitioningToAppLayout:animated:);
+        if ([gInvalidateRespCls instancesRespondToSelector:ii]) {
+            id inv = ((id (*)(id, SEL, id, id, BOOL))objc_msgSend)([gInvalidateRespCls alloc], ii, from, to, animated);
+            if (inv) r = G1B_AppendTo(inv, r);
+        }
+    }
+    return r;
 }
 
 // ---- handleTransitionEvent: peek child (0x1c7819470) ----

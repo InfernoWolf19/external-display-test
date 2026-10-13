@@ -1540,7 +1540,7 @@ static void G1B_BuildWindowDelete(void) {
 // had already been removed: an upstream (transition selection / container lifetime) difference, ported pieces: G1B_ItemContainer, G1B_WindowDelete. This guard is the last line only.
 // Stock assertion removed: "Trying to add an icon overlay but the item container for this app layout doesn't exist" (device crash: pressing Close on a
 // window on the extended display; an icon-overlay-visible response reached the view controller for an app layout whose item container was already gone).
-// 16.0 -_performModifierIconOverlayVisibilityUpdateResponse: (0x1c5fe3358) only asserts for visible == YES with no container; nothing is left to do then.
+// 16.0 -_performModifierIconOverlayVisibilityUpdateResponse: (0x1c5fe3358) only asserts for visible == YES with no overlay accessory view (see the guard below); nothing is left to do then.
 // ============================================================================================================
 %group G1B_IconOverlay
 %hook SBFluidSwitcherViewController
@@ -1548,9 +1548,14 @@ static void G1B_BuildWindowDelete(void) {
     id me = (id)self;
     if (G1B_ON() && response && G1B_SendB0(response, @selector(isVisible))) {
         id layout = G1B_Send0(response, @selector(appLayout));
-        SEL ex = NSSelectorFromString(@"_itemContainerForAppLayoutIfExists:");
-        if (layout && [me respondsToSelector:ex] && !G1B_Send1(me, ex, layout)) {
-            if (BP_LogEnabled()) BP_Log(@"GUARD icon overlay response for an app layout without item container ignored: %@", layout);
+        // What the stock assertion tests (16.2 0x1c745cb84 / 16.0 0x1c5fe33d0): `_visibleOverlayAccessoryViews[response.appLayout]` is nil.  That dictionary is keyed by the ADJUSTED
+        // app layout (_visibleAdjustedAppLayouts = _leafAppLayoutsToAdjustedAppLayouts[leaf] of every leaf that has a container, 16.2 0x1c7448158), while the item containers are
+        // keyed by LEAF app layouts: a stage with several windows (A&B) has containers for A and B but none for A&B, so testing _itemContainerForAppLayoutIfExists:(A&B) (what this
+        // guard did up to 0.7.3) rejected every legitimate icon overlay of a multi-window stage (going home with 2+ windows).  The guard now tests the same dictionary as the assertion.
+        Ivar ov = class_getInstanceVariable(object_getClass(me), "_visibleOverlayAccessoryViews");
+        id ovd = ov ? BP_ObjIvar(me, ov) : nil;
+        if (layout && ov && [ovd isKindOfClass:[NSDictionary class]] && ![(NSDictionary *)ovd objectForKey:layout]) {
+            if (BP_LogEnabled()) BP_Log(@"GUARD icon overlay response for an app layout without overlay accessory view ignored: %@", layout);
             return;
         }
     }

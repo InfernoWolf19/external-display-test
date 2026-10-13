@@ -44,3 +44,24 @@ Fix: G3C.x `G3C_ZoomRequest` toggles: current policy == Largest(mask) -> policy 
 * Stale read (confirmed from code): `_setRequestedFrontmostEntity:` (16.0 0x1c61ccc80 / 16.2 0x1c765b980) copies the attributes from the PREVIOUS LAYOUT STATE's `elementIdentifiersToLayoutAttributes[uid]`, i.e. the attributes that were REQUESTED, stored verbatim (0x1c5e2551c loop: `requested[uid]` first). The calculator write-back (0x1c75a5338, `_SBPreferredDisplayItemSizingPolicy`) then re-derives the policy for the DISPLAYED app layout (log: requested 2, displayed snap-to-grid). The direction decision therefore read 2 although the window was windowed (press 2 became a second request of the old size). Fix: the direction now comes from the committed layout (`switcherController.layoutState` -> `appLayout`/`floatingAppLayout` -> `layoutAttributesForItem:`), the requested attributes are only the base of the new request.
 * First press without effect: the request was built correctly (policy 2, Unspecified) and the log shows the displayed layout after it with policy snap-to-grid, old size, centre x re-centred to 0.5 (the single-window hCenter of the overlapping controller), so the frame/auto-layout stage of that transition produced the old size instead of the container. The one structural difference to the working presses (3, 5) is that press 1 reduces a two-window set (Reynard + Filza, `setEntities:@[Reynard]`) to one window while the strip was visible. I could not pin the exact branch statically (the frame code takes the size from `cachedLastOverlappingModel` when not skipping the auto layout, G2B.m BP2B_FrameForLayoutRole; the model is rebuilt from skip-auto-layout frames in BP2B_AutoLayout step 4). Deterministic workaround, not a root-cause fix: `G3C_SendZoom` re-reads the committed policy 1.6 s after the request and, if it did not change and no newer press happened, repeats the request once (direction recomputed from the committed state). Log line `[g3c] zoom request had no effect ... repeating once` identifies the case; the `[g3c] zoom:` line now prints `committed` and `requested-base`.
 * Same-app AppToApp replacement (G1C): not the cause by the evidence: the replacement only changes modifiers, the coordinator model/layout state printed at transition end does not read modifiers, and presses 3 and 5 went through the identical replacement and worked.
+
+## Add Another Window with 2+ windows (0.7.4, G3C.x group G3C_Peek)
+
+Root cause: `-[SBMainDisplayLayoutStateManager _layoutStateForApplicationTransitionContext:]` (16.0 0x1c5e23430, 16.2 0x1c72952ec) changed. 16.0 (0x1c5e240e8..0x1c5e24138) discards a valid
+requested peek when `[[previousState elements] count] > 1` under chamois (peek none, mode and space kept: "addwin: transition end ... modes 3->3 peek 1->1", identical layout), so the
+type-12 request is a no-op for a stage with 2+ windows; with one window the peek survives and the mode becomes 1 (unspecified mode + valid peek, 0x1c5e24c94). 16.2 has no element-count test:
+chamois + valid requested peek + previous state without a peek (0x1c7296014 -> 0x1c72961cc) sets the mode to `1 + ([[self _recentAppLayouts] recentsIncludingHiddenAppLayouts:NO].count >= 2)`
+(0x1c72961f4..0x1c7296218) and keeps the requested peek. Port: hook of the 16.0 method that corrects its result for exactly that case (peek and mode only; entities/space/attributes are the stock
+result's = the previous state). Switches: `g3c_addwin` (whole), `g3c_peekmode` (only the 1/2 mode rule; off = mode as the stock result).
+
+## GUARD icon overlay "without item container" for a multi-window stage (G1B.x G1B_IconOverlay)
+
+The stock assertion tests `_visibleOverlayAccessoryViews[response.appLayout]` (16.2 0x1c745cb84 / 16.0 0x1c5fe33d0). That dictionary is keyed by the ADJUSTED app layout
+(`_visibleAdjustedAppLayouts` = `_leafAppLayoutsToAdjustedAppLayouts[leaf]` of every leaf with a container, 16.2 0x1c7448158); item containers are keyed by LEAF app layouts. The old guard tested
+`_itemContainerForAppLayoutIfExists:(A&B)` and so rejected every legitimate icon overlay of a stage with several windows (home with 2+ windows). It now tests the same dictionary as the assertion.
+
+## Flicker after app-to-app (G1C.x root handleEvent:)
+
+16.2 0x1c78192e8..0x1c78193f0 appends `SBInvalidateContinuousExposeIdentifiersEventResponse(from, to, animated)` after the stage bookkeeping of every transition event (phase 2 for from+to, 3 for from only,
+1 for to only, 1 for neither, or any phase when not animated). 16.0 updates the identifiers inline before the root handler runs, with the old stage: the strip kept the old window until the final
+non-animated update (phase 3 end) and popped. Port: the response is now appended (switch `g1c_invalidate`).
