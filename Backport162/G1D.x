@@ -2372,34 +2372,6 @@ static BOOL G1D_IsEmptyTransition(id m) {
 %end
 %end // G1D_EmptyDismiss
 
-// ---- routing cache refresh (crash 7355cddc: "SBRoutingSwitcherModifier ... couldn't find a modifier among (PeekContent, FilteringPassthroughTarget) for index 0") ----
-// The 16.0 routing modifier caches, per -appLayoutsGenCount, which child owns which app layouts (-_lastIndexForModifier:, 0x1c60b18f4: for every layout of [super appLayouts]
-// ask the delegate -routingModifier:modifierForAppLayout:, remember the last index per modifier; a modifier without layouts answers NSIntegerMax).  The crash log prints
-// BOTH children with 0x7fffffffffffffff, i.e. the cache was filled while the chain had no app layouts and was not refreshed when the add-window pick (3 -> 4 windows) changed
-// the layouts under the peek filter without a generation bump, so the status-bar query for index 0 found no owner.  When every child answers "none" although the chain has
-// layouts, the cache is stale by construction (each layout is assigned to exactly one child): bump the generation (what a layouts change does) and ask again.  Logged.
-%group G1D_RoutingFresh
-%hook SBRoutingSwitcherModifier
-- (unsigned long long)_lastIndexForModifier:(id)m {
-    unsigned long long r = %orig;
-    if (r != (unsigned long long)NSIntegerMax) return r;
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_modifiers");
-    id mods = iv ? object_getIvar(self, iv) : nil;
-    if (![mods isKindOfClass:[NSArray class]] || ![(NSArray *)mods count]) return r;
-    for (id o in (NSArray *)mods) {
-        if (o == m) continue;
-        unsigned long long other = %orig(o);
-        if (other != (unsigned long long)NSIntegerMax) return r;                    // another child owns layouts: this child legitimately has none
-    }
-    NSArray *live = G1B_SUPER(id, NSClassFromString(@"SBSwitcherModifier"), self, @selector(appLayouts), (struct objc_super *, SEL));
-    if (![live isKindOfClass:[NSArray class]] || !live.count) return r;             // the chain really has no layouts
-    if (BP_LogEnabled()) BP_Log(@"g1d: routing cache stale (every child empty, chain has %lu app layouts: %@) -> new generation", (unsigned long)live.count, live);
-    id me = (id)self;
-    if ([me respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(me, @selector(newAppLayoutsGenCount));
-    return %orig(m);
-}
-%end
-%end // G1D_RoutingFresh
 
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
@@ -2423,6 +2395,5 @@ void G1D_Setup(void) {
     %init(G1D_DockHidden);
     %init(G1D_ExtTrace);
     if (BP_OnName("g1d_emptydismiss")) { %init(G1D_EmptyDismiss); }
-    if (BP_OnName("g1d_routingfresh")) { %init(G1D_RoutingFresh); }
 }
 #pragma clang diagnostic pop

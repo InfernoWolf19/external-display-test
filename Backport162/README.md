@@ -90,7 +90,6 @@ Needs ExtendedDisplayEnabler for the external display features.
 |---|---|---|
 | g3c | Zoom (top-affordance menu item and the keyboard shortcut) builds the 16.2 request: largest sizing policy, attributed size Unspecified; 16.2 has no un-zoom through this item | `g3c` |
 | g3c_addwin | "Add Another Window" sends only the 16.2 peek request (16.0 also forced the unlocked environment mode) | `g3c_addwin` |
-| g1d_routingfresh | Routing modifier refreshes its stale layout-owner cache when every child reports no layouts although the chain has some (add-window crash, 3 -> 4 windows) | `g1d_routingfresh` |
 | g3c_endpeek | The app picked after "Add Another Window" joins the peeking stage (16.2 end-of-peek branch) instead of replacing it | `g3c_endpeek` |
 | g1d_emptydismiss | Empty app switcher dismisses itself even when its transition modifier ended before the 0.2 s timer (external display) | `g1d_emptydismiss` |
 | addwinnet | safety net: the stock assertion "The appLayouts array MUST contain the app layout we're transitioning to." at the end of a transition (seen after three-dots > Add Another Window) is repaired (model add, else the array is patched) instead of crashing SpringBoard; see specs/AUDIT-ADDWINDOW-0.6.4.md | `addwinnet` |

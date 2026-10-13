@@ -203,6 +203,21 @@ static NSArray *G1B_Filtering_FilteredLayouts(id self, SEL _cmd, id routing, NSA
     for (id l in layouts) {
         if (![l respondsToSelector:@selector(appLayoutWithItemsPassingTest:)]) continue;
         id f = ((id (*)(id, SEL, BOOL (^)(id)))objc_msgSend)(l, @selector(appLayoutWithItemsPassingTest:), ^BOOL(id item) { return [items containsObject:item] == keep; });
+        // The 16.0 routing modifier maps a child's LAST filtered layout back to its index with -indexOfObject: on the real layout list (-_lastIndexForModifier: 0x1c60b18f4:
+        // indexOfObject:[[child appLayouts] lastObject]); a filtered layout that is not an element of that list answers NSNotFound (== NSIntegerMax, the "owns nothing" value) and
+        // the index query then throws "couldn't find a modifier among (...) for index N" (crash 0ee042c2: the add-window pick merged the picked app INTO the peeked stage, so the one
+        // layout of the list holds peeked items AND others and neither half equals it).  16.2 never routes such a mixed layout (the peek is gone when the stage changes);
+        // a layout that mixes peeked and other items belongs to the content modifier as a whole, exactly as -routingModifier:modifierForAppLayout: (any item in the set) assigns it.
+        BOOL anyIn = [l respondsToSelector:@selector(containsAnyItemFromSet:)] && G1B_SendB1(l, @selector(containsAnyItemFromSet:), items);
+        if (anyIn && f != l) {
+            id other = ((id (*)(id, SEL, BOOL (^)(id)))objc_msgSend)(l, @selector(appLayoutWithItemsPassingTest:), ^BOOL(id item) { return [items containsObject:item] != keep; });
+            id inPart = keep ? f : other, outPart = keep ? other : f;
+            if (inPart && outPart) {
+                if (BP_LogEnabled()) BP_Log(@"g1b: filtering: layout mixes peeked and other items, routed whole to the content modifier (%s): %@", keep ? "content" : "passthrough skipped", l);
+                if (keep) [out addObject:l];
+                continue;
+            }
+        }
         if (f) [out addObject:f];
     }
     return out;
