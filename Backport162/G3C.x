@@ -280,7 +280,6 @@ static void G3C_SendZoom(id workspace, id cfg, long long source, id handle, id w
 // 16.0 would also have left mode 1 for the one-window case (mode 0 + valid peek -> 1, 0x1c5e24c94), so the 16.2 mode rule is applied for both.
 // The 16.0 method is a ~3300 instruction body that cannot be re-entered with a different decision, so it runs unchanged and its RESULT is corrected for exactly
 // that case (same entities / space / attributes as the stock result, which for a peek request equals the previous state, only peek and mode set the 16.2 way).
-static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }           // _SBPeekConfigurationIsValid (16.2 0x1c77229fc)
 @interface NSObject (BPG3CPeek)
 - (id)_switcherControllerForDisplayIdentity:(id)identity;
 - (id)displayIdentity;
@@ -288,26 +287,117 @@ static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }          
 - (id)_recentAppLayouts;
 - (id)recentsIncludingHiddenAppLayouts:(BOOL)hidden;
 - (long long)requestedPeekConfiguration;
+- (void)setRequestedPeekConfiguration:(long long)cfg;
 - (long long)peekConfiguration;
 - (long long)unlockedEnvironmentMode;
 - (id)previousLayoutState;
 - (id)_initWithLayoutState:(id)state;
 - (id)request;
+- (id)activatingEntity;
+- (void)setEntity:(id)entity forLayoutRole:(long long)role;
+- (id)entityForLayoutRole:(long long)role;
+- (void)_setRequestedFrontmostEntity:(id)entity;
+- (id)entities;
+- (id)previousEntities;
+- (BOOL)isBackground;
+- (long long)source;
+- (long long)layoutRole;
+- (BOOL)isHomeScreenEntity;
+- (BOOL)isPreviousWorkspaceEntity;
+- (BOOL)isEmptyWorkspaceEntity;
 @end
+
+// 16.0 0x1c5e23430..0x1c5e2351c: chamois = [[self _switcherControllerForDisplayIdentity:[request displayIdentity]] isChamoisWindowingUIEnabled]
+// (the flag lives on the per-display switcher controller, NOT on SBMainWorkspace; request = [ctx request], previous = [ctx previousLayoutState])
+static BOOL G3C_Chamois(id mgr, id ctx) {
+    id rq = [ctx respondsToSelector:@selector(request)] ? [ctx request] : nil;
+    id di = [rq respondsToSelector:@selector(displayIdentity)] ? [rq displayIdentity] : nil;
+    id sc = [mgr respondsToSelector:@selector(_switcherControllerForDisplayIdentity:)] ? [mgr _switcherControllerForDisplayIdentity:di] : nil;
+    return [sc respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && [sc isChamoisWindowingUIEnabled];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// END OF THE PEEK (the app picked after "Add Another Window" joins the peeking stage).  Spec: specs/ADDWINDOW-PICK-0.7.4.md.
+// 16.2 has a new branch in -_layoutStateForApplicationTransitionContext: (0x1c7296020..0x1c7296f6c; entry 0x1c7295ffc..0x1c7296030: chamois, requestedPeek == 0,
+// previous state peeking, not background / source 0xe).  Pick case (0x1c7296908..0x1c7296f40): the picked entity goes to role 1 (0x1c7296d70; a picked multi-window stage keeps
+// its own roles and only gets _setRequestedFrontmostEntity: 0x1c729693c), then EVERY entity of ctx.previousEntities that is not home/previous/empty and not already in
+// ctx.entities goes into the first free role of {2,5,6,7,8,9} (block 0x1c76f2bb8 via 0x1c7296ed0), peek := none, mode := 3.  The unchanged main body (same in 16.0) builds the stage
+// elements from [ctx entities], so roles 5+ become stage windows and the previous windows stay in the transaction's "to" set.  16.0 has no such branch: with chamois it runs the
+// Split View peek merge (0x1c5e241fc..0x1c5e260e4) that can keep only the previous primary, and the supportsSplitView gate (0x1c5e24888) then collapses the pair to the picked app.
+// The merge is done on the ctx BEFORE %orig; requestedPeekConfiguration = 1 during %orig makes 16.0 take its own "explicit none" path (0x1c5e2418c) and skip the legacy merge.
+// Cases 1-3 of the 16.2 branch (request == previous stage, nothing real in the request, Home while peeking) are not merged here (the stock code runs unchanged for them).
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }           // _SBPeekConfigurationIsValid (16.2 0x1c77229fc)
+static BOOL G3C_Real(id e) { return e && ![e isEmptyWorkspaceEntity] && ![e isPreviousWorkspaceEntity]; }
+static NSString *G3C_EntDesc(id e) { return e ? [NSString stringWithFormat:@"%@", e] : @"nil"; }
+static BOOL G3C_EndPeekPick(id mgr, id ctx) {
+    if (!ctx || !BP_OnName("g3c_endpeek") || !BP_OnName("g3c_addwin")) return NO;
+    if (![ctx respondsToSelector:@selector(previousEntities)] || ![ctx respondsToSelector:@selector(setEntity:forLayoutRole:)]) return NO;
+    id rq = [ctx request];
+    if ([ctx isBackground] || (rq && [rq respondsToSelector:@selector(source)] && [rq source] == 0xe)) return NO;                 // 0x1c7295398 (background path)
+    if (!G3C_Chamois(mgr, ctx)) return NO;
+    id prev = [ctx previousLayoutState];
+    if (!prev || !G3C_PeekValid([prev peekConfiguration]) || [ctx requestedPeekConfiguration] != 0) return NO;                   // 0x1c7295ffc..0x1c7296030
+    NSSet *ents = [ctx entities], *pents = [ctx previousEntities];
+    if (!pents.count || [ents isEqualToSet:pents]) return NO;                                                                     // case 1 (stock)
+    id A = [ctx activatingEntity], E1 = [ctx entityForLayoutRole:1], E2 = [ctx entityForLayoutRole:2], E3 = [ctx entityForLayoutRole:3];
+    if (!A && E1 && !E2 && !E3) { A = E1; E1 = nil; }                                                                             // 0x1c7295470
+    if (!G3C_Real(E1) && !G3C_Real(A)) return NO;                                                                                 // case 2 (stock)
+    if (A && [A isHomeScreenEntity]) return NO;                                                                                   // case 3 (stock)
+    if (G3C_Real(A)) [ctx setEntity:A forLayoutRole:1];                                                                           // 0x1c7296d70
+    else if (E1) [ctx _setRequestedFrontmostEntity:E1];                                                                           // 0x1c729693c
+    NSArray *prevs = [[pents allObjects] sortedArrayUsingComparator:^NSComparisonResult(id a, id b) {                              // deterministic (16.2 iterates the NSSet)
+        long long x = [a layoutRole], y = [b layoutRole];
+        return x < y ? NSOrderedAscending : (x > y ? NSOrderedDescending : NSOrderedSame);
+    }];
+    static const long long kRoles[] = { 1, 2, 5, 6, 7, 8, 9 };            // 162 enumeration order of _SBLayoutRoleEnumerateValidRoles filtered by _SBLayoutRoleIsValidForSplitView
+    NSMutableString *placed = [NSMutableString string];
+    for (id e in prevs) {
+        if ([e isHomeScreenEntity] || [e isPreviousWorkspaceEntity] || [e isEmptyWorkspaceEntity]) continue;                     // 0x1c7296e1c..0x1c7296e38
+        if ([[ctx entities] containsObject:e]) continue;                                                                          // 0x1c7296e40..0x1c7296e64
+        for (size_t i = 0; i < sizeof kRoles / sizeof *kRoles; i++) {
+            id cur = [ctx entityForLayoutRole:kRoles[i]];
+            if (!cur || [cur isEmptyWorkspaceEntity]) { [ctx setEntity:e forLayoutRole:kRoles[i]]; [placed appendFormat:@" %lld:%@", kRoles[i], G3C_EntDesc(e)]; break; }
+        }
+    }
+    if (BP_LogEnabled()) BP_Log(@"[g3c] endpeek: A=%@ E1=%@ previous entities %lu -> roles added:%@ (reqPeek 0 -> 1 for the stock body)", G3C_EntDesc(A), G3C_EntDesc(E1), (unsigned long)pents.count, placed);
+    return YES;
+}
+// copy of a layout state with peek and mode forced (the stock result for a peek request equals the previous state apart from these two)
+static id G3C_StateWith(id r, long long peek, long long mode) {
+    if (![r respondsToSelector:@selector(_initWithLayoutState:)]) return r;
+    id n = [[[r class] alloc] _initWithLayoutState:r];
+    Ivar ip = class_getInstanceVariable([n class], "_peekConfiguration"), im = class_getInstanceVariable([n class], "_unlockedEnvironmentMode");
+    if (!n || !ip || !im) return r;
+    *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(ip)) = peek;
+    *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(im)) = mode;
+    return n;
+}
 
 %group G3C_Peek
 %hook SBMainDisplayLayoutStateManager
 - (id)_layoutStateForApplicationTransitionContext:(id)ctx {
-    id r = %orig;
+    BOOL merged = G3C_EndPeekPick(self, ctx);
+    long long savedReq = merged ? [ctx requestedPeekConfiguration] : 0;
+    if (merged) [ctx setRequestedPeekConfiguration:1];
+    id r = nil;
+    @try {
+        r = %orig;
+    } @finally {
+        if (merged) [ctx setRequestedPeekConfiguration:savedReq];
+    }
+    if (merged && r && ([r peekConfiguration] != 1 || [r unlockedEnvironmentMode] != 3)) {                                       // 16.2 0x1c7296f40: mode 3, peek none
+        if (BP_LogEnabled()) BP_Log(@"[g3c] endpeek: stock result had mode %lld peek %lld -> 16.2 mode 3 peek 1", [r unlockedEnvironmentMode], [r peekConfiguration]);
+        r = G3C_StateWith(r, 1, 3);
+    }
+    if (merged) {
+        if (BP_LogEnabled()) BP_Log(@"[g3c] endpeek: result %@", r);
+        return r;
+    }
     if (!r || !ctx || !BP_OnName("g3c_addwin") || ![ctx respondsToSelector:@selector(requestedPeekConfiguration)]) return r;
     long long req = [ctx requestedPeekConfiguration];
     if (!G3C_PeekValid(req)) return r;
-    // 16.0 0x1c5e23430..0x1c5e2351c: chamois = [[self _switcherControllerForDisplayIdentity:[request displayIdentity]] isChamoisWindowingUIEnabled]
-    // (the flag lives on the per-display switcher controller, NOT on SBMainWorkspace; request = [ctx request], previous = [ctx previousLayoutState])
-    id rq = [ctx respondsToSelector:@selector(request)] ? [ctx request] : nil;
-    id di = [rq respondsToSelector:@selector(displayIdentity)] ? [rq displayIdentity] : nil;
-    id sc = [self respondsToSelector:@selector(_switcherControllerForDisplayIdentity:)] ? [self _switcherControllerForDisplayIdentity:di] : nil;
-    if (![sc respondsToSelector:@selector(isChamoisWindowingUIEnabled)] || ![sc isChamoisWindowingUIEnabled]) return r;
+    if (!G3C_Chamois(self, ctx)) return r;
     id prev = [ctx respondsToSelector:@selector(previousLayoutState)] ? [ctx previousLayoutState] : nil;
     if (!prev || G3C_PeekValid([prev peekConfiguration])) return r;                // only the START of a peek (16.2 0x1c7296014)
     long long mode = 1;
@@ -318,12 +408,8 @@ static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }          
     } else mode = [r unlockedEnvironmentMode];
     long long haveMode = [r unlockedEnvironmentMode], havePeek = [r peekConfiguration];
     if (havePeek == req && haveMode == mode) return r;
-    if (![r respondsToSelector:@selector(_initWithLayoutState:)]) return r;
-    id n = [[[r class] alloc] _initWithLayoutState:r];
-    Ivar ip = class_getInstanceVariable([n class], "_peekConfiguration"), im = class_getInstanceVariable([n class], "_unlockedEnvironmentMode");
-    if (!n || !ip || !im) return r;
-    *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(ip)) = req;
-    *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(im)) = mode;
+    id n = G3C_StateWith(r, req, mode);
+    if (n == r) return r;
     BP_Log(@"[g3c] add window: stock layout state kept mode %lld peek %lld (previous stage elements %lu) -> 16.2 mode %lld peek %lld", haveMode, havePeek,
            (unsigned long)[(NSArray *)[(id)prev valueForKey:@"elements"] count], mode, req);
     return n;
