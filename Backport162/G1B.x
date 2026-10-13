@@ -47,6 +47,7 @@
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 @interface SBSwitcherModifier : NSObject @end
+@interface SBRoutingSwitcherModifier : NSObject @end
 @interface SBFluidSwitcherViewController : UIViewController @end
 @interface SBMainSwitcherControllerCoordinator : NSObject @end
 @interface SBiPadOSPlatformSwitcherModifier : NSObject @end
@@ -199,6 +200,9 @@ static id G1B_Filtering_Event(id self, SEL _cmd, id routing, id event, id forMod
     return event;
 }
 
+// 16.2 0x1c77f1084: compactMap over the layouts of appLayoutWithItemsPassingTest:. The content modifier keeps the items IN _displayItemsToFilter, every other child the complement; a
+// layout with no passing item is dropped. A layout that splits yields a NEW (interned) half layout: that is the 16.2 design, and the routing modifier copes with it (see section 1.1b:
+// the context's appLayouts, which -_lastIndexForModifier: searches, is the view controller's ADJUSTED list that already contains the halves, and the filter is idempotent on a half).
 static NSArray *G1B_Filtering_FilteredLayouts(id self, SEL _cmd, id routing, NSArray *layouts, id forModifier) {
     id mod = G1B_GET(self, kFiltModifier);
     NSSet *items = G1B_GET(self, kFiltDisplayItems);
@@ -207,21 +211,6 @@ static NSArray *G1B_Filtering_FilteredLayouts(id self, SEL _cmd, id routing, NSA
     for (id l in layouts) {
         if (![l respondsToSelector:@selector(appLayoutWithItemsPassingTest:)]) continue;
         id f = ((id (*)(id, SEL, BOOL (^)(id)))objc_msgSend)(l, @selector(appLayoutWithItemsPassingTest:), ^BOOL(id item) { return [items containsObject:item] == keep; });
-        // The 16.0 routing modifier maps a child's LAST filtered layout back to its index with -indexOfObject: on the real layout list (-_lastIndexForModifier: 0x1c60b18f4:
-        // indexOfObject:[[child appLayouts] lastObject]); a filtered layout that is not an element of that list answers NSNotFound (== NSIntegerMax, the "owns nothing" value) and
-        // the index query then throws "couldn't find a modifier among (...) for index N" (crash 0ee042c2: the add-window pick merged the picked app INTO the peeked stage, so the one
-        // layout of the list holds peeked items AND others and neither half equals it).  16.2 never routes such a mixed layout (the peek is gone when the stage changes);
-        // a layout that mixes peeked and other items belongs to the content modifier as a whole, exactly as -routingModifier:modifierForAppLayout: (any item in the set) assigns it.
-        BOOL anyIn = [l respondsToSelector:@selector(containsAnyItemFromSet:)] && G1B_SendB1(l, @selector(containsAnyItemFromSet:), items);
-        if (anyIn && f != l) {
-            id other = ((id (*)(id, SEL, BOOL (^)(id)))objc_msgSend)(l, @selector(appLayoutWithItemsPassingTest:), ^BOOL(id item) { return [items containsObject:item] != keep; });
-            id inPart = keep ? f : other, outPart = keep ? other : f;
-            if (inPart && outPart) {
-                if (BP_LogEnabled()) BP_Log(@"g1b: filtering: layout mixes peeked and other items, routed whole to the content modifier (%s): %@", keep ? "content" : "passthrough skipped", l);
-                if (keep) [out addObject:l];
-                continue;
-            }
-        }
         if (f) [out addObject:f];
     }
     return out;
@@ -273,6 +262,187 @@ static void G1B_BuildFiltering(void) {
     gFilteringCls = G1B_MakeClass("SBFilteringSwitcherModifier", sup, NULL, 0, m, sizeof m / sizeof m[0], "SBRoutingSwitcherModifierDelegate", NULL);
 }
 // ---- end 1.1
+
+// ============================================================================================================
+// 1.1b  SBRoutingSwitcherModifier: what 16.2 changed in the class that the filtering modifier is built on        (specs/ROUTING-162-0.7.4.md)
+// ============================================================================================================
+// Method by method / block by block diff of all 198 + 13 methods of SBRoutingSwitcherModifier, 16.0 20A8372 (0x1c609cee8..0x1c60b1dd0) against 16.2 20C65 (0x1c7520028..0x1c7536214):
+//   IDENTICAL (same instruction sequence, same callees, same constants): init, didMove, handleEvent: (+block), `_lastIndexForModifier:` (16.0 0x1c60b18f4 = 16.2 0x1c7535d38), the three
+//   helpers _SBRoutingSwitcherModifierRouteToModifier / ...ContainingAppLayout / ...ContainingIndex (16.0 0x1c609d860 / 0x1c609ddec / 0x1c609f440 = 16.2 0x1c75209ec / 0x1c7521034 /
+//   0x1c752236c, ContainingIndex still asserts "couldn't find a modifier among (...) for index %lu", line 0x52d) and every index based forward (backgroundOpacityForIndex:, maskedCornersForIndex:,
+//   opacityForLayoutRole:inAppLayout:atIndex:, shadowOpacityForLayoutRole:atIndex:, fullyPresentedFrameForIndex:frame:, ...). 16.2 does NOT map a split layout back differently.
+//   CHANGED in 16.2:
+//     * NEW -_currentModifierOrFallback 0x1c7520e8c: `_currentModifier ?: [delegate fallbackModifierForRoutingModifier:self]` (16.0 has no such protocol method).
+//     * -appLayouts 0x1c7520b44, -containerViewBounds 0x1c7520d64, -switcherViewBounds 0x1c7520df8 use it instead of the raw `_currentModifier` (16.0 0x1c609d9b8 / 0x1c609dbc4 / 0x1c609dc40:
+//       outside a routed call `_currentModifier` is nil, appLayouts answers nil and the bounds delegate gets a nil forModifier).
+//     * the new delegate method -fallbackModifierForRoutingModifier: on all three delegates (Filtering 0x1c77f144c -> passthrough, SBMainSwitcherRoutingSwitcherModifier 0x1c7489128 -> the ivar that
+//       -homeScreenModifierForRoutingModifier: returns (16.0 0x1c600e0f0), SBPeekSplitViewRoutingSwitcherModifier 0x1c74e8ac4 -> the ivar of -scrollModifierForRoutingModifier: (16.0 0x1c606714c)).
+//     * _SBRoutingSwitcherModifierSubIndexFromIndexForModifier (only caller: -shouldAnimateInsertionOrRemovalOfAppLayout:atIndex:'s block) 16.0 0x1c60ac784: sum of (last+1) over the preceding
+//       modifiers (NSNotFound counts 0); 16.2 0x1c752fccc: offset = last+1 of the last preceding modifier whose last index is BELOW the index (NSNotFound never is).
+//     * debug descriptions only list the modifiers whose delegate is the routing modifier (descriptionBuilder block 0x1c7520304, stackDescriptionWithPrefix: 0x1c752045c): not ported (debug text).
+//     * 13 new routed queries: ported in G1C.x (section 0b).
+// WHY A SPLIT LAYOUT IS SAFE IN 16.2 (and therefore here): `_lastIndexForModifier:` looks the LAST layout of a child's filtered list up with -indexOfObject: in `[super appLayouts]`. SBAppLayout's
+// isEqual: is identity (16.0 0x1c5e31cac) but the class INTERNS (init returns the equal instance from a global NSHashTable, 0x1c628ab00 `member:`), and -appLayoutWithItemsPassingTest: (16.0
+// 0x1c5e4ab78) returns `self` when every item passes. `[super appLayouts]` at that point is the view controller's context `appLayouts` = `_cachedAdjustedAppLayouts` (16.2 getter 0x1c72a33a8, written by
+// -_rebuildCachedAdjustedAppLayouts 0x1c7457028 with the result of [modifier adjustedAppLayoutsForAppLayouts:unadjusted]; same ivar in 16.0 0x1c5e30f3c / 0x1c5fddcd0), i.e. the list that
+// ALREADY contains the halves [content halves..., passthrough halves...] (routing -adjustedAppLayoutsForAppLayouts: 16.0 0x1c609e6c8 concatenates the children's answers in order). Filtering
+// an already split list again is the identity, so every child's last layout is found, the children own the contiguous ranges [0..Lc], (Lc..Lp] that ContainingIndex walks, and an index the view
+// controller derives from the adjusted list (16.2 _applyStyleToAppLayout: 0x1c744e5c4: `[[self appLayouts] indexOfObject:layout]`) lands on the right child. A child with no layout answers NSNotFound
+// = "owns nothing" and is skipped. -routingModifier:modifierForAppLayout: (any item in the set -> content) agrees: it is asked with layouts of that same list, a half is entirely in or out.
+// THE ONE CASE THE DESIGN DOES NOT COVER (identical in 16.2): the context list still holds the UNSPLIT mixed layout (the cached adjusted list is rebuilt after the model changed; e.g. the
+// add-window pick merged the picked app into the peeked stage while the peek filter was still on the root: crash 0ee042c2, 7355cddc, c4bbd19b "couldn't find a modifier among
+// ((passthrough: 9223372036854775807), (peek content: 9223372036854775807)) for index 0"): neither half is an element, both children answer NSNotFound, ContainingIndex asserts. 16.2 gets out of
+// it because the peek is gone (retired at phase 3, G1C) before the layout list is queried again; here the two last-line guards below (logged, only reached when stock code would throw) cover it.
+static Class gRtCls, gRtSuper, gRtMainDelegate, gRtPeekDelegate;
+static Ivar gRtIvCur, gRtIvDel, gRtIvMods;
+static const unsigned long long kRtNotFound = 0x7fffffffffffffffULL;    // NSNotFound == NSIntegerMax
+
+static BOOL G1B_RT_On(void) { return G1B_ON() && BP_OnName("g1b_routing162"); }
+static id G1B_RT_Current(id rt) { return BP_ObjIvar(rt, gRtIvCur); }
+static void G1B_RT_SetCurrent(id rt, id m) { BP_SetObjIvar(rt, gRtIvCur, m); }
+static id G1B_RT_Delegate(id rt) { return BP_ObjIvar(rt, gRtIvDel); }
+
+// 16.2 -_currentModifierOrFallback 0x1c7520e8c
+static id G1B_RT_CurrentOrFallback(id self, SEL _cmd) {
+    id cur = G1B_RT_Current(self);
+    if (cur) return cur;
+    return G1B_Send1(G1B_RT_Delegate(self), @selector(fallbackModifierForRoutingModifier:), self);
+}
+// 16.2 -fallbackModifierForRoutingModifier: of SBMainSwitcherRoutingSwitcherModifier (0x1c7489128, the ivar of its home screen modifier) and SBPeekSplitViewRoutingSwitcherModifier (0x1c74e8ac4, the
+// ivar of its scroll modifier); 16.0 has the two getters, the same ivars.
+static id G1B_RT_MainFallback(id self, SEL _cmd, id routing) { return G1B_Send1(self, @selector(homeScreenModifierForRoutingModifier:), routing); }
+static id G1B_RT_PeekFallback(id self, SEL _cmd, id routing) { return G1B_Send1(self, @selector(scrollModifierForRoutingModifier:), routing); }
+
+// 16.2 _SBRoutingSwitcherModifierSubIndexFromIndexForModifier 0x1c752fccc
+static unsigned long long G1B_RT_SubIndex(id rt, unsigned long long index, id modifier) {
+    unsigned long long offset = 0;
+    SEL li = NSSelectorFromString(@"_lastIndexForModifier:");
+    NSArray *mods = BP_ObjIvar(rt, gRtIvMods);
+    for (id m in mods) {
+        if (m == modifier) break;
+        unsigned long long last = ((unsigned long long (*)(id, SEL, id))objc_msgSend)(rt, li, m);
+        if (last < index) offset = last + 1;
+    }
+    return index - offset;
+}
+
+static void G1B_BuildRouting162(void) {
+    gRtCls = NSClassFromString(@"SBRoutingSwitcherModifier");
+    if (!gRtCls) return;
+    gRtSuper = class_getSuperclass(gRtCls);
+    gRtIvCur = class_getInstanceVariable(gRtCls, "_currentModifier");
+    gRtIvDel = class_getInstanceVariable(gRtCls, "_delegate");
+    gRtIvMods = class_getInstanceVariable(gRtCls, "_modifiers");
+    if (!gRtIvCur || !gRtIvDel || !gRtIvMods) { gRtCls = Nil; BP_Log(@"g1b: routing162: SBRoutingSwitcherModifier ivars missing (cur %d del %d mods %d), group inert", gRtIvCur != NULL, gRtIvDel != NULL, gRtIvMods != NULL); return; }
+    const G1BMethod rm[] = { { "_currentModifierOrFallback", (IMP)G1B_RT_CurrentOrFallback, "@16@0:8" } };
+    if (!class_getInstanceMethod(gRtCls, @selector(_currentModifierOrFallback))) G1B_AddMethods(gRtCls, rm, 1);
+    const G1BMethod mm[] = { { "fallbackModifierForRoutingModifier:", (IMP)G1B_RT_MainFallback, "@24@0:8@16" } };
+    const G1BMethod pm[] = { { "fallbackModifierForRoutingModifier:", (IMP)G1B_RT_PeekFallback, "@24@0:8@16" } };
+    SEL fb = @selector(fallbackModifierForRoutingModifier:);
+    gRtMainDelegate = NSClassFromString(@"SBMainSwitcherRoutingSwitcherModifier");
+    gRtPeekDelegate = NSClassFromString(@"SBPeekSplitViewRoutingSwitcherModifier");
+    if (gRtMainDelegate && !class_getInstanceMethod(gRtMainDelegate, fb)) G1B_AddMethods(gRtMainDelegate, mm, 1);
+    if (gRtPeekDelegate && !class_getInstanceMethod(gRtPeekDelegate, fb)) G1B_AddMethods(gRtPeekDelegate, pm, 1);
+}
+
+// Guard 1 (NOT in 16.2): the child's last filtered layout is not an element of the context list although the child owns layouts. Stock code answers NSNotFound ("owns nothing") for it and
+// -ContainingIndex asserts when no other child covers the index. Only reached for the filtering modifier's routing modifier and only after the faithful lookup answered NSNotFound for a child with
+// a non-empty list: the layout of the context list that the child's last half was cut from (the filter applied to the context layout gives that very half) is that child's last index. For the
+// unsplit mixed layout this assigns it to the child that -routingModifier:modifierForAppLayout: names too (content when any item is in the set). Never changes an answer stock code can give.
+static unsigned long long G1B_RT_GuardLastIndex(id rt, id modifier) {
+    id del = G1B_RT_Delegate(rt);
+    if (!gFilteringCls || ![del isKindOfClass:gFilteringCls]) return kRtNotFound;
+    SEL ap = @selector(appLayouts), fs = @selector(routingModifier:filteredAppLayouts:forModifier:);
+    if (!G1B_HasSuper(gRtSuper, ap) || ![del respondsToSelector:fs]) return kRtNotFound;
+    id old = G1B_RT_Current(rt);
+    G1B_RT_SetCurrent(rt, modifier);                                   // [modifier appLayouts] reaches the routing modifier with _currentModifier == modifier (what stock does through RouteToModifier)
+    NSArray *mine = G1B_Send0(rt, ap);
+    G1B_RT_SetCurrent(rt, old);
+    id last = [mine isKindOfClass:[NSArray class]] ? mine.lastObject : nil;
+    if (!last) return kRtNotFound;                                      // owns nothing: NSNotFound is the faithful answer
+    NSArray *all = G1B_SUPER(id, gRtSuper, rt, ap, (struct objc_super *, SEL));
+    if (![all isKindOfClass:[NSArray class]]) return kRtNotFound;
+    for (NSUInteger i = all.count; i-- > 0;) {
+        NSArray *cut = ((NSArray *(*)(id, SEL, id, NSArray *, id))objc_msgSend)(del, fs, rt, @[ all[i] ], modifier);
+        if ([cut isKindOfClass:[NSArray class]] && cut.lastObject == last) {
+            if (BP_LogEnabled()) BP_Log(@"g1b: routing162 guard: last layout of %@ is not in the context list (%lu layouts), taken from layout %lu: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, (unsigned long)i, all[i]);
+            return i;
+        }
+    }
+    if (BP_LogEnabled()) BP_Log(@"g1b: routing162 guard: last layout of %@ is not in the context list and was cut from none of its %lu layouts: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, last);
+    return kRtNotFound;
+}
+
+%group G1B_Routing162
+%hook SBRoutingSwitcherModifier
+// 16.2 -appLayouts 0x1c7520b44: the cached per-modifier answer is looked up with `_currentModifierOrFallback`.
+- (id)appLayouts {
+    if (G1B_RT_Current(self) || !G1B_RT_On()) return %orig;       // (the cheap test first: this is a hot query)
+    id fb = G1B_RT_CurrentOrFallback(self, @selector(_currentModifierOrFallback));
+    if (!fb) return %orig;
+    G1B_RT_SetCurrent(self, fb);
+    id r = %orig;
+    G1B_RT_SetCurrent(self, nil);
+    return r;
+}
+// 16.2 -containerViewBounds 0x1c7520d64 / -switcherViewBounds 0x1c7520df8: the delegate is asked with `_currentModifierOrFallback` (16.0: the raw, possibly nil, `_currentModifier`).
+- (CGRect)containerViewBounds {
+    id d = G1B_RT_Delegate(self);
+    SEL s = @selector(routingModifier:containerViewBoundsForModifier:);
+    if (!G1B_RT_On() || ![d respondsToSelector:s]) return %orig;
+    return ((CGRect (*)(id, SEL, id, id))objc_msgSend)(d, s, self, G1B_RT_CurrentOrFallback(self, @selector(_currentModifierOrFallback)));
+}
+- (CGRect)switcherViewBounds {
+    id d = G1B_RT_Delegate(self);
+    SEL s = @selector(routingModifier:switcherViewBoundsForModifier:);
+    if (!G1B_RT_On() || ![d respondsToSelector:s]) return %orig;
+    return ((CGRect (*)(id, SEL, id, id))objc_msgSend)(d, s, self, G1B_RT_CurrentOrFallback(self, @selector(_currentModifierOrFallback)));
+}
+// 16.2 block of -shouldAnimateInsertionOrRemovalOfAppLayout:atIndex: 0x1c752fc60 with the 16.2 SubIndexFromIndexForModifier (0x1c752fccc, see G1B_RT_SubIndex); the routing part is
+// _SBRoutingSwitcherModifierRouteToModifierContainingAppLayout (16.2 0x1c7521034): `_currentModifier` = [delegate routingModifier:self modifierForAppLayout:layout] around the block.
+- (BOOL)shouldAnimateInsertionOrRemovalOfAppLayout:(id)layout atIndex:(unsigned long long)index {
+    id d = G1B_RT_Delegate(self);
+    SEL ms = @selector(routingModifier:modifierForAppLayout:);
+    if (!G1B_RT_On() || ![d respondsToSelector:ms]) return %orig;
+    id m = ((id (*)(id, SEL, id, id))objc_msgSend)(d, ms, self, layout);
+    id old = G1B_RT_Current(self);
+    G1B_RT_SetCurrent(self, m);
+    BOOL r = NO;
+    if (m) r = ((BOOL (*)(id, SEL, id, unsigned long long))objc_msgSend)(m, _cmd, layout, G1B_RT_SubIndex(self, index, m));
+    G1B_RT_SetCurrent(self, old);
+    return r;
+}
+// Guard 1 (see G1B_RT_GuardLastIndex): only when the faithful lookup answered NSNotFound.
+- (unsigned long long)_lastIndexForModifier:(id)modifier {
+    unsigned long long r = %orig;
+    if (r != kRtNotFound || !G1B_RT_On()) return r;
+    return G1B_RT_GuardLastIndex(self, modifier);
+}
+%end
+
+// Guard 2 (NOT in 16.2): the assertion of _SBRoutingSwitcherModifierRouteToModifierContainingIndex (16.0 0x1c609f6e4 `-[NSAssertionHandler handleFailureInFunction:file:lineNumber:description:]`,
+// file "SBRoutingSwitcherModifier.m", line 0x52d) raises. The code after the call is the assertions-disabled path: `_currentModifier` = nil, the block runs with a nil modifier (every message
+// to it answers 0 / nil / NO) and `_currentModifier` is restored. Reached only when no child covers the index (even after guard 1). Everything else is forwarded to the original with the
+// message formatted here (the variadic arguments cannot be forwarded from a hook).
+%hook NSAssertionHandler
+- (void)handleFailureInFunction:(NSString *)functionName file:(NSString *)fileName lineNumber:(NSInteger)line description:(NSString *)format, ... {
+    if (!format) {
+        %orig;
+        return;
+    }
+    if (G1B_RT_On() && [fileName isEqualToString:@"SBRoutingSwitcherModifier.m"] && [format rangeOfString:@"couldn't find a modifier among"].location != NSNotFound) {
+        BP_Log(@"g1b: routing162 guard: no child modifier covers the index (stock 16.2 asserts here), answered as if assertions were disabled: %@:%ld", fileName, (long)line);
+        return;
+    }
+    va_list ap;
+    va_start(ap, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:ap];
+    va_end(ap);
+    %orig(functionName, fileName, line, @"%@", message);
+}
+%end
+%end
+
 
 // ============================================================================================================
 // 1.2  SBOverrideContinuousExposeIdentifiersSwitcherModifier  (PARTIAL: 16.0 has one identifier list, see spec 1.2)
@@ -2550,6 +2720,7 @@ static BOOL G1B_OptIn(const char *name) { return BP_OnName(name); }     // defau
 
 void G1B_Setup(void) {
     G1B_BuildFiltering();
+    G1B_BuildRouting162();
     G1B_BuildOverrideIds();
     G1B_BuildPulse();
     G1B_BuildEventsAndResponses();
@@ -2578,6 +2749,7 @@ void G1B_Setup(void) {
     %init(G1B_FluidRoot);                    // 16.2 creator 0x1c762c998
     %init(G1B_HomeFloor);                    // 16.2 creator 0x1c750c194
     %init(G1B_WindowDelete);                 // 16.2 transitionDidEnd: un-blur the closed window's container (blur after Close + relaunch)
+    if (gRtCls) %init(G1B_Routing162);       // 1.1b SBRoutingSwitcherModifier 16.2 delta (_currentModifierOrFallback, SubIndex) + two logged last-line guards, kill switch g1b_routing162
     %init(G1B_Base);                         // 0.1  event types 36..38
     %init(G1B_VC);                           // 1.7 / 1.10 response consumers + 1.5 header-tap emission below
     %init(G1B_VCInvalidate);                 // 1.3 consumer
