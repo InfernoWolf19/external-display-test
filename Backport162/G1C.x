@@ -4835,6 +4835,10 @@ static id G1C_As_Removal(id self, SEL _cmd, id event) {                         
     if (!G1C_ON() || !event) return r;
     long long phase = G1B_SendLL0(event, @selector(phase));
     long long n = G1C_IvarLL(self, "_bp_ongoingRemovals");
+    if (BP_LogEnabled()) {
+        NSArray *dl = G1C_Resp(self, @selector(appLayouts)) ? G1B_Send0(self, @selector(appLayouts)) : nil;
+        BP_Log(@"g1c: app switcher removal event phase %lld ongoing %lld appLayouts %lu (last-window dismiss fires at phase 2 with 0 layouts and 0 ongoing)", phase, n, (unsigned long)dl.count);
+    }
     if (phase == 1) G1C_SetIvarLL(self, "_bp_ongoingRemovals", n + 1);
     else if (phase == 2) {
         n = MAX(0, n - 1);
