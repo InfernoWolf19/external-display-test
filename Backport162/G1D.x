@@ -2298,6 +2298,60 @@ static NSString *G1D_TraceResp(id r) {
 %end
 %end // G1D_ExtTrace
 
+// ---- empty switcher on an external display: the dismiss timer outlives its transition modifier ----
+// 16.0 and 16.2 are identical here: SBHomeToSwitcher / SBForcePressToSwitcher / SBHomeGestureToSwitcher schedule a timer (reason
+// "DismissForEmptySwitcher-<modifier>", delay = emptySwitcherDismissDelay) in -transitionWillBegin/-transitionWillUpdate and ANSWER it in their own
+// -handleTimerEvent: (16.2 0x1c794f8f0: reason == -_dismissForEmptySwitcherResponseName and appLayouts.count == 0 -> append
+// SBDismissForEmptySwitcherSwitcherEventResponse).  The log (ee0a4eef) shows that on the external display the empty-switcher transition runs 1 -> 3 in 4 ms
+// (nothing to animate: no home screen content there, so no blur and no animation, with apps it takes 0.72 s as on the main display), the transition
+// modifier is removed at phase 3, the 0.2 s timer then fires at a chain that no longer contains the modifier that answers it, and the switcher stays open
+// until a click.  Whoever is still in the chain answers it now, exactly as the transition modifier would have (same reason test, same response).
+static NSHashTable *gG1DLiveEmptyTransitions;
+static __unsafe_unretained id gG1DLastEmptyDismissEvent;
+static BOOL G1D_IsEmptyTransition(id m) {
+    static Class a, b, c;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ a = NSClassFromString(@"SBHomeToSwitcherSwitcherModifier"); b = NSClassFromString(@"SBForcePressToSwitcherSwitcherModifier"); c = NSClassFromString(@"SBHomeGestureToSwitcherSwitcherModifier"); });
+    return (a && [m isKindOfClass:a]) || (b && [m isKindOfClass:b]) || (c && [m isKindOfClass:c]);
+}
+%group G1D_EmptyDismiss
+%hook SBTransitionSwitcherModifier
+- (id)transitionWillBegin {
+    id r = %orig;
+    if (G1D_IsEmptyTransition(self)) {
+        @synchronized ([SBTransitionSwitcherModifier class]) {
+            if (!gG1DLiveEmptyTransitions) gG1DLiveEmptyTransitions = [NSHashTable weakObjectsHashTable];
+            [gG1DLiveEmptyTransitions addObject:self];
+        }
+    }
+    return r;
+}
+- (id)transitionDidEnd {
+    id r = %orig;
+    @synchronized ([SBTransitionSwitcherModifier class]) { [gG1DLiveEmptyTransitions removeObject:self]; }
+    return r;
+}
+%end
+%hook SBSwitcherModifier
+- (id)handleTimerEvent:(id)event {
+    id r = %orig;
+    if (!event || event == gG1DLastEmptyDismissEvent || ![event respondsToSelector:@selector(reason)]) return r;
+    NSString *reason = [event reason];
+    if (![reason isKindOfClass:[NSString class]] || ![reason hasPrefix:@"DismissForEmptySwitcher-"]) return r;
+    @synchronized ([SBTransitionSwitcherModifier class]) { if (gG1DLiveEmptyTransitions.count) return r; }       // a transition modifier is alive: it answers
+    NSUInteger n = 1;
+    @try { n = [(NSArray *)[(id)self valueForKey:@"appLayouts"] count]; } @catch (NSException *e) { n = 1; }
+    if (n) return r;
+    Class dc = NSClassFromString(@"SBDismissForEmptySwitcherSwitcherEventResponse");
+    id d = dc ? [[dc alloc] init] : nil;
+    if (!d) return r;
+    gG1DLastEmptyDismissEvent = event;
+    if (BP_LogEnabled()) BP_Log(@"g1d: empty switcher dismiss timer arrived after its transition modifier was gone (%@ on %@) -> dismissing", reason, [self class]);
+    return G1B_AppendTo(d, r);
+}
+%end
+%end // G1D_EmptyDismiss
+
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
@@ -2319,5 +2373,6 @@ void G1D_Setup(void) {
     %init(G1D_DockFocus);
     %init(G1D_DockHidden);
     %init(G1D_ExtTrace);
+    if (BP_OnName("g1d_emptydismiss")) { %init(G1D_EmptyDismiss); }
 }
 #pragma clang diagnostic pop
