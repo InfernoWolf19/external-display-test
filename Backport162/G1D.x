@@ -2134,6 +2134,7 @@ static __thread __unsafe_unretained id tOverlayInsetsSC;
         id identity = G1B_Send0(G1B_Send0(entity, NSSelectorFromString(@"sceneHandle")), NSSelectorFromString(@"displayIdentity"));
         id config = G1B_Send0(identity, NSSelectorFromString(@"currentConfiguration"));
         SEL s = NSSelectorFromString(@"createRequestWithOptions:displayConfiguration:");
+        if (BP_LogEnabled()) BP_Log(@"g1d: pip restore request: entity %@ identity %@ config %@ -> %s", entity, identity, config, (config && [self respondsToSelector:s]) ? "that display" : "main display (stock)");
         if (config && [self respondsToSelector:s]) return ((id (*)(id, SEL, unsigned long long, id))objc_msgSend)(self, s, options, config);
     }
     return %orig;

@@ -332,6 +332,14 @@ static void PIPS_PostEnsured(id adapter, id ctrl, id pipVC, id sid) {
 
     id entity = PIPS_Entity(G1B_Send0(handle, NSSelectorFromString(@"application")), sid, sceneManager, G1B_Send0(handle, NSSelectorFromString(@"displayIdentity")));
     id scene = G1B_Send0(handle, NSSelectorFromString(@"sceneIfExists"));
+    if (BP_LogEnabled()) {
+        id hid = G1B_Send0(handle, NSSelectorFromString(@"displayIdentity"));
+        id eh = G1B_Send0(entity, NSSelectorFromString(@"sceneHandle"));
+        BP_Log(@"pipstop: expand display: handle identity %@ (config %@), scene manager %@ identity %@, entity %@ sceneHandle %@ identity %@ config %@, scene settings identity %@",
+               hid, G1B_Send0(hid, NSSelectorFromString(@"currentConfiguration")), sceneManager, G1B_Send0(sceneManager, NSSelectorFromString(@"displayIdentity")),
+               entity, eh, G1B_Send0(eh, NSSelectorFromString(@"displayIdentity")), G1B_Send0(G1B_Send0(G1B_Send0(eh, NSSelectorFromString(@"displayIdentity")), NSSelectorFromString(@"currentConfiguration")), NSSelectorFromString(@"identity")),
+               G1B_Send0(G1B_Send0(scene, NSSelectorFromString(@"settings")), NSSelectorFromString(@"displayIdentity")));
+    }
     id targetWS = nil;
     if (G1B_SendB0(G1B_Send0(scene, NSSelectorFromString(@"settings")), NSSelectorFromString(@"isForeground")))
         targetWS = PIPS_WindowSceneForDisplayIdentity(G1B_Send0(G1B_Send0(scene, NSSelectorFromString(@"settings")), NSSelectorFromString(@"displayIdentity")));
