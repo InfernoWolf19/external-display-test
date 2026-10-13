@@ -2742,7 +2742,7 @@ static id G1C_Wdd_AddItem(id self, SEL _cmd, id item, id layout, CGSize size, CG
     if (na) [map addEntriesFromDictionary:@{ item : na }];
     Class alc = NSClassFromString(@"SBAppLayout");
     SEL ini = NSSelectorFromString(@"initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:centerConfiguration:environment:hidden:preferredDisplayOrdinal:");
-    id nl = ((id (*)(id, SEL, id, id, id, long long, id, long long, long long, BOOL, long long))objc_msgSend)([alc alloc], ini, items,
+    id nl = G1B_INIT(id, id, id, long long, id, long long, long long, BOOL, long long)([alc alloc], ini, items,      // SBAppLayout interns: init consumes the alloc (G1BKit.h)
         G1C_SendLL1(layout, @selector(itemForLayoutRole:), 4), G1C_SendLL1(layout, @selector(itemForLayoutRole:), 3), 3, map,
         G1B_SendLL0(layout, @selector(centerConfiguration)), G1B_SendLL0(layout, @selector(environment)), G1B_SendB0(layout, @selector(isHidden)), G1B_SendLL0(layout, @selector(preferredDisplayOrdinal)));
     id fronted = G1C_Send2(self, @selector(appLayoutByBringingItemToFront:inAppLayout:), item, nl);

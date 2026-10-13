@@ -1612,7 +1612,7 @@ static id G1B_FilterAppLayoutForChamois(id cls, SEL _cmd, id l) {
     else if (env == 3) { cfg = G1B_SendLL0(l, @selector(configuration)); env = 1; }
     else return nil;
     id floating = ((id (*)(id, SEL, long long))objc_msgSend)(l, @selector(itemForLayoutRole:), 3);
-    return ((id (*)(id, SEL, id, id, id, long long, id, long long, long long, BOOL, long long))objc_msgSend)([ac alloc], ini, G1B_Send0(l, @selector(allItems)), nil, floating, cfg,
+    return G1B_INIT(id, id, id, long long, id, long long, long long, BOOL, long long)([ac alloc], ini, G1B_Send0(l, @selector(allItems)), nil, floating, cfg,      // SBAppLayout interns: init consumes the alloc (G1BKit.h)
         G1B_Send0(l, NSSelectorFromString(@"itemsToLayoutAttributesMap")), 0, env, G1B_SendB0(l, @selector(isHidden)), G1B_SendLL0(l, NSSelectorFromString(@"preferredDisplayOrdinal")));
 }
 static void G1B_InstallChamoisFilter(void) {

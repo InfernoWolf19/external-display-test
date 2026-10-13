@@ -102,6 +102,14 @@ static ptrdiff_t G1B_IvarOffset(Class cls, const char *name) {
     struct objc_super _g1b_s = { (__bridge __unsafe_unretained id)(__bridge void *)(OBJ), (SUP) }; \
     ((RET (*) ARGTYPES)objc_msgSendSuper)(&_g1b_s, (SEL_), ##__VA_ARGS__); })
 
+// `[[cls alloc] initWith...]` through an objc_msgSend cast with the ARC contract of an init method: the receiver is CONSUMED and the result is +1 (owned). A plain
+// `((id (*)(id, SEL, ...))objc_msgSend)([cls alloc], ...)` tells ARC nothing about that: it releases the `[cls alloc]` temporary after the call, which is a DOUBLE RELEASE
+// whenever the stock init releases `self` and returns another object. -[SBAppLayout initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:
+// centerConfiguration:environment:hidden:preferredDisplayOrdinal:] does exactly that (16.0 0x1c628a6c0: it interns layouts in a global NSMutableSet and returns the cached equal
+// instance, 0x1c628ab00 `member:`): crash records c3e82660 entry pid 92376, SIGSEGV in objc_release <- G1C_Wdd_AddItem. Use this macro for every alloc+init cast of a class
+// whose init may return another instance (SBAppLayout) - it is correct for every init.   Usage: G1B_INIT(id, long long)([cls alloc], sel, a, b)
+#define G1B_INIT(...) ((__attribute__((ns_returns_retained)) id (*)(__attribute__((ns_consumed)) id, SEL, __VA_ARGS__))objc_msgSend)
+
 // Object state of run-time classes (see the header comment).
 #define G1B_GET(obj, key)      objc_getAssociatedObject((obj), &(key))
 #define G1B_SET(obj, key, val) objc_setAssociatedObject((obj), &(key), (val), OBJC_ASSOCIATION_RETAIN_NONATOMIC)
