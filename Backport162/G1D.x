@@ -2260,16 +2260,34 @@ static NSString *G1D_TraceResp(id r) {
 }
 %group G1D_ExtTrace
 %hook SBHomeToSwitcherSwitcherModifier
-- (id)transitionWillUpdate { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeToSwitcher transitionWillUpdate -> %@", G1D_TraceResp(r)); return r; }
-- (id)handleTimerEvent:(id)event { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r; }
+- (id)transitionWillUpdate {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeToSwitcher transitionWillUpdate -> %@", G1D_TraceResp(r)); return r;
+}
+- (id)handleTimerEvent:(id)event {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r;
+}
 %end
 %hook SBHomeGestureToSwitcherSwitcherModifier
-- (id)transitionWillBegin { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeGestureToSwitcher transitionWillBegin -> %@", G1D_TraceResp(r)); return r; }
-- (id)handleTimerEvent:(id)event { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeGestureToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r; }
+- (id)transitionWillBegin {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeGestureToSwitcher transitionWillBegin -> %@", G1D_TraceResp(r)); return r;
+}
+- (id)handleTimerEvent:(id)event {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeGestureToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r;
+}
 %end
 %hook SBForcePressToSwitcherSwitcherModifier
-- (id)transitionWillBegin { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBForcePressToSwitcher transitionWillBegin -> %@", G1D_TraceResp(r)); return r; }
-- (id)handleTimerEvent:(id)event { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBForcePressToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r; }
+- (id)transitionWillBegin {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: SBForcePressToSwitcher transitionWillBegin -> %@", G1D_TraceResp(r)); return r;
+}
+- (id)handleTimerEvent:(id)event {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: SBForcePressToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r;
+}
 %end
 %hook SBSwitcherController
 - (BOOL)toggleMainSwitcherNoninteractivelyWithSource:(long long)source animated:(BOOL)animated {
