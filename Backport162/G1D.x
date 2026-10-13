@@ -2413,6 +2413,23 @@ static BOOL G1D_SGM_PiPAllows(id sgm, CGPoint loc) {
 %end
 %end // G1D_SGMReceive
 
+// ---- -[SBAppSwitcherSnapshotImageCache _representedApplicationSceneEntityForDisplayItem:] (crash 659b3ad0: disconnecting the extended display with a window on it) ----
+// 16.0 0x1c5e45fdc asks the delegate for -sceneHandleProviderForImageCache: (the display's scene manager) and builds the entity unconditionally; with the display gone the answer is nil and
+// SBDeviceApplicationSceneEntity's NSParameterAssert(sceneHandleProvider) raises ("Invalid parameter not satisfying: sceneHandleProvider") out of a dispatch block.  16.2 0x1c72b84f4
+// checks it (0x1c72b85c8: provider == nil && application != nil -> _SBLogSwitcherSnapshotCache error "no scene handle provider" and the method answers nil instead of creating the entity).
+%group G1D_SnapshotNoScene
+%hook SBAppSwitcherSnapshotImageCache
+- (id)_representedApplicationSceneEntityForDisplayItem:(id)item {
+    id provider = G1B_Send1(G1B_Send0((id)self, @selector(delegate)), NSSelectorFromString(@"sceneHandleProviderForImageCache:"), (id)self);
+    if (!provider) {
+        if (BP_LogEnabled()) BP_Log(@"g1d: snapshot cache: no scene handle provider for %@ (display disconnected) -> no entity (16.2 does the same)", item);
+        return nil;
+    }
+    return %orig;
+}
+%end
+%end // G1D_SnapshotNoScene
+
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
@@ -2434,6 +2451,7 @@ void G1D_Setup(void) {
     %init(G1D_DockFocus);
     %init(G1D_DockHidden);
     %init(G1D_ExtTrace);
+    if (BP_OnName("g1d_snapguard")) { %init(G1D_SnapshotNoScene); }
     if (BP_OnName("g1d_sgmreceive")) { %init(G1D_SGMReceive); }
     if (BP_OnName("g1d_emptydismiss")) { %init(G1D_EmptyDismiss); }
 }

@@ -90,6 +90,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 |---|---|---|
 | g3c | Zoom (top-affordance menu item and the keyboard shortcut) builds the 16.2 request: largest sizing policy, attributed size Unspecified; 16.2 has no un-zoom through this item | `g3c` |
 | g3c_addwin | "Add Another Window" sends only the 16.2 peek request (16.0 also forced the unlocked environment mode) | `g3c_addwin` |
+| g1d_snapguard | Snapshot cache returns no entity when the display has no scene handle provider (16.2) instead of asserting - fixes the crash when the extended display is disconnected with a window on it | `g1d_snapguard` |
 | g1d_sgmreceive | 16.2 base -shouldSystemGestureReceiveTouchWithLocation: (PiP content never starts a system gesture); fixes window drag/resize/strip drag on the external display | `g1d_sgmreceive` |
 | g3c_endpeek | The app picked after "Add Another Window" joins the peeking stage (16.2 end-of-peek branch) instead of replacing it | `g3c_endpeek` |
 | g1d_emptydismiss | Empty app switcher dismisses itself even when its transition modifier ended before the 0.2 s timer (external display) | `g1d_emptydismiss` |
