@@ -408,6 +408,7 @@ void BP_G2_Setup(void);                // G2.x
 void BP2B_Setup(void);                 // G2B.x
 void G1C_Setup(void);                  // G1C.x
 void G1D_Setup(void);                  // G1D.x   (coordinator / gesture manager / PiP morph)
+void PIPStop_Setup(void);              // PIPStop.x (PiP stop / expand per display)
 void BP_G3_Setup(void);                // G3.x
 void BP_G3B_Setup(void);               // G3B.x
 void G3C_Setup(void);                  // G3C.x
@@ -432,6 +433,7 @@ void G4B_Setup(void);                  // G4B.x
         BP2B_Setup();                  // group 2b: switcher view
         G1C_Setup();                   // group 1c: modifier rewrites (its %init(G1C_VCIds) is last, after group 2b)
         G1D_Setup();                   // group 1d: coordinator / gesture manager / PiP morph (after 1b, 2b, 1c: it replaces a few VC methods)
+        PIPStop_Setup();               // PiP stop / expand per display (16.2 SBPIPPegasusAdapter), independent of the other groups
         BP_G3_Setup();                 // group 3: plumbing
         BP_G3B_Setup();                // group 3b
         G3C_Setup();                   // group 3c: Zoom on a full-screen app
