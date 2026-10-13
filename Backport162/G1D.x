@@ -2299,6 +2299,22 @@ static NSString *G1D_TraceResp(id r) {
     return r;
 }
 %end
+// card close by a two-finger trackpad swipe up (the card's own kill scroll view): where does it stop on the external display?
+%hook SBFluidSwitcherItemContainer
+- (void)setKillable:(BOOL)killable {
+    %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: card %p setKillable %d (killAxis %lld)", self, killable, G1B_SendLL0((id)self, NSSelectorFromString(@"killAxis")));
+}
+- (BOOL)_scrollViewShouldPanGestureTryToBegin:(id)scrollView {
+    BOOL r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: card %p kill scroll view asked to begin a pan -> %d (killable %d, killingProgress %f)", self, r, G1B_SendB0((id)self, NSSelectorFromString(@"isKillable")), G1B_Dbl0((id)self, NSSelectorFromString(@"killingProgress")));
+    return r;
+}
+- (void)scrollViewWillBeginDragging:(id)scrollView {
+    %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: card %p kill scroll view began dragging (killable %d)", self, G1B_SendB0((id)self, NSSelectorFromString(@"isKillable")));
+}
+%end
 %end // G1D_ExtTrace
 
 // ---- empty switcher on an external display: the dismiss timer outlives its transition modifier ----
