@@ -282,7 +282,8 @@ static void G3C_SendZoom(id workspace, id cfg, long long source, id handle, id w
 // that case (same entities / space / attributes as the stock result, which for a peek request equals the previous state, only peek and mode set the 16.2 way).
 static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }           // _SBPeekConfigurationIsValid (16.2 0x1c77229fc)
 @interface NSObject (BPG3CPeek)
-- (id)_mainWorkspace;
+- (id)_switcherControllerForDisplayIdentity:(id)identity;
+- (id)displayIdentity;
 - (BOOL)isChamoisWindowingUIEnabled;
 - (id)_recentAppLayouts;
 - (id)recentsIncludingHiddenAppLayouts:(BOOL)hidden;
@@ -301,10 +302,13 @@ static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }          
     if (!r || !ctx || !BP_OnName("g3c_addwin") || ![ctx respondsToSelector:@selector(requestedPeekConfiguration)]) return r;
     long long req = [ctx requestedPeekConfiguration];
     if (!G3C_PeekValid(req)) return r;
-    id ws = [self respondsToSelector:@selector(_mainWorkspace)] ? [self _mainWorkspace] : nil;
-    if (![ws respondsToSelector:@selector(isChamoisWindowingUIEnabled)] || ![ws isChamoisWindowingUIEnabled]) return r;
+    // 16.0 0x1c5e23430..0x1c5e2351c: chamois = [[self _switcherControllerForDisplayIdentity:[request displayIdentity]] isChamoisWindowingUIEnabled]
+    // (the flag lives on the per-display switcher controller, NOT on SBMainWorkspace; request = [ctx request], previous = [ctx previousLayoutState])
+    id rq = [ctx respondsToSelector:@selector(request)] ? [ctx request] : nil;
+    id di = [rq respondsToSelector:@selector(displayIdentity)] ? [rq displayIdentity] : nil;
+    id sc = [self respondsToSelector:@selector(_switcherControllerForDisplayIdentity:)] ? [self _switcherControllerForDisplayIdentity:di] : nil;
+    if (![sc respondsToSelector:@selector(isChamoisWindowingUIEnabled)] || ![sc isChamoisWindowingUIEnabled]) return r;
     id prev = [ctx respondsToSelector:@selector(previousLayoutState)] ? [ctx previousLayoutState] : nil;
-    if (!prev && [ctx respondsToSelector:@selector(request)]) { id rq = [ctx request]; prev = [rq respondsToSelector:@selector(previousLayoutState)] ? [rq previousLayoutState] : nil; }
     if (!prev || G3C_PeekValid([prev peekConfiguration])) return r;                // only the START of a peek (16.2 0x1c7296014)
     long long mode = 1;
     if (BP_OnName("g3c_peekmode")) {
