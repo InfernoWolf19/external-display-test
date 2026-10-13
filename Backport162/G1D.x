@@ -2315,6 +2315,19 @@ static NSString *G1D_TraceResp(id r) {
     if (BP_LogEnabled()) BP_Log(@"exttrace: card %p kill scroll view began dragging (killable %d)", self, G1B_SendB0((id)self, NSSelectorFromString(@"isKillable")));
 }
 %end
+%hook SBFluidSwitcherViewController
+- (void)killContainer:(id)container forReason:(long long)reason {
+    if (BP_LogEnabled()) BP_Log(@"exttrace: killContainer %@ reason %lld (view controller %p)", G1B_Send0(container, @selector(appLayout)), reason, self);
+    %orig;
+}
+%end
+%hook SBSwitcherModifier
+- (id)handleRemovalEvent:(id)event {
+    id r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: removal event on %@: phase %lld reason %lld layout %@ -> %@", NSStringFromClass(object_getClass(self)), G1B_SendLL0(event, @selector(phase)), G1B_SendLL0(event, @selector(reason)), G1B_Send0(event, @selector(appLayout)), G1D_TraceResp(r));
+    return r;
+}
+%end
 %end // G1D_ExtTrace
 
 // ---- empty switcher on an external display: the dismiss timer outlives its transition modifier ----
