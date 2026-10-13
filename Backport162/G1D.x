@@ -2375,7 +2375,8 @@ static BOOL G1D_IsEmptyTransition(id m) {
     NSArray *live = G1B_SUPER(id, NSClassFromString(@"SBSwitcherModifier"), self, @selector(appLayouts), (struct objc_super *, SEL));
     if (![live isKindOfClass:[NSArray class]] || !live.count) return r;             // the chain really has no layouts
     if (BP_LogEnabled()) BP_Log(@"g1d: routing cache stale (every child empty, chain has %lu app layouts: %@) -> new generation", (unsigned long)live.count, live);
-    if ([self respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(self, @selector(newAppLayoutsGenCount));
+    id me = (id)self;
+    if ([me respondsToSelector:@selector(newAppLayoutsGenCount)]) (void)G1B_SendLL0(me, @selector(newAppLayoutsGenCount));
     return %orig(m);
 }
 %end
