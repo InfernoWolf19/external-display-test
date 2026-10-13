@@ -3,7 +3,7 @@
 //
 // Integration: call G1D_Setup() from the %ctor after G1B_Setup() / BP2B_Setup() / G1C_Setup() (it adds methods and replaces a few VC methods that G2.x / G2B.m
 // stubbed, so it must run after them; it is harmless when it runs earlier because every installer re-checks what exists).
-// Every part is default-on; Backport162.off.<name> switches one off. Names: g1d (whole file), g1d_model, g1d_request, g1d_removal, g1d_newwindow, g1d_gesture,
+// Every part is default-on; Backport162.off.<name> switches one off. Names: g1d (whole file), g1d_model, g1d_request, g1d_removal, g1d_removalowner, g1d_newwindow, g1d_gesture,
 // g1d_vcdrag, g1d_pointer, g1d_tongue, g1d_gmtouch, g1d_windowdrag, g1d_updatemode, g1d_pip, g1d_pipframes, g1d_piprestore, g1d_pipkeyboard, g1d_pipinsets, g1d_extgestures.
 
 #import <Foundation/Foundation.h>
@@ -385,6 +385,8 @@ static __thread __unsafe_unretained id tSetChamoisSC;               // SBSwitche
 static __thread __unsafe_unretained id tCfgReq, tCfgLayout;         // SBSwitcherTransitionRequest and the layout it must report inside -_configureRequest:...
 static NSString *G1D_TraceResp(id r);
 static __thread __unsafe_unretained id tRRSelf, tRRLayouts;         // coordinator and the removal request's app layouts inside -_switcherModelRemovalResultsForRequest:forReason:
+static __thread __unsafe_unretained id tExecOwner, tExecLayout;    // owner switcher controller / layout of the removal action that -[SBSwitcherModelRemovalResults executeActionForAppLayout:] is running
+static char kRemovalOwners;                                           // associated object on the removal results: NSMapTable app layout -> owning switcher controller (16.2 captures it per layout, 0x1c76e0740)
 static __thread NSUInteger tRRIdx;
 static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinator and the to-layout state inside the mode 1 -> 3 part of transitionDidEnd
 
@@ -476,7 +478,17 @@ static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinat
     id sRRSelf = tRRSelf, sRRLayouts = tRRLayouts; NSUInteger sIdx = tRRIdx;
     NSArray *ls = [G1B_Send0(req, @selector(appLayouts)) isKindOfClass:[NSArray class]] ? G1B_Send0(req, @selector(appLayouts)) : [G1B_Send0(req, @selector(appLayouts)) respondsToSelector:@selector(allObjects)] ? [G1B_Send0(req, @selector(appLayouts)) allObjects] : nil;
     tRRSelf = self; tRRLayouts = ls; tRRIdx = 0;
+    // 16.2 0x1c76e0740: the owner of every removed layout is read while the layouts are still in the model and captured by the per-item action block
+    NSMapTable *owners = nil;
+    if (G1D_ON("g1d_removalowner") && ls.count) {
+        owners = [NSMapTable strongToStrongObjectsMapTable];
+        for (id l in ls) {
+            id sc = G1D_Msg1((id)self, NSSelectorFromString(@"switcherControllerForAppLayout:"), l);
+            if (sc) [owners setObject:sc forKey:l];
+        }
+    }
     id r = %orig;
+    if (r && owners) objc_setAssociatedObject(r, &kRemovalOwners, owners, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     tRRSelf = sRRSelf; tRRLayouts = sRRLayouts; tRRIdx = sIdx;
     if (BP_LogEnabled()) BP_Log(@"g1d: model removal results for %lu layout(s), reason %lld: %@", (unsigned long)ls.count, reason, G1D_TraceResp(r));
     return r;
@@ -2417,6 +2429,37 @@ static BOOL G1D_SGM_PiPAllows(id sgm, CGPoint loc) {
 // 16.0 0x1c5e45fdc asks the delegate for -sceneHandleProviderForImageCache: (the display's scene manager) and builds the entity unconditionally; with the display gone the answer is nil and
 // SBDeviceApplicationSceneEntity's NSParameterAssert(sceneHandleProvider) raises ("Invalid parameter not satisfying: sceneHandleProvider") out of a dispatch block.  16.2 0x1c72b84f4
 // checks it (0x1c72b85c8: provider == nil && application != nil -> _SBLogSwitcherSnapshotCache error "no scene handle provider" and the method answers nil instead of creating the entity).
+// ---- 16.2 removal action block (0x1c76e0b00; 16.0 0x1c624b928) ----
+// The per-item action removes the layout role through the content view controller of the switcher controller that owns the layout ([[sc contentViewController] removeLayoutRole:...]).
+// 16.0 sends it to [[coordinator _embeddedDisplaySwitcherController] contentViewController], always the main display's: on the extended display the owner never dispatches the
+// removal events (type 15 phases 1/2, produced only inside -removeLayoutRole:inSpace:mutationBlock:reason:), so the switcher keeps the layout and never dismisses.
+// The block cannot be edited, so the receiver is redirected while the action of that layout runs.
+%group G1D_RemovalOwner
+%hook SBSwitcherModelRemovalResults
+- (void)executeActionForAppLayout:(id)layout {
+    id sO = tExecOwner, sL = tExecLayout;
+    tExecOwner = [(NSMapTable *)objc_getAssociatedObject(self, &kRemovalOwners) objectForKey:layout];
+    tExecLayout = layout;
+    %orig;
+    tExecOwner = sO; tExecLayout = sL;
+}
+%end
+%hook SBFluidSwitcherViewController
+- (void)removeLayoutRole:(long long)role inSpace:(id)space mutationBlock:(id)mutation reason:(long long)reason {
+    if (tExecOwner && tExecLayout && [space isEqual:tExecLayout]) {
+        id owner = G1B_Send0(tExecOwner, @selector(contentViewController));
+        if (owner && owner != (id)self) {
+            if (BP_LogEnabled()) BP_Log(@"g1d: removal of %@ runs on its own display's switcher (role %lld, reason %lld)", space, role, reason);
+            ((void (*)(id, SEL, long long, id, id, long long))objc_msgSend)(owner, _cmd, role, space, mutation, reason);
+            return;
+        }
+        if (!owner && BP_LogEnabled()) BP_Log(@"g1d: removal of %@ has no owning switcher controller, stock receiver used", space);
+    }
+    %orig;
+}
+%end
+%end // G1D_RemovalOwner
+
 %group G1D_SnapshotNoScene
 %hook SBAppSwitcherSnapshotImageCache
 - (id)_representedApplicationSceneEntityForDisplayItem:(id)item {
@@ -2452,6 +2495,7 @@ void G1D_Setup(void) {
     %init(G1D_DockHidden);
     %init(G1D_ExtTrace);
     if (BP_OnName("g1d_snapguard")) { %init(G1D_SnapshotNoScene); }
+    if (BP_OnName("g1d_removalowner")) { %init(G1D_RemovalOwner); }
     if (BP_OnName("g1d_sgmreceive")) { %init(G1D_SGMReceive); }
     if (BP_OnName("g1d_emptydismiss")) { %init(G1D_EmptyDismiss); }
 }
