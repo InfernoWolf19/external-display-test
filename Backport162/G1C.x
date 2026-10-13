@@ -6169,9 +6169,9 @@ void G1C_Setup(void) {
     G1C_BuildAppSwitcher();
     G1C_BuildStrip();
     G1C_InstallFullScreen();
-    G1C_InstallHomeScreen();
     G1C_InstallRemovedForwarders();
-    G1C_BuildFloors();
+    G1C_BuildFloors();                   // sets gHsParent, which the Home screen conversion below needs (it used to run before this: the 16.2 Home floor never got installed)
+    G1C_InstallHomeScreen();
     G1C_BuildWindowDragFamily();
     %init(G1C_WdEvent);
     %init(G1C_EventDefault);

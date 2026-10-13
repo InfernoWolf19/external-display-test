@@ -51,6 +51,7 @@
 
 // interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 @interface SBMedusaDecoratedDeviceApplicationSceneViewController : UIViewController @end
+@interface SBMainDisplayLayoutStateManager : NSObject @end
 
 @interface NSObject (BPG3C)
 - (id)_windowScene;
@@ -261,6 +262,72 @@ static void G3C_SendZoom(id workspace, id cfg, long long source, id handle, id w
 
 %end // G3C_Zoom
 
+// ============================================================================================================
+// Add Another Window with 2+ windows on the stage  (switch "g3c_addwin", sub-switch "g3c_peekmode")
+// ============================================================================================================
+// ROOT CAUSE.  The type-12 request only carries requestedPeekConfiguration = 2 (see the handler above).  What turns it into a layout state is
+// -[SBMainDisplayLayoutStateManager _layoutStateForApplicationTransitionContext:] (16.0 0x1c5e23430, 16.2 0x1c72952ec) and that method CHANGED:
+//   16.0 0x1c5e240e8..0x1c5e24138:  if (_SBPeekConfigurationIsValid(requestedPeek)) {
+//                                       drop = ([[previousState elements] count] > 1) && chamoisWindowingUIEnabled;      // 0x1c5e240f4..0x1c5e24110
+//                                       if (drop) { peek = none(1); mode = previousState.unlockedEnvironmentMode; spaceConfiguration = previous's } }
+//                                   i.e. a stage that already holds two or more windows silently discards the peek: the transition ends with the identical layout
+//                                   (log: "addwin: transition end ... modes 3->3 peek 1->1", N unchanged).  One window: the peek survives (mode 1, peek 2).
+//   16.2 0x1c7295ffc..0x1c7296248:  no element-count test at all.  For chamois with a valid requested peek and NO peek in the previous state (0x1c7296014 ->
+//                                   0x1c72961cc):  recents = [[self _recentAppLayouts] recentsIncludingHiddenAppLayouts:NO];
+//                                                  unlockedEnvironmentMode = 1 + (recents.count >= 2);                   // 0x1c72961f4..0x1c7296218 (cinc), stored to
+//                                                  the mode slot (the same slot 0x1c7297514 compares with 2), peek = the requested one.
+//                                   (home screen to pick from when there is nothing else open, the app switcher with the peeking stage otherwise)
+// 16.0 would also have left mode 1 for the one-window case (mode 0 + valid peek -> 1, 0x1c5e24c94), so the 16.2 mode rule is applied for both.
+// The 16.0 method is a ~3300 instruction body that cannot be re-entered with a different decision, so it runs unchanged and its RESULT is corrected for exactly
+// that case (same entities / space / attributes as the stock result, which for a peek request equals the previous state, only peek and mode set the 16.2 way).
+static BOOL G3C_PeekValid(long long cfg) { return (cfg & ~1LL) == 2; }           // _SBPeekConfigurationIsValid (16.2 0x1c77229fc)
+@interface NSObject (BPG3CPeek)
+- (id)_mainWorkspace;
+- (BOOL)isChamoisWindowingUIEnabled;
+- (id)_recentAppLayouts;
+- (id)recentsIncludingHiddenAppLayouts:(BOOL)hidden;
+- (long long)requestedPeekConfiguration;
+- (long long)peekConfiguration;
+- (long long)unlockedEnvironmentMode;
+- (id)previousLayoutState;
+- (id)_initWithLayoutState:(id)state;
+- (id)request;
+@end
+
+%group G3C_Peek
+%hook SBMainDisplayLayoutStateManager
+- (id)_layoutStateForApplicationTransitionContext:(id)ctx {
+    id r = %orig;
+    if (!r || !ctx || !BP_OnName("g3c_addwin") || ![ctx respondsToSelector:@selector(requestedPeekConfiguration)]) return r;
+    long long req = [ctx requestedPeekConfiguration];
+    if (!G3C_PeekValid(req)) return r;
+    id ws = [self respondsToSelector:@selector(_mainWorkspace)] ? [self _mainWorkspace] : nil;
+    if (![ws respondsToSelector:@selector(isChamoisWindowingUIEnabled)] || ![ws isChamoisWindowingUIEnabled]) return r;
+    id prev = [ctx respondsToSelector:@selector(previousLayoutState)] ? [ctx previousLayoutState] : nil;
+    if (!prev && [ctx respondsToSelector:@selector(request)]) { id rq = [ctx request]; prev = [rq respondsToSelector:@selector(previousLayoutState)] ? [rq previousLayoutState] : nil; }
+    if (!prev || G3C_PeekValid([prev peekConfiguration])) return r;                // only the START of a peek (16.2 0x1c7296014)
+    long long mode = 1;
+    if (BP_OnName("g3c_peekmode")) {
+        id recents = [self respondsToSelector:@selector(_recentAppLayouts)] ? [self _recentAppLayouts] : nil;
+        id list = [recents respondsToSelector:@selector(recentsIncludingHiddenAppLayouts:)] ? [recents recentsIncludingHiddenAppLayouts:NO] : nil;
+        mode = ([list respondsToSelector:@selector(count)] && [(NSArray *)list count] >= 2) ? 2 : 1;
+    } else mode = [r unlockedEnvironmentMode];
+    long long haveMode = [r unlockedEnvironmentMode], havePeek = [r peekConfiguration];
+    if (havePeek == req && haveMode == mode) return r;
+    if (![r respondsToSelector:@selector(_initWithLayoutState:)]) return r;
+    id n = [[[r class] alloc] _initWithLayoutState:r];
+    Ivar ip = class_getInstanceVariable([n class], "_peekConfiguration"), im = class_getInstanceVariable([n class], "_unlockedEnvironmentMode");
+    if (!n || !ip || !im) return r;
+    *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(ip)) = req;
+    *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(im)) = mode;
+    BP_Log(@"[g3c] add window: stock layout state kept mode %lld peek %lld (previous stage elements %lu) -> 16.2 mode %lld peek %lld", haveMode, havePeek,
+           (unsigned long)[(NSArray *)[(id)prev valueForKey:@"elements"] count], mode, req);
+    return n;
+}
+%end
+%end // G3C_Peek
+
 void G3C_Setup(void) {
     %init(G3C_Zoom);
+    %init(G3C_Peek);
 }
