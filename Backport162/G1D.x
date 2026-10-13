@@ -2373,6 +2373,44 @@ static BOOL G1D_IsEmptyTransition(id m) {
 %end // G1D_EmptyDismiss
 
 
+// ---- -[SBSystemGestureManager shouldSystemGestureReceiveTouchWithLocation:] (NEW in 16.2, 0x1c77b7600) ----
+// 16.0 only has the Main display flavour; the external display's manager (SBExternalDisplaySystemGestureManager) does not answer the selector, so every G1D check that asks the scene's
+// system gesture manager "may a system gesture receive this touch" (window drag, live resize, tap to bring forward, strip drag) was NO on the external display: log 7eb313e5 / 9757852f
+// "window drag receiveTouch REFUSED ... receives 0 ... sgm SBExternalDisplaySystemGestureManager" (nothing could be moved, resized or dragged there).
+// 16.2 base body: window = [self windowForSystemGestures]; scene = [windowSceneManager windowSceneForDisplayIdentity:[[[window windowScene] screen] displayIdentity]];
+// point = [[[scene screen] fixedCoordinateSpace] convertPoint:location toCoordinateSpace:[scene coordinateSpace]]; return ![[scene pictureInPictureManager] isPointWithinAnyPictureInPictureContent:point];
+// (log line "system gesture receive touch at %@: %@").  The 16.2 Main flavour (0x1c775ce54, ...ignoringUCB:) calls the base first and ANDs it with its own result: a touch on PiP content
+// never starts a system gesture.
+static BOOL G1D_SGM_PiPAllows(id sgm, CGPoint loc) {
+    id window = G1B_Send0(sgm, NSSelectorFromString(@"windowForSystemGestures"));
+    id scene = G1B_Send0(window, NSSelectorFromString(@"windowScene"));
+    id screen = G1B_Send0(scene, NSSelectorFromString(@"screen"));
+    id di = G1B_Send0(screen, NSSelectorFromString(@"displayIdentity"));
+    id wsm = G1B_Send0([UIApplication sharedApplication], NSSelectorFromString(@"windowSceneManager"));
+    id target = (wsm && di && [wsm respondsToSelector:NSSelectorFromString(@"windowSceneForDisplayIdentity:")]) ? G1B_Send1(wsm, NSSelectorFromString(@"windowSceneForDisplayIdentity:"), di) : nil;
+    if (!target) target = scene;                                                    // same scene: the manager's own window's scene
+    id pip = G1B_Send0(target, NSSelectorFromString(@"pictureInPictureManager"));
+    id fixed = G1B_Send0(G1B_Send0(target, NSSelectorFromString(@"screen")), NSSelectorFromString(@"fixedCoordinateSpace"));
+    id space = G1B_Send0(target, NSSelectorFromString(@"coordinateSpace"));
+    SEL conv = NSSelectorFromString(@"convertPoint:toCoordinateSpace:"), within = NSSelectorFromString(@"isPointWithinAnyPictureInPictureContent:");
+    CGPoint pt = (fixed && space && [fixed respondsToSelector:conv]) ? ((CGPoint (*)(id, SEL, CGPoint, id))objc_msgSend)(fixed, conv, loc, space) : loc;
+    BOOL inPiP = (pip && [pip respondsToSelector:within]) ? ((BOOL (*)(id, SEL, CGPoint))objc_msgSend)(pip, within, pt) : NO;
+    return !inPiP;
+}
+%group G1D_SGMReceive
+%hook SBSystemGestureManager
+%new
+- (BOOL)shouldSystemGestureReceiveTouchWithLocation:(CGPoint)loc { return G1D_SGM_PiPAllows((id)self, loc); }
+%end
+%hook SBMainDisplaySystemGestureManager
+- (BOOL)shouldSystemGestureReceiveTouchWithLocation:(CGPoint)loc ignoringUCB:(BOOL)ucb {
+    BOOL r = %orig;
+    if (!r) return NO;
+    return G1D_SGM_PiPAllows((id)self, loc);
+}
+%end
+%end // G1D_SGMReceive
+
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
@@ -2394,6 +2432,7 @@ void G1D_Setup(void) {
     %init(G1D_DockFocus);
     %init(G1D_DockHidden);
     %init(G1D_ExtTrace);
+    if (BP_OnName("g1d_sgmreceive")) { %init(G1D_SGMReceive); }
     if (BP_OnName("g1d_emptydismiss")) { %init(G1D_EmptyDismiss); }
 }
 #pragma clang diagnostic pop
