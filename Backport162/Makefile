@@ -5,10 +5,14 @@ INSTALL_TARGET_PROCESSES = SpringBoard
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = Backport162
+TWEAK_NAME = Backport162 Backport162AV
 
 Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x BPCrash.m
 Backport162_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
 Backport162_FRAMEWORKS = Foundation CoreGraphics UIKit QuartzCore
+
+Backport162AV_FILES = AV.x
+Backport162AV_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
+Backport162AV_FRAMEWORKS = Foundation UIKit
 
 include $(THEOS_MAKE_PATH)/tweak.mk

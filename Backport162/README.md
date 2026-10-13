@@ -92,6 +92,7 @@ Needs ExtendedDisplayEnabler for the external display features.
 | g3c_addwin | "Add Another Window" sends only the 16.2 peek request (16.0 also forced the unlocked environment mode) | `g3c_addwin` |
 | g1d_snapguard | Snapshot cache returns no entity when the display has no scene handle provider (16.2) instead of asserting - fixes the crash when the extended display is disconnected with a window on it | `g1d_snapguard` |
 | g1d_removalowner | Closing a card removes the layout through the switcher that owns it (16.2) instead of always the main display's - closing the last/only app on the extended display now updates the model and auto-dismisses | `g1d_removalowner` |
+| avkit | (Backport162AV, loads into apps via AVKit) With an extended display connected the video player never makes the second screen connection ready (16.2 asks the AVKit shared preferences service `extendedDisplayActive:`; here computed from UIScreen) - fixes video moved to the extended display with an AirPlay/TV out placeholder on the iPad | `avkit` |
 | g1d_sgmreceive | 16.2 base -shouldSystemGestureReceiveTouchWithLocation: (PiP content never starts a system gesture); fixes window drag/resize/strip drag on the external display | `g1d_sgmreceive` |
 | g3c_endpeek | The app picked after "Add Another Window" joins the peeking stage (16.2 end-of-peek branch) instead of replacing it | `g3c_endpeek` |
 | g1d_emptydismiss | Empty app switcher dismisses itself even when its transition modifier ended before the 0.2 s timer (external display) | `g1d_emptydismiss` |
