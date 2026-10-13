@@ -106,6 +106,10 @@ static SEL G1B_HandlerForEventType(long long t) {
         }
         return handled ? G1B_Send1(self, h, event) : nil;
     }
+    if (et == 15 && BP_LogEnabled()) {                                   // SBRemovalSwitcherModifierEvent (16.0 -type 0x1c5f85794 = 0xf): which modifiers of the chain see a card removal
+        static int loggedRemoval;
+        if (loggedRemoval++ < 200) BP_Log(@"g1b: removal event (type 15) on %@: phase %lld layout %@", NSStringFromClass(object_getClass(self)), G1B_SendLL0(event, @selector(phase)), G1B_Send0(event, @selector(appLayout)));
+    }
     return %orig;
 }
 %end

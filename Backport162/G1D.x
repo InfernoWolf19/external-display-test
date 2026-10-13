@@ -383,6 +383,7 @@ static long long G1D_OrdinalMask(id coord, id sc) {
 static __thread __unsafe_unretained id tConnecting;                  // coordinator inside -windowSceneDidConnect:
 static __thread __unsafe_unretained id tSetChamoisSC;               // SBSwitcherController inside -setChamoisWindowingUIEnabled: (when the value changes)
 static __thread __unsafe_unretained id tCfgReq, tCfgLayout;         // SBSwitcherTransitionRequest and the layout it must report inside -_configureRequest:...
+static NSString *G1D_TraceResp(id r);
 static __thread __unsafe_unretained id tRRSelf, tRRLayouts;         // coordinator and the removal request's app layouts inside -_switcherModelRemovalResultsForRequest:forReason:
 static __thread NSUInteger tRRIdx;
 static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinator and the to-layout state inside the mode 1 -> 3 part of transitionDidEnd
@@ -477,6 +478,7 @@ static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinat
     tRRSelf = self; tRRLayouts = ls; tRRIdx = 0;
     id r = %orig;
     tRRSelf = sRRSelf; tRRLayouts = sRRLayouts; tRRIdx = sIdx;
+    if (BP_LogEnabled()) BP_Log(@"g1d: model removal results for %lu layout(s), reason %lld: %@", (unsigned long)ls.count, reason, G1D_TraceResp(r));
     return r;
 }
 - (id)_currentAppLayout {
@@ -2313,19 +2315,6 @@ static NSString *G1D_TraceResp(id r) {
 - (void)scrollViewWillBeginDragging:(id)scrollView {
     %orig;
     if (BP_LogEnabled()) BP_Log(@"exttrace: card %p kill scroll view began dragging (killable %d)", self, G1B_SendB0((id)self, NSSelectorFromString(@"isKillable")));
-}
-%end
-%hook SBFluidSwitcherViewController
-- (void)killContainer:(id)container forReason:(long long)reason {
-    if (BP_LogEnabled()) BP_Log(@"exttrace: killContainer %@ reason %lld (view controller %p)", G1B_Send0(container, @selector(appLayout)), reason, self);
-    %orig;
-}
-%end
-%hook SBSwitcherModifier
-- (id)handleRemovalEvent:(id)event {
-    id r = %orig;
-    if (BP_LogEnabled()) BP_Log(@"exttrace: removal event on %@: phase %lld reason %lld layout %@ -> %@", NSStringFromClass(object_getClass(self)), G1B_SendLL0(event, @selector(phase)), G1B_SendLL0(event, @selector(reason)), G1B_Send0(event, @selector(appLayout)), G1D_TraceResp(r));
-    return r;
 }
 %end
 %end // G1D_ExtTrace
