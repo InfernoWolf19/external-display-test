@@ -390,6 +390,21 @@ BP162VCState *BP_G2_VCStateFor(id vc) {
 
 %end // %group G2VC
 
+// PORTABLE. 16.2 overrides -requireStripContentsInViewHierarchy with `return YES` in SBTransitionSwitcherModifier (0x1c746a124) and
+// SBGestureSwitcherModifier (0x1c7828710); the base answer (VC 0x1c7436c4c) is NO.  While a transition or gesture modifier is in the chain the strip
+// contents stay in the view hierarchy (the strip modifier's -handleEvent: forces a layout update when the value changes, see G1C strip).  Without it the
+// strip cards are torn out during a rotation and pop back in tiny and blurred when the transition ends (user video, rotation with several windows).
+%group G2StripRequire
+%hook SBTransitionSwitcherModifier
+%new
+- (BOOL)requireStripContentsInViewHierarchy { return YES; }
+%end
+%hook SBGestureSwitcherModifier
+%new
+- (BOOL)requireStripContentsInViewHierarchy { return YES; }
+%end
+%end // %group G2StripRequire
+
 // PARTIAL fallback for strategy (B) of section 0: if the extended-protocol hook did not take effect (no trampoline was installed
 // for a new selector), install forwarding implementations on SBSwitcherModifier that go straight to the root context provider
 // (the VC). Chain overrides (stage layout, strip progress in FullScreen/WindowDrag, ...) are ignored by this fallback.
@@ -2016,6 +2031,7 @@ static void BP_G2_SetupViewController(void) {
 void BP_G2_Setup(void) {
     %init(G2);
     %init(G2VC);
+    %init(G2StripRequire);
     BP_G2_InstallContextForwardersIfMissing();      // no-op when the extended protocols produced the trampolines
     BP_G2_SetupModel();                              // A3
     BP_G2_SetupLayoutData();                         // A5, A6, A8

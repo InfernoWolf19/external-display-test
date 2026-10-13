@@ -2246,6 +2246,40 @@ static void G1D_VC_PointerMoved(id self, SEL _cmd, id from, id to) {
 %end
 %end
 
+// ============================================================================================================
+// Extended display diagnostics (debug log only): the empty app switcher on an external display (user: status bar hides, no blur and no animation,
+// dismissed only by clicking, no auto-dismiss).  Both 16.0 and 16.2 decide the empty-switcher auto-dismiss in the same three transition modifiers
+// (SBHomeToSwitcher 0x1c7346fd0 / SBForcePressToSwitcher 0x1c788bac4 / SBHomeGestureToSwitcher 0x1c794f844: emptySwitcherDismissDelay + a timer that
+// emits SBDismissForEmptySwitcherSwitcherEventResponse).  These hooks only LOG what each of them returns and when its timer fires, so the log of an
+// empty switcher on the external display shows which transition modifier ran and whether the dismiss timer was ever scheduled or delivered.
+// ============================================================================================================
+static NSString *G1D_TraceResp(id r) {
+    if (!r) return @"nil";
+    NSString *d = [r description];
+    return d.length > 400 ? [[d substringToIndex:400] stringByAppendingString:@"..."] : d;
+}
+%group G1D_ExtTrace
+%hook SBHomeToSwitcherSwitcherModifier
+- (id)transitionWillUpdate { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeToSwitcher transitionWillUpdate -> %@", G1D_TraceResp(r)); return r; }
+- (id)handleTimerEvent:(id)event { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r; }
+%end
+%hook SBHomeGestureToSwitcherSwitcherModifier
+- (id)transitionWillBegin { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeGestureToSwitcher transitionWillBegin -> %@", G1D_TraceResp(r)); return r; }
+- (id)handleTimerEvent:(id)event { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBHomeGestureToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r; }
+%end
+%hook SBForcePressToSwitcherSwitcherModifier
+- (id)transitionWillBegin { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBForcePressToSwitcher transitionWillBegin -> %@", G1D_TraceResp(r)); return r; }
+- (id)handleTimerEvent:(id)event { id r = %orig; if (BP_LogEnabled()) BP_Log(@"exttrace: SBForcePressToSwitcher handleTimerEvent %@ -> %@", event, G1D_TraceResp(r)); return r; }
+%end
+%hook SBSwitcherController
+- (BOOL)toggleMainSwitcherNoninteractivelyWithSource:(long long)source animated:(BOOL)animated {
+    BOOL r = %orig;
+    if (BP_LogEnabled()) BP_Log(@"exttrace: toggleMainSwitcherNoninteractively source %lld animated %d display %@ -> %d", source, animated, G1B_Send0(self, NSSelectorFromString(@"displayIdentity")), r);
+    return r;
+}
+%end
+%end // G1D_ExtTrace
+
 void G1D_Setup(void) {
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
@@ -2266,5 +2300,6 @@ void G1D_Setup(void) {
     %init(G1D_PIPCtl);
     %init(G1D_DockFocus);
     %init(G1D_DockHidden);
+    %init(G1D_ExtTrace);
 }
 #pragma clang diagnostic pop
