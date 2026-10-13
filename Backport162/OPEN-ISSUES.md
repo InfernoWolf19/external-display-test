@@ -1,6 +1,6 @@
 # Backport162 - open issues (single source of truth; updated every time something changes)
 
-Last CI-green build: `5f87250` (0.7.3). Last build the user ran: `c83357c` (retain-crash fix; add-window still failed there).
+Last CI-green build: `b700f1c` (0.7.3); `130504d` building. Last build the user ran: `b700f1c`.
 
 ## Crashes / hangs
 1. **Retain crash (use-after-free)** when tapping the left strip area and when moving the pointer onto the extended display. Same bug, two entry paths. Earlier `_newMultitaskingModifier` +1 fix did NOT cure it. STATUS: agent investigating from the user's backtraces (specs/AUDIT-RETAIN-CRASH-0.7.3.md when done).
@@ -43,3 +43,9 @@ Last CI-green build: `5f87250` (0.7.3). Last build the user ran: `c83357c` (reta
 - Add-window crash 3->4 windows: the 16.0 routing modifier maps a child's last filtered layout back with indexOfObject:; the merged stage layout mixed peeked and other items so neither half was in the list. Layouts mixing peeked items now route whole to the content modifier (G1B filtering). `g1d_routingfresh` was tried and removed (did not help: log b12000a1).
 - Empty switcher on the external display auto-dismisses (`g1d_emptydismiss`, confirmed in log 5081160a). Two-finger trackpad swipe-up to close a card on the external display: card kill scroll view trace added (`exttrace: card ...`), result pending.
 - Pointer stuck as resize arrows on the external display: not investigated (likely the same refused gestures).
+
+## Added after b700f1c
+- Disconnecting the extended display with a window on it: crash fixed (`g1d_snapguard`, 16.2 snapshot cache guard). Confirmed on device in log 76c96b37 (guard line logged, no crash, windows migrated to the embedded scene).
+- Windows bunched while dragging + resize grabber vanishing on the main display after Add Another Window (log 43f88b77): a stale `SBContinuousExposePeekSwitcherModifier` stayed on the root after the pick merged the window into the stage (`g1b: filtering: layout mixes peeked and other items` on every layout pass). Fixed in 130504d: root `handleTransitionEvent:` retires the peek child at phase 3 when the target peek configuration is invalid (log line `GLITCH peek child retired ...`). Device-unverified.
+- OPEN: closing the last/only card on the extended display (two-finger swipe up): card disappears but the model keeps the layout, no removal event, no auto-dismiss. Needs the kill path analysis (`killContainer` -> coordinator -> `_removeDisplayItem...` per display).
+- OPEN: pointer stuck as resize arrows on the extended display (uninvestigated, maybe fixed by `g1d_sgmreceive`).
