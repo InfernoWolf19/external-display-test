@@ -56,6 +56,12 @@ Needs ExtendedDisplayEnabler for the external display features.
 | g2btongue | strip tongue view hosting | `g2btongue` |
 | cgregion | use CoreGraphics `CGRegion*` SPI (off: the built-in region fallback) | `cgregion` |
 
+### Group 2c: window resize grabber auto hide [G2C.x]
+
+| feature | what it ports | switch |
+|---|---|---|
+| g2c_autohide | 16.2 auto hide of the corner resize marks: `_updateAutoHideForItemContainer:appLayout:` and the call from `_setupLiveContentOverlayForAppLayout:itemContainer:overlay:` (a recycled window container no longer keeps the auto-hide flag of the app it showed before; the mark hides after the stock 2.0 s `autoHideTime` only when the window's app asks for home indicator auto hide); per window scene tap to unhide (`g2c_scenemgr`: windows on the extended display get their own `SBTransientUIInteractionManager`). specs/GRABBER-AUTOHIDE-0.7.4.md | `g2c_autohide`, `g2c_scenemgr` |
+
 ### Group 3: scene / window plumbing [G3.x]
 
 | feature | what it ports | switch |
