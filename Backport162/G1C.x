@@ -5178,6 +5178,18 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
                G1C_DbgLayout(G1B_Send0(event, @selector(fromAppLayout))), G1C_DbgLayout(G1B_Send0(event, @selector(toAppLayout))), G1B_SendLL0(event, @selector(fromPeekConfiguration)), cfg,
                G1C_DbgCls(fl), G1C_Resp(self, @selector(_effectiveEnvironmentMode)) ? G1B_SendLL0(self, @selector(_effectiveEnvironmentMode)) : -1, G1C_DbgLayout(G1B_GET(self, kRootEffStage)));
     }
+    if (phase == 3 && !G1C_PeekIsValid(cfg)) {
+        // The peek is over: 16.2 retires the peek modifier through its own state (SBContinuousExposePeekSwitcherModifier -setState: after its dismissal transition modifier ended, 0x1c78e5354).
+        // The log of a stage built by the add-window pick (43f88b77: "g1b: filtering: layout mixes peeked and other items" on every layout pass for the next 20 s in plain mode 3) shows our
+        // peek child was never retired once the pick merged the new window into the peeked stage: its content modifier (pile layout of the app switcher child) kept laying out the whole stage,
+        // so dragging one window moved the whole stack as a pile and the resize grabber never stayed (resize grabber visibility = NO in the app switcher modifier).  Retire it here.
+        SEL by0 = NSSelectorFromString(@"childModifierByKey:");
+        id stale = G1C_Resp(self, by0) ? G1B_Send1(self, by0, kG1CPeekKey) : nil;
+        if (stale && [self respondsToSelector:@selector(removeChildModifier:)]) {
+            if (BP_LogEnabled()) BP_Log(@"GLITCH peek child retired at the end of the transition (peek %lld -> none)", G1B_SendLL0(event, @selector(fromPeekConfiguration)));
+            G1B_SendV1(self, @selector(removeChildModifier:), stale);
+        }
+    }
     if ((phase == 2 || !animated) && G1C_PeekIsValid(cfg)) {
         SEL by = NSSelectorFromString(@"childModifierByKey:");
         id existing = G1C_Resp(self, by) ? G1B_Send1(self, by, kG1CPeekKey) : nil;
