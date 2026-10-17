@@ -169,6 +169,7 @@ static uint64_t gBPPTRChangeAt;           // uptime ns of the last display chang
 static uint64_t gBPPTRWatchUntil;         // after a display change the next pointer updates are traced for 1.5 s (debug only)
 static unsigned gBPPTRWatchLines;
 static char kBPPTRBackdropsOff;           // associated object on a rendering controller: its CABackdropLayers were disabled by ptr_edge
+static char kBPPTRBackdropsKeptNote;      // associated object on a rendering controller: "backdrops stay disabled" was logged since they were switched off
 static __thread int gBPPTRMoving;         // >0 while -_movePointerToDisplay: runs (its hidePointer is the one of the display that was left)
 
 static void BPPTR_Walk(CALayer *l, int depth, void (^visit)(CALayer *, int)) {
@@ -188,7 +189,28 @@ static void BPPTR_SetBackdrops(id rc, BOOL enabled) {
         if ([l isKindOfClass:bl] && [l respondsToSelector:se]) { ((void (*)(id, SEL, BOOL))objc_msgSend)(l, se, enabled); n++; }
     });
     objc_setAssociatedObject(rc, &kBPPTRBackdropsOff, enabled ? nil : @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(rc, &kBPPTRBackdropsKeptNote, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (BPPTR_DebugOn()) BPPTR_Log(@"ptr_edge: %d backdrop layer(s) of %@ %@", n, BPPTR_Trunc(rc, 80), enabled ? @"enabled" : @"disabled");
+}
+
+// YES when a visible backdrop layer of the controller's view tree is cut by the bounds of its window (model frames: the target of the pointer's current state).
+static BOOL BPPTR_BackdropCutByEdge(id rc, NSString **why) {
+    if (![rc isKindOfClass:[UIViewController class]] || !((UIViewController *)rc).isViewLoaded) return NO;
+    UIView *v = ((UIViewController *)rc).view;
+    UIWindow *w = v.window;
+    Class bl = NSClassFromString(@"CABackdropLayer");
+    if (!w || !bl) return NO;
+    CGRect wb = w.bounds;
+    __block BOOL cut = NO;
+    BPPTR_Walk(v.layer, 0, ^(CALayer *l, int d) {
+        if (cut || ![l isKindOfClass:bl] || l.hidden || l.opacity <= 0.01f) return;
+        CGRect fr = [l convertRect:l.bounds toLayer:w.layer];
+        if (!CGRectIsEmpty(fr) && CGRectIntersectsRect(wb, fr) && !CGRectContainsRect(wb, fr)) {
+            cut = YES;
+            if (why) *why = [NSString stringWithFormat:@"%@ frame %@ in window %@", NSStringFromClass([l class]), NSStringFromCGRect(fr), NSStringFromCGRect(wb)];
+        }
+    });
+    return cut;
 }
 
 // Diagnostics: every layer that can paint the pointer: frame in the window (= display points) against the window bounds, hidden / alpha / presentation alpha, backdrop enabled, filters.
@@ -341,8 +363,20 @@ static void BPPTR_DisplayChanged(id controller, id before, id after) {
 - (BOOL)setPointerState:(id)state options:(unsigned long long)options updateHandlerCollection:(id)collection error:(id *)error {
     BOOL edge = BPPTR_OnEdge();
     BOOL hidden = edge && BPPTR_BoolIvar(state, "_pointerAutoHidden");
-    if (edge && !hidden && objc_getAssociatedObject(self, &kBPPTRBackdropsOff)) BPPTR_SetBackdrops(self, YES);
     BOOL r = %orig;
+    // The pointer comes back onto a display it had left: its backdrops stay off while any of them is cut by the display edge (the entering pointer is clamped half off the display), the
+    // first frames of a backdrop that reaches beyond the display painted coloured specks into the last pixel rows (monitor bottom edge, pointer arriving from the iPad).  They are
+    // enabled by the first state whose backdrop frames are all inside the window.
+    if (edge && !hidden && objc_getAssociatedObject(self, &kBPPTRBackdropsOff)) {
+        NSString *cut = nil;
+        if (!BPPTR_BackdropCutByEdge(self, &cut)) {
+            BPPTR_SetBackdrops(self, YES);
+            if (BPPTR_DebugOn()) BPPTR_Log(@"ptr_edge: backdrops enabled, no backdrop layer is cut by the display edge any more");
+        } else if (BPPTR_DebugOn() && !objc_getAssociatedObject(self, &kBPPTRBackdropsKeptNote)) {
+            objc_setAssociatedObject(self, &kBPPTRBackdropsKeptNote, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            BPPTR_Log(@"ptr_edge: backdrops stay disabled, cut by the display edge: %@", cut);
+        }
+    }
     if (hidden && options != 0 && !objc_getAssociatedObject(self, &kBPPTRBackdropsOff)) {                                        // animated hide (autohide): turn the backdrops off when the animation is over, if the pointer is still hidden
         __weak id wself = self;
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(700 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
