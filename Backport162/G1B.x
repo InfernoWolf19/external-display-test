@@ -345,31 +345,83 @@ static void G1B_BuildRouting162(void) {
     if (gRtPeekDelegate && !class_getInstanceMethod(gRtPeekDelegate, fb)) G1B_AddMethods(gRtPeekDelegate, pm, 1);
 }
 
-// Guard 1 (NOT in 16.2): the child's last filtered layout is not an element of the context list although the child owns layouts. Stock code answers NSNotFound ("owns nothing") for it and
-// -ContainingIndex asserts when no other child covers the index. Only reached for the filtering modifier's routing modifier and only after the faithful lookup answered NSNotFound for a child with
-// a non-empty list: the layout of the context list that the child's last half was cut from (the filter applied to the context layout gives that very half) is that child's last index. For the
-// unsplit mixed layout this assigns it to the child that -routingModifier:modifierForAppLayout: names too (content when any item is in the set). Never changes an answer stock code can give.
+// ---- (0.7.7) the guard is a LAST line: it must not replace a stock answer that already covers every index --------------------------------------------------------------------------
+// Log of the add-window pick (3d57be8f, 20:24:00.7): the context list (9 layouts) holds the unsplit merged stage [Filza + Preferences] at index 0 (the transition modifier of the pick re-merges the
+// peek filter's halves: SBTransitionSwitcherModifier -adjustedAppLayoutsForAppLayouts: 16.2 0x1c746a12c calls super and then puts the from / to layouts back as whole layouts, it runs after the
+// peek's routing split), so the content child's last half is not an element (NSNotFound = "owns nothing") but the PASSTHROUGH child's last layout (the last card) is element 8 = count - 1.
+// -ContainingIndex (16.0 0x1c609f440 = 16.2 0x1c752236c: child k owns (last(k-1), last(k)], NotFound children are skipped, sub index = index - (last+1 of the preceding found child)) then routes EVERY
+// index to the passthrough child with sub index = index, and that is the right pairing: its list [Filza half, strip cards ...] has one entry per context element (the Filza half stands for element 0).
+// The old guard gave the content child index 0, which made the passthrough sub index = index - 1 for every other card (1178 guard hits in 264 ms, every card answered with the previous card's
+// layout while the pick animates: the tilted stale card of the report, and 264 ms of main thread). The stock (16.2) answer is therefore kept whenever the faithful lasts of the children already cover
+// the last context index; the guard below only acts when stock code would assert (uncovered tail).
+static unsigned long long G1B_RT_FaithfulLast(id rt, id child, NSArray *all) {
+    id old = G1B_RT_Current(rt);
+    G1B_RT_SetCurrent(rt, child);
+    NSArray *mine = G1B_Send0(rt, @selector(appLayouts));
+    G1B_RT_SetCurrent(rt, old);
+    id last = [mine isKindOfClass:[NSArray class]] ? mine.lastObject : nil;
+    if (!last) return kRtNotFound;
+    NSUInteger i = [all indexOfObject:last];
+    return i == NSNotFound ? kRtNotFound : (unsigned long long)i;
+}
+static __weak id gRtCovRt, gRtCovAll;
+static NSUInteger gRtCovCount;
+static BOOL gRtCovered;
+static BOOL G1B_RT_StockCoversAll(id rt, NSArray *all) {
+    if (!all.count) return NO;
+    if (gRtCovRt == rt && gRtCovAll == all && gRtCovCount == all.count) return gRtCovered;     // the context list object is the view controller's cache: stable between rebuilds
+    unsigned long long maxFound = kRtNotFound;
+    for (id m in (NSArray *)BP_ObjIvar(rt, gRtIvMods)) {
+        unsigned long long r = G1B_RT_FaithfulLast(rt, m, all);
+        if (r != kRtNotFound && (maxFound == kRtNotFound || r > maxFound)) maxFound = r;
+    }
+    gRtCovRt = rt; gRtCovAll = all; gRtCovCount = all.count;
+    gRtCovered = (maxFound != kRtNotFound && maxFound == all.count - 1);
+    return gRtCovered;
+}
+// one log line per (kind, class, layout) and 2 s (the guard is asked ~1300 times during one pick)
+static void G1B_RT_GuardLog(NSString *key, NSString *msg) {
+    static NSString *lastKey; static double lastT; static unsigned suppressed;
+    double now = CFAbsoluteTimeGetCurrent();
+    if (lastKey && [lastKey isEqualToString:key] && now - lastT < 2.0) { suppressed++; return; }
+    if (suppressed) BP_Log(@"g1b: routing162: (%u identical lines suppressed)", suppressed);
+    suppressed = 0; lastKey = key; lastT = now;
+    BP_Log(@"%@", msg);
+}
+
+// Guard 1 (NOT in 16.2): the child's last filtered layout is not an element of the context list although the child owns layouts, AND no other child's stock answer covers the last context index (so
+// -ContainingIndex would assert). Only reached for the filtering modifier's routing modifier and only after the faithful lookup answered NSNotFound for a child with a non-empty list: the layout of the
+// context list that the child's last half was cut from (the filter applied to the context layout gives that very half) is that child's last index. For the unsplit mixed layout this assigns it to the
+// child that -routingModifier:modifierForAppLayout: names too (content when any item is in the set). Never changes an answer stock code can give.
 static unsigned long long G1B_RT_GuardLastIndex(id rt, id modifier) {
     id del = G1B_RT_Delegate(rt);
     if (!gFilteringCls || ![del isKindOfClass:gFilteringCls]) return kRtNotFound;
     SEL ap = @selector(appLayouts), fs = @selector(routingModifier:filteredAppLayouts:forModifier:);
     if (!G1B_HasSuper(gRtSuper, ap) || ![del respondsToSelector:fs]) return kRtNotFound;
+    NSArray *all = G1B_SUPER(id, gRtSuper, rt, ap, (struct objc_super *, SEL));
+    if (![all isKindOfClass:[NSArray class]]) return kRtNotFound;
+    if (G1B_RT_StockCoversAll(rt, all)) {                               // stock answer (this child owns nothing) is complete: keep it
+        if (BP_LogEnabled()) G1B_RT_GuardLog([NSString stringWithFormat:@"cover|%@|%p", NSStringFromClass(object_getClass(modifier)), (__bridge void *)all],
+                [NSString stringWithFormat:@"g1b: routing162: %@ owns no index (its last layout is a half that is not in the %lu layout context list, the unsplit merged stage); another child already covers the last index, stock answer kept",
+                    NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count]);
+        return kRtNotFound;
+    }
     id old = G1B_RT_Current(rt);
     G1B_RT_SetCurrent(rt, modifier);                                   // [modifier appLayouts] reaches the routing modifier with _currentModifier == modifier (what stock does through RouteToModifier)
     NSArray *mine = G1B_Send0(rt, ap);
     G1B_RT_SetCurrent(rt, old);
     id last = [mine isKindOfClass:[NSArray class]] ? mine.lastObject : nil;
     if (!last) return kRtNotFound;                                      // owns nothing: NSNotFound is the faithful answer
-    NSArray *all = G1B_SUPER(id, gRtSuper, rt, ap, (struct objc_super *, SEL));
-    if (![all isKindOfClass:[NSArray class]]) return kRtNotFound;
     for (NSUInteger i = all.count; i-- > 0;) {
         NSArray *cut = ((NSArray *(*)(id, SEL, id, NSArray *, id))objc_msgSend)(del, fs, rt, @[ all[i] ], modifier);
         if ([cut isKindOfClass:[NSArray class]] && cut.lastObject == last) {
-            if (BP_LogEnabled()) BP_Log(@"g1b: routing162 guard: last layout of %@ is not in the context list (%lu layouts), taken from layout %lu: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, (unsigned long)i, all[i]);
+            if (BP_LogEnabled()) G1B_RT_GuardLog([NSString stringWithFormat:@"cut|%@|%p|%lu", NSStringFromClass(object_getClass(modifier)), (__bridge void *)all, (unsigned long)i],
+                    [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list (%lu layouts) and no other child covers the last index, taken from layout %lu: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, (unsigned long)i, all[i]]);
             return i;
         }
     }
-    if (BP_LogEnabled()) BP_Log(@"g1b: routing162 guard: last layout of %@ is not in the context list and was cut from none of its %lu layouts: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, last);
+    if (BP_LogEnabled()) G1B_RT_GuardLog([NSString stringWithFormat:@"none|%@|%p", NSStringFromClass(object_getClass(modifier)), (__bridge void *)all],
+            [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list and was cut from none of its %lu layouts: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, last]);
     return kRtNotFound;
 }
 

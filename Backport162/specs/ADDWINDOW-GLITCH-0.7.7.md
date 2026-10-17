@@ -1,7 +1,7 @@
 # ADDWINDOW-GLITCH-0.7.7: stale tilted card behind the windows after "Add Another Window" > pick an app
 
-Status: cause NOT determined. The evidence that came with the report does not contain the flow (section 2), so this build only adds diagnostics (`G2I.x`, switch
-`g2i_addwindiag`, writes with `Backport162.debug` only, changes no behaviour). No speculative hook was added (user rule: faithful port, no guessed fixes).
+Status: UPDATED by section 7 (log 3d57be8f / 91ff0638 of the G2I build contains two complete add-window flows and shows a defect of our routing guard; fix `g1b_routing162` guard narrowed, device-unverified).
+Sections 1 - 6 are the first analysis (recording only, logs did not cover it): the cause was not determined there; `G2I.x` (switch `g2i_addwindiag`, debug log only, no behaviour change) was added then.
 16.0 = 20A8372, 16.2 = 20C65. Evidence files: recording `cb05c277-RPReplay_Final1792263287.mp4` (1920x1342, VFR ~60 fps in motion, 11.24 s), logs
 `d54ebccf-Backport162.log.1` + `6a00205b-Backport162.log` (identical to `89646064` / `84256315`), user screenshot `images/25.webp`.
 
@@ -105,3 +105,44 @@ transition modifier for items that are not in the target layout / have no attrib
 * The `G2I.x` code compiled only against stub headers (`clang -fsyntax-only`); CI builds it with Theos. The selectors used on the root (`frameForIndex:`, `scaleForIndex:`, `rotationAngleForIndex:`,
   `anchorPointForIndex:`), `stackDescription` (16.0 `-[SBSwitcherModifier stackDescription]` 0x1c63e8e5c), `layoutAttributesForItem:` (`-[SBAppLayout ...]` 0x1c628d6ec), `leafAppLayouts`,
   `allItems`, `_itemContainerForAppLayoutIfExists:` (0x1c5e31310) exist in 16.0; every call is guarded with `respondsToSelector:` and `@try`.
+
+## 7. New evidence: logs 3d57be8f-Backport162.log.1 + 91ff0638-Backport162.log (build 5d96621, Preferences open, Add Another Window, pick Filza 20:24:00.7; second flow: pick Notes 20:24:07.5)
+
+Timeline of flow 1 (log time, all in `3d57be8f`): peek start phases 1/2/3 at 23:59.362 / .366 / 24:00.359 (1.0 s long), `[g3c] endpeek` merge 00.690, model change (VC ids update) 00.724, `GLITCH main transition: from mode 2 to mode 3 ...
+stock modifier=SBContinuousExposeSwitcherToAppModifier` replaced by `BP162ContinuousExposeSwitcherToAppModifier` 00.726, pick phase 1 / 2 at 00.726 / 00.734, **1178 lines `g1b: routing162 guard` from 00.728 to 00.992**, nothing from
+00.992 to phase 3 at 01.842, second non-animated pass 01.864 / 01.873. Flow 2 identical (1098 guard lines, 8 layouts, `mobilenotes` merged with Preferences).
+
+### 7.1 What the stack dumps show (G2I)
+* Phase 1 / 2 stack of the pick (before the handler): `ContinuousExposeRoot > ContinuousExposePeek > Filtering > Routing > [ContinuousExposePeekContent, FilteringPassthroughTarget]`, and from the main transition
+  `BP162ContinuousExposeSwitcherToApp` next to it. At phase 3 (01.842) BEFORE the handler the Peek child AND the transition modifier are already gone (the peek retired itself through its state when its dismissal
+  transition ended, about when the guard stops at 00.992; our phase-3 `GLITCH peek child retired` never logs because there is nothing left to retire). The animation then runs 0.85 s more without layout passes.
+* The target layout of the pick is ONE app layout `primary Filza + side Preferences, half/half` (that is what a stage is: one SBAppLayout with several window items, laid out per item by layout attributes: Filza
+  {409,24,761x786}, Preferences {24,24,761x646}); its two leaves are the two item containers. There is no mismatch with the two separate windows on the screen.
+* `[vc appLayouts]` is 10 layouts during the peek and 9 after the model change: the combined stage replaces `Preferences` and `Filza`. A split (peek content half + passthrough half) would be 10.
+
+### 7.2 The mechanism (the guard of ROUTING-162-0.7.4.md section 3, not the peek)
+* The first guard line comes 2 ms after phase 1, i.e. when the pick's transition modifier enters the tree (its phase-1 handler appends an invalidate-adjusted response, G1C.x line ~2868, and the view controller rebuilds
+  `_cachedAdjustedAppLayouts`, 16.2 `-_rebuildCachedAdjustedAppLayouts` 0x1c7457028). Order of the adjust chain (read from the first ~60 instructions of the 16.2 method; the 9-layout list and the timing of the first guard line are the observed evidence for the re-merge): `SBTransitionSwitcherModifier -adjustedAppLayoutsForAppLayouts:` (16.2 0x1c746a12c, 16.0 0x1c5fef2b8)
+  calls super (the peek routing split: halves) and then puts the transition's from / to layouts back as whole layouts (`containsObject:`, `containsAnyItemFromAppLayout:`, block 0x1c746a414): it removes every layout
+  that shares an item with the target layout and inserts the merged stage. The halves are merged again, the context list that the routing modifier searches (`[super appLayouts]` = the view controller's cache,
+  16.2 getter 0x1c72a33a8) holds the UNSPLIT stage at index 0, 9 layouts.
+* `-[SBRoutingSwitcherModifier _lastIndexForModifier:]` (16.0 0x1c60b18f4 = 16.2 0x1c7535d38, `indexOfObject:` of the child's last filtered layout in the context list) then answers: content child (peek content): its
+  last layout is the half `Preferences`, not an element: NSNotFound (= "owns nothing"); passthrough child: its last layout is the last card of the list (element 8 = count - 1): found.
+* `-ContainingIndex` (16.0 0x1c609f440 = 16.2 0x1c752236c): child k owns (last(k-1), last(k)], NotFound children are skipped, sub index = index - (last + 1 of the preceding found child). With the stock answers the passthrough
+  child owns EVERY index with sub index = index, and its list `[Filza half, strip cards ...]` has exactly one entry per context element (the Filza half stands for element 0): a correct pairing, nothing asserts.
+* Our guard 1 (G1B.x, added after the 0.7.3 crashes where BOTH children answered NSNotFound and ContainingIndex asserted) did not check that. It gave the content child index 0 ("the layout its half was cut from").
+  Then the passthrough child owns indices 1..8 with sub index = index - 1: every other card (strip cards, the rest of the list) is answered with the layout of the previous list entry, the stage index 0 is answered by
+  the peek content child for its half. That is 1178 mis-mapped answers in 264 ms (00.728 - 00.992) while the pick's cards are laid out for the first frames; the card of the chosen layout lands on the wrong
+  layout's strip / peek answers (rotation, scale, frame of another entry) and stays in that state until the peek child retires at 00.992 and the list is rebuilt. The tilted window-sized card of the recording
+  (strip rotation, window size, behind both windows, from the first frames of the pick to the end of the transition) is, most plausibly, that card (inferred, not observed: the log has no per-container dump during the transition). The p2+0 / p2+3f dumps (123 ms apart) show the new window's container with the
+  SAME presentation transform (scale 0.239, position {1155.5, 211.8}) in both: the animation had not started 123 ms after phase 2; the guard storm (each call filters 9 layouts for 1-2 children and writes a ~1 KB
+  log line) occupied the main thread for those 264 ms.
+* Why 16.2 does not show it: not proven. Same code path in both builds up to our guard; the stock answers above are complete, so 16.2 simply answers them (no assertion, correct pairing). The guard is ours.
+
+### 7.3 Fix (deliberate narrowing of our own last-line guard; G1B.x `G1B_RT_GuardLastIndex`, kill switch unchanged `g1b_routing162`)
+The guard now acts only if stock code would assert: for the filtering modifier's routing modifier it first computes the stock (faithful) last index of every child; if the largest one equals `count - 1` of the context list
+(`G1B_RT_StockCoversAll`, cached per context list object) the stock NSNotFound of the child with the half is kept ("owns nothing"), exactly 16.2's answer. Otherwise (the 0.7.3 crash states, no child covers the tail)
+the old guard logic runs unchanged. Logging: one line per (kind, class, layout) and 2 s plus a count of suppressed lines instead of one line per query (`g1b: routing162: <class> owns no index ... stock answer kept`).
+Unproven: that the stale card is gone on the device (needs the new recording; log lines to expect: the `owns no index` line once per pick, no `routing162 guard: last layout` lines, `[g2i] during+N ms` dumps with
+no container at window size and a rotated transform behind the windows). If the card remains, the `during+N ms` dumps (visible AND hidden containers every 100 ms) name the container.
+Not changed: the peek child is still retired by its own state / our phase 3; the transition modifier's re-merge is stock 16.2 code.
