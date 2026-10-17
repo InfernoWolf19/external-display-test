@@ -22,9 +22,12 @@
 // G2F makes (the geometry and timing of 24816c1, which the user approved, for the open as well as the close: nothing in this file touches the mask's bounds, centre or radius any more).
 // What remains is the pop of the shadow when the mask is dropped.  The shadow is requested at full strength from the first frame (log 27f5d0d0: shadowOpacity 1.0, shadowStyle 5, container
 // shadowAlpha 1.0, shadow layer r 70 / opacity 0.35 / offset y +35 at phase 1) and is hidden only by the mask, so when G2F drops the mask (end of the open, 0.56 - 0.60 s after phase 1) it is
-// revealed in one frame.  So: right before the mask is removed from an item container that is on screen, the page's shadow view (SBAppSwitcherPageShadowView, alpha = the page's shadowAlpha,
-// -[SBAppSwitcherPageView setShadowAlpha:] 16.0 0x1c5e36434 -> -[UIView setAlpha:]) is set to alpha 0 without animation in the same run loop turn (the removal and the alpha change reach the
-// render server together, so no frame shows the shadow), then animated back to the page's shadowAlpha with a short ease-out fade (0.22 s) instead.  Nothing else about the shadow is touched.
+// revealed in one frame.  The layer that draws it is NOT the SBAppSwitcherPageShadowView (its own layer has opacity 0, radius 3) but its child, an SBFView with shadowRadius 70 / shadowOpacity 0.35 /
+// offset y +35 (found by the layer values: shadowRadius > 3 and shadowOpacity > 0).  Version 7df60c8 faded the UIView alpha of the page shadow view with animateWithDuration: and the
+// user's recording d5e8fb61 (log bd05b284) still shows the pop in one frame (right strip 132.8 -> 123.7, below the window 151.2 -> 117.6, left 110.1 -> 102.8 between 2.152 and 2.168 s),
+// so that fade did nothing visible.  Now: right after the mask is removed from an item container that is on screen, every shadow-casting layer gets an explicit Core Animation
+// (CABasicAnimation on shadowOpacity, 0 -> its model value, ease-out, 0.28 s); the model value is not changed.  Follow-up samples at +50 / +100 / +200 / +300 ms log the presentation
+// values (shadow fade lines).
 // Not addressed (deliberately, the crop has priority): at the START of a close the shadow still disappears at once, because the exact crop mask clips it from its first frame; a shadow of the
 // full window outline around a card that is being cropped to the icon box would show the old nested shape again.
 //
@@ -55,7 +58,7 @@
 
 static IMP gG2HOrigSetMask, gG2HOrigEvent, gG2HOrigLayout;
 static unsigned gG2HMaskSerial;                                            // counts the masks that G2F put on an item container (each open / close that crops)
-static const double kG2HFadeDuration = 0.22;                               // the fade of the shadow after the mask is dropped (seconds)
+static const double kG2HFadeDuration = 0.28;                               // the fade of the shadow after the mask is dropped (seconds)
 
 // ==================================================================================================================================================================================
 // small typed senders
@@ -88,47 +91,63 @@ static double G2H_Dbl(id o, const char *sel) {
 // ==================================================================================================================================================================================
 // Part 1: the shadow no longer pops when G2F drops the crop mask (g2h_maskshadow)
 // ==================================================================================================================================================================================
-// The window's shadow layers (below the container): every SBAppSwitcherPageShadowView, its own layer and the layers of its subviews.  Used for the fade (the shadow view itself) and for the
-// log (radius / opacity / offset: in 27f5d0d0 the shadow view's own layer has opacity 0 and the diffuse SBFView below it r 70, opacity 0.35, offset y +35).
-static void G2H_ScanShadow(UIView *v, int depth, int *budget, UIView **shadowView, int *n, NSMutableString *dump) {
-    if (!v || depth > 10 || *budget <= 0) return;
+// The layers that draw the window's shadow: every view below the container whose layer shadows for real (shadowOpacity > 0, shadowRadius > 3), found by the layer values and not by class
+// name.  In log bd05b284 (and 27f5d0d0) that is ONE layer, the SBFView below the SBAppSwitcherPageShadowView: radius 70, opacity 0.35, offset y +35 (the page shadow view's own layer
+// has opacity 0 and radius 3 and draws nothing).  budget / depth keep the walk cheap (a container holds the page, the app's view and a few accessories).
+static void G2H_CollectShadow(UIView *v, int depth, int *budget, NSMutableArray *views) {
+    if (!v || depth > 12 || *budget <= 0) return;
     (*budget)--;
-    static Class sh; static dispatch_once_t once;
-    dispatch_once(&once, ^{ sh = NSClassFromString(@"SBAppSwitcherPageShadowView"); });
-    if (sh && [v isKindOfClass:sh]) {
-        if (shadowView && !*shadowView) *shadowView = v;
-        NSMutableArray *views = [NSMutableArray arrayWithObject:v];
-        for (UIView *s in v.subviews) [views addObject:s];
-        for (UIView *s in views) {
-            CALayer *l = s.layer;
-            if (!l) continue;
-            double r = l.shadowRadius, op = l.shadowOpacity;
-            CGSize off = l.shadowOffset;
-            if (dump) [dump appendFormat:@" [%@ r %.1f op %.2f off {%.1f, %.1f} alpha %.2f pres %.2f]", s == v ? @"shadowview" : NSStringFromClass([s class]), r, op, off.width, off.height, s.alpha,
-                       (double)([l presentationLayer] ? [(CALayer *)[l presentationLayer] shadowOpacity] : op)];
-            if (r > 0.0 && op > 0.0 && n) (*n)++;
-        }
-        return;
+    CALayer *l = v.layer;
+    if (l && l.shadowRadius > 3.0 && l.shadowOpacity > 0.0) [views addObject:v];
+    for (UIView *s in v.subviews) G2H_CollectShadow(s, depth + 1, budget, views);
+}
+// One text element per shadow-casting view (and the page shadow view that parents it): class, layer shadowRadius / shadowOpacity (model) / offset, view alpha, presentation shadowOpacity,
+// presentation layer opacity, number of running animations.
+static NSString *G2H_ShadowDump(UIView *host, int *count) {
+    NSMutableArray *views = [NSMutableArray array];
+    int budget = 800;
+    G2H_CollectShadow(host, 0, &budget, views);
+    NSMutableString *o = [NSMutableString string];
+    for (UIView *v in views) {
+        CALayer *l = v.layer, *pl = [l presentationLayer] ?: l;
+        CGSize off = l.shadowOffset;
+        [o appendFormat:@" [%@ r %.1f op %.3f off {%.1f, %.1f} alpha %.2f | pres op %.3f layerOpacity %.3f anims %lu]", NSStringFromClass([v class]), l.shadowRadius, l.shadowOpacity, off.width, off.height, v.alpha,
+         pl.shadowOpacity, pl.opacity, (unsigned long)l.animationKeys.count];
     }
-    for (UIView *s in v.subviews) G2H_ScanShadow(s, depth + 1, budget, shadowView, n, dump);
+    if (count) *count = (int)views.count;
+    return o;
 }
 
-// Fade the shadow in: the removal of the mask has just happened (same run loop turn, nothing rendered yet): alpha 0 now, back to the page's shadowAlpha over kG2HFadeDuration.
+// Fade the shadow in: the removal of the mask has just happened (same run loop turn, nothing rendered yet).  A UIView alpha animation of the page shadow view had no visible effect in
+// recording d5e8fb61 (user: the pop is still one frame): the layer that draws the shadow is a child, its alpha was never what showed.  So the shadow layer's own shadowOpacity is animated
+// with Core Animation (explicit CABasicAnimation 0 -> model value, ease-out, kG2HFadeDuration): independent of the UIView animation state of whatever block the mask was dropped in.
+// The model value is left alone (the style pass keeps owning it).  Follow-up samples at +50 / +100 / +200 / +300 ms log the presentation values, which prove the fade.
 static void G2H_FadeShadowIn(UIView *host) {
-    UIView *sv = nil; int budget = 600, n = 0;
-    G2H_ScanShadow(host, 0, &budget, &sv, &n, nil);
-    if (!sv) { G2H_LOG(@"[g2h] mask removed from container %p: no shadow view below it, no fade", host); return; }
-    UIView *page = sv.superview;
-    double a = sv.alpha;
-    if (page && [page respondsToSelector:sel_registerName("shadowAlpha")]) a = G2H_Dbl(page, "shadowAlpha");
-    if (!(a > 0.01)) { G2H_LOG(@"[g2h] mask removed from container %p: shadow alpha %.3f, nothing to fade in", host, a); return; }
-    __weak UIView *wsv = sv, *wpage = page;
-    [UIView performWithoutAnimation:^{ sv.alpha = 0.0; }];
-    [UIView animateWithDuration:kG2HFadeDuration delay:0 options:(UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionBeginFromCurrentState) animations:^{
-        UIView *s = wsv, *p = wpage;
-        if (s) s.alpha = (p && [p respondsToSelector:sel_registerName("shadowAlpha")]) ? G2H_Dbl(p, "shadowAlpha") : a;      // the value the style pass wants now
-    } completion:nil];
-    G2H_LOG(@"[g2h] mask removed from container %p: shadow view alpha %.3f -> 0 -> %.3f over %.2f s (the mask clipped it until now)", host, a, a, kG2HFadeDuration);
+    NSMutableArray *views = [NSMutableArray array];
+    int budget = 800;
+    G2H_CollectShadow(host, 0, &budget, views);
+    if (!views.count) { G2H_LOG(@"[g2h] mask removed from container %p: no shadow-casting layer (radius > 3, opacity > 0) below it, no fade", host); return; }
+    for (UIView *v in views) {
+        CALayer *l = v.layer;
+        CABasicAnimation *an = [CABasicAnimation animationWithKeyPath:@"shadowOpacity"];
+        an.fromValue = @(0.0f);
+        an.toValue = @(l.shadowOpacity);
+        an.duration = kG2HFadeDuration;
+        an.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        [l addAnimation:an forKey:@"bp162.g2h.shadowfade"];
+    }
+    G2H_LOG(@"[g2h] mask removed from container %p: %lu shadow layer(s) fade in over %.2f s (shadowOpacity 0 -> model value, CABasicAnimation):%@", host, (unsigned long)views.count, kG2HFadeDuration, G2H_ShadowDump(host, NULL));
+    if (!BP_LogEnabled()) return;
+    __weak UIView *wh = host;
+    double t0 = CACurrentMediaTime();
+    static const int kMs[] = { 50, 100, 200, 300 };
+    for (int k = 0; k < 4; k++) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kMs[k] * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+            UIView *h = wh;
+            if (!h || !BP_LogEnabled()) return;
+            @try { BP_Log(@"[g2h] shadow fade t=+%.3f container %p:%@", CACurrentMediaTime() - t0, h, G2H_ShadowDump(h, NULL)); } @catch (NSException *ex) { BP_Log(@"[g2h] shadow fade sample exception %@", ex); }
+        });
+    }
 }
 
 // Crop timing of one mask, for the log: its logical / layer (model) / presentation bounds, the container bounds, at the moment the mask is set and 50, 100, 150, 250 ms later.  With the mask
@@ -234,9 +253,8 @@ static NSString *G2H_Sample(id root, id vc, id layout) {
         UIView *cv = (UIView *)c;
         CALayer *pl = [cv.layer presentationLayer] ?: cv.layer;
         [o appendFormat:@" %p shadowAlpha=%.3f shadowStyle=%lld alpha=%.3f presBounds=%@", c, G2H_Dbl(c, "shadowAlpha"), G2H_LL(c, "shadowStyle"), cv.alpha, NSStringFromCGSize(pl.bounds.size)];
-        NSMutableString *sh = [NSMutableString string];
-        int budget = 600, n = 0;
-        G2H_ScanShadow(cv, 0, &budget, NULL, &n, sh);
+        int n = 0;
+        NSString *sh = G2H_ShadowDump(cv, &n);
         [o appendFormat:@" shadows(%d)%@", n, sh.length ? sh : @" none"];
         UIView *m = cv.maskView;
         if (m) {

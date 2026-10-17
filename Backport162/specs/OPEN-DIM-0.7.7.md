@@ -79,18 +79,23 @@ regressed"). The first attempt is removed completely (no subclass, no bounds cha
 ### 4b. What it does now
 * The mask is exactly what G2F makes: bounds, centre, corner radius, animation attributes and release are those of 24816c1 (the user-approved crop timing), in the close and in the open
   (the open's mask goes from the icon box to the container bounds with the same spring and is dropped at its settle, as before). G2H no longer touches any property of the mask.
-* The shadow pop at the release is turned into a fade: the shadow is requested at full strength from the first frame (log 27f5d0d0 phase 1: `shadowOpacity=1.000 shadowStyle=5`, container
-  `shadowAlpha=1.000`, diffuse shadow layer r 70 / opacity 0.35 / offset y +35, pres 0.35, i.e. fully "on" while the recording shows no shadow: this confirms that only the mask hides it).
-  Hook of `-[SBFluidSwitcherItemContainer setMaskView:]` (G2F.x untouched): when the mask is removed from a container that is on screen (window, not hidden, alpha > 0; a recycled container
-  is skipped) the page's shadow view (`SBAppSwitcherPageShadowView`; `-[SBAppSwitcherPageView setShadowAlpha:]` 16.0 0x1c5e36434 is a tail call of `-[UIView setAlpha:]` on it) is set to
-  alpha 0 without animation right after the removal (same run loop turn: no frame shows the shadow), then animated to the page's `shadowAlpha` over 0.22 s, ease-out,
-  begin-from-current, user interaction allowed. Log `[g2h] mask removed from container ...: shadow view alpha 1.000 -> 0 -> 1.000 over 0.22 s`.
+* The shadow pop at the release is turned into a fade. The shadow is requested at full strength from the first frame (log 27f5d0d0 phase 1: `shadowOpacity=1.000 shadowStyle=5`, container
+  `shadowAlpha=1.000`) and hidden only by the mask. The layer that draws it is NOT the `SBAppSwitcherPageShadowView` ([shadowview r 3.0 op 0.00 off {0,-3}]: draws nothing) but its child, an
+  `SBFView` with `shadowRadius 70 / shadowOpacity 0.35 / shadowOffset (0, 35)` (the big shadow of the recording).
+  7df60c8 faded the UIView alpha of the page shadow view (`animateWithDuration:` after `performWithoutAnimation:`) and the next recording (d5e8fb61, log bd05b284) still shows the pop in one
+  frame (right strip 132.8 -> 123.7, below the window 151.2 -> 117.6, left 110.1 -> 102.8 between t = 2.152 and 2.168 s; mask removed 0.556 s after its creation in the log): that fade had no
+  visible effect (cause not established: the child's drawing does not follow the parent view alpha in the way assumed, or the UIView animation started inside G2F's completion block was swallowed).
+  Now (hook of `-[SBFluidSwitcherItemContainer setMaskView:]`, G2F.x untouched): when the mask is removed from a container that is on screen (window, not hidden, alpha > 0; a recycled
+  container is skipped), every shadow-casting layer below the container (found by the layer values, `shadowRadius > 3` and `shadowOpacity > 0`, not by class) gets an explicit Core Animation:
+  `CABasicAnimation` on `shadowOpacity`, from 0 to the model value, ease-out, 0.28 s, key `bp162.g2h.shadowfade`; the model value is not touched. Log: `[g2h] mask removed from container ...:
+  N shadow layer(s) fade in ...` and, at +50 / +100 / +200 / +300 ms, `[g2h] shadow fade t=+... container ...: [SBFView r 70.0 op 0.350 off {0.0, 35.0} alpha 1.00 | pres op <value>
+  layerOpacity <value> anims <n>]`: the `pres op` column rises 0 -> 0.35 (and `anims` is 1 until the end) if the fade runs; if it stays 0.35 at once the animation was not applied.
 * NOT fixed (on purpose): at the start of a close the shadow still disappears at once (the exact mask clips it from its first frame). Any variant that keeps it longer has to widen the
   mask along the cropped axis (delays the crop, see 4a) or leave a halo of the full window outline around the cropped card (the old nested shape in shadow form). The open's shadow now
   fades in right after the window has arrived (release at 0.56 - 0.60 s after phase 1, fade 0.22 s) instead of popping.
 * Options considered: (a) mask on the page view instead of the container: the shadow view is a child of the page view (`_updateShadowPresence` 0x1c5f1afd8 adds it to the page), so it would be
   clipped as well; masking only the other page subviews needs one mask per subview (`_orderSubviews` 0x1c5e33a4c orders ten of them) with every animation duplicated: rejected. (b) fade at
-  the release: done. (c) slack only on the uncropped axis: the height; the sides (the cropped axis) are the larger part of the pop and stay clipped, and a halo above / below with hard ends
+  the release: done (Core Animation on the shadow layer). (c) slack only on the uncropped axis: the height; the sides (the cropped axis) are the larger part of the pop and stay clipped, and a halo above / below with hard ends
   at the card's sides looks worse than none: rejected. Slack decaying in time on the cropped axis delays the crop by the decay time: rejected (the user asked for the exact 24816c1 timing).
 Kill switch: `<jbroot>/tmp/Backport162.off.g2h_maskshadow` (checked at every mask removal).
 
@@ -110,7 +115,7 @@ Kill switch: `<jbroot>/tmp/Backport162.off.g2h_maskshadow` (checked at every mas
   3 -> 3 app-to-app transitions of a three window stage) do not belong to it (the recording's status bar says 19:49, the logs start at 19:54:51), so the log side of section 3 comes from
   other runs of the same build (291a0cf5, 8025ca8b). The recording itself fits the mask in time (0.45 s vs 0.56 - 0.58 s from phase 1, the first dimming frame lagging phase 1 by ~0.1 s)
   and in shape (a step to the full shadow, at the start of the close an immediate removal).
-* How the fade looks on the device (0.22 s ease-out starting at the mask release; whether it should start earlier, i.e. before the mask settles, is a matter of taste: the shadow cannot
+* That the explicit animation on the SBFView layer is visible (the next log must show `pres op` rising in the `shadow fade` lines; if it does but the recording still pops, the shadow is drawn by something else); how the fade looks (0.28 s ease-out starting at the mask release; whether it should start earlier, i.e. before the mask settles, is a matter of taste: the shadow cannot
   appear while the mask exists without widening it).
-* That nothing else sets the shadow view's alpha during the 0.22 s (a style pass with the same value changes nothing; one with another value wins at the end of the fade).
+* That nothing replaces the explicit animation during the 0.28 s (the style pass sets the model value only).
 * The close-start disappearance of the shadow is unchanged by design.
