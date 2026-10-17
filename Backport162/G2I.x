@@ -15,7 +15,9 @@
 //  * -[SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion:] (after G2B / G2F): the first layout pass after each event that touches a layout holding a new item dumps, per leaf of
 //    the layouts of the switcher that hold a new item, the root's answers for its index (frameForIndex:, scaleForIndex:, alphaForIndex:, zPositionForIndex:), the layout attributes and the item
 //    container (class, frame, bounds, centre, alpha, hidden, layer transform and presentation values, z index in the container view).  For phase 2 again ~3 frames (50 ms) later.
-//  * At the end of the pick transition (phase 3 of the event that ends the peek) every item container that is still alive is dumped at +0 / +0.5 s / +1.5 s: those in _visibleItemContainers
+//  * DURING the pick (0.7.7, after the 3d57be8f log showed nothing visible left at the end): from phase 2 on every ~100 ms until phase 3 (4 s at most) the same dump of ALL item containers,
+//    visible and hidden ("during+N ms"), and once after the first layout pass of phase 1 and 2 ("p1+0 all", "p2+0 all").
+//  * At the end of the pick transition (phase 3 of the event that ends the peek) every item container that is still alive is dumped at +0 / +0.3 s / +1.5 s: those in _visibleItemContainers
 //    (with: is its leaf still part of one of the switcher's app layouts, its index there, its z index in the container view) AND every other subview of the same container view that looks like an
 //    item container (flagged "NOT in _visibleItemContainers"), plus the container view's sublayerTransform (the perspective of the strip cards).
 // 16.0 = 20A8372.  All reads are guarded (respondsToSelector, @try) and happen only with Backport162.debug on.
@@ -40,6 +42,8 @@ static double gG2ILastEvent;                               // CACurrentMediaTime
 static BOOL gG2IPicked;                                    // the flow's pick (peek end) was seen
 static double gG2IPickTime;                                // CACurrentMediaTime() of the last pick event
 static BOOL gG2IEndScheduled;                              // the end-of-flow container dumps of this flow are queued
+static BOOL gG2IDuringScheduled;                           // the during-the-transition dump series of this flow runs
+static BOOL gG2IPhase3;                                    // the pick's phase 3 was seen (stops the series)
 static NSArray *gG2IWatch;                                 // items of the new window(s) of the last traced event
 static NSString *gG2IPendingTag;                           // tag of the dump the next layout pass of a layout with a new item writes (nil: none)
 static __weak id gG2IVC;                                   // the switcher view controller that laid out a layout with a new item
@@ -218,6 +222,7 @@ static void G2I_Layout(id vc, SEL _cmd, id appLayout, unsigned long long roleMas
         gG2IVC = vc;
         unsigned serial = gG2IFlow;
         G2I_DumpNew(vc, [tag stringByAppendingString:@"+0"]);
+        if ([tag isEqualToString:@"p2"] || [tag isEqualToString:@"p1"]) G2I_DumpAll(vc, [tag stringByAppendingString:@"+0 all"]);
         if ([tag isEqualToString:@"p2"]) {                                             // ~3 frames at 60 fps later
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 if (!BP_LogEnabled() || gG2IFlow != serial) return;
@@ -240,12 +245,21 @@ static BOOL G2I_Qualifies(id event, BOOL *startOut, BOOL *pickOut) {
     return gG2IActive && gG2IPicked && now - gG2IPickTime < 2.0;                        // what follows the pick (stock second non-animated pass ...)
 }
 
+static void G2I_DuringTick(unsigned serial, int n) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (!BP_LogEnabled() || gG2IFlow != serial || gG2IPhase3 || n >= 40) return;     // 4 s at most
+        @try { BP_Log(@"[g2i] flow %u during the pick, +%d ms after phase 2", serial, (n + 1) * 100); G2I_DumpAll(gG2IVC, [NSString stringWithFormat:@"during+%dms", (n + 1) * 100]); }
+        @catch (NSException *e) { BP_Log(@"[g2i] exception %@", e); }
+        G2I_DuringTick(serial, n + 1);
+    });
+}
+
 static void G2I_LogEvent(id root, id event, NSString *pre, BOOL start, BOOL pick) {
     long long phase = G2I_LL(event, "phase");
     BOOL animated = G2I_Bool(event, "isAnimated");
     double now = CACurrentMediaTime();
     BOOL fresh0 = !gG2IFlow || now - gG2ILastEvent > 30.0 || (start && (gG2IPicked || now - gG2ILastEvent > 1.5)) || (pick && gG2IPicked && now - gG2IPickTime > 2.0);   // phases 1 / 2 / 3 of one transition share a flow
-    if (fresh0) { gG2IFlow++; gG2IPicked = NO; gG2IEndScheduled = NO; }
+    if (fresh0) { gG2IFlow++; gG2IPicked = NO; gG2IEndScheduled = NO; gG2IDuringScheduled = NO; gG2IPhase3 = NO; }
     gG2IActive = YES;
     gG2ILastEvent = now;
     if (pick) { gG2IPicked = YES; gG2IPickTime = now; }
@@ -269,10 +283,15 @@ static void G2I_LogEvent(id root, id event, NSString *pre, BOOL start, BOOL pick
     NSString *post = postStack;
     if ([pre isEqualToString:post]) BP_Log(@"[g2i] flow %u phase %lld modifier stack (before = after the handler):\n%@", serial, phase, post);
     else BP_Log(@"[g2i] flow %u phase %lld modifier stack before the handler:\n%@\n[g2i] flow %u phase %lld modifier stack after the handler:\n%@", serial, phase, pre, serial, phase, post);
+    if (pick && phase == 2 && animated && !gG2IDuringScheduled) {                       // every item container (visible AND hidden) every ~100 ms while the pick animates
+        gG2IDuringScheduled = YES;
+        G2I_DuringTick(serial, 0);
+    }
+    if (pick && phase == 3) gG2IPhase3 = YES;
     if (pick && phase == 3 && !gG2IEndScheduled) {
         gG2IEndScheduled = YES;
-        static const double kDelay[] = { 0.0, 0.5, 1.5 };
-        static NSString *const kTag[] = { @"end+0", @"end+0.5s", @"end+1.5s" };
+        static const double kDelay[] = { 0.0, 0.3, 1.5 };
+        static NSString *const kTag[] = { @"end+0", @"end+0.3s", @"end+1.5s" };
         for (int i = 0; i < 3; i++) {
             NSString *tag = kTag[i];
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kDelay[i] * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
