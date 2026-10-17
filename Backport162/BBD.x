@@ -53,6 +53,7 @@
 #import <sys/sysctl.h>
 #import <unistd.h>
 #import <string.h>
+#import <stdio.h>
 #import <stdarg.h>
 #import <fcntl.h>
 #import <pthread.h>
@@ -702,6 +703,33 @@ static void BPD_InstallCloneMirror(void) {
     BPD_Log(@"installed (slide 0x%lx)", (long)gSlide);
 }
 
+// ------------------------------------------------------------------------------------------------ crash loop guard
+// A crash of this tweak inside backboardd restarts the whole userspace (SpringBoard relaunches over and over: the ExtendedDisplayEnabler log of the first install of the merged package
+// shows "5 consecutive short-lived launches").  Each backboardd start counts a strike in <root>/Backport162BBD.strikes ("<build id> <count>"); the count is cleared when backboardd has
+// stayed up for 25 s.  With 3 strikes in a row the tweak stays out of backboardd (log line when Backport162.debug exists) until the file is removed or a different build is installed
+// (the build id is the compile time of this file).
+static BOOL BPD_CrashGuardTripped(void) {
+    char path[1200]; snprintf(path, sizeof path, "%s/Backport162BBD.strikes", gBPDRoot);
+    char id[64]; snprintf(id, sizeof id, "%s_%s", __DATE__, __TIME__);
+    for (char *c = id; *c; c++) if (*c == ' ') *c = '_';
+    int strikes = 0;
+    FILE *f = fopen(path, "r");
+    if (f) {
+        char oldId[64] = {0}; int n = 0;
+        if (fscanf(f, "%63s %d", oldId, &n) == 2 && strcmp(oldId, id) == 0) strikes = n;
+        fclose(f);
+    }
+    if (strikes >= 3) { BPD_Log(@"crash guard: %d consecutive short-lived backboardd launches with this build, the backboardd tweak stays out. Remove %s to retry", strikes, path); return YES; }
+    f = fopen(path, "w");
+    if (f) { fprintf(f, "%s %d\n", id, strikes + 1); fclose(f); }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        FILE *g = fopen(path, "w");
+        if (g) { fprintf(g, "%s 0\n", id); fclose(g); }
+    });
+    return NO;
+}
+
+
 %ctor {
     @autoreleasepool {
         BPD_InitPaths();
@@ -710,6 +738,7 @@ static void BPD_InstallCloneMirror(void) {
         size_t n = strlen(path);
         if (n < 10 || strcmp(path + n - 10, "/backboardd") != 0) return;     // belt and braces next to the Filter
         if (!BPD_BuildMatches()) { BPD_Log(@"build does not match 20A8372, not installing"); return; }
+        if (BPD_CrashGuardTripped()) return;
         gSlide = _dyld_get_image_vmaddr_slide(0);
         BPD_InstallCloneMirror();
         BPP_Install();
