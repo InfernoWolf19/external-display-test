@@ -27,6 +27,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import <notify.h>
 #import <objc/message.h>
 #import <math.h>
 #import "BP.h"
@@ -76,7 +77,26 @@ static void G2D_UpdateCancels(id self, SEL _cmd, id recognizer) {
     }
 }
 
+
+// Darwin notifications posted by the backboardd and pointeruid dylibs at the stages of their start-up (BBD.x / PTR.x): logged here because those daemons often cannot write files.
+static void G2D_ListenForDaemonLoads(void) {
+    static const char *names[] = {
+        "com.infernowolf19.backport162.load.bbd.ctor_entered", "com.infernowolf19.backport162.load.bbd.not_backboardd_leaving", "com.infernowolf19.backport162.load.bbd.build_mismatch_leaving",
+        "com.infernowolf19.backport162.load.bbd.crash_guard_tripped_leaving", "com.infernowolf19.backport162.load.bbd.installing",
+        "com.infernowolf19.backport162.load.ptr.ctor_entered", "com.infernowolf19.backport162.load.ptr.not_pointeruid_leaving", "com.infernowolf19.backport162.load.ptr.build_mismatch_leaving",
+        "com.infernowolf19.backport162.load.ptr.installing",
+    };
+    for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
+        const char *nm = names[i];
+        int token = 0;
+        notify_register_dispatch(nm, &token, dispatch_get_main_queue(), ^(int t) { BP_Log(@"daemon load note: %s", nm + strlen("com.infernowolf19.backport162.load.")); });
+        int chk = 0; uint64_t pid = 0;                                          // posted before SpringBoard started: the daemon left its pid as the state
+        if (notify_register_check(nm, &chk) == NOTIFY_STATUS_OK && notify_get_state(chk, &pid) == NOTIFY_STATUS_OK && pid) BP_Log(@"daemon load note (earlier, pid %llu): %s", (unsigned long long)pid, nm + strlen("com.infernowolf19.backport162.load."));
+    }
+}
+
 void G2D_Setup(void) {
+    G2D_ListenForDaemonLoads();
     if (!G2D_ON()) return;
     Class c = NSClassFromString(@"SBGrabberTongue");
     SEL s = NSSelectorFromString(@"_updateCancelsTouchesWithRecognizer:");

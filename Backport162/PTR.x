@@ -35,6 +35,7 @@
 #import <sys/sysctl.h>
 #import <string.h>
 #import <stdio.h>
+#import <notify.h>
 #import <unistd.h>
 #import <fcntl.h>
 #import <stdio.h>
@@ -220,8 +221,25 @@ static void BPPTR_RetryInstall(int attempt) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ BPPTR_RetryInstall(attempt + 1); });
 }
 
+// Darwin notifications to SpringBoard (its tweak logs them into Backport162.log): a stage of the start-up, readable even when the daemon cannot write files.
+static void BPPTR_NotifySlug(const char *prefix, const char *what) {
+    char name[200]; size_t n = (size_t)snprintf(name, sizeof name, "com.infernowolf19.backport162.load.%s.", prefix);
+    BOOL lastUnderscore = YES;
+    for (const char *c = what; *c && n < sizeof name - 2; c++) {
+        char ch = (*c >= 'A' && *c <= 'Z') ? (char)(*c + 32) : *c;
+        BOOL alnum = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+        if (alnum) { name[n++] = ch; lastUnderscore = NO; }
+        else if (!lastUnderscore) { name[n++] = '_'; lastUnderscore = YES; }
+    }
+    while (n > 0 && name[n - 1] == '_') n--;
+    name[n] = 0;
+    int tok = 0;                                                   // the state (our pid) survives until SpringBoard registers: the daemon starts before SpringBoard
+    if (notify_register_check(name, &tok) == NOTIFY_STATUS_OK) notify_set_state(tok, (uint64_t)getpid());
+    notify_post(name);
+}
 // Marker so that the user can see whether the dylib was injected at all (one line per process start; the daemon may be sandboxed: then nothing is written).
 static void BPPTR_Marker(const char *what) {
+    BPPTR_NotifySlug("ptr", what);
     const char *dirs[] = { "/var/jb/tmp", "/tmp", "/var/mobile/Library/Caches" };
     for (size_t i = 0; i < 3; i++) {
         char p[300]; snprintf(p, sizeof p, "%s/Backport162PTR.ctor", dirs[i]);
@@ -241,8 +259,9 @@ static void BPPTR_Marker(const char *what) {
         const char *path = _dyld_get_image_name(0);
         if (!path) return;
         size_t n = strlen(path);
-        if (n < 11 || strcmp(path + n - 11, "/pointeruid") != 0) return;   // belt and braces next to the Filter
-        if (!BPPTR_BuildMatches()) { BPPTR_Log(@"build does not match 20A8372, not installing"); return; }
+        if (n < 11 || strcmp(path + n - 11, "/pointeruid") != 0) { BPPTR_Marker("not pointeruid, leaving"); return; }   // belt and braces next to the Filter
+        if (!BPPTR_BuildMatches()) { BPPTR_Marker("build mismatch, leaving"); BPPTR_Log(@"build does not match 20A8372, not installing"); return; }
+        BPPTR_Marker("installing");
         BPPTR_Log(@"loaded in pointeruid (20A8372)");
         BPPTR_RetryInstall(0);
     }

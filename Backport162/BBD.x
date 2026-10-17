@@ -54,6 +54,7 @@
 #import <unistd.h>
 #import <string.h>
 #import <stdio.h>
+#import <notify.h>
 #import <stdlib.h>
 #import <stdarg.h>
 #import <fcntl.h>
@@ -733,8 +734,25 @@ static BOOL BPD_CrashGuardTripped(void) {
 }
 
 
+// Darwin notifications to SpringBoard (its tweak logs them into Backport162.log): a stage of the start-up, readable even when backboardd cannot write files.
+static void BPD_NotifySlug(const char *prefix, const char *what) {
+    char name[200]; size_t n = (size_t)snprintf(name, sizeof name, "com.infernowolf19.backport162.load.%s.", prefix);
+    BOOL lastUnderscore = YES;
+    for (const char *c = what; *c && n < sizeof name - 2; c++) {
+        char ch = (*c >= 'A' && *c <= 'Z') ? (char)(*c + 32) : *c;
+        BOOL alnum = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9');
+        if (alnum) { name[n++] = ch; lastUnderscore = NO; }
+        else if (!lastUnderscore) { name[n++] = '_'; lastUnderscore = YES; }
+    }
+    while (n > 0 && name[n - 1] == '_') n--;
+    name[n] = 0;
+    int tok = 0;                                                   // the state (our pid) survives until SpringBoard registers: the daemon starts before SpringBoard
+    if (notify_register_check(name, &tok) == NOTIFY_STATUS_OK) notify_set_state(tok, (uint64_t)getpid());
+    notify_post(name);
+}
 // Marker so that the user can see whether the dylib was injected at all and which check stopped it (<root>/Backport162BBD.ctor, one line per process start).
 static void BPD_Marker(const char *what) {
+    BPD_NotifySlug("bbd", what);
     char p[1200]; snprintf(p, sizeof p, "%s/Backport162BBD.ctor", gBPDRoot[0] ? gBPDRoot : "/var/jb/tmp");
     int fd = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
     if (fd < 0) return;
