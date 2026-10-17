@@ -7,7 +7,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Backport162 Backport162AV Backport162BBD Backport162PTR
 
-Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x BPCrash.m
+Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x BPCrash.m
 Backport162_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
 Backport162_FRAMEWORKS = Foundation CoreGraphics UIKit QuartzCore
 
