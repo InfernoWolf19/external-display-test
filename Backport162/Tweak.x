@@ -415,6 +415,7 @@ void G2E_Setup(void);                  // G2E.x    (home swipe close: instant ge
 void G2F_Setup(void);                  // G2F.x    (zoom to / from an icon pivots about the window's own centre; deliberate deviation)
 void G2G_Setup(void);                  // G2G.x    (hover region of the display the pointer left is exited; trace of the pointer arbiter; deliberate deviation)
 void G2I_Setup(void);                  // G2I.x    (add-window flow diagnostics: transition events, new window / item container dumps; Backport162.debug only, no behaviour change)
+void G2H_Setup(void);                  // G2H.x    (the crop mask of g2f_closecrop no longer clips the window shadow: shadow popped in after an open and out at a close; dim diagnostics of open / close)
 void BP_G3_Setup(void);                // G3.x
 void BP_G3B_Setup(void);               // G3B.x
 void G3C_Setup(void);                  // G3C.x
@@ -452,5 +453,6 @@ void EDE_Setup(void);                  // EDE.x    (ExtendedDisplayEnabler's pro
         G4B_Setup();                   // group 4b
         EDE_Setup();                   // Extended display provider registration (was the separate ExtendedDisplayEnabler package, switch ede_provider)
         G2I_Setup();                   // diagnostics of the Add Another Window flow (switch g2i_addwindiag; wrappers installed last so they see every other hook's result)
+        G2H_Setup();                   // shadow room in the crop mask of G2F (switch g2h_maskshadow) + open / close dim diagnostics (switch g2h_dimdiag); after G2F, whose mask it adopts
     }
 }
