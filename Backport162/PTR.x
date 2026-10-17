@@ -44,6 +44,8 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <mach-o/dyld.h>
+#import <dlfcn.h>
+#import <math.h>
 #import <sys/sysctl.h>
 #import <string.h>
 #import <stdio.h>
@@ -138,6 +140,32 @@ static NSString *BPPTR_DisplayName(id displayContext) {
     id hw = BPPTR_Send0(disp, "hardwareIdentifier");
     return hw ? [NSString stringWithFormat:@"%@", hw] : (disp ? BPPTR_Trunc(disp, 60) : @"?");
 }
+// The pointer button mask of the controller's last pointer event: IOHIDEventGetIntegerValue(event, kIOHIDEventFieldPointerButtonMask = 0x110003), the field the controller itself reads
+// in -pointerEventStreamProvider:didReceivePointerEvent: (0x100008878) to derive _isButtonPressDownTransition (+0x119).  NOTE: _isFingerDown (+0x118) is NOT a button state: it is
+// (fingerDownCount > 0) of the pointer attributes (0x100008b54 .. 0x100008b80), i.e. TRUE the whole time a finger rests on a trackpad (the 0.7.6 guard read it as "button held" and never cleared).
+typedef long long (*BPPTR_GetInt)(void *, uint32_t);
+typedef double (*BPPTR_GetFloat)(void *, uint32_t);
+static void *BPPTR_LastEvent(id controller) {
+    Ivar iv = class_getInstanceVariable(object_getClass(controller), "_lastPointerEvent");
+    void *e = NULL;
+    if (iv) memcpy(&e, (const char *)(__bridge void *)controller + ivar_getOffset(iv), sizeof e);
+    return e;
+}
+static long long BPPTR_ButtonMask(id controller) {
+    static BPPTR_GetInt fn; static BOOL tried;
+    if (!tried) { tried = YES; fn = (BPPTR_GetInt)dlsym(RTLD_DEFAULT, "IOHIDEventGetIntegerValue"); }
+    void *e = BPPTR_LastEvent(controller);
+    return (fn && e) ? fn(e, 0x110003) : -1;
+}
+static BOOL BPPTR_EventPosition(id controller, CGPoint *out) {
+    static BPPTR_GetFloat fn; static BOOL tried;
+    if (!tried) { tried = YES; fn = (BPPTR_GetFloat)dlsym(RTLD_DEFAULT, "IOHIDEventGetFloatValue"); }
+    void *e = BPPTR_LastEvent(controller);
+    if (!fn || !e) return NO;
+    out->x = fn(e, 0x110000); out->y = fn(e, 0x110001);                 // the two fields the controller reads for the model position (0x10000eb64)
+    return YES;
+}
+static uint64_t gBPPTRChangeAt;           // uptime ns of the last display change (for the "ms after the display change" of the hover region trace)
 static uint64_t gBPPTRWatchUntil;         // after a display change the next pointer updates are traced for 1.5 s (debug only)
 static unsigned gBPPTRWatchLines;
 static char kBPPTRBackdropsOff;           // associated object on a rendering controller: its CABackdropLayers were disabled by ptr_edge
@@ -204,8 +232,17 @@ static void BPPTR_DisplayChanged(id controller, id before, id after) {
         gBPPTRWatchLines = 0;
         BPPTR_Log(@"hover: pointer display %@ -> %@: %lu client state(s), fix %@", BPPTR_DisplayName(before), BPPTR_DisplayName(after), (unsigned long)clients.count, fix ? @"ON" : @"off (switch)");
     }
-    BOOL held = BPPTR_BoolIvar(controller, "_isFingerDown");           // button / finger held (a drag or resize that crosses the display edge): the region belongs to the drag, keep it
-    if (held && fix && dbg) BPPTR_Log(@"hover: a button is held (_isFingerDown), hover regions are kept");
+    long long buttons = BPPTR_ButtonMask(controller);
+    BOOL held = buttons > 0;                                           // a pointer button is down (a drag or resize that crosses the display edge): the region belongs to the drag, keep it
+    gBPPTRChangeAt = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (dbg) {
+        Ivar fd = class_getInstanceVariable(object_getClass(controller), "_isFingerDown");
+        BPPTR_Log(@"hover: raw state: button mask %lld (held %d), _isFingerDown byte %d (ivar offset 0x%lx type %s: trackpad finger contact, not a button), _isButtonPressDownTransition %d, _latchingState %lld, _lockedContext %@",
+                  buttons, (int)held, (int)BPPTR_BoolIvar(controller, "_isFingerDown"), fd ? (unsigned long)ivar_getOffset(fd) : 0ul, fd ? ivar_getTypeEncoding(fd) : "?", (int)BPPTR_BoolIvar(controller, "_isButtonPressDownTransition"),
+                  ({ long long v = -1; Ivar li = class_getInstanceVariable(object_getClass(controller), "_latchingState"); if (li) memcpy(&v, (const char *)(__bridge void *)controller + ivar_getOffset(li), sizeof v); v; }),
+                  BPPTR_Ivar(controller, "_lockedContext") ? @"set" : @"nil");
+        if (held && fix) BPPTR_Log(@"hover: a pointer button is held, hover regions are kept");
+    }
     int cleared = 0;
     for (id client in clients) {
         id state = [(NSMapTable *)map objectForKey:client];
@@ -253,13 +290,21 @@ static void BPPTR_DisplayChanged(id controller, id before, id after) {
 - (void)_updatePointerWithOptions:(unsigned long long)options updateHandlerCollection:(id)collection {
     %orig;
     if (gBPPTRWatchUntil == 0) return;
-    if (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) > gBPPTRWatchUntil || gBPPTRWatchLines >= 12) { gBPPTRWatchUntil = 0; return; }
+    if (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) > gBPPTRWatchUntil || gBPPTRWatchLines >= 20) { gBPPTRWatchUntil = 0; return; }
     gBPPTRWatchLines++;
     id client = BPPTR_Ivar(self, "_previousPointerClient");
     id state = client ? [(NSMapTable *)BPPTR_Ivar(self, "_pointerClientToClientStateMap") objectForKey:client] : nil;
     id region = BPPTR_Send0(state, "activeHoverRegion");
-    BPPTR_Log(@"hover: update after the display change: pointer client pid %d (%@) hover region %@ autohidden %d active display %@", BPPTR_Pid(client),
-              NSStringFromClass([client class]), region ? BPPTR_Trunc(BPPTR_Send0(region, "pointerShape"), 80) : @"none", (int)BPPTR_BoolIvar(self, "_pointerIsAutohidden"), BPPTR_DisplayName(BPPTR_Ivar(self, "_activeDisplayContext")));
+    // pointer position: event position (what the model uses) against what the active display's rendering controller has on screen (model and presentation position of the shape view)
+    CGPoint ev = CGPointZero; BOOL haveEv = BPPTR_EventPosition(self, &ev);
+    id rc = BPPTR_Ivar(BPPTR_Ivar(self, "_activeDisplayContext"), "_pointerRenderingController");
+    id sv = BPPTR_Ivar(rc, "_pointerShapeView");
+    CALayer *sl = [sv isKindOfClass:[UIView class]] ? ((UIView *)sv).layer : nil;
+    CGPoint mp = sl ? sl.position : CGPointZero, pp = sl.presentationLayer ? sl.presentationLayer.position : CGPointMake(-1, -1);
+    BPPTR_Log(@"hover: update %.0f ms after the display change: pointer client pid %d (%@) hover region %@ autohidden %d active display %@ | event position %@ shape view model %@ presentation %@ (jump %.1f pt)",
+              (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - gBPPTRChangeAt) / 1e6, BPPTR_Pid(client), NSStringFromClass([client class]), region ? BPPTR_Trunc(BPPTR_Send0(region, "pointerShape"), 80) : @"none",
+              (int)BPPTR_BoolIvar(self, "_pointerIsAutohidden"), BPPTR_DisplayName(BPPTR_Ivar(self, "_activeDisplayContext")), haveEv ? NSStringFromCGPoint(ev) : @"?", NSStringFromCGPoint(mp), NSStringFromCGPoint(pp),
+              haveEv && sl ? hypot(pp.x - ev.x, pp.y - ev.y) : -1.0);
 }
 - (void)xpcClientContextController:(id)xpc didUpdateHoverRegion:(id)region forClient:(id)client transitionCompletion:(id)completion {
     %orig;
@@ -268,8 +313,12 @@ static void BPPTR_DisplayChanged(id controller, id before, id after) {
     uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000000ull;
     if (now != sec) { sec = now; n = 0; }
     if (++n > 20) return;
-    BPPTR_Log(@"hover: client pid %d sent hover region %@ (active display %@)", BPPTR_Pid(client),
-              region ? BPPTR_Trunc(BPPTR_Send0(region, "pointerShape"), 80) : @"NIL (hover ended)", BPPTR_DisplayName(BPPTR_Ivar(self, "_activeDisplayContext")));
+    SEL cs = sel_registerName("coordinateSpaceSourceContextID"), cb = sel_registerName("contentBounds");
+    unsigned ctx = (region && [region respondsToSelector:cs]) ? ((unsigned (*)(id, SEL))objc_msgSend)(region, cs) : 0u;
+    CGRect bounds = (region && [region respondsToSelector:cb]) ? ((CGRect (*)(id, SEL))objc_msgSend)(region, cb) : CGRectZero;
+    BPPTR_Log(@"hover: client pid %d sent hover region %@ ctx 0x%x contentBounds %@ (active display %@, %.0f ms after the last display change)", BPPTR_Pid(client),
+              region ? BPPTR_Trunc(BPPTR_Send0(region, "pointerShape"), 80) : @"NIL (hover ended)", ctx, NSStringFromCGRect(bounds), BPPTR_DisplayName(BPPTR_Ivar(self, "_activeDisplayContext")),
+              gBPPTRChangeAt ? (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - gBPPTRChangeAt) / 1e6 : -1.0);
 }
 %end
 

@@ -13,6 +13,15 @@
 //   This file registers one observer.  If the arbiter's active region belongs to a view of the window scene the pointer LEFT (region.referenceView, else the coordinate space source view of
 //   the arbiter core), the region is exited with -[_UIPointerArbiter exitRegion:removeStyle:completion:] (the very call the hover driver makes).  A second exit from UIKit's own
 //   hover end is harmless (block 0x189799108 only acts when the region is still the active one).
+// Second fix (switch g2g_staleenter, default ON), found in the user's log db230d53 (21:41:14 .. 21:42:23, 102 display changes): around EVERY display change UIKit sends the hover region of a
+// region it had already asked to exit: "arbiter exitRegion <R> (active no)" then "arbiter sends hover region <shape of R>" then "sends hover region NIL" 1 to 12 ms apart, also while the
+// pointer is on the other display.  Cause: -[_UIPointerArbiterCore_iOS applyStyle:forRegion:effectSourceHandler:completion:] (0x18979883c) and -exitRegion:removeStyle:completion: (0x189798fd0)
+// both run through the FIFO -_performTransactionUsingBlock: (0x18979a068); the hover end of the pointer leaving the display (backboardd's hit-test exit) calls exitRegion for R while the
+// enter of R is still queued, so the queued enter runs afterwards (-_setActiveHoverRegion:style:forPointerRegion:transactionID:completion: 0x1897991e0, which sends the shape of R to
+// pointeruid) and the exit block (0x189799108) then sends nil.  pointeruid applies the shape for a few ms on the display the pointer is now on: for the resize corner (RoundedRect /
+// CustomPath region of the iPad's window) the pointer morphs to the old region's geometry and snaps back = the jump the user sees.  Fix: remember regions with an exit requested after
+// their enter (exitRegion marks, applyStyle:forRegion: unmarks); when the queued enter executes for a marked region it is called with hover = nil / style = nil, i.e. the arbiter state stays
+// "no region" (exactly what the exit block leaves behind) and no shape is sent.  Decision by identity of the UIPointerRegion, so a real re-enter (applyStyle after the exit) is untouched.
 // Diagnostics (Backport162.debug): the observer logs the arbiter state on every display change; the arbiter's exit / set-region / interaction state calls are traced (rate limited), so one
 // recording shows whether UIKit exited the region by itself (an "exitRegion" line before the display change line) or not.
 //
@@ -112,13 +121,39 @@ static void G2G_Register(void) {
 
 // ---------------------------------------------------------------------------------------------- arbiter trace (debug only)
 
-static IMP gG2GOrigExit, gG2GOrigSet, gG2GOrigState;
+static IMP gG2GOrigExit, gG2GOrigSet, gG2GOrigState, gG2GOrigApply;
+static NSMutableArray *gG2GPendingExit;           // regions for which exitRegion was requested after their (possibly still queued) enter; identity compared
+static BOOL G2G_StaleOn(void) { return BP_OnName("g2g_staleenter"); }
+static void G2G_MarkExit(id region, BOOL on) {
+    if (!region) return;
+    @synchronized ([NSObject class]) {
+        if (!gG2GPendingExit) gG2GPendingExit = [NSMutableArray array];
+        NSUInteger i = [gG2GPendingExit indexOfObjectIdenticalTo:region];
+        if (on && i == NSNotFound) { [gG2GPendingExit addObject:region]; if (gG2GPendingExit.count > 16) [gG2GPendingExit removeObjectAtIndex:0]; }
+        else if (!on && i != NSNotFound) [gG2GPendingExit removeObjectAtIndex:i];
+    }
+}
+static BOOL G2G_IsMarked(id region) {
+    if (!region) return NO;
+    @synchronized ([NSObject class]) { return gG2GPendingExit && [gG2GPendingExit indexOfObjectIdenticalTo:region] != NSNotFound; }
+}
 
 static void G2G_Exit(id self, SEL _cmd, id region, BOOL removeStyle, id completion) {
     if (BP_LogEnabled() && G2G_Rate()) G2G_LOG(@"g2g: arbiter exitRegion removeStyle %d region %@ (active %@)", (int)removeStyle, G2G_Short(region), G2G_Send0(self, "activePointerRegion") == region ? @"yes" : @"no");
+    if (G2G_StaleOn()) G2G_MarkExit(region, YES);
     ((void (*)(id, SEL, id, BOOL, id))gG2GOrigExit)(self, _cmd, region, removeStyle, completion);
 }
+static void G2G_Apply(id self, SEL _cmd, id style, id region, id handler, id completion) {
+    G2G_MarkExit(region, NO);                                                       // a real (re)enter after an exit request
+    ((void (*)(id, SEL, id, id, id, id))gG2GOrigApply)(self, _cmd, style, region, handler, completion);
+}
 static void G2G_SetRegion(id self, SEL _cmd, id hover, id style, id pointerRegion, unsigned long long tid, id completion) {
+    if (hover && G2G_StaleOn() && G2G_IsMarked(pointerRegion)) {
+        G2G_LOG(@"g2g: queued enter of a region whose exit was already requested: shape NOT sent (stale enter, would show the old display's region on the new one): %@", G2G_Short(pointerRegion));
+        G2G_MarkExit(pointerRegion, NO);
+        ((void (*)(id, SEL, id, id, id, unsigned long long, id))gG2GOrigSet)(self, _cmd, nil, nil, pointerRegion, tid, completion);
+        return;
+    }
     if (BP_LogEnabled() && G2G_Rate()) G2G_LOG(@"g2g: arbiter sends hover region %@ to pointeruid (pointerState %lld)", hover ? G2G_Short(G2G_Send0(hover, "pointerShape")) : @"NIL (hover ended)",
                                               [self respondsToSelector:@selector(pointerState)] ? ((long long (*)(id, SEL))objc_msgSend)(self, @selector(pointerState)) : -1LL);
     ((void (*)(id, SEL, id, id, id, unsigned long long, id))gG2GOrigSet)(self, _cmd, hover, style, pointerRegion, tid, completion);
@@ -146,10 +181,12 @@ void G2G_Setup(void) {
     if (core) {
         gG2GOrigExit = G2G_Replace(core, "exitRegion:removeStyle:completion:", (IMP)G2G_Exit);
         gG2GOrigSet = G2G_Replace(core, "_setActiveHoverRegion:style:forPointerRegion:transactionID:completion:", (IMP)G2G_SetRegion);
+        gG2GOrigApply = G2G_Replace(core, "applyStyle:forRegion:effectSourceHandler:completion:", (IMP)G2G_Apply);
         gG2GOrigState = G2G_Replace(core, "pointerClientControllerClientInteractionStateDidChange:", (IMP)G2G_ClientState);
     } else {
         BP_Log(@"g2g: _UIPointerArbiterCore_iOS not found, arbiter trace not installed");
     }
+    if (!gG2GOrigApply || !gG2GOrigSet || !gG2GOrigExit) BP_Log(@"g2g: arbiter methods missing (exit %p set %p apply %p): stale enter filter cannot work", gG2GOrigExit, gG2GOrigSet, gG2GOrigApply);
     Class oc = objc_allocateClassPair([NSObject class], "BPG2GPointerObserver", 0);
     if (!oc) { BP_Log(@"g2g: observer class could not be created"); return; }
     class_addMethod(oc, NSSelectorFromString(@"pointerDidMoveToFromWindowScene:toWindowScene:"), (IMP)G2G_PointerMoved, "v@:@@");
