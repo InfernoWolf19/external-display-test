@@ -770,5 +770,7 @@ static void BPD_Marker(const char *what) {
         gSlide = BPDW_MainSlide();
         BPD_InstallCloneMirror();
         BPP_Install();
+        char res[200]; snprintf(res, sizeof res, "install result: updateClone %d handler %d pointer process %d link exit %d", orig_updateClone != NULL, orig_handler != NULL, orig_processOne != NULL, orig_linkExit != NULL);
+        BPD_Marker(res);                                                                       // always logged: which hooks are live
     }
 }
