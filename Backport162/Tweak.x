@@ -416,6 +416,7 @@ void BP_G3_Setup(void);                // G3.x
 void BP_G3B_Setup(void);               // G3B.x
 void G3C_Setup(void);                  // G3C.x
 void G4B_Setup(void);                  // G4B.x
+void EDE_Setup(void);                  // EDE.x    (ExtendedDisplayEnabler's provider registration, merged in 0.7.5)
 
 // ---------------------------------------------------------------- entry
 
@@ -424,7 +425,7 @@ void G4B_Setup(void);                  // G4B.x
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
         BP_InstallCrashRecorder(gTmpDir);   // own crash report: <jbroot>/tmp/Backport162.crash (ReportCrash writes nothing for some of these crashes)
-        BP_Log(@"Backport162 0.7.4 loaded");
+        BP_Log(@"Backport162 0.7.5 loaded");
         // BP2B_Early() must run before any message reaches a modifier class (+initialize of SBSwitcherModifier builds the
         // protocol tables); nothing above this line touches those classes.
         BP2B_Early();
@@ -444,5 +445,6 @@ void G4B_Setup(void);                  // G4B.x
         BP_G3B_Setup();                // group 3b
         G3C_Setup();                   // group 3c: Zoom on a full-screen app
         G4B_Setup();                   // group 4b
+        EDE_Setup();                   // Extended display provider registration (was the separate ExtendedDisplayEnabler package, switch ede_provider)
     }
 }

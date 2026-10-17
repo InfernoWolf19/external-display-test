@@ -72,6 +72,8 @@ static BOOL G4B_On(const char *name) { return BP_OnName(name); }     // INTEGRAT
 // opt-in switch: <jbroot>/tmp/Backport162.on.<name>, checked at most once a second
 static BOOL G4B_OptIn(const char *name) { return BP_OptInName(name); }
 
+void BP4_NoteUserMirroringChoice(BOOL mirror);     // Group4Connect.m (saved mirror / extended choice, 0.7.5)
+
 // `type`, `count` ... are declared with different return types in Foundation: message explicitly when needed.
 static inline long long G4B_LL(id obj, SEL sel) { return ((long long (*)(id, SEL))objc_msgSend)(obj, sel); }
 static inline BOOL G4B_Bool(id obj, SEL sel) { return ((BOOL (*)(id, SEL))objc_msgSend)(obj, sel); }
@@ -740,8 +742,10 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     void (^complete)(NSUInteger) = ^(NSUInteger result) {
         if (result) {                                     // the session writes the mirroring default itself (0x1c77d4ab8)
             id d = G4B_ExternalDisplayDefaults();
-            if ([d respondsToSelector:@selector(setMirroringEnabled:)])
+            if ([d respondsToSelector:@selector(setMirroringEnabled:)]) {
                 ((void (*)(id, SEL, BOOL))objc_msgSend)(d, @selector(setMirroringEnabled:), result == 2);
+                BP4_NoteUserMirroringChoice(result == 2);     // Group4Connect.m: the answer is the user's choice, saved like the Settings switch (0.7.5)
+            }
         }
         BP_Log(@"edu: received response from user. externalDisplayEnabled: %d", result == 1);
         completion(result);

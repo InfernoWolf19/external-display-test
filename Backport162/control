@@ -1,11 +1,12 @@
 Package: com.infernowolf19.backport162
 Name: Backport162
-Version: 0.7.4
+Version: 0.7.5
 Architecture: iphoneos-arm64
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice). Reboot userspace after installing (backboardd).
 Maintainer: infernowolf19
 Author: infernowolf19
 Section: Tweaks
 Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
+Provides: com.infernowolf19.extendeddisplayenabler

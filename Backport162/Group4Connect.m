@@ -22,8 +22,10 @@
 //
 // Feature names:  autoext  mirrorsvc  covernote  nilock(E)  discguard(E)  provmap(E)       (E = experimental)
 
-// autoext and mirrorsvc are installed from 0.7.0 on (kill switches Backport162.off.autoext / .mirrorsvc); they used to be left to
-// ExtendedDisplayEnabler.
+// autoext and mirrorsvc are installed from 0.7.0 on (kill switches Backport162.off.autoext / .mirrorsvc).  Since 0.7.5 they are the ONE
+// implementation of what ExtendedDisplayEnabler 0.2.2 did on these selectors (that package is merged into this one: EDE.x has its provider
+// registration, this file has the rest): the user's saved mirror / extended choice (CFPreferences, migrated from the EDE domain), the
+// beta-5 default, the setDisplayMirroringEnabled:forDisplay: fix incl. the "ever enabled" flag.  See specs/EDE-MERGE-0.7.5.md.
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
@@ -114,6 +116,47 @@ static BOOL BP4_BuildMatches(void) {
 #else
     return NO;
 #endif
+}
+
+// ======================================================================================================== saved choice
+// Ported from ExtendedDisplayEnabler 0.2.2 (EDEPrefGet / EDEPrefSet / EDELoadChoice / EDESaveChoice): the user's last explicit choice,
+// "extended" or "mirror", stored by cfprefsd (not a jailbreak file).  It beats the automatic decision on every connect.
+// Domain: com.infernowolf19.backport162, key "choice".  First start after the merge: when that key is absent the value of the old
+// ExtendedDisplayEnabler domain (com.infernowolf19.extendeddisplayenabler, key "choice") is read and copied over, so the user's setting
+// survives; the old domain is left untouched.
+
+static NSString *const kBP4PrefsDomain  = @"com.infernowolf19.backport162";
+static NSString *const kBP4LegacyDomain = @"com.infernowolf19.extendeddisplayenabler";
+enum { BP4_ChoiceNone = 0, BP4_ChoiceExtended = 1, BP4_ChoiceMirror = 2 };
+static int gBP4Choice;                        // BP4_Choice*; written on the main queue (and once from the constructor), read in the connect hook
+
+static id BP4_PrefGet(NSString *domain, NSString *key) {
+    return CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key, (__bridge CFStringRef)domain));
+}
+static void BP4_PrefSet(NSString *domain, NSString *key, id value) {
+    CFPreferencesSetAppValue((__bridge CFStringRef)key, (__bridge CFPropertyListRef)value, (__bridge CFStringRef)domain);
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
+}
+static int BP4_ParseChoice(id v) {
+    if ([v isKindOfClass:[NSString class]]) {
+        if ([v isEqualToString:@"extended"]) return BP4_ChoiceExtended;
+        if ([v isEqualToString:@"mirror"]) return BP4_ChoiceMirror;
+    }
+    return BP4_ChoiceNone;
+}
+static void BP4_SaveChoice(int choice) {
+    NSString *text = choice == BP4_ChoiceExtended ? @"extended" : (choice == BP4_ChoiceMirror ? @"mirror" : nil);
+    BP4_PrefSet(kBP4PrefsDomain, @"choice", text);
+}
+static int BP4_LoadChoice(void) {
+    int c = BP4_ParseChoice(BP4_PrefGet(kBP4PrefsDomain, @"choice"));
+    if (c != BP4_ChoiceNone) return c;
+    c = BP4_ParseChoice(BP4_PrefGet(kBP4LegacyDomain, @"choice"));
+    if (c != BP4_ChoiceNone) {
+        BP4_SaveChoice(c);
+        BP4_Log(@"saved choice %d migrated from the ExtendedDisplayEnabler domain", c);
+    }
+    return c;
 }
 
 // ======================================================================================================== helpers
@@ -318,9 +361,18 @@ static void hk_policyConnect(id self, SEL _cmd, id controller, id config) {
     st.userPref = 0;
     objc_setAssociatedObject(self, &kBP4ExtStateKey, st, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // 16.2: [_externalDisplayDefaults setMirroringEnabled:!met]   (done BEFORE the observer below is installed)
-    [defaults setMirroringEnabled:!met];
-    BP4_Log(@"autoext: connect, requirements met=%d -> mirroringEnabled=%d", met, !met);
+    // 16.2: [_externalDisplayDefaults setMirroringEnabled:!met]   (done BEFORE the observer below is installed).  ExtendedDisplayEnabler's beta-5
+    // rule (mirroringEnabled = !_areRuntimeAvailabilityRequirementsMet) is the same value; on top of it the user's saved choice (EDEApplyDesired)
+    // wins, and it is also the user preference of the 16.2 state (userPref 1 mirror / 2 extend), otherwise shouldHaveControl would answer with
+    // the automatic flag and the display would not follow the choice.  Compare first, like EDEApplyDesired (the 16.0 body set YES just before).
+    BOOL wantMirror = !met;
+    if (gBP4Choice != BP4_ChoiceNone) {
+        wantMirror = (gBP4Choice == BP4_ChoiceMirror);
+        st.userPref = wantMirror ? 1 : 2;
+    }
+    BOOL wasMirror = [defaults isMirroringEnabled];
+    if (wasMirror != wantMirror) [defaults setMirroringEnabled:wantMirror];
+    BP4_Log(@"autoext: connect, requirements met=%d -> mirroringEnabled=%d (was %d, %s)", met, wantMirror, wasMirror, gBP4Choice != BP4_ChoiceNone ? "saved choice" : "beta-5 default");
 
     // the 4 s device-connection window (16.2: BSContinuousMachTimer scheduleWithFireInterval:4.0 leeway:0.5 queue:main)
     NSUInteger gen = ++st.generation;
@@ -390,6 +442,10 @@ static void hk_policyDidDisconnect(id self, SEL _cmd, id controller, id sceneMan
 // 16.0: on every root display connect, if the user never used extended mode (both "ever enabled" flags NO) it sets
 // mirroringEnabled = YES AFTER the policy connected, which would undo the automatic decision above.  16.2 has no
 // such code (the flags were replaced by externalDisplayEducationReasons).
+// ExtendedDisplayEnabler ran the original and then put the desired state back (EDEApplyDesired: saved choice, else the beta-5 default of the last policy
+// connect).  Skipping the original ends in the same state without the detour: the forced YES is the only thing the 16.0 body does to the mirroring
+// default, and the state it would have to be restored to is what the policy connect above already wrote (saved choice or !met).  Skipping also keeps the
+// defaults observer of the policy (user preference) from seeing a YES that nobody chose.
 static void (*orig_eduConnect)(id, SEL, id, id);
 static void hk_eduConnect(id self, SEL _cmd, id mgr, id display) {
     if (BP4_On(BP4_AUTOEXT)) return;
@@ -404,33 +460,77 @@ static void hk_eduConnect(id self, SEL _cmd, id mgr, id display) {
 // notify }`, i.e. a request to disable mirroring (= use the display as a separate/extended display) is executed as
 // "enable mirroring".  16.2 (0x1c77d5db4, block 0x1c77d5ebc) honours the value and only acts if it differs.
 
+// ExtendedDisplayEnabler 0.2.2 (EDEApplyMirroring) is merged here: the requested value is applied for BOTH values (the 16.0 original only does the
+// "turn on" half), the request is remembered as the user's saved choice (it beats the automatic decision at the next connect), and a request for
+// "extended" also sets the "extended display ever enabled with hardware requirements satisfied" flag of the defaults.  Like EDE the original is not
+// called when the request is handled (arguments of the expected kind and an extended identity + defaults found).
+// Runs on the main queue: SBDisplayManager asserts the main thread and the service calls this on its XPC queue.
+
 // PORTABLE
 static void (*orig_setMirroring)(id, SEL, id, id);
 static void hk_setMirroring(id self, SEL _cmd, id enabled, id hardwareIdentifier) {
-    if (!BP4_On(BP4_MIRRORSVC) || ![enabled respondsToSelector:@selector(boolValue)] || ![hardwareIdentifier isKindOfClass:[NSString class]]) {
+    BP4_Log(@"mirrorsvc: setDisplayMirroringEnabled hook hit: enabled=%@ display=%@", enabled, hardwareIdentifier);
+    if (!BP4_On(BP4_MIRRORSVC) || ![enabled isKindOfClass:[NSNumber class]] || ![hardwareIdentifier isKindOfClass:[NSString class]] ||
+        ![self respondsToSelector:@selector(_extendedModeDisplayIdentityForHardwareIdentifier:error:)]) {
         orig_setMirroring(self, _cmd, enabled, hardwareIdentifier);
         return;
     }
     BOOL want = [enabled boolValue];
-    if (want) { orig_setMirroring(self, _cmd, enabled, hardwareIdentifier); return; }   // 16.0 already does this correctly
 
     id process = nil;                                              // 16.0: [[BSServiceConnection currentContext] remoteProcess]
-    Class bsc = objc_getClass("BSServiceConnection");
-    if (bsc && [(id)bsc respondsToSelector:@selector(currentContext)]) {
-        id ctx = [(id)bsc currentContext];
-        if ([ctx respondsToSelector:@selector(remoteProcess)]) process = ((id (*)(id, SEL))objc_msgSend)(ctx, @selector(remoteProcess));
+    @try {
+        Class bsc = objc_getClass("BSServiceConnection");          // by name: no link against BoardServices
+        if (bsc && [(id)bsc respondsToSelector:@selector(currentContext)]) {
+            id ctx = [(id)bsc currentContext];
+            if ([ctx respondsToSelector:@selector(remoteProcess)]) process = ((id (*)(id, SEL))objc_msgSend)(ctx, @selector(remoteProcess));
+        }
+    } @catch (NSException *ex) {
+        process = nil;
     }
     NSString *hw = [hardwareIdentifier copy];
     BP4_Main(^{                                                    // 16.0/16.2: BSDispatchMain
-        if (![self respondsToSelector:@selector(_extendedModeDisplayIdentityForHardwareIdentifier:error:)]) return;
-        id identity = [self _extendedModeDisplayIdentityForHardwareIdentifier:hw error:NULL];
-        id defaults = BP4_Ivar(self, "_defaults");
-        if (!identity || ![defaults respondsToSelector:@selector(isMirroringEnabled)] || ![defaults respondsToSelector:@selector(setMirroringEnabled:)]) return;
-        if ([defaults isMirroringEnabled] == want) return;
-        BP4_Log(@"mirrorsvc: client asked mirroringEnabled=%d for %@", want, hw);
-        [defaults setMirroringEnabled:want];
-        if ([self respondsToSelector:@selector(_notifyOfPropertyChangesForDisplayIdentity:requestingProcess:)])
-            [self _notifyOfPropertyChangesForDisplayIdentity:identity requestingProcess:process];
+        @try {
+            id identity = [self _extendedModeDisplayIdentityForHardwareIdentifier:hw error:NULL];
+            id defaults = BP4_Ivar(self, "_defaults");
+            if (!identity || ![defaults respondsToSelector:@selector(isMirroringEnabled)] || ![defaults respondsToSelector:@selector(setMirroringEnabled:)]) {
+                BP4_Log(@"mirrorsvc: mirroring request: no extended identity/defaults for %@", hw);
+                return;
+            }
+            // The request is valid: remember it so the connect handlers can't undo it later.
+            gBP4Choice = want ? BP4_ChoiceMirror : BP4_ChoiceExtended;
+            BP4_SaveChoice(gBP4Choice);
+
+            BOOL cur = [defaults isMirroringEnabled];
+            BP4_Log(@"mirrorsvc: mirroring request: want=%d current=%d display=%@", want, cur, hw);
+            if (cur == want) return;
+            [defaults setMirroringEnabled:want];
+            if (BP4_Logging()) {
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    BP4_Log(@"mirrorsvc: 1s after the change: isMirroringEnabled=%d (wanted %d)", [defaults isMirroringEnabled], want);
+                });
+            }
+            if (!want) {
+                // The education observer only forces mirroring while neither "ever enabled" flag is set.
+                SEL ever = NSSelectorFromString(@"setExtendedDisplayEverEnabledWithHardwareReqsSatisfied:");
+                if ([defaults respondsToSelector:ever]) ((void (*)(id, SEL, BOOL))objc_msgSend)(defaults, ever, YES);
+            }
+            if ([self respondsToSelector:@selector(_notifyOfPropertyChangesForDisplayIdentity:requestingProcess:)])
+                [self _notifyOfPropertyChangesForDisplayIdentity:identity requestingProcess:process];
+        } @catch (NSException *ex) {
+            BP4_Log(@"mirrorsvc: exception applying mirroring change: %@", ex);
+        }
+    });
+}
+
+// G4B.x (education alert): the answer of the alert writes the mirroring default itself; it is the user's explicit choice as much as the Settings
+// switch is, so it replaces the saved choice (else the next connect would put the older saved choice back over it).
+void BP4_NoteUserMirroringChoice(BOOL mirror);
+void BP4_NoteUserMirroringChoice(BOOL mirror) {
+    if (!BP4_On(BP4_AUTOEXT)) return;
+    BP4_Main(^{
+        gBP4Choice = mirror ? BP4_ChoiceMirror : BP4_ChoiceExtended;
+        BP4_SaveChoice(gBP4Choice);
+        BP4_Log(@"autoext: education alert answered, saved choice -> %s", mirror ? "mirror" : "extended");
     });
 }
 
@@ -615,7 +715,9 @@ static void hk_provDidDisconnect(id self, SEL _cmd, id manager, id identity) {
 static void BP4_Install(void) {
     const char *pol = "SBSystemShellExtendedDisplayControllerPolicy";
     int ok = 0;
-    // --- autoext / mirrorsvc (0.7.0: ported here instead of relying on ExtendedDisplayEnabler; both are idempotent with it)
+    gBP4Choice = BP4_LoadChoice();
+    BP4_Log(@"saved choice=%d", gBP4Choice);
+    // --- autoext / mirrorsvc (0.7.0; since 0.7.5 the one implementation, ExtendedDisplayEnabler is merged into the package)
     if (BP4_On(BP4_AUTOEXT) && objc_getClass(pol)) {
         BP4_AddMethod(pol, @selector(_keyboardAvailabilityChanged:), (IMP)BP4_KeyboardAvailabilityChanged, "v@:@");
         BP4_AddMethod(pol, @selector(mousePointerManager:hardwarePointingDeviceAttachedDidChange:), (IMP)BP4_PointerAttachChanged, "v@:@B");

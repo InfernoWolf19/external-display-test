@@ -38,7 +38,7 @@ Do not spend usage re-reading what the specs already contain.
 
 ## Group 4 progress (all agent work integrated)
 Package 0.4.0 (CI run for commit "Backport162 0.4.0"): `Tweak.x` (scale, autohost, blank), `Group4Connect.m` (provmap on by default; nilock/discguard/covernote opt-in), `Group4Focus.x` (disconnect on by default; activedisplay/gesturegate/lockedptr/discswitch/directhook opt-in). Shared enum/helpers in `BP.h`. Opt-in = file `<jbroot>/tmp/Backport162.on.<name>`.
-Not installed on purpose: autoext + mirrorsvc (ExtendedDisplayEnabler 0.2.2 already does both). Not portable: clone-mirroring, education rework, per-scene SBLockedPointerManager, window migration on unplug, per-display focus locks (see specs/group4-*.md).
+autoext + mirrorsvc were left to ExtendedDisplayEnabler 0.2.2 in 0.4.0; installed since 0.7.0 and, since 0.7.5, ExtendedDisplayEnabler itself is merged (EDE.x, specs/EDE-MERGE-0.7.5.md). Not portable: clone-mirroring, education rework, per-scene SBLockedPointerManager, window migration on unplug, per-display focus locks (see specs/group4-*.md).
 Nothing in group 4 has been run on a device yet. Next: tell the user group 4 is done and give them the 0.4.0 artifact; they test; fix issues; then start groups 1-3 (specs for group 1 exist).
 
 ## Facts worth keeping
