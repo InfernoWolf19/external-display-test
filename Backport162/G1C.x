@@ -3899,12 +3899,21 @@ static BOOL G1C_FS_ResizingAllowed(id self, SEL _cmd, long long role, id layout)
     return G1B_SendB1(self, @selector(appLayoutContainsOnlyResizableApps:), layout) && G1C_FloatEq(G1C_FS_Reveal(self), 0.0) && G1C_FS_OnStage(self, layout);
 }
 static BOOL G1C_FS_ShouldEnableGrabbers(id self, SEL _cmd, long long role, id layout) {  // 0x1c75c5288
-    if (!G1C_FloatEq(G1C_FS_Reveal(self), 0.0) && G1C_FS_Exceeds(self, 0)) return NO;
-    if (!G1B_SendB0(self, @selector(isDisplayEmbedded))) return NO;
-    if (!G1C_FS_OnStage(self, layout)) return NO;
-    if (!G1B_SendB1(self, @selector(appLayoutContainsOnlyResizableApps:), layout)) return NO;
-    if (!(role == 1 || role == 2)) return NO;                                                // SBLayoutRoleIsValidForSplitView (0x1c7894a30): primary / side
-    return !G1C_FS_Occluded(self, 0, role, layout);
+    BOOL strip = !G1C_FloatEq(G1C_FS_Reveal(self), 0.0) && G1C_FS_Exceeds(self, 0);
+    BOOL embedded = G1B_SendB0(self, @selector(isDisplayEmbedded));
+    BOOL onStage = G1C_FS_OnStage(self, layout);
+    BOOL resizable = G1B_SendB1(self, @selector(appLayoutContainsOnlyResizableApps:), layout);
+    BOOL roleOK = (role == 1 || role == 2);                                                // SBLayoutRoleIsValidForSplitView (0x1c7894a30): primary / side
+    BOOL occluded = roleOK ? G1C_FS_Occluded(self, 0, role, layout) : NO;
+    BOOL r = !strip && embedded && onStage && resizable && roleOK && !occluded;
+    if (BP_LogEnabled()) {                                                                 // diagnostics: logged when the answer for a layout changes (resize corner dead after tapping a window)
+        static __unsafe_unretained id lastLayout; static long long lastRole = -1; static int lastR = -1; static int n;
+        if ((lastLayout != layout || lastRole != role || lastR != (int)r) && n < 300) {
+            lastLayout = layout; lastRole = role; lastR = r; n++;
+            BP_Log(@"g1c: resize grabbers enabled=%d role %lld: stripHides=%d embedded=%d onStage=%d resizable=%d roleOK=%d occluded=%d stage=%@ layout=%@", r, role, strip, embedded, onStage, resizable, roleOK, occluded, G1C_DbgLayout(G1C_FS_Layout(self)), G1C_DbgLayout(layout));
+        }
+    }
+    return r;
 }
 static unsigned long long G1C_FS_ActiveCorners(id self, SEL _cmd, long long role, id layout) {   // 0x1c75c3aac
     if (!G1C_FS_ShouldEnableGrabbers(self, 0, role, layout)) return G1B_SUPER(unsigned long long, gFsSuper, self, _cmd, (struct objc_super *, SEL, long long, id), role, layout);
