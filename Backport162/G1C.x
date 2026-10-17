@@ -5022,9 +5022,16 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 static BOOL gCloseTraceOn;
 static int gCloseTracePhase;                                                          // 0 = gesture
 static NSString *gCloseTraceSig[8];
+static unsigned gCloseTraceSerial;                                                    // counts the armed home swipe closes (read by G2F.x for its per-close dump)
+// G2F.x: -1 = no traced close running, else the current phase (0 = gesture, 1..3 = transition phases) and the close's serial number.
+int G1C_CloseTraceState(unsigned *serial) {
+    if (!gCloseTraceOn) return -1;
+    if (serial) *serial = gCloseTraceSerial;
+    return gCloseTracePhase;
+}
 static void G1C_CloseTraceArm(long long mode) {
     if (!BP_LogEnabled() || mode != 3) return;
-    gCloseTraceOn = YES; gCloseTracePhase = 0;
+    gCloseTraceOn = YES; gCloseTracePhase = 0; gCloseTraceSerial++;
     for (int k = 0; k < 8; k++) gCloseTraceSig[k] = nil;
     BP_Log(@"[g1c] close: trace armed (home gesture in mode 3)");
 }
