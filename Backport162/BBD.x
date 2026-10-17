@@ -733,15 +733,29 @@ static BOOL BPD_CrashGuardTripped(void) {
 }
 
 
+// Marker so that the user can see whether the dylib was injected at all and which check stopped it (<root>/Backport162BBD.ctor, one line per process start).
+static void BPD_Marker(const char *what) {
+    char p[1200]; snprintf(p, sizeof p, "%s/Backport162BBD.ctor", gBPDRoot[0] ? gBPDRoot : "/var/jb/tmp");
+    int fd = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+    if (fd < 0) return;
+    char line[600]; const char *img = _dyld_get_image_name(0);
+    char ver[64] = {0}; size_t vn = sizeof ver; sysctlbyname("kern.osversion", ver, &vn, NULL, 0);
+    int n = snprintf(line, sizeof line, "pid %d image %s build %s: %s\n", (int)getpid(), img ? img : "(null)", ver, what);
+    if (n > 0) (void)!write(fd, line, (size_t)n);
+    close(fd);
+}
+
 %ctor {
     @autoreleasepool {
         BPD_InitPaths();
+        BPD_Marker("ctor entered");
         const char *path = _dyld_get_image_name(0);
         if (!path) return;
         size_t n = strlen(path);
-        if (n < 10 || strcmp(path + n - 10, "/backboardd") != 0) return;     // belt and braces next to the Filter
-        if (!BPD_BuildMatches()) { BPD_Log(@"build does not match 20A8372, not installing"); return; }
-        if (BPD_CrashGuardTripped()) return;
+        if (n < 10 || strcmp(path + n - 10, "/backboardd") != 0) { BPD_Marker("not backboardd, leaving"); return; }     // belt and braces next to the Filter
+        if (!BPD_BuildMatches()) { BPD_Marker("build mismatch, leaving"); BPD_Log(@"build does not match 20A8372, not installing"); return; }
+        if (BPD_CrashGuardTripped()) { BPD_Marker("crash guard tripped, leaving"); return; }
+        BPD_Marker("installing");
         gSlide = _dyld_get_image_vmaddr_slide(0);
         BPD_InstallCloneMirror();
         BPP_Install();

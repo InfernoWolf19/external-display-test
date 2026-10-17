@@ -36,6 +36,8 @@
 #import <string.h>
 #import <stdio.h>
 #import <unistd.h>
+#import <fcntl.h>
+#import <stdio.h>
 #import <time.h>
 
 @protocol BPPTRContext <NSObject>
@@ -218,8 +220,24 @@ static void BPPTR_RetryInstall(int attempt) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ BPPTR_RetryInstall(attempt + 1); });
 }
 
+// Marker so that the user can see whether the dylib was injected at all (one line per process start; the daemon may be sandboxed: then nothing is written).
+static void BPPTR_Marker(const char *what) {
+    const char *dirs[] = { "/var/jb/tmp", "/tmp", "/var/mobile/Library/Caches" };
+    for (size_t i = 0; i < 3; i++) {
+        char p[300]; snprintf(p, sizeof p, "%s/Backport162PTR.ctor", dirs[i]);
+        int fd = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+        if (fd < 0) continue;
+        const char *img = _dyld_get_image_name(0);
+        char line[600]; int n = snprintf(line, sizeof line, "pid %d image %s: %s\n", (int)getpid(), img ? img : "(null)", what);
+        if (n > 0) (void)!write(fd, line, (size_t)n);
+        close(fd);
+        return;
+    }
+}
+
 %ctor {
     @autoreleasepool {
+        BPPTR_Marker("ctor entered");
         const char *path = _dyld_get_image_name(0);
         if (!path) return;
         size_t n = strlen(path);
