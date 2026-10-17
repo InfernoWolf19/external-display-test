@@ -1433,15 +1433,47 @@ static BOOL G1D_GM_LocationReceivable(id gm, id touch, id *outScene, id *outSGM,
 %hook SBFluidSwitcherGestureManager
 - (BOOL)_shouldLiveResizeGesture:(id)gesture receiveTouch:(id)touch {
     if (!G1D_ON("g1d_gmtouch")) return %orig;
+    static int sResizeLogged;
+    BOOL lg = BP_LogEnabled() && sResizeLogged < 400;
     id sc = G1D_GM_SC(self);
-    if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) return NO;
+    if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) {
+        if (lg) { sResizeLogged++; BP_Log(@"g1d: live resize refused: chamois windowing UI not enabled"); }
+        return NO;
+    }
     id ws = nil, sgm = nil;
-    if (!G1D_GM_LocationReceivable(self, touch, &ws, &sgm, NULL)) return NO;
+    CGPoint loc = CGPointZero;
+    if (!G1D_GM_LocationReceivable(self, touch, &ws, &sgm, &loc)) {
+        if (lg) { sResizeLogged++; BP_Log(@"g1d: live resize refused at %@: the system gesture manager does not receive a touch there", NSStringFromCGPoint(loc)); }
+        return NO;
+    }
     SEL allowedSel = NSSelectorFromString(@"isGestureWithTypeAllowed:");
-    if (![sgm respondsToSelector:allowedSel] || !((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowedSel, 0x22)) return NO;
+    if (![sgm respondsToSelector:allowedSel] || !((BOOL (*)(id, SEL, unsigned long long))objc_msgSend)(sgm, allowedSel, 0x22)) {
+        if (lg) { sResizeLogged++; BP_Log(@"g1d: live resize refused at %@: system gesture 0x22 not allowed", NSStringFromCGPoint(loc)); }
+        return NO;
+    }
     SEL ptr = NSSelectorFromString(@"_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch:"), tch = NSSelectorFromString(@"_shouldLiveResizeItemContainerGestureWithTouch:receiveTouch:");
-    if ([self respondsToSelector:ptr] && ((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, ptr, gesture, touch)) return YES;
-    return [self respondsToSelector:tch] ? ((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, tch, gesture, touch) : NO;
+    BOOL viaPointer = [self respondsToSelector:ptr] && ((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, ptr, gesture, touch);
+    if (viaPointer) {
+        if (lg) { sResizeLogged++; BP_Log(@"g1d: live resize accepted (pointer) at %@", NSStringFromCGPoint(loc)); }
+        return YES;
+    }
+    BOOL viaTouch = [self respondsToSelector:tch] ? ((BOOL (*)(id, SEL, id, id))objc_msgSend)(self, tch, gesture, touch) : NO;
+    if (lg) { sResizeLogged++; BP_Log(@"g1d: live resize %s (touch) at %@: pointer variant no", viaTouch ? "accepted" : "refused", NSStringFromCGPoint(loc)); }
+    return viaTouch;
+}
+
+- (BOOL)_shouldLiveResizeItemContainerGestureWithTouch:(id)gesture receiveTouch:(id)touch {
+    BOOL r = %orig;
+    static int sLogged;
+    if (BP_LogEnabled() && sLogged < 400) {
+        sLogged++;
+        id vc = G1D_GM_VC(self);
+        CGPoint pt = G1D_SystemGestureLocation(gesture, touch, G1B_Send0(vc, NSSelectorFromString(@"view")));
+        SEL ica = NSSelectorFromString(@"_itemContainerAtLocation:environment:");
+        id container = [vc respondsToSelector:ica] ? ((id (*)(id, SEL, CGPoint, long long))objc_msgSend)(vc, ica, pt, 1) : nil;
+        BP_Log(@"g1d: live resize (touch variant) -> %d at %@ container %@ layout %@", r, NSStringFromCGPoint(pt), container, G1B_Send0(container, NSSelectorFromString(@"appLayout")));
+    }
+    return r;
 }
 
 - (BOOL)_shouldTapToBringItemContainerForward:(id)gesture receiveTouch:(id)touch {
