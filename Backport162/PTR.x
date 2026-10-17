@@ -202,14 +202,16 @@ static BOOL BPPTR_BackdropCutByEdge(id rc, NSString **why) {
     if (!w || !bl) return NO;
     CGRect wb = w.bounds;
     __block BOOL cut = NO;
+    __block NSString *found = nil;
     BPPTR_Walk(v.layer, 0, ^(CALayer *l, int d) {
         if (cut || ![l isKindOfClass:bl] || l.hidden || l.opacity <= 0.01f) return;
         CGRect fr = [l convertRect:l.bounds toLayer:w.layer];
         if (!CGRectIsEmpty(fr) && CGRectIntersectsRect(wb, fr) && !CGRectContainsRect(wb, fr)) {
             cut = YES;
-            if (why) *why = [NSString stringWithFormat:@"%@ frame %@ in window %@", NSStringFromClass([l class]), NSStringFromCGRect(fr), NSStringFromCGRect(wb)];
+            found = [NSString stringWithFormat:@"%@ frame %@ in window %@", NSStringFromClass([l class]), NSStringFromCGRect(fr), NSStringFromCGRect(wb)];
         }
     });
+    if (why) *why = found;
     return cut;
 }
 
