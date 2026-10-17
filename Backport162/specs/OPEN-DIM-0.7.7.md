@@ -92,7 +92,7 @@ regressed"). The first attempt is removed completely (no subclass, no bounds cha
   layerOpacity <value> anims <n>]`: the `pres op` column rises 0 -> 0.35 (and `anims` is 1 until the end) if the fade runs; if it stays 0.35 at once the animation was not applied.
 * NOT fixed (on purpose): at the start of a close the shadow still disappears at once (the exact mask clips it from its first frame). Any variant that keeps it longer has to widen the
   mask along the cropped axis (delays the crop, see 4a) or leave a halo of the full window outline around the cropped card (the old nested shape in shadow form). The open's shadow now
-  fades in right after the window has arrived (release at 0.56 - 0.60 s after phase 1, fade 0.22 s) instead of popping.
+  fades in right after the window has arrived (release at 0.56 - 0.60 s after phase 1, fade 0.28 s) instead of popping.
 * Options considered: (a) mask on the page view instead of the container: the shadow view is a child of the page view (`_updateShadowPresence` 0x1c5f1afd8 adds it to the page), so it would be
   clipped as well; masking only the other page subviews needs one mask per subview (`_orderSubviews` 0x1c5e33a4c orders ten of them) with every animation duplicated: rejected. (b) fade at
   the release: done (Core Animation on the shadow layer). (c) slack only on the uncropped axis: the height; the sides (the cropped axis) are the larger part of the pop and stay clipped, and a halo above / below with hard ends
