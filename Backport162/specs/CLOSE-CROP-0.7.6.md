@@ -107,9 +107,17 @@ Crop lines: `[g2f] crop: mask created ...`, `crop: zoom over ...`, `crop: mask r
 * That animating `maskView.bounds` and `layer.cornerRadius` through `sb_animateWithSettings:mode:` animates (UIKit machinery on a mask view; expected, as the layout block animates accessory views the same
   way). If the mask jumps, the p2+3f dump shows its bounds / presentation bounds.
 * That the item container's content (live scene overlay included) is fully inside the container's layer so the mask covers it. The dump's subview tree shows it.
-* Whether real 16.2's calculator really answers the window size for `frameForLayoutRole:...withBounds:` {box}: our G2B port does (log), the default `SBDefaultImplementationsSwitcherModifier
-  frameForLayoutRole:` 0x1c788a480 passes the `bounds` argument to the calculator as containerBounds (disassembled), so a 16.2 calculator that clamped the window to those bounds would make the
-  container itself morph to the box with the snapshot stretched (g1c_fillbounds YES) and no nested card would exist in real 16.2. Not checked in the 16.2 calculator (0x1c75a3614).
+* RESOLVED (0.7.6, second pass): real 16.2 does NOT clamp the role frame to the `bounds` argument. `SBDefaultImplementationsSwitcherModifier frameForLayoutRole:inAppLayout:withBounds:` 16.2
+  0x1c788a480 (16.0 0x1c63df34c, same structure): environment 2 / 3 and the centre role (4, the constant at 0x1c7a933b0) take the centre-item branch; with Stage Manager off the calculator's
+  `frameForLayoutRole:...containerBounds:` (0x1c75a3614 family) is called with the bounds argument; with Stage Manager ON and any other role (the stage window) the calculator is NOT asked for a frame:
+  0x1c788a644 `appLayoutContainingAppLayout:` -> `overlappingModelForAppLayout:...bounds:` with the real `containerViewBounds` (not the argument) -> `centerForItem:` (0x1c788a718) and
+  `sizeForItem:` (0x1c788a770) -> `_SBRectWithSize` -> `_UIRectCenteredAboutPoint`, result origin = argument origin + (item rect origin - overlapping model boundingBox origin) (0x1c788a798..0x1c788a7b0),
+  size = the item's size, then (16.2 only, 2 or more items) the partially-occluded stage scale shift, then `_UIRectIntegralWithScale` (0x1c788a8dc). The argument's SIZE (the zoom's 646x646 / 834x834)
+  is never read. 16.0 0x1c63df518..0x1c63df664 is the same sequence minus the multi-item shift. So the role frame is {argument origin + offset, window size} in both builds, matching our log
+  (`{{0,-0.5},{1056,646}}` in bounds {646,646}); the container bounds stay the window size in real 16.2; nothing morphs the container to the box; the nested card is stock. Our port is faithful here: it
+  does not replace this default at all (the 16.0 body runs), and G2B's calculator port is only on the classic / centre branches and in the overlapping-model size, none of which look at the argument size.
+  No 16.2-only class overrides `frameForLayoutRole:` for the icon zoom (the zoom, SBHomeGestureToZoomDown and the Home floor have no override; `SBFullScreenContinuousExposeSwitcherModifier` 0x1c75c310c only
+  shifts a stage window while the strip is revealed).
 * The open (home -> app) uses the same code: the mask is created at the box on phase 1 and removed with an animation on phase 2; unobserved. A container created inside the pass has no presentation
   radius (the mask starts at the target radius).
 * Multi-window layouts keep the stock nested look.
