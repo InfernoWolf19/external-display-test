@@ -126,6 +126,16 @@ Needs ExtendedDisplayEnabler for the external display features.
 
 `Backport162BBD/` is a separate tweak that runs inside backboardd (filter `backboardd`, arm64e): the daemon side of `clonemirror` (new MIG routines on the BackBoard display service and a per-display override in `updateClone`). Optional; reboot userspace after installing. Log lines are prefixed `g4b-bbd`.
 
+### Backport162PTR (pointeruid dylib of the same package) [PTR.x]
+
+Runs only inside the `pointeruid` executable (filter `Executables = pointeruid`, arm64e, build 20A8372 only). Ports three of the four 16.1 multi-display changes of pointeruid that the real 16.0 binary lacks (specs/POINTER-PIXELS-0.7.4.md); aimed at the stale pixels on the display edge when the pointer leaves the extended display. Effect on the pixels is a guess (about 25 %). `killall pointeruid` (or a userspace reboot) after installing or after creating / removing a switch file. Log lines `[Backport162PTR]` via NSLog (Console / idevicesyslog), also in `Backport162.log` with `Backport162.debug`.
+
+| switch | what | name |
+|---|---|---|
+| ptr_layerclass | `+[PUIDPointerShapeView layerClass]` returns CALayer (16.0: CABackdropLayer, removed in 16.1) | `ptr_layerclass` |
+| ptr_hidden | 16.1 `hiddenForPerformanceReasons`: the pointer rendering view is hidden on a display that has a system pointer window (pointer only visible through the system window's portal). If the pointer disappears on every display, create this switch first | `ptr_hidden` |
+| ptr_scene | 16.1 nil system pointer scene handling (no system window, no system portal source collection); dead path on a normal setup | `ptr_scene` |
+
 ### Notes
 
 * SwitcherDismissFix 0.3.0 ports one class that group 1c also builds (`SBContinuousExposeToHomeSwitcherModifier`); whichever loads first creates it. Remove SwitcherDismissFix when you test this build.
