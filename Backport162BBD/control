@@ -2,7 +2,7 @@ Package: com.infernowolf19.backport162bbd
 Name: Backport162BBD
 Version: 0.7.0
 Architecture: iphoneos-arm64
-Description: backboardd half of Backport162 (iPadOS 16.2 per-destination-display clone mirroring requests, ported to iPadOS 16.0 build 20A8372). Optional; needs Backport162 0.7.0 for the SpringBoard side. Reboot userspace after installing.
+Description: backboardd half of Backport162 (iPadOS 16.2 per-destination-display clone mirroring requests and the exit event for global pointer routes of a display the pointer left, ported to iPadOS 16.0 build 20A8372). Optional; needs Backport162 0.7.0 for the SpringBoard side. Reboot userspace after installing.
 Maintainer: infernowolf19
 Author: infernowolf19
 Section: Tweaks
