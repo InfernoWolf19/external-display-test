@@ -58,6 +58,7 @@
 #import <stdlib.h>
 #import <stdarg.h>
 #import <fcntl.h>
+#import "BPDaemon.h"
 #import <pthread.h>
 #import <signal.h>
 #import <errno.h>
@@ -136,12 +137,8 @@ static void BPD_Log(NSString *fmt, ...) {
     va_list ap; va_start(ap, fmt);
     NSString *m = [[NSString alloc] initWithFormat:fmt arguments:ap];
     va_end(ap);
-    int fd = open(gBPDLog, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-    if (fd < 0) return;
-    NSString *line = [NSString stringWithFormat:@"g4b-bbd %@\n", m];
-    const char *u = line.UTF8String;
-    if (u) (void)!write(fd, u, strlen(u));
-    close(fd);
+    const char *u = m.UTF8String;                                   // backboardd cannot write to <jbroot>/tmp: BPDaemon.h picks a directory it can write to, SpringBoard copies the lines into Backport162.log
+    if (u) BPDW_Line("g4b-bbd", u);
 }
 
 // ------------------------------------------------------------------------------------------------ pointers to unexported code
@@ -711,7 +708,8 @@ static void BPD_InstallCloneMirror(void) {
 // stayed up for 25 s.  With 3 strikes in a row the tweak stays out of backboardd (log line when Backport162.debug exists) until the file is removed or a different build is installed
 // (the build id is the compile time of this file).
 static BOOL BPD_CrashGuardTripped(void) {
-    char path[1200]; snprintf(path, sizeof path, "%s/Backport162BBD.strikes", gBPDRoot);
+    char path[1200];
+    if (!BPDW_Path("Backport162BBD.strikes", path, sizeof path)) return NO;       // no writable directory: no counting possible
     char id[64]; snprintf(id, sizeof id, "%s_%s", __DATE__, __TIME__);
     for (char *c = id; *c; c++) if (*c == ' ') *c = '_';
     int strikes = 0;
@@ -750,17 +748,14 @@ static void BPD_NotifySlug(const char *prefix, const char *what) {
     if (notify_register_check(name, &tok) == NOTIFY_STATUS_OK) notify_set_state(tok, (uint64_t)getpid());
     notify_post(name);
 }
-// Marker so that the user can see whether the dylib was injected at all and which check stopped it (<root>/Backport162BBD.ctor, one line per process start).
+// Marker so that the user can see whether the dylib was injected at all and which check stopped it (a "ctor:" line in Backport162.daemon.log, one line per process start; SpringBoard copies it into Backport162.log).
 static void BPD_Marker(const char *what) {
     BPD_NotifySlug("bbd", what);
-    char p[1200]; snprintf(p, sizeof p, "%s/Backport162BBD.ctor", gBPDRoot[0] ? gBPDRoot : "/var/jb/tmp");
-    int fd = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-    if (fd < 0) return;
-    char line[600]; const char *img = _dyld_get_image_name(0);
     char ver[64] = {0}; size_t vn = sizeof ver; sysctlbyname("kern.osversion", ver, &vn, NULL, 0);
-    int n = snprintf(line, sizeof line, "pid %d image %s build %s: %s\n", (int)getpid(), img ? img : "(null)", ver, what);
-    if (n > 0) (void)!write(fd, line, (size_t)n);
-    close(fd);
+    const char *img = _dyld_get_image_name(0);
+    int di = BPDW_DirIndex();
+    char line[700]; snprintf(line, sizeof line, "ctor: %s (image %s, build %s, log dir %s)", what, img ? img : "(null)", ver, di >= 0 ? kBPDWDirs[di] : "NONE writable");
+    BPDW_Line("bbd", line);                                                          // always written: it is the proof that the dylib was injected
 }
 
 %ctor {

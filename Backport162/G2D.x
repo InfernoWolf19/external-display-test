@@ -30,6 +30,10 @@
 #import <notify.h>
 #import <objc/message.h>
 #import <math.h>
+#import <sys/stat.h>
+#import <fcntl.h>
+#import <unistd.h>
+#import <errno.h>
 #import "BP.h"
 
 #pragma clang diagnostic push
@@ -95,8 +99,47 @@ static void G2D_ListenForDaemonLoads(void) {
     }
 }
 
+// The daemon halves (backboardd, pointeruid) cannot write to <jbroot>/tmp (see BPDaemon.h): they append to Backport162.daemon.log in a directory they can write to; copy their new lines
+// into Backport162.log (prefix "daemon:") while logging is on.  Directories as in BPDaemon.h.  Every 2 s, at most 64 KiB per file and tick.
+static void G2D_IngestDaemonLog(void) {
+    static const char *const dirs[] = { "/var/jb/tmp", "/var/mobile/Library/Caches", "/var/mobile", "/tmp" };
+    static off_t offsets[4];
+    dispatch_queue_t q = dispatch_queue_create("com.infernowolf19.backport162.daemonlog", DISPATCH_QUEUE_SERIAL);
+    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);
+    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), 2 * NSEC_PER_SEC, 500 * NSEC_PER_MSEC);
+    dispatch_source_set_event_handler(t, ^{
+        if (!BP_LogEnabled()) return;
+        for (size_t i = 0; i < sizeof dirs / sizeof dirs[0]; i++) {
+            char path[300]; snprintf(path, sizeof path, "%s/Backport162.daemon.log", dirs[i]);
+            struct stat st;
+            if (stat(path, &st) != 0) continue;
+            if (st.st_size < offsets[i]) offsets[i] = 0;                       // truncated by the daemon
+            if (st.st_size == offsets[i]) continue;
+            int fd = open(path, O_RDONLY | O_CLOEXEC);
+            if (fd < 0) { BP_Log(@"[g2d] cannot read %s (errno %d)", path, errno); continue; }
+            size_t want = (size_t)(st.st_size - offsets[i]);
+            if (want > 65536) want = 65536;
+            char *buf = malloc(want + 1);
+            ssize_t n = buf ? pread(fd, buf, want, offsets[i]) : -1;
+            close(fd);
+            if (n > 0) {
+                size_t used = (size_t)n;
+                while (used > 0 && buf[used - 1] != '\n') used--;               // only whole lines
+                if (used == 0) used = (size_t)n;
+                buf[used] = 0;
+                offsets[i] += (off_t)used;
+                NSString *text = [NSString stringWithUTF8String:buf] ?: @"(not UTF-8)";
+                for (NSString *line in [text componentsSeparatedByString:@"\n"]) if (line.length) BP_Log(@"daemon: %@", line);
+            }
+            free(buf);
+        }
+    });
+    dispatch_resume(t);
+}
+
 void G2D_Setup(void) {
     G2D_ListenForDaemonLoads();
+    G2D_IngestDaemonLog();
     if (!G2D_ON()) return;
     Class c = NSClassFromString(@"SBGrabberTongue");
     SEL s = NSSelectorFromString(@"_updateCancelsTouchesWithRecognizer:");

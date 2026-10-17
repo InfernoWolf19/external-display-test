@@ -26,7 +26,7 @@
 // Switches (checked at most once a second, in <jbroot>/tmp and /tmp; any access() failure means ON): Backport162.off.ptr_layerclass, .off.ptr_hidden, .off.ptr_scene, Backport162.off.
 // A is evaluated when a shape view is created, B when a display context is created (display attach), C when a display attaches; a switch needs `killall pointeruid` to take
 // effect on pointers that already exist.
-// Log: NSLog with prefix [Backport162PTR]; additionally appended to <jbroot>/tmp/Backport162.log when Backport162.debug exists and the file is writable.
+// Log: NSLog with prefix [Backport162PTR]; additionally (when Backport162.debug exists) appended to Backport162.daemon.log in a directory pointeruid can write to (BPDaemon.h); SpringBoard copies it into Backport162.log.
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -40,6 +40,7 @@
 #import <fcntl.h>
 #import <stdio.h>
 #import <time.h>
+#import "BPDaemon.h"
 
 @protocol BPPTRContext <NSObject>
 - (id)systemPointerWindow;
@@ -79,16 +80,8 @@ static void BPPTR_Log(NSString *fmt, ...) {
     va_end(ap);
     NSLog(@"[Backport162PTR] %@", m);
     if (!BPPTR_FileExists("Backport162.debug")) return;
-    for (int i = 0; i < 2; i++) {
-        char p[1200];
-        snprintf(p, sizeof p, "%s/Backport162.log", kBPPTRDirs[i]);
-        if (access(p, W_OK) != 0 && access(kBPPTRDirs[i], W_OK) != 0) continue;
-        FILE *f = fopen(p, "a");
-        if (!f) continue;
-        fprintf(f, "ptr: %s\n", m.UTF8String);
-        fclose(f);
-        break;
-    }
+    const char *u = m.UTF8String;                                   // pointeruid is sandboxed: BPDaemon.h picks a directory it can write to, SpringBoard copies the lines into Backport162.log
+    if (u) BPDW_Line("ptr", u);
 }
 
 // ------------------------------------------------------------------------------------------------ hooks
@@ -240,17 +233,11 @@ static void BPPTR_NotifySlug(const char *prefix, const char *what) {
 // Marker so that the user can see whether the dylib was injected at all (one line per process start; the daemon may be sandboxed: then nothing is written).
 static void BPPTR_Marker(const char *what) {
     BPPTR_NotifySlug("ptr", what);
-    const char *dirs[] = { "/var/jb/tmp", "/tmp", "/var/mobile/Library/Caches" };
-    for (size_t i = 0; i < 3; i++) {
-        char p[300]; snprintf(p, sizeof p, "%s/Backport162PTR.ctor", dirs[i]);
-        int fd = open(p, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-        if (fd < 0) continue;
-        const char *img = _dyld_get_image_name(0);
-        char line[600]; int n = snprintf(line, sizeof line, "pid %d image %s: %s\n", (int)getpid(), img ? img : "(null)", what);
-        if (n > 0) (void)!write(fd, line, (size_t)n);
-        close(fd);
-        return;
-    }
+    char ver[64] = {0}; size_t vn = sizeof ver; sysctlbyname("kern.osversion", ver, &vn, NULL, 0);
+    const char *img = _dyld_get_image_name(0);
+    int di = BPDW_DirIndex();
+    char line[700]; snprintf(line, sizeof line, "ctor: %s (image %s, build %s, log dir %s)", what, img ? img : "(null)", ver, di >= 0 ? kBPDWDirs[di] : "NONE writable");
+    BPDW_Line("ptr", line);                                                          // always written: it is the proof that the dylib was injected
 }
 
 %ctor {
