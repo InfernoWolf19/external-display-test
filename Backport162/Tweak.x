@@ -157,7 +157,7 @@ void BP_Log(NSString *fmt, ...) {
     NSString *line = [NSString stringWithFormat:@"%02d:%02d:%02d.%03ld %@\n", tmv.tm_hour, tmv.tm_min, tmv.tm_sec, ts.tv_nsec / 1000000, msg];
     pthread_mutex_lock(&gMu);
     struct stat st;
-    if (stat(gLogPath, &st) == 0 && st.st_size > 256 * 1024) rename(gLogPath, gLogOldPath);
+    if (stat(gLogPath, &st) == 0 && st.st_size > 3 * 1024 * 1024) rename(gLogPath, gLogOldPath);
     int fd = open(gLogPath, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
     if (fd >= 0) {
         const char *u = line.UTF8String;
