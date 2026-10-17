@@ -23,6 +23,18 @@
 //                     with createPointerPortalSourceCollectionForClient: answering nil (the nil collection reaches exactly the setters 16.1 does not call, all nil safe:
 //                     16.0 0x10001e188 isEqual/copy/portalLayer, hover region setter). Dead path on a normal setup: SpringBoard prepares both scenes for every display.
 //
+// D (ptr_hover)     STUCK RESIZE ARROWS (specs/POINTER-HOVER-0.7.6.md).  Hover regions are per CLIENT in pointeruid (_PUIDPointerControllerClientState.activeHoverRegion, held in
+//                     -[PUIDPointerController _pointerClientToClientStateMap]), not per display.  -[PUIDPointerController _movePointerToDisplay:] (16.0 0x10000cb60, identical 16.1 / 16.2) only
+//                     hides the pointer of the old display; the region SpringBoard's single _UIPointerArbiter sent while the pointer was on the old display stays and
+//                     -[PUIDPointerController _updatePointerWithOptions:updateHandlerCollection:] (16.0 0x10000ead4, 0x10000eb3c .. 0x10000ed2c) picks it again for the new display (first client with the
+//                     pid of the new display's system pointer interaction context and a non-nil activeHoverRegion), its automatic exit (0.2 s, 0x10000f1a8) is only armed on a hit state 1 -> 2
+//                     change measured with the NEW display's transform.  DELIBERATE FIX (no stock build does this): after -_movePointerToDisplay: changed the active display, clear the active
+//                     hover region (and its exit timer / hit state) of every non-system client; the next update then uses the new display's system pointer client.
+// E (ptr_edge)       STALE PIXELS at the display edge (same spec).  DELIBERATE FIX: (1) the hide of the display the pointer LEFT is not animated (-[PUIDPointerRenderingRootViewController hidePointer]
+//                     16.0 0x100023ab8 passes options 3 = animated; options 0 is what the controller itself uses for the first, non animated, state) so the blur / scale / alpha springs do not
+//                     run while the pointer is clamped half off the display, (2) once a pointer is hidden (immediately for (1), 0.7 s after an animated autohide) every CABackdropLayer of its
+//                     view tree gets enabled = NO and is enabled again before the next visible state.
+//
 // Switches (checked at most once a second, in <jbroot>/tmp and /tmp; any access() failure means ON): Backport162.off.ptr_layerclass, .off.ptr_hidden, .off.ptr_scene, Backport162.off.
 // A is evaluated when a shape view is created, B when a display context is created (display attach), C when a display attaches; a switch needs `killall pointeruid` to take
 // effect on pointers that already exist.
@@ -41,11 +53,6 @@
 #import <stdio.h>
 #import <time.h>
 #import "BPDaemon.h"
-
-@protocol BPPTRContext <NSObject>
-- (id)systemPointerWindow;
-- (id)pointerRenderingController;
-@end
 
 // ------------------------------------------------------------------------------------------------ switches / log
 
@@ -72,6 +79,16 @@ static BOOL BPPTR_Killed(BPPTRCache *c, const char *name) {
 static BOOL BPPTR_OnLayerClass(void) { static BPPTRCache c; return !BPPTR_Killed(&c, "Backport162.off.ptr_layerclass"); }
 static BOOL BPPTR_OnHidden(void)     { static BPPTRCache c; return !BPPTR_Killed(&c, "Backport162.off.ptr_hidden"); }
 static BOOL BPPTR_OnScene(void)      { static BPPTRCache c; return !BPPTR_Killed(&c, "Backport162.off.ptr_scene"); }
+static BOOL BPPTR_OnHover(void)      { static BPPTRCache c; return !BPPTR_Killed(&c, "Backport162.off.ptr_hover"); }
+static BOOL BPPTR_OnEdge(void)       { static BPPTRCache c; return !BPPTR_Killed(&c, "Backport162.off.ptr_edge"); }
+static BOOL BPPTR_DebugOn(void) {
+    static BPPTRCache c;
+    uint64_t t = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (c.next && t < c.next) return c.last;
+    c.next = t + 1000000000ull;
+    c.last = BPPTR_FileExists("Backport162.debug");
+    return c.last;
+}
 
 static void BPPTR_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
 static void BPPTR_Log(NSString *fmt, ...) {
@@ -88,6 +105,208 @@ static void BPPTR_Log(NSString *fmt, ...) {
 
 static __thread int gBPPTRNoPortal;      // >0 while displayAttached: runs for a display without system pointer scene
 
+// ------------------------------------------------------------------------------------------------ runtime helpers
+
+static id BPPTR_Ivar(id o, const char *name) {
+    if (!o) return nil;
+    Ivar iv = class_getInstanceVariable(object_getClass(o), name);
+    return iv ? object_getIvar(o, iv) : nil;                            // strong ivars only (the weak _display of PUIDDisplayContext is read through the rendering controller)
+}
+static BOOL BPPTR_BoolIvar(id o, const char *name) {
+    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    if (!iv) return NO;
+    BOOL b = NO;
+    memcpy(&b, (const char *)(__bridge void *)o + ivar_getOffset(iv), 1);
+    return b;
+}
+static id BPPTR_Send0(id o, const char *sel) {
+    SEL s = sel_registerName(sel);
+    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil;
+}
+static int BPPTR_Pid(id client) {
+    SEL s = sel_registerName("pid");
+    return (client && [client respondsToSelector:s]) ? ((int (*)(id, SEL))objc_msgSend)(client, s) : -1;
+}
+static NSString *BPPTR_Trunc(id o, NSUInteger n) {
+    NSString *d = o ? [NSString stringWithFormat:@"%@", o] : @"nil";
+    d = [d stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
+    return d.length > n ? [[d substringToIndex:n] stringByAppendingString:@"..."] : d;
+}
+static NSString *BPPTR_DisplayName(id displayContext) {
+    id rc = BPPTR_Ivar(displayContext, "_pointerRenderingController");
+    id disp = BPPTR_Send0(rc, "display");
+    id hw = BPPTR_Send0(disp, "hardwareIdentifier");
+    return hw ? [NSString stringWithFormat:@"%@", hw] : (disp ? BPPTR_Trunc(disp, 60) : @"?");
+}
+static uint64_t gBPPTRWatchUntil;         // after a display change the next pointer updates are traced for 1.5 s (debug only)
+static unsigned gBPPTRWatchLines;
+static char kBPPTRBackdropsOff;           // associated object on a rendering controller: its CABackdropLayers were disabled by ptr_edge
+static __thread int gBPPTRMoving;         // >0 while -_movePointerToDisplay: runs (its hidePointer is the one of the display that was left)
+
+static void BPPTR_Walk(CALayer *l, int depth, void (^visit)(CALayer *, int)) {
+    if (!l || depth > 14) return;
+    visit(l, depth);
+    for (CALayer *c in [l.sublayers copy]) BPPTR_Walk(c, depth + 1, visit);
+}
+
+// ptr_edge (2): every CABackdropLayer below the rendering controller's view (shape view backdrops, shape morphing backdrop, specular copy, portal sources) on / off.
+static void BPPTR_SetBackdrops(id rc, BOOL enabled) {
+    if (![rc isKindOfClass:[UIViewController class]] || !((UIViewController *)rc).isViewLoaded) return;
+    Class bl = NSClassFromString(@"CABackdropLayer");
+    SEL se = sel_registerName("setEnabled:");
+    if (!bl) return;
+    __block int n = 0;
+    BPPTR_Walk(((UIViewController *)rc).view.layer, 0, ^(CALayer *l, int d) {
+        if ([l isKindOfClass:bl] && [l respondsToSelector:se]) { ((void (*)(id, SEL, BOOL))objc_msgSend)(l, se, enabled); n++; }
+    });
+    objc_setAssociatedObject(rc, &kBPPTRBackdropsOff, enabled ? nil : @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (BPPTR_DebugOn()) BPPTR_Log(@"ptr_edge: %d backdrop layer(s) of %@ %@", n, BPPTR_Trunc(rc, 80), enabled ? @"enabled" : @"disabled");
+}
+
+// Diagnostics: every layer that can paint the pointer: frame in the window (= display points) against the window bounds, hidden / alpha / presentation alpha, backdrop enabled, filters.
+static void BPPTR_DumpLayers(id rc, NSString *tag) {
+    if (!BPPTR_DebugOn() || ![rc isKindOfClass:[UIViewController class]] || !((UIViewController *)rc).isViewLoaded) return;
+    UIView *v = ((UIViewController *)rc).view;
+    UIWindow *w = v.window;
+    CGRect wb = w ? w.bounds : CGRectZero;
+    Class bl = NSClassFromString(@"CABackdropLayer");
+    __block int lines = 0, total = 0;
+    BPPTR_Log(@"edge-dump [%@] %@ display %@ window %@ view hidden %d alpha %.2f", tag, BPPTR_Trunc(rc, 60), BPPTR_Send0(rc, "display") ? @"set" : @"nil", NSStringFromCGRect(wb), (int)v.hidden, v.alpha);
+    BPPTR_Walk(v.layer, 0, ^(CALayer *l, int d) {
+        total++;
+        BOOL isBd = bl && [l isKindOfClass:bl];
+        CGRect fr = [l convertRect:l.bounds toLayer:w.layer];
+        BOOL straddle = w && !CGRectIsEmpty(fr) && !CGRectContainsRect(wb, fr) && CGRectIntersectsRect(wb, fr);
+        if (!(isBd || straddle || d <= 2) || lines >= 24) return;
+        lines++;
+        CALayer *pl = l.presentationLayer;
+        NSString *bd = isBd ? [NSString stringWithFormat:@" backdrop-enabled %d", (int)((BOOL (*)(id, SEL))objc_msgSend)(l, sel_registerName("isEnabled"))] : @"";
+        BPPTR_Log(@"edge-dump [%@]  d%d %@ frame %@ %@ hidden %d op %.2f pres %.2f%@ filters %@", tag, d, NSStringFromClass([l class]), NSStringFromCGRect(fr),
+                  straddle ? @"STRADDLES-EDGE" : @"", (int)l.hidden, l.opacity, pl ? pl.opacity : -1.0f, bd, l.filters.count ? [l.filters valueForKey:@"name"] : @"-");
+    });
+    BPPTR_Log(@"edge-dump [%@] %d layers total, %d listed", tag, total, lines);
+}
+static void BPPTR_DumpLater(id rc, NSString *tag, double delay) {
+    __weak id wrc = rc;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ id r = wrc; if (r) BPPTR_DumpLayers(r, tag); });
+}
+
+// ptr_hover (the fix) and its diagnostics: called after -_movePointerToDisplay: changed the active display context.
+static void BPPTR_DisplayChanged(id controller, id before, id after) {
+    BOOL dbg = BPPTR_DebugOn();
+    BOOL fix = BPPTR_OnHover();
+    id map = BPPTR_Ivar(controller, "_pointerClientToClientStateMap");
+    NSArray *clients = [BPPTR_Send0(map, "keyEnumerator") allObjects];
+    Class sysState = NSClassFromString(@"_PUIDPointerControllerSystemClientState");
+    SEL setRegion = sel_registerName("setActiveHoverRegion:"), invTimer = sel_registerName("invalidateAutomaticRegionExitTimer"), setHit = sel_registerName("setPreviousPointerEventActiveHoverRegionHitTestState:");
+    if (dbg) {
+        gBPPTRWatchUntil = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) + 1500000000ull;
+        gBPPTRWatchLines = 0;
+        BPPTR_Log(@"hover: pointer display %@ -> %@: %lu client state(s), fix %@", BPPTR_DisplayName(before), BPPTR_DisplayName(after), (unsigned long)clients.count, fix ? @"ON" : @"off (switch)");
+    }
+    BOOL held = BPPTR_BoolIvar(controller, "_isFingerDown");           // button / finger held (a drag or resize that crosses the display edge): the region belongs to the drag, keep it
+    if (held && fix && dbg) BPPTR_Log(@"hover: a button is held (_isFingerDown), hover regions are kept");
+    int cleared = 0;
+    for (id client in clients) {
+        id state = [(NSMapTable *)map objectForKey:client];
+        id region = BPPTR_Send0(state, "activeHoverRegion");
+        if (!region) {
+            if (dbg) BPPTR_Log(@"hover:   client pid %d (%@) has no active hover region", BPPTR_Pid(client), NSStringFromClass([client class]));
+            continue;
+        }
+        BOOL sys = sysState && [state isKindOfClass:sysState];
+        id shape = BPPTR_Send0(region, "pointerShape");
+        if (dbg) BPPTR_Log(@"hover:   client pid %d (%@, state %@%@) active hover region: shape %@ coordinateSpaceSourceContextID 0x%x hitTestState %lld | %@",
+                           BPPTR_Pid(client), NSStringFromClass([client class]), NSStringFromClass([state class]), sys ? @", system client: kept" : @"",
+                           BPPTR_Trunc(shape, 90), [region respondsToSelector:sel_registerName("coordinateSpaceSourceContextID")] ? ((unsigned (*)(id, SEL))objc_msgSend)(region, sel_registerName("coordinateSpaceSourceContextID")) : 0u,
+                           [state respondsToSelector:sel_registerName("previousPointerEventActiveHoverRegionHitTestState")] ? ((long long (*)(id, SEL))objc_msgSend)(state, sel_registerName("previousPointerEventActiveHoverRegionHitTestState")) : -1LL,
+                           BPPTR_Trunc(region, 140));
+        if (!fix || held || sys || ![state respondsToSelector:setRegion]) continue;
+        if ([state respondsToSelector:invTimer]) ((void (*)(id, SEL))objc_msgSend)(state, invTimer);
+        ((void (*)(id, SEL, id))objc_msgSend)(state, setRegion, nil);
+        if ([state respondsToSelector:setHit]) ((void (*)(id, SEL, long long))objc_msgSend)(state, setHit, 0);
+        cleared++;
+    }
+    if (dbg) BPPTR_Log(@"hover: cleared %d active hover region(s) of the clients (the display left: %@)", cleared, BPPTR_DisplayName(before));
+}
+
+%group BPPTR_Display
+%hook PUIDPointerController
+- (void)_movePointerToDisplay:(id)display {
+    id before = BPPTR_Ivar(self, "_activeDisplayContext");
+    gBPPTRMoving++;
+    @try {
+        %orig;
+    } @finally {
+        gBPPTRMoving--;
+    }
+    id after = BPPTR_Ivar(self, "_activeDisplayContext");
+    if (!before || !after || before == after) return;
+    @try {
+        BPPTR_DisplayChanged(self, before, after);
+        id oldRc = BPPTR_Ivar(before, "_pointerRenderingController");
+        if (BPPTR_DebugOn()) { BPPTR_DumpLayers(oldRc, @"left+0"); BPPTR_DumpLater(oldRc, @"left+0.1s", 0.1); BPPTR_DumpLater(oldRc, @"left+0.4s", 0.4); BPPTR_DumpLater(oldRc, @"left+1.2s", 1.2); }
+    } @catch (NSException *e) {
+        BPPTR_Log(@"display change handling raised %@", e);
+    }
+}
+- (void)_updatePointerWithOptions:(unsigned long long)options updateHandlerCollection:(id)collection {
+    %orig;
+    if (gBPPTRWatchUntil == 0) return;
+    if (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) > gBPPTRWatchUntil || gBPPTRWatchLines >= 12) { gBPPTRWatchUntil = 0; return; }
+    gBPPTRWatchLines++;
+    id client = BPPTR_Ivar(self, "_previousPointerClient");
+    id state = client ? [(NSMapTable *)BPPTR_Ivar(self, "_pointerClientToClientStateMap") objectForKey:client] : nil;
+    id region = BPPTR_Send0(state, "activeHoverRegion");
+    BPPTR_Log(@"hover: update after the display change: pointer client pid %d (%@) hover region %@ autohidden %d active display %@", BPPTR_Pid(client),
+              NSStringFromClass([client class]), region ? BPPTR_Trunc(BPPTR_Send0(region, "pointerShape"), 80) : @"none", (int)BPPTR_BoolIvar(self, "_pointerIsAutohidden"), BPPTR_DisplayName(BPPTR_Ivar(self, "_activeDisplayContext")));
+}
+- (void)xpcClientContextController:(id)xpc didUpdateHoverRegion:(id)region forClient:(id)client transitionCompletion:(id)completion {
+    %orig;
+    if (!BPPTR_DebugOn()) return;
+    static uint64_t sec; static int n;
+    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW) / 1000000000ull;
+    if (now != sec) { sec = now; n = 0; }
+    if (++n > 20) return;
+    BPPTR_Log(@"hover: client pid %d sent hover region %@ (active display %@)", BPPTR_Pid(client),
+              region ? BPPTR_Trunc(BPPTR_Send0(region, "pointerShape"), 80) : @"NIL (hover ended)", BPPTR_DisplayName(BPPTR_Ivar(self, "_activeDisplayContext")));
+}
+%end
+
+%hook PUIDPointerRenderingRootViewController
+- (void)hidePointer {
+    if (gBPPTRMoving > 0 && BPPTR_OnEdge()) {
+        id st = BPPTR_Ivar(self, "_pointerState");
+        id m = [st mutableCopy];
+        SEL sh = sel_registerName("setPointerAutoHidden:");
+        if (m && [m respondsToSelector:sh]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(m, sh, YES);
+            if (BPPTR_DebugOn()) BPPTR_Log(@"ptr_edge: hiding the pointer of the display that was left without animation (stock: options 3, animated, while the pointer is clamped on the edge)");
+            ((BOOL (*)(id, SEL, id, unsigned long long, id, id *))objc_msgSend)((id)self, sel_registerName("setPointerState:options:updateHandlerCollection:error:"), m, 0ull, nil, NULL);
+            BPPTR_SetBackdrops(self, NO);
+            return;
+        }
+    }
+    %orig;
+}
+- (BOOL)setPointerState:(id)state options:(unsigned long long)options updateHandlerCollection:(id)collection error:(id *)error {
+    BOOL edge = BPPTR_OnEdge();
+    BOOL hidden = edge && BPPTR_BoolIvar(state, "_pointerAutoHidden");
+    if (edge && !hidden && objc_getAssociatedObject(self, &kBPPTRBackdropsOff)) BPPTR_SetBackdrops(self, YES);
+    BOOL r = %orig;
+    if (hidden && options != 0 && !objc_getAssociatedObject(self, &kBPPTRBackdropsOff)) {                                        // animated hide (autohide): turn the backdrops off when the animation is over, if the pointer is still hidden
+        __weak id wself = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(700 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+            id me = wself;
+            if (me && BPPTR_OnEdge() && BPPTR_BoolIvar(BPPTR_Ivar(me, "_pointerState"), "_pointerAutoHidden")) BPPTR_SetBackdrops(me, NO);
+        });
+    }
+    return r;
+}
+%end
+%end
+
+
 %group BPPTR_LayerClass
 %hook PUIDPointerShapeView
 + (Class)layerClass {
@@ -102,11 +321,12 @@ static __thread int gBPPTRNoPortal;      // >0 while displayAttached: runs for a
 - (void)setSystemPointerRenderingController:(id)controller {
     %orig;
     if (!controller || !BPPTR_OnHidden()) return;
-    id<BPPTRContext> ctx = (id<BPPTRContext>)self;
-    if (![ctx systemPointerWindow]) return;                              // 16.1: no system pointer scene -> not hidden
-    UIViewController *rc = [ctx pointerRenderingController];
+    // PUIDDisplayContext declares its property getters objc_direct (they are not in the method list: the first build asked respondsToSelector: for systemPointerWindow and never installed),
+    // so the ivars are read. 16.0 factory 0x100010c4c: setSystemPointerWindow: (0x100010df4) runs before setSystemPointerRenderingController: (0x100010e00).
+    if (!BPPTR_Ivar(self, "_systemPointerWindow")) return;                // 16.1: no system pointer scene -> not hidden
+    id rc = BPPTR_Ivar(self, "_pointerRenderingController");
     if (![rc isKindOfClass:[UIViewController class]]) return;
-    [rc.view setHidden:YES];                                             // 16.1 viewDidLoad: [self.view setHidden:_hiddenForPerformanceReasons]
+    [((UIViewController *)rc).view setHidden:YES];                       // 16.1 viewDidLoad: [self.view setHidden:_hiddenForPerformanceReasons]
     BPPTR_Log(@"hiddenForPerformanceReasons: pointer rendering view of %@ hidden (system pointer window present)", self);
 }
 %end
@@ -158,7 +378,7 @@ static BOOL BPPTR_HasInstance(const char *cls, SEL sel) {
     return c && class_getInstanceMethod(c, sel) != NULL;
 }
 
-static BOOL gBPPTRDoneA, gBPPTRDoneB, gBPPTRDoneC;
+static BOOL gBPPTRDoneA, gBPPTRDoneB, gBPPTRDoneC, gBPPTRDoneD;
 
 // returns YES when everything is installed (or impossible)
 static BOOL BPPTR_TryInstall(void) {
@@ -178,13 +398,14 @@ static BOOL BPPTR_TryInstall(void) {
     }
     if (!gBPPTRDoneB) {
         if (objc_getClass("PUIDDisplayContext")) {
+            // the getters of PUIDDisplayContext are objc_direct (not in the method list), the hook reads the ivars
+            Class dc = objc_getClass("PUIDDisplayContext");
             if (BPPTR_HasInstance("PUIDDisplayContext", @selector(setSystemPointerRenderingController:)) &&
-                BPPTR_HasInstance("PUIDDisplayContext", @selector(systemPointerWindow)) &&
-                BPPTR_HasInstance("PUIDDisplayContext", @selector(pointerRenderingController))) {
+                class_getInstanceVariable(dc, "_systemPointerWindow") && class_getInstanceVariable(dc, "_pointerRenderingController")) {
                 %init(BPPTR_Hidden);
                 BPPTR_Log(@"ptr_hidden installed");
             } else {
-                BPPTR_Log(@"ptr_hidden: PUIDDisplayContext selectors missing, not installing");
+                BPPTR_Log(@"ptr_hidden: setSystemPointerRenderingController: or the ivars _systemPointerWindow / _pointerRenderingController missing, not installing");
             }
             gBPPTRDoneB = YES;
         }
@@ -202,13 +423,32 @@ static BOOL BPPTR_TryInstall(void) {
             gBPPTRDoneC = YES;
         }
     }
-    return gBPPTRDoneA && gBPPTRDoneB && gBPPTRDoneC;
+    if (!gBPPTRDoneD) {
+        Class pc = objc_getClass("PUIDPointerController"), rv = objc_getClass("PUIDPointerRenderingRootViewController");
+        if (pc && rv) {
+            if (BPPTR_HasInstance("PUIDPointerController", @selector(_movePointerToDisplay:)) &&
+                BPPTR_HasInstance("PUIDPointerController", @selector(_updatePointerWithOptions:updateHandlerCollection:)) &&
+                BPPTR_HasInstance("PUIDPointerController", @selector(xpcClientContextController:didUpdateHoverRegion:forClient:transitionCompletion:)) &&
+                BPPTR_HasInstance("PUIDPointerRenderingRootViewController", @selector(hidePointer)) &&
+                BPPTR_HasInstance("PUIDPointerRenderingRootViewController", @selector(setPointerState:options:updateHandlerCollection:error:)) &&
+                class_getInstanceVariable(pc, "_activeDisplayContext") && class_getInstanceVariable(pc, "_pointerClientToClientStateMap") && class_getInstanceVariable(pc, "_previousPointerClient") &&
+                class_getInstanceVariable(rv, "_pointerState") && objc_getClass("_PUIDPointerControllerClientState") &&
+                class_getInstanceVariable(objc_getClass("PUIDDisplayContext"), "_pointerRenderingController")) {
+                %init(BPPTR_Display);
+                BPPTR_Log(@"ptr_hover / ptr_edge installed (_movePointerToDisplay:, hidePointer, setPointerState:options:...)");
+            } else {
+                BPPTR_Log(@"ptr_hover / ptr_edge: selectors or ivars missing, not installing");
+            }
+            gBPPTRDoneD = YES;
+        }
+    }
+    return gBPPTRDoneA && gBPPTRDoneB && gBPPTRDoneC && gBPPTRDoneD;
 }
 
 static void BPPTR_RetryInstall(int attempt) {
     if (BPPTR_TryInstall()) return;
     if (attempt >= 100) {
-        BPPTR_Log(@"classes still missing after %d attempts (A=%d B=%d C=%d), giving up", attempt, gBPPTRDoneA, gBPPTRDoneB, gBPPTRDoneC);
+        BPPTR_Log(@"classes still missing after %d attempts (A=%d B=%d C=%d D=%d), giving up", attempt, gBPPTRDoneA, gBPPTRDoneB, gBPPTRDoneC, gBPPTRDoneD);
         return;
     }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{ BPPTR_RetryInstall(attempt + 1); });
