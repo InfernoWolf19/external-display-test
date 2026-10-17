@@ -709,7 +709,7 @@ static void BPD_InstallCloneMirror(void) {
 // (the build id is the compile time of this file).
 static BOOL BPD_CrashGuardTripped(void) {
     char path[1200];
-    if (!BPDW_Path("Backport162BBD.strikes", path, sizeof path)) return NO;       // no writable directory: no counting possible
+    if (!BPDW_Path("Backport162BBD.strikes", path, sizeof path)) return YES;      // no writable directory: a crash could not be counted, so the hooks stay out of backboardd
     char id[64]; snprintf(id, sizeof id, "%s_%s", __DATE__, __TIME__);
     for (char *c = id; *c; c++) if (*c == ' ') *c = '_';
     int strikes = 0;
@@ -752,9 +752,10 @@ static void BPD_NotifySlug(const char *prefix, const char *what) {
 static void BPD_Marker(const char *what) {
     BPD_NotifySlug("bbd", what);
     char ver[64] = {0}; size_t vn = sizeof ver; sysctlbyname("kern.osversion", ver, &vn, NULL, 0);
-    const char *img = _dyld_get_image_name(0);
+    const char *img = BPDW_MainName();
+    const char *img0 = _dyld_get_image_name(0);
     int di = BPDW_DirIndex();
-    char line[700]; snprintf(line, sizeof line, "ctor: %s (image %s, build %s, log dir %s)", what, img ? img : "(null)", ver, di >= 0 ? kBPDWDirs[di] : "NONE writable");
+    char line[700]; snprintf(line, sizeof line, "ctor: %s (main image %s, image 0 %s, build %s, log dir %s)", what, img ? img : "(null)", img0 ? img0 : "(null)", ver, di >= 0 ? kBPDWDirs[di] : "NONE writable");
     BPDW_Line("bbd", line);                                                          // always written: it is the proof that the dylib was injected
 }
 
@@ -762,14 +763,11 @@ static void BPD_Marker(const char *what) {
     @autoreleasepool {
         BPD_InitPaths();
         BPD_Marker("ctor entered");
-        const char *path = _dyld_get_image_name(0);
-        if (!path) return;
-        size_t n = strlen(path);
-        if (n < 10 || strcmp(path + n - 10, "/backboardd") != 0) { BPD_Marker("not backboardd, leaving"); return; }     // belt and braces next to the Filter
+        if (!BPDW_MainIs("backboardd")) { BPD_Marker("not backboardd, leaving"); return; }                              // belt and braces next to the Filter
         if (!BPD_BuildMatches()) { BPD_Marker("build mismatch, leaving"); BPD_Log(@"build does not match 20A8372, not installing"); return; }
         if (BPD_CrashGuardTripped()) { BPD_Marker("crash guard tripped, leaving"); return; }
         BPD_Marker("installing");
-        gSlide = _dyld_get_image_vmaddr_slide(0);
+        gSlide = BPDW_MainSlide();
         BPD_InstallCloneMirror();
         BPP_Install();
     }

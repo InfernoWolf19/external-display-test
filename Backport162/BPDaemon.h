@@ -16,11 +16,37 @@
 #import <sys/stat.h>
 #import <time.h>
 #import <unistd.h>
+#import <mach-o/dyld.h>
+#import <mach-o/loader.h>
 
-#define BPDW_DIR_COUNT 4
-static const char *const kBPDWDirs[BPDW_DIR_COUNT] = { "/var/jb/tmp", "/var/mobile/Library/Caches", "/var/mobile", "/tmp" };
+#define BPDW_DIR_COUNT 7
+// <jbroot>/var is a real directory inside the jailbreak root (not a link to /var): the sandbox extension makes <jbroot>/var/mobile writable, /var/mobile itself is not covered.
+static const char *const kBPDWDirs[BPDW_DIR_COUNT] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile/Library/Preferences", "/var/jb/var/mobile", "/var/jb/tmp", "/var/mobile/Library/Caches", "/var/mobile", "/tmp" };
 #define BPDW_FILE "Backport162.daemon.log"
 #define BPDW_MAX_BYTES (256 * 1024)
+
+// Index of the main executable among the loaded images: the image with file type MH_EXECUTE.  Index 0 is not reliably it (an earlier build compared the name of image 0 and every
+// daemon left with "not backboardd" / "not pointeruid").  -1 when none is found.
+static inline int BPDW_MainImage(void) {
+    static int idx = -2;
+    if (idx != -2) return idx;
+    idx = -1;
+    uint32_t n = _dyld_image_count();
+    for (uint32_t i = 0; i < n; i++) {
+        const struct mach_header *h = _dyld_get_image_header(i);
+        if (h && h->filetype == MH_EXECUTE) { idx = (int)i; break; }
+    }
+    return idx;
+}
+static inline const char *BPDW_MainName(void) { int i = BPDW_MainImage(); return i >= 0 ? _dyld_get_image_name((uint32_t)i) : NULL; }
+static inline intptr_t BPDW_MainSlide(void) { int i = BPDW_MainImage(); return i >= 0 ? _dyld_get_image_vmaddr_slide((uint32_t)i) : 0; }
+// YES when the main executable's last path component is `base`.
+static inline int BPDW_MainIs(const char *base) {
+    const char *name = BPDW_MainName();
+    if (!name) return 0;
+    const char *slash = strrchr(name, '/');
+    return strcmp(slash ? slash + 1 : name, base) == 0;
+}
 
 // Directory the daemon can write to (probed once, then cached; -1 = none of them).
 static inline int BPDW_DirIndex(void) {

@@ -234,19 +234,17 @@ static void BPPTR_NotifySlug(const char *prefix, const char *what) {
 static void BPPTR_Marker(const char *what) {
     BPPTR_NotifySlug("ptr", what);
     char ver[64] = {0}; size_t vn = sizeof ver; sysctlbyname("kern.osversion", ver, &vn, NULL, 0);
-    const char *img = _dyld_get_image_name(0);
+    const char *img = BPDW_MainName();
+    const char *img0 = _dyld_get_image_name(0);
     int di = BPDW_DirIndex();
-    char line[700]; snprintf(line, sizeof line, "ctor: %s (image %s, build %s, log dir %s)", what, img ? img : "(null)", ver, di >= 0 ? kBPDWDirs[di] : "NONE writable");
+    char line[700]; snprintf(line, sizeof line, "ctor: %s (main image %s, image 0 %s, build %s, log dir %s)", what, img ? img : "(null)", img0 ? img0 : "(null)", ver, di >= 0 ? kBPDWDirs[di] : "NONE writable");
     BPDW_Line("ptr", line);                                                          // always written: it is the proof that the dylib was injected
 }
 
 %ctor {
     @autoreleasepool {
         BPPTR_Marker("ctor entered");
-        const char *path = _dyld_get_image_name(0);
-        if (!path) return;
-        size_t n = strlen(path);
-        if (n < 11 || strcmp(path + n - 11, "/pointeruid") != 0) { BPPTR_Marker("not pointeruid, leaving"); return; }   // belt and braces next to the Filter
+        if (!BPDW_MainIs("pointeruid")) { BPPTR_Marker("not pointeruid, leaving"); return; }                           // belt and braces next to the Filter
         if (!BPPTR_BuildMatches()) { BPPTR_Marker("build mismatch, leaving"); BPPTR_Log(@"build does not match 20A8372, not installing"); return; }
         BPPTR_Marker("installing");
         BPPTR_Log(@"loaded in pointeruid (20A8372)");

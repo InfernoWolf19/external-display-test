@@ -102,8 +102,8 @@ static void G2D_ListenForDaemonLoads(void) {
 // The daemon halves (backboardd, pointeruid) cannot write to <jbroot>/tmp (see BPDaemon.h): they append to Backport162.daemon.log in a directory they can write to; copy their new lines
 // into Backport162.log (prefix "daemon:") while logging is on.  Directories as in BPDaemon.h.  Every 2 s, at most 64 KiB per file and tick.
 static void G2D_IngestDaemonLog(void) {
-    static const char *const dirs[] = { "/var/jb/tmp", "/var/mobile/Library/Caches", "/var/mobile", "/tmp" };
-    static off_t offsets[4];
+    static const char *const dirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile/Library/Preferences", "/var/jb/var/mobile", "/var/jb/tmp", "/var/mobile/Library/Caches", "/var/mobile", "/tmp" };    // as in BPDaemon.h
+    static off_t offsets[7];
     dispatch_queue_t q = dispatch_queue_create("com.infernowolf19.backport162.daemonlog", DISPATCH_QUEUE_SERIAL);
     dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, q);
     dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), 2 * NSEC_PER_SEC, 500 * NSEC_PER_MSEC);
