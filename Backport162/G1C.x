@@ -5016,8 +5016,66 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 %end
 %end
 
+// ---- close trace (diagnostics only, BP_LogEnabled; user video 0dee8146 = Dopamine window, size jump at the start of the home-swipe close): what the composed root answers for the closing stage window during the home swipe ----
+// Armed when a home gesture starts in mode 3 (G1C_HGR_GestureChild), disarmed at phase 3 of the next transition.  Every line starts with "[g1c] close", carries the transition phase
+// (g = gesture still running, 1/2/3 = transition phases) and is logged only when the answer changed.  The values are exactly what the layout block (G2B BP2B_LayoutAppLayoutImpl) reads.
+static BOOL gCloseTraceOn;
+static int gCloseTracePhase;                                                          // 0 = gesture
+static NSString *gCloseTraceSig[8];
+static void G1C_CloseTraceArm(long long mode) {
+    if (!BP_LogEnabled() || mode != 3) return;
+    gCloseTraceOn = YES; gCloseTracePhase = 0;
+    for (int k = 0; k < 8; k++) gCloseTraceSig[k] = nil;
+    BP_Log(@"[g1c] close: trace armed (home gesture in mode 3)");
+}
+static void G1C_CloseTraceLine(int slot, NSString *what, unsigned long long idx, NSString *vals) {
+    NSString *sig = [NSString stringWithFormat:@"%d|%llu|%@", gCloseTracePhase, idx, vals];
+    BOOL changed = NO;
+    @synchronized(@"BP162.closetrace") { if (![gCloseTraceSig[slot] isEqualToString:sig]) { gCloseTraceSig[slot] = sig; changed = YES; } }
+    if (changed) BP_Log(@"[g1c] close %@ phase=%@ idx=%llu %@", what, gCloseTracePhase ? [NSString stringWithFormat:@"%d", gCloseTracePhase] : @"g", idx, vals);
+}
+static BOOL G1C_CloseTraceIsStage(id root, id layout) {
+    id stage = G1B_GET(root, kRootEffStage);
+    return gCloseTraceOn && layout && stage && [layout isEqual:stage];
+}
+static void G1C_CloseTraceTransition(id root, id event, long long phase) {
+    if (!gCloseTraceOn || !BP_LogEnabled()) return;
+    gCloseTracePhase = (int)phase;
+    id fl = G1C_Resp(root, @selector(floorModifier)) ? G1B_Send0(root, @selector(floorModifier)) : nil;
+    BP_Log(@"[g1c] close transition phase=%lld modes %lld->%lld floor=%@ stage=%@", phase, G1B_SendLL0(event, @selector(fromEnvironmentMode)), G1B_SendLL0(event, @selector(toEnvironmentMode)),
+           G1C_DbgCls(fl), G1C_DbgLayout(G1B_GET(root, kRootEffStage)));
+    if (phase == 3) gCloseTraceOn = NO;
+}
+
 %group G1C_Root
 %hook SBContinuousExposeRootSwitcherModifier
+
+// close trace: the composed answers (log only; the values are returned untouched)
+- (CGRect)frameForIndex:(unsigned long long)i {
+    CGRect r = %orig;
+    if (gCloseTraceOn && G1C_CloseTraceIsStage(self, G1C_LayoutAtIdx(self, i))) G1C_CloseTraceLine(0, @"frame", i, NSStringFromCGRect(r));
+    return r;
+}
+- (double)scaleForIndex:(unsigned long long)i {
+    double r = %orig;
+    if (gCloseTraceOn && G1C_CloseTraceIsStage(self, G1C_LayoutAtIdx(self, i))) G1C_CloseTraceLine(1, @"scale", i, [NSString stringWithFormat:@"%.4f", r]);
+    return r;
+}
+- (CGPoint)anchorPointForIndex:(unsigned long long)i {
+    CGPoint r = %orig;
+    if (gCloseTraceOn && G1C_CloseTraceIsStage(self, G1C_LayoutAtIdx(self, i))) G1C_CloseTraceLine(2, @"anchor", i, NSStringFromCGPoint(r));
+    return r;
+}
+- (CGRect)frameForLayoutRole:(long long)role inAppLayout:(id)layout withBounds:(CGRect)bounds {
+    CGRect r = %orig;
+    if (gCloseTraceOn && G1C_CloseTraceIsStage(self, layout)) G1C_CloseTraceLine(3, @"roleFrame", (unsigned long long)role, [NSString stringWithFormat:@"%@ in bounds %@", NSStringFromCGRect(r), NSStringFromCGSize(bounds.size)]);
+    return r;
+}
+- (double)scaleForLayoutRole:(long long)role inAppLayout:(id)layout {
+    double r = %orig;
+    if (gCloseTraceOn && G1C_CloseTraceIsStage(self, layout)) G1C_CloseTraceLine(4, @"roleScale", (unsigned long long)role, [NSString stringWithFormat:@"%.4f", r]);
+    return r;
+}
 
 // ---- floorModifierForTransitionEvent: (0x1c78180e8) -- reuse / create floors, with the 16.2 state carry-over ----
 - (id)floorModifierForTransitionEvent:(id)event {
@@ -5180,6 +5238,7 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     long long phase = G1B_SendLL0(event, @selector(phase));
     BOOL animated = G1B_SendB0(event, @selector(isAnimated));
     long long cfg = G1B_SendLL0(event, @selector(toPeekConfiguration));
+    if (BP_LogEnabled()) G1C_CloseTraceTransition(self, event, phase);
     if (BP_LogEnabled()) {
         id fl = G1C_Resp(self, @selector(floorModifier)) ? G1B_Send0(self, @selector(floorModifier)) : nil;
         BP_Log(@"GLITCH transition event: phase=%lld animated=%d gesture=%d modes %lld->%lld from=%@ to=%@ peek %lld->%lld floor=%@ effMode=%lld stage=%@", phase, animated,
@@ -5295,10 +5354,18 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
     return G1B_AppendTo(G1B_NewUpdateLayoutResponse(4, 2), r);
 }
 - (BOOL)shouldUseWallpaperGradientTreatment { return YES; }
+// 16.2 0x1c7819ca8 and 0x1c7819cb0 are both `mov w0, #1 ; ret` (raw bytes 20 00 80 52 c0 03 5f d6): YES / YES.  The first port read them as NO ("UNSURE: returns 0", specs/group1b-modifiers.md).
+// G2B's layout block hands them to the item container's content view (setShouldStretchToBounds: / setUsesNonuniformScaling:), i.e. the window's snapshot is stretched with the container bounds while
+// the zoom-down / icon-zoom transitions animate them (SBFullScreenToHomeIconZoom frame = icon-shaped box) instead of keeping its size and snapping at the first update.
+// Kill switch Backport162.off.g1c_fillbounds restores the old NO answers.
 %new
-- (BOOL)shouldScaleContentToFillBoundsAtIndex:(unsigned long long)i { return NO; }
+- (BOOL)shouldScaleContentToFillBoundsAtIndex:(unsigned long long)i {
+    BOOL r = BP_OnName("g1c_fillbounds");
+    if (gCloseTraceOn && G1C_CloseTraceIsStage(self, G1C_LayoutAtIdx(self, i))) G1C_CloseTraceLine(5, @"fillBounds", i, r ? @"YES (16.2)" : @"NO (g1c_fillbounds off)");
+    return r;
+}
 %new
-- (BOOL)shouldUseNonuniformSnapshotScalingForLayoutRole:(long long)role inAppLayout:(id)layout { return NO; }
+- (BOOL)shouldUseNonuniformSnapshotScalingForLayoutRole:(long long)role inAppLayout:(id)layout { return BP_OnName("g1c_fillbounds"); }
 %new
 - (G1CTongueAttrs)continuousExposeStripTongueAttributes {
     G1CTongueAttrs a;
@@ -5491,6 +5558,7 @@ static id G1C_HGR_GestureChild(id self, SEL _cmd, id event, id active) {
         G1C_SendVB(o, NSSelectorFromString(@"setLaysOutNeighboringCards:"), !chamois);
         return o;
     }
+    G1C_CloseTraceArm(mode);                                                         // diagnostics only (BP_LogEnabled)
     id mm = G1C_NewMultiOf(self);
     Class c = NSClassFromString(@"SBHomeGestureSwitcherModifier");
     SEL i = NSSelectorFromString(@"initWithGestureID:selectedAppLayout:startingEnvironmentMode:multitaskingModifier:scrunchInitiated:continuingGesture:lastGestureWasAnArcSwipe:");
