@@ -67,26 +67,42 @@ g2f_closecrop (0.7.5 and earlier) there is no mask; the shadow then follows stoc
 What else could switch a shadow on in one frame and was ruled out: the style animation (spring / update modes smooth, identical to stock); the floor swap (phase 2, 30 ms after the start, would
 pop at the START of the open); the wallpaper dimming queries (smooth, and they would darken the whole screen, not a halo decaying with the distance from the window).
 
-## 4. The fix (G2H.x, switch g2h_maskshadow, default ON, deliberate repair of our deviation)
+## 4. The fix (G2H.x, switch g2h_maskshadow, default ON)
 
-The crop stays (the user confirmed it fixes the nested card, a62c5f6); the mask is given room for the shadow wherever it is not cropping. The plain `UIView` that G2F sets as the item container's
-`maskView` (hook of `-[SBFluidSwitcherItemContainer setMaskView:]`, G2F.x untouched) is switched with `object_setClass` to the runtime subclass `BP162ShadowRoomMaskView` (no ivars added: the
-instance size is unchanged), whose `-setBounds:` adds the slack on every side when the requested size covers the container (creation and the target of the "zoom over" animation) and keeps the
-icon box exact, and whose `-bounds` returns the logical size, so G2F's comparisons of `mask.bounds` with the container bounds keep working. Slack =
-`max over the layers that really shadow (radius > 0, opacity > 0) of 2.8 x shadowRadius + max(|offset.x|, |offset.y|)`, 2.8 being the factor stock uses for the shadow-inclusive bounds
-(`_visibleSwitcherBoundsIncludingShadow` 16.2 0x1c78133f4, constant -2.8; see G1C.x). Result: close starts with a mask that clips nothing (no step in the first frame), the spring then shrinks it
-to the icon box and the shadow is swept away with the zoom; open: the shadow is revealed with the growing mask and, when G2F drops the mask, nothing changes in that frame.
-Log lines (Backport162.debug): `[g2h] mask adopted on container ... shadow slack <E> on every side (<n> shadow layers)`, `[g2h] mask removed ...`.
-Kill switch: `<jbroot>/tmp/Backport162.off.g2h_maskshadow` (hot: checked at every bounds change; the hook itself needs no respring).
+### 4a. First attempt (build ed3eb1b) and why it was wrong (FACT, log 27f5d0d0 + recordings 080e9505 / 7b244285)
+The first version inflated the crop mask by the shadow extent (slack 231 pt = 2.8 x 70 + 35 on every side: log `mask adopted ... container bounds {1056, 646}, shadow slack 231.0 ... mask bounds
+now {1518, 1108}`). The crop is measured in the mask's bounds: with the mask 462 pt wider than the card it only starts to crop the card when it has travelled 462 of 872 pt (53 %), and
+`pres` in the new log shows it: open, t = +0.053 s mask 866 wide, +0.103 1147, +0.154 1319 ... +0.404 1511 (target 1518). The card therefore stayed a wide landscape rectangle while the
+icon overlay (which animates to the icon box on its own spring) already narrowed inside it: the nested outer card of CLOSE-CROP-0.7.6 came back (user: "the close app animation fix
+regressed"). The first attempt is removed completely (no subclass, no bounds change).
+
+### 4b. What it does now
+* The mask is exactly what G2F makes: bounds, centre, corner radius, animation attributes and release are those of 24816c1 (the user-approved crop timing), in the close and in the open
+  (the open's mask goes from the icon box to the container bounds with the same spring and is dropped at its settle, as before). G2H no longer touches any property of the mask.
+* The shadow pop at the release is turned into a fade: the shadow is requested at full strength from the first frame (log 27f5d0d0 phase 1: `shadowOpacity=1.000 shadowStyle=5`, container
+  `shadowAlpha=1.000`, diffuse shadow layer r 70 / opacity 0.35 / offset y +35, pres 0.35, i.e. fully "on" while the recording shows no shadow: this confirms that only the mask hides it).
+  Hook of `-[SBFluidSwitcherItemContainer setMaskView:]` (G2F.x untouched): when the mask is removed from a container that is on screen (window, not hidden, alpha > 0; a recycled container
+  is skipped) the page's shadow view (`SBAppSwitcherPageShadowView`; `-[SBAppSwitcherPageView setShadowAlpha:]` 16.0 0x1c5e36434 is a tail call of `-[UIView setAlpha:]` on it) is set to
+  alpha 0 without animation right after the removal (same run loop turn: no frame shows the shadow), then animated to the page's `shadowAlpha` over 0.22 s, ease-out,
+  begin-from-current, user interaction allowed. Log `[g2h] mask removed from container ...: shadow view alpha 1.000 -> 0 -> 1.000 over 0.22 s`.
+* NOT fixed (on purpose): at the start of a close the shadow still disappears at once (the exact mask clips it from its first frame). Any variant that keeps it longer has to widen the
+  mask along the cropped axis (delays the crop, see 4a) or leave a halo of the full window outline around the cropped card (the old nested shape in shadow form). The open's shadow now
+  fades in right after the window has arrived (release at 0.56 - 0.60 s after phase 1, fade 0.22 s) instead of popping.
+* Options considered: (a) mask on the page view instead of the container: the shadow view is a child of the page view (`_updateShadowPresence` 0x1c5f1afd8 adds it to the page), so it would be
+  clipped as well; masking only the other page subviews needs one mask per subview (`_orderSubviews` 0x1c5e33a4c orders ten of them) with every animation duplicated: rejected. (b) fade at
+  the release: done. (c) slack only on the uncropped axis: the height; the sides (the cropped axis) are the larger part of the pop and stay clipped, and a halo above / below with hard ends
+  at the card's sides looks worse than none: rejected. Slack decaying in time on the cropped axis delays the crop by the decay time: rejected (the user asked for the exact 24816c1 timing).
+Kill switch: `<jbroot>/tmp/Backport162.off.g2h_maskshadow` (checked at every mask removal).
 
 ## 5. Diagnostics for the next test (G2H.x, g2h_dimdiag, default ON, only with Backport162.debug)
 
-For every animated 1 -> 3 (open) and 3 -> 1 (close) transition of the root: a line per phase and one every 50 ms for 1.5 s after phase 1:
-`[g2h] dim#N open|close t=+0.350 idx= role= | shadowOpacity= shadowStyle= opacity= dimming= wallpaperOverlay= lightening= background= | home alpha= dim= blur= blurType= scale=
-wallpaperScale= wallpaperStyle= | container <ptr> shadowAlpha= shadowStyle= alpha= presBounds= shadows(n, extent) [shadowview r op off alpha pres] ... mask(class logical layer pres r)`.
-Read it like this: if the shadow layers show `alpha 1` / `op > 0` and `shadowOpacity=1` from phase 2 on while the recording shows no shadow until the mask line disappears
-(`mask(none)`), the mask is the cause. If the shadow layer values themselves jump at the pop (alpha 0 -> 1, or `shadowOpacity` 0 -> 1), the cause is in the root's answers and this fix
-is not it (kill switch `g2h_maskshadow` to compare, `g2f_closecrop` off removes the mask altogether).
+* For every animated 1 -> 3 (open) and 3 -> 1 (close) transition of the root: a line per phase and one every 50 ms for 1.5 s after phase 1:
+  `[g2h] dim#N open|close t=+0.350 idx= role= | shadowOpacity= shadowStyle= opacity= dimming= wallpaperOverlay= lightening= background= | home alpha= dim= blur= blurType= scale=
+  wallpaperScale= wallpaperStyle= | container <ptr> shadowAlpha= shadowStyle= alpha= presBounds= shadows(n) [shadowview r op off alpha pres] [SBFView ...] mask(class logical layer pres r)`.
+  (Real example, log 27f5d0d0: the shadow values are "on" from phase 1, the mask hides them.)
+* Per mask (every open / close that crops): `[g2h] mask#N set|sample t=+0.000 / +0.050 / +0.100 / +0.150 / +0.250 container <ptr> bounds {w, h} | mask logical {..} layer {..} pres {..}
+  r .. (presentation r ..)`: logical = `mask.bounds` (the target of the running animation), layer = model layer bounds (equal with the untouched mask), pres = on screen. The crop timing of
+  a close reads off the `pres` width: from the container width down to the icon box (646 for the 1056 x 646 window); compare with 24816c1 / recording 83f40670.
 
 ## 6. Unproven
 
@@ -94,8 +110,7 @@ is not it (kill switch `g2h_maskshadow` to compare, `g2f_closecrop` off removes 
   3 -> 3 app-to-app transitions of a three window stage) do not belong to it (the recording's status bar says 19:49, the logs start at 19:54:51), so the log side of section 3 comes from
   other runs of the same build (291a0cf5, 8025ca8b). The recording itself fits the mask in time (0.45 s vs 0.56 - 0.58 s from phase 1, the first dimming frame lagging phase 1 by ~0.1 s)
   and in shape (a step to the full shadow, at the start of the close an immediate removal).
-* The size of the shadow slack (the radius of the window shadow is not known; it comes from the layers at run time; if no shadow layer exists yet at the time the mask is adopted the slack
-  is 0 for that call and the next bounds change looks again).
-* That UIKit never reads `-bounds` of a mask view in a way that matters (the mask view has no subviews and is positioned only through its layer; G2F sets bounds and centre only).
-* How the swept shadow looks on the device (the shadow around the full-width card is revealed / hidden by the moving mask edge; at the close the mask edge reaches the shadow of the card
-  within the first ~100 ms).
+* How the fade looks on the device (0.22 s ease-out starting at the mask release; whether it should start earlier, i.e. before the mask settles, is a matter of taste: the shadow cannot
+  appear while the mask exists without widening it).
+* That nothing else sets the shadow view's alpha during the 0.22 s (a style pass with the same value changes nothing; one with another value wins at the end of the fade).
+* The close-start disappearance of the shadow is unchanged by design.

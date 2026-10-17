@@ -17,24 +17,23 @@
 // jump is the mask coming off (open) and going on (close).
 //
 // ===== Fix (default ON) =====
-// The mask keeps its job (crop the card to the icon box, g2f_closecrop) but is given room for the shadow wherever it is not cropping: whenever its bounds are set to a size that
-// covers the container (creation, and the target of the "zoom over" animation that ends in the release) the mask view is inflated by the extent of the window's shadow on every side:
-// slack = max over the shadow views of (2.8 x shadowRadius + max(|offset.x|, |offset.y|)), 2.8 being the factor stock itself uses for the shadow-inclusive bounds
-// (-[SBFluidSwitcherViewController _visibleSwitcherBoundsIncludingShadow], 16.2 0x1c78133f4 const -2.8; G1C.x).  Bounds that crop (the icon box) stay exact.  Consequences:
-//  * close: the mask starts as large as container + shadow (nothing changes in the first frame, the shadow does not vanish), then shrinks to the icon box with the same spring as before:
-//    the shadow is swept away together with the zoom instead of switching off;
-//  * open: the first pass creates the mask at container + shadow (the 25 ms until the "zoom over" pass crop it, the card is icon sized then), the "zoom over" animation grows it to container +
-//    shadow, so the shadow is revealed with the window, and when G2F releases the mask nothing changes in that frame (the mask never clipped anything inside the slack).
-// Implemented without touching G2F.x: the plain UIView that G2F sets as the item container's maskView (hook of -[SBFluidSwitcherItemContainer setMaskView:]) is switched to a runtime
-// subclass (object_setClass, no new ivars: the instance size is unchanged) that adds the slack in -setBounds: and takes it out again in the -bounds getter, so G2F's own comparisons of
-// mask.bounds with the container bounds keep working.  The host container is kept in an associated weak box.
+// 0.7.7 first attempt (build ed3eb1b) inflated the crop mask by the shadow extent (231 pt on every side).  WRONG: the crop is measured in the mask's bounds, so with the mask 462 pt wider
+// it only started to crop the card after half of its travel and the nested outer card of the old problem came back (user, recordings 080e9505 / 7b244285).  The mask is now EXACTLY what
+// G2F makes (the geometry and timing of 24816c1, which the user approved, for the open as well as the close: nothing in this file touches the mask's bounds, centre or radius any more).
+// What remains is the pop of the shadow when the mask is dropped.  The shadow is requested at full strength from the first frame (log 27f5d0d0: shadowOpacity 1.0, shadowStyle 5, container
+// shadowAlpha 1.0, shadow layer r 70 / opacity 0.35 / offset y +35 at phase 1) and is hidden only by the mask, so when G2F drops the mask (end of the open, 0.56 - 0.60 s after phase 1) it is
+// revealed in one frame.  So: right before the mask is removed from an item container that is on screen, the page's shadow view (SBAppSwitcherPageShadowView, alpha = the page's shadowAlpha,
+// -[SBAppSwitcherPageView setShadowAlpha:] 16.0 0x1c5e36434 -> -[UIView setAlpha:]) is set to alpha 0 without animation in the same run loop turn (the removal and the alpha change reach the
+// render server together, so no frame shows the shadow), then animated back to the page's shadowAlpha with a short ease-out fade (0.22 s) instead.  Nothing else about the shadow is touched.
+// Not addressed (deliberately, the crop has priority): at the START of a close the shadow still disappears at once, because the exact crop mask clips it from its first frame; a shadow of the
+// full window outline around a card that is being cropped to the icon box would show the old nested shape again.
 //
 // ===== Diagnostics (Backport162.debug, g2h_dimdiag) =====
 // For every animated home -> app (1 -> 3) and app -> home (3 -> 1) transition of the root: one line per transition phase and one every 50 ms for 1.5 s after phase 1 ("[g2h] dim#N
 // open|close t=+0.350 ..."): the root's answers for the window (shadowOpacityForLayoutRole:atIndex:, shadowStyleForLayoutRole:inAppLayout:, opacityForLayoutRole:..., dimmingAlpha...,
 // wallpaperOverlayAlpha, lighteningAlpha, backgroundOpacity) and for the home screen / wallpaper (homeScreenAlpha, homeScreenDimmingAlpha, homeScreenBackdropBlurProgress / Type,
 // homeScreenScale, wallpaperScale / Style), and what the item container really shows: its shadowAlpha / shadowStyle, every shadow layer (radius, opacity, offset, view alpha, presentation
-// opacity) and the mask (class, bounds, presentation bounds, corner radius).  Mask adoption / removal lines carry the slack.
+// opacity) and the mask (class, bounds, presentation bounds, corner radius).  Mask set / removal lines and the mask timing samples (mask#N) are logged too.
 //
 // 16.0 = 20A8372, 16.2 = 20C65.  All reads are guarded (respondsToSelector, @try); the diagnostics run only with Backport162.debug on.
 
@@ -54,18 +53,9 @@
 #define G2H_DIAG_ON() BP_OnName("g2h_dimdiag")
 #define G2H_LOG(...) do { if (BP_LogEnabled()) BP_Log(__VA_ARGS__); } while (0)
 
-// weak holder of the container that a mask belongs to (the mask can outlive its container inside an animation completion block)
-@interface G2HWeakBox : NSObject
-@property (nonatomic, weak) UIView *view;
-@end
-@implementation G2HWeakBox
-@end
-
 static IMP gG2HOrigSetMask, gG2HOrigEvent, gG2HOrigLayout;
-static IMP gG2HUISetBounds, gG2HUIBounds;                                  // UIView's own -setBounds: / -bounds (the superclass implementations of the mask subclass)
-static Class gG2HMaskCls;
-static const void *kG2HHost = &kG2HHost;                                    // associated G2HWeakBox on the mask view
-static const void *kG2HApplied = &kG2HApplied;                              // associated NSNumber on the mask view: the slack included in its current bounds (each side)
+static unsigned gG2HMaskSerial;                                            // counts the masks that G2F put on an item container (each open / close that crops)
+static const double kG2HFadeDuration = 0.22;                               // the fade of the shadow after the mask is dropped (seconds)
 
 // ==================================================================================================================================================================================
 // small typed senders
@@ -96,25 +86,17 @@ static double G2H_Dbl(id o, const char *sel) {
 }
 
 // ==================================================================================================================================================================================
-// Part 1: the shadow room of G2F's crop mask (g2h_maskshadow)
+// Part 1: the shadow no longer pops when G2F drops the crop mask (g2h_maskshadow)
 // ==================================================================================================================================================================================
-static UIView *G2H_Host(UIView *mask) {
-    G2HWeakBox *b = objc_getAssociatedObject(mask, kG2HHost);
-    return b.view;
-}
-static double G2H_Applied(UIView *mask) {
-    NSNumber *n = objc_getAssociatedObject(mask, kG2HApplied);
-    return n ? n.doubleValue : 0.0;
-}
-
-// The extent of the window's shadow: every SBAppSwitcherPageShadowView below the container, its own layer and the layers of its subviews (the diffuse and the rim shadow view), the layers
-// that really shadow (radius > 0 and opacity > 0).  2.8 x radius + the larger offset component, the shadow-inclusive inset of stock (see the header).  0 when there is no shadow.
-static void G2H_ScanShadow(UIView *v, int depth, int *budget, double *e, int *n, NSMutableString *dump) {
+// The window's shadow layers (below the container): every SBAppSwitcherPageShadowView, its own layer and the layers of its subviews.  Used for the fade (the shadow view itself) and for the
+// log (radius / opacity / offset: in 27f5d0d0 the shadow view's own layer has opacity 0 and the diffuse SBFView below it r 70, opacity 0.35, offset y +35).
+static void G2H_ScanShadow(UIView *v, int depth, int *budget, UIView **shadowView, int *n, NSMutableString *dump) {
     if (!v || depth > 10 || *budget <= 0) return;
     (*budget)--;
     static Class sh; static dispatch_once_t once;
     dispatch_once(&once, ^{ sh = NSClassFromString(@"SBAppSwitcherPageShadowView"); });
     if (sh && [v isKindOfClass:sh]) {
+        if (shadowView && !*shadowView) *shadowView = v;
         NSMutableArray *views = [NSMutableArray arrayWithObject:v];
         for (UIView *s in v.subviews) [views addObject:s];
         for (UIView *s in views) {
@@ -124,72 +106,70 @@ static void G2H_ScanShadow(UIView *v, int depth, int *budget, double *e, int *n,
             CGSize off = l.shadowOffset;
             if (dump) [dump appendFormat:@" [%@ r %.1f op %.2f off {%.1f, %.1f} alpha %.2f pres %.2f]", s == v ? @"shadowview" : NSStringFromClass([s class]), r, op, off.width, off.height, s.alpha,
                        (double)([l presentationLayer] ? [(CALayer *)[l presentationLayer] shadowOpacity] : op)];
-            if (r > 0.0 && op > 0.0) {
-                double x = 2.8 * r + fmax(fabs(off.width), fabs(off.height));
-                if (x > *e) *e = x;
-                (*n)++;
-            }
+            if (r > 0.0 && op > 0.0 && n) (*n)++;
         }
         return;
     }
-    for (UIView *s in v.subviews) G2H_ScanShadow(s, depth + 1, budget, e, n, dump);
-}
-static double G2H_Slack(UIView *host, int *count) {
-    double e = 0.0; int n = 0, budget = 600;
-    G2H_ScanShadow(host, 0, &budget, &e, &n, nil);
-    if (count) *count = n;
-    return e;
+    for (UIView *s in v.subviews) G2H_ScanShadow(s, depth + 1, budget, shadowView, n, dump);
 }
 
-// the mask subclass: -setBounds: adds the slack when the requested size covers the host (not cropping), -bounds hides it again
-static void G2H_MaskSetBounds(UIView *self, SEL _cmd, CGRect b) {
-    CGRect eff = b;
-    double applied = 0.0;
-    UIView *host = G2H_Host(self);
-    if (host && G2H_FIX_ON()) {
-        CGSize hs = host.bounds.size;
-        if (b.size.width >= hs.width - 0.01 && b.size.height >= hs.height - 0.01) {
-            applied = G2H_Slack(host, NULL);
-            eff.size.width += 2.0 * applied;
-            eff.size.height += 2.0 * applied;
-        }
-    }
-    objc_setAssociatedObject(self, kG2HApplied, applied != 0.0 ? @(applied) : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    ((void (*)(id, SEL, CGRect))gG2HUISetBounds)(self, _cmd, eff);
-}
-static CGRect G2H_MaskBounds(UIView *self, SEL _cmd) {
-    CGRect b = ((CGRect (*)(id, SEL))gG2HUIBounds)(self, _cmd);
-    double a = G2H_Applied(self);
-    if (a != 0.0) { b.size.width -= 2.0 * a; b.size.height -= 2.0 * a; }
-    return b;
+// Fade the shadow in: the removal of the mask has just happened (same run loop turn, nothing rendered yet): alpha 0 now, back to the page's shadowAlpha over kG2HFadeDuration.
+static void G2H_FadeShadowIn(UIView *host) {
+    UIView *sv = nil; int budget = 600, n = 0;
+    G2H_ScanShadow(host, 0, &budget, &sv, &n, nil);
+    if (!sv) { G2H_LOG(@"[g2h] mask removed from container %p: no shadow view below it, no fade", host); return; }
+    UIView *page = sv.superview;
+    double a = sv.alpha;
+    if (page && [page respondsToSelector:sel_registerName("shadowAlpha")]) a = G2H_Dbl(page, "shadowAlpha");
+    if (!(a > 0.01)) { G2H_LOG(@"[g2h] mask removed from container %p: shadow alpha %.3f, nothing to fade in", host, a); return; }
+    __weak UIView *wsv = sv, *wpage = page;
+    [UIView performWithoutAnimation:^{ sv.alpha = 0.0; }];
+    [UIView animateWithDuration:kG2HFadeDuration delay:0 options:(UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionBeginFromCurrentState) animations:^{
+        UIView *s = wsv, *p = wpage;
+        if (s) s.alpha = (p && [p respondsToSelector:sel_registerName("shadowAlpha")]) ? G2H_Dbl(p, "shadowAlpha") : a;      // the value the style pass wants now
+    } completion:nil];
+    G2H_LOG(@"[g2h] mask removed from container %p: shadow view alpha %.3f -> 0 -> %.3f over %.2f s (the mask clipped it until now)", host, a, a, kG2HFadeDuration);
 }
 
-// -[UIView setMaskView:] on SBFluidSwitcherItemContainer: the plain UIView of G2F becomes a G2HMask and is inflated at once (inside performWithoutAnimation: G2F's block around the
-// assignment is already one, the second one is for any other caller).
+// Crop timing of one mask, for the log: its logical / layer (model) / presentation bounds, the container bounds, at the moment the mask is set and 50, 100, 150, 250 ms later.  With the mask
+// exactly as G2F makes it the layer bounds equal the logical bounds (the model value, i.e. the target of the running animation); the presentation bounds are what is on screen.
+static void G2H_MaskSample(UIView *host, UIView *m, unsigned serial, double t0, NSString *what) {
+    CALayer *pl = [m.layer presentationLayer] ?: m.layer;
+    G2H_LOG(@"[g2h] mask#%u %@ t=%+.3f container %p bounds %@ | mask logical %@ layer %@ pres %@ r %.1f (presentation r %.1f)", serial, what, CACurrentMediaTime() - t0, host,
+            NSStringFromCGSize(host.bounds.size), NSStringFromCGSize(m.bounds.size), NSStringFromCGSize(m.layer.bounds.size), NSStringFromCGSize(pl.bounds.size), m.layer.cornerRadius, pl.cornerRadius);
+}
+
+// -[UIView setMaskView:] on SBFluidSwitcherItemContainer.  Removal of the mask: the shadow fades in.  A mask being set: timing diagnostics (nothing is changed).
 static void G2H_SetMaskView(id self, SEL _cmd, UIView *m) {
     UIView *prev = nil;
-    if (!m && BP_LogEnabled() && [self respondsToSelector:@selector(maskView)]) prev = [(UIView *)self maskView];
-    ((void (*)(id, SEL, id))gG2HOrigSetMask)(self, _cmd, m);
-    if (!m) {
-        if (prev && gG2HMaskCls && object_getClass(prev) == gG2HMaskCls) G2H_LOG(@"[g2h] mask removed from container %p (the shadow is no longer clipped by anything; mask bounds %@)", self, NSStringFromCGRect(prev.bounds));
-        return;
+    BOOL fade = NO;
+    if (!m && [self isKindOfClass:[UIView class]] && [self respondsToSelector:@selector(maskView)]) {
+        prev = [(UIView *)self maskView];
+        UIView *h = (UIView *)self;
+        fade = prev && G2H_FIX_ON() && h.window && !h.hidden && h.alpha > 0.01;       // a container that is being recycled is not on screen: no fade
     }
+    ((void (*)(id, SEL, id))gG2HOrigSetMask)(self, _cmd, m);
     @try {
-        if (!G2H_FIX_ON() || !gG2HMaskCls || ![self isKindOfClass:[UIView class]]) return;
-        if (object_getClass(m) != [UIView class]) return;                     // only the plain UIView that G2F creates (an adopted mask already has our class)
+        if (!m) {
+            if (fade) G2H_FadeShadowIn((UIView *)self);
+            else if (prev) G2H_LOG(@"[g2h] mask removed from container %p (not on screen or g2h_maskshadow off: no fade)", self);
+            return;
+        }
+        if (!BP_LogEnabled() || !G2H_DIAG_ON() || ![self isKindOfClass:[UIView class]]) return;
         UIView *host = (UIView *)self;
-        G2HWeakBox *box = [G2HWeakBox new];
-        box.view = host;
-        objc_setAssociatedObject(m, kG2HHost, box, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        object_setClass(m, gG2HMaskCls);
-        CGSize cb = host.bounds.size;
-        [UIView performWithoutAnimation:^{ m.bounds = CGRectMake(0, 0, cb.width, cb.height); }];
-        int n = 0;
-        double e = G2H_Slack(host, &n);
-        G2H_LOG(@"[g2h] mask adopted on container %p: container bounds %@, shadow slack %.1f on every side (%d shadow layers), mask bounds now %@ (logical %@)", self, NSStringFromCGSize(cb), e, n,
-                NSStringFromCGRect([m.layer bounds]), NSStringFromCGRect(m.bounds));
-        if (e == 0.0) G2H_LOG(@"[g2h] mask adopted without slack: no shadow layer (radius > 0, opacity > 0) below the container yet; later bounds changes look again");
-    } @catch (NSException *ex) { G2H_LOG(@"[g2h] mask adoption exception %@", ex); }
+        unsigned serial = ++gG2HMaskSerial;
+        double t0 = CACurrentMediaTime();
+        __weak UIView *wh = host, *wm = m;
+        G2H_MaskSample(host, m, serial, t0, @"set");
+        static const int kMs[] = { 0, 50, 100, 150, 250 };
+        for (int k = 0; k < 5; k++) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kMs[k] * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+                UIView *h = wh, *mm = wm;
+                if (!h || !mm || !BP_LogEnabled()) return;
+                @try { G2H_MaskSample(h, mm, serial, t0, @"sample"); } @catch (NSException *ex) { BP_Log(@"[g2h] mask sample exception %@", ex); }
+            });
+        }
+    } @catch (NSException *ex) { G2H_LOG(@"[g2h] setMaskView exception %@", ex); }
 }
 
 // ==================================================================================================================================================================================
@@ -255,9 +235,9 @@ static NSString *G2H_Sample(id root, id vc, id layout) {
         CALayer *pl = [cv.layer presentationLayer] ?: cv.layer;
         [o appendFormat:@" %p shadowAlpha=%.3f shadowStyle=%lld alpha=%.3f presBounds=%@", c, G2H_Dbl(c, "shadowAlpha"), G2H_LL(c, "shadowStyle"), cv.alpha, NSStringFromCGSize(pl.bounds.size)];
         NSMutableString *sh = [NSMutableString string];
-        int budget = 600, n = 0; double e = 0;
-        G2H_ScanShadow(cv, 0, &budget, &e, &n, sh);
-        [o appendFormat:@" shadows(%d, extent %.1f)%@", n, e, sh.length ? sh : @" none"];
+        int budget = 600, n = 0;
+        G2H_ScanShadow(cv, 0, &budget, NULL, &n, sh);
+        [o appendFormat:@" shadows(%d)%@", n, sh.length ? sh : @" none"];
         UIView *m = cv.maskView;
         if (m) {
             CALayer *mp = [m.layer presentationLayer] ?: m.layer;
@@ -309,33 +289,16 @@ static void G2H_Layout(id vc, SEL _cmd, id appLayout, unsigned long long roleMas
 
 // ==================================================================================================================================================================================
 void G2H_Setup(void) {
-    // part 1: the mask subclass and the setMaskView: hook of the item container
+    // part 1: the setMaskView: hook of the item container
     Class ic = NSClassFromString(@"SBFluidSwitcherItemContainer");
     SEL ms = @selector(setMaskView:);
     Method mm = ic ? class_getInstanceMethod(ic, ms) : NULL;
-    Method sb = class_getInstanceMethod([UIView class], @selector(setBounds:));
-    Method gb = class_getInstanceMethod([UIView class], @selector(bounds));
-    if (!mm || !sb || !gb) {
-        BP_Log(@"[g2h] SBFluidSwitcherItemContainer setMaskView: / UIView bounds not found, mask shadow room not installed");
+    if (!mm) {
+        BP_Log(@"[g2h] SBFluidSwitcherItemContainer setMaskView: not found, shadow fade not installed");
     } else {
-        gG2HUISetBounds = method_getImplementation(sb);
-        gG2HUIBounds = method_getImplementation(gb);
-        Class sub = NSClassFromString(@"BP162ShadowRoomMaskView");
-        if (!sub) {
-            sub = objc_allocateClassPair([UIView class], "BP162ShadowRoomMaskView", 0);
-            if (sub) {
-                class_addMethod(sub, @selector(setBounds:), (IMP)G2H_MaskSetBounds, method_getTypeEncoding(sb));
-                class_addMethod(sub, @selector(bounds), (IMP)G2H_MaskBounds, method_getTypeEncoding(gb));
-                objc_registerClassPair(sub);
-            }
-        }
-        gG2HMaskCls = sub;
-        if (!sub) BP_Log(@"[g2h] could not create the mask subclass, mask shadow room not installed");
-        else {
-            gG2HOrigSetMask = method_getImplementation(mm);
-            class_replaceMethod(ic, ms, (IMP)G2H_SetMaskView, method_getTypeEncoding(mm));
-            BP_Log(@"[g2h] installed (the crop mask of g2f_closecrop leaves room for the window's shadow: %@)", G2H_FIX_ON() ? @"ON" : @"off");
-        }
+        gG2HOrigSetMask = method_getImplementation(mm);
+        class_replaceMethod(ic, ms, (IMP)G2H_SetMaskView, method_getTypeEncoding(mm));
+        BP_Log(@"[g2h] installed (the window shadow fades in over %.2f s when the crop mask of g2f_closecrop is dropped instead of popping: %@; mask timing log with Backport162.debug)", kG2HFadeDuration, G2H_FIX_ON() ? @"ON" : @"off");
     }
     // part 2: diagnostics
     Class rc = NSClassFromString(@"SBContinuousExposeRootSwitcherModifier");
