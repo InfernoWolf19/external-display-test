@@ -330,8 +330,15 @@ static void PIPS_PostEnsured(id adapter, id ctrl, id pipVC, id sid) {
     SEL hide = NSSelectorFromString(@"hideContainersExcludingContainerForContentViewControllerAndTetheredOnes:animated:");
     if ([pc respondsToSelector:hide]) ((void (*)(id, SEL, id, BOOL))objc_msgSend)(pc, hide, pipVC, YES);
 
-    id entity = PIPS_Entity(G1B_Send0(handle, NSSelectorFromString(@"application")), sid, sceneManager, G1B_Send0(handle, NSSelectorFromString(@"displayIdentity")));
     id scene = G1B_Send0(handle, NSSelectorFromString(@"sceneIfExists"));
+    // 16.2: [handle displayIdentity] is the display of the scene manager that owns the scene, which is the display the scene is shown on.  Here a scene can live in the MAIN display's
+    // scene manager while its FBScene is shown on the extended display (device log f7965a9c 08:55:37: handle identity Main, scene settings identity AirPlay.main): the restore then opened
+    // the window on the iPad.  The display of the scene itself is what 16.2's identity stands for.
+    id handleIdentity = G1B_Send0(handle, NSSelectorFromString(@"displayIdentity"));
+    id sceneIdentity = G1B_Send0(G1B_Send0(scene, NSSelectorFromString(@"settings")), NSSelectorFromString(@"displayIdentity"));
+    id entityIdentity = sceneIdentity ?: handleIdentity;
+    if (sceneIdentity && handleIdentity && ![sceneIdentity isEqual:handleIdentity]) PIPS_LOG(@"pipstop: scene shown on %@ but owned by the scene manager of %@: restoring on the scene's display", sceneIdentity, handleIdentity);
+    id entity = PIPS_Entity(G1B_Send0(handle, NSSelectorFromString(@"application")), sid, sceneManager, entityIdentity);
     if (BP_LogEnabled()) {
         id hid = G1B_Send0(handle, NSSelectorFromString(@"displayIdentity"));
         id eh = G1B_Send0(entity, NSSelectorFromString(@"sceneHandle"));

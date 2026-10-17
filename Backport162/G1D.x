@@ -2163,7 +2163,11 @@ static __thread __unsafe_unretained id tOverlayInsetsSC;
     id entity = tPipRestoreEntity;
     if (entity) {
         tPipRestoreEntity = nil;                                                      // only the request of the restore transition itself
-        id identity = G1B_Send0(G1B_Send0(entity, NSSelectorFromString(@"sceneHandle")), NSSelectorFromString(@"displayIdentity"));
+        id eHandle = G1B_Send0(entity, NSSelectorFromString(@"sceneHandle"));
+        id identity = G1B_Send0(eHandle, NSSelectorFromString(@"displayIdentity"));
+        // a scene owned by the main display's scene manager can be shown on the extended display (handle identity Main, FBScene settings identity AirPlay): the display of the scene wins
+        id sceneIdentity = G1B_Send0(G1B_Send0(G1B_Send0(eHandle, NSSelectorFromString(@"sceneIfExists")), NSSelectorFromString(@"settings")), NSSelectorFromString(@"displayIdentity"));
+        if (sceneIdentity) identity = sceneIdentity;
         id config = G1B_Send0(identity, NSSelectorFromString(@"currentConfiguration"));
         SEL s = NSSelectorFromString(@"createRequestWithOptions:displayConfiguration:");
         if (BP_LogEnabled()) BP_Log(@"g1d: pip restore request: entity %@ identity %@ config %@ -> %s", entity, identity, config, (config && [self respondsToSelector:s]) ? "that display" : "main display (stock)");
