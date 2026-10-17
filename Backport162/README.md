@@ -105,11 +105,11 @@ Needs ExtendedDisplayEnabler for the external display features.
 | g1d_pipstop | PiP expand / stop on the display of the PiP (16.2 `SBPIPPegasusAdapter _postEnsuredInSwitcher_...` per display incl. the cross-display branch, `performStopAnimation...` hides the PiP view when the source scene is on another display); fixes a window on the extended display coming back half on the iPad and half on the extended display (PIPStop.x, specs/VIDEO-EXTDISPLAY-0.7.4.md section 4) | `g1d_pipstop` |
 | addwinnet | safety net: the stock assertion "The appLayouts array MUST contain the app layout we're transitioning to." at the end of a transition (seen after three-dots > Add Another Window) is repaired (model add, else the array is patched) instead of crashing SpringBoard; see specs/AUDIT-ADDWINDOW-0.6.4.md | `addwinnet` |
 
-### Group 4b: reconstruction of external-display extras [G4B.x, Backport162BBD/]
+### Group 4b: reconstruction of external-display extras [G4B.x, BBD.x (the backboardd tweak, now part of this one package)]
 
 | feature | what it ports | switch |
 |---|---|---|
-| clonemirror | per-display clone mirroring mode (needs the Backport162BBD 0.7.0 package in backboardd; userspace reboot after installing) | `clonemirror` |
+| clonemirror | per-display clone mirroring mode (needs the backboardd part of this package; reboot userspace after installing; userspace reboot after installing) | `clonemirror` |
 | autoext | 16.2 hardware-window auto "extended" mode on connect (ported from ExtendedDisplayEnabler, idempotent with it) | `autoext` |
 | mirrorsvc | `SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:` fix (ported from ExtendedDisplayEnabler, idempotent with it) | `mirrorsvc` |
 | edu | external-display education session / pill / observer | `edu` |
