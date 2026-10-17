@@ -410,6 +410,7 @@ void G1C_Setup(void);                  // G1C.x
 void G1D_Setup(void);                  // G1D.x   (coordinator / gesture manager / PiP morph)
 void PIPStop_Setup(void);              // PIPStop.x (PiP stop / expand per display)
 void G2C_Setup(void);                  // G2C.x    (16.2 auto hide of the window resize grabbers)
+void G2D_Setup(void);                  // G2D.x    (home swipe cancels the app's touch stream; deliberate deviation)
 void BP_G3_Setup(void);                // G3.x
 void BP_G3B_Setup(void);               // G3B.x
 void G3C_Setup(void);                  // G3C.x
@@ -436,6 +437,7 @@ void G4B_Setup(void);                  // G4B.x
         G1D_Setup();                   // group 1d: coordinator / gesture manager / PiP morph (after 1b, 2b, 1c: it replaces a few VC methods)
         PIPStop_Setup();               // PiP stop / expand per display (16.2 SBPIPPegasusAdapter), independent of the other groups
         G2C_Setup();                   // 16.2 auto hide of the window resize grabbers (after 2b / 1d: it uses -windowScene of the item container and the VC selectors)
+        G2D_Setup();                   // home swipe cancels the touch stream of the app (SBGrabberTongue cancelsTouchesInView, switch g2d_homecancel)
         BP_G3_Setup();                 // group 3: plumbing
         BP_G3B_Setup();                // group 3b
         G3C_Setup();                   // group 3c: Zoom on a full-screen app
