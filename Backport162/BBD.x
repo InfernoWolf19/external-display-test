@@ -54,6 +54,7 @@
 #import <unistd.h>
 #import <string.h>
 #import <stdio.h>
+#import <stdlib.h>
 #import <stdarg.h>
 #import <fcntl.h>
 #import <pthread.h>
@@ -722,9 +723,11 @@ static BOOL BPD_CrashGuardTripped(void) {
     if (strikes >= 3) { BPD_Log(@"crash guard: %d consecutive short-lived backboardd launches with this build, the backboardd tweak stays out. Remove %s to retry", strikes, path); return YES; }
     f = fopen(path, "w");
     if (f) { fprintf(f, "%s %d\n", id, strikes + 1); fclose(f); }
+    char *pathCopy = strdup(path), *idCopy = strdup(id);                    // blocks cannot capture arrays
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        FILE *g = fopen(path, "w");
-        if (g) { fprintf(g, "%s 0\n", id); fclose(g); }
+        FILE *g = fopen(pathCopy, "w");
+        if (g) { fprintf(g, "%s 0\n", idCopy); fclose(g); }
+        free(pathCopy); free(idCopy);
     });
     return NO;
 }
