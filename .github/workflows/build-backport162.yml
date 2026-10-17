@@ -17,7 +17,7 @@ jobs:
         working-directory: Backport162
         run: |
           # compile every source file on its own so one run lists the compile errors of ALL files (the normal build stops at the first failing file)
-          for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x BPCrash.m; do
+          for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x BPCrash.m; do
             rm -rf .theos
             echo "=== $f"
             make all FINALPACKAGE=1 ARCHS=arm64e Backport162_FILES="$f" 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true

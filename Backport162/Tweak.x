@@ -412,6 +412,7 @@ void PIPStop_Setup(void);              // PIPStop.x (PiP stop / expand per displ
 void G2C_Setup(void);                  // G2C.x    (16.2 auto hide of the window resize grabbers)
 void G2D_Setup(void);                  // G2D.x    (home swipe cancels the app's touch stream; deliberate deviation)
 void G2E_Setup(void);                  // G2E.x    (home swipe close: instant gesture tracking becomes a tracking spring; deliberate deviation)
+void G2F_Setup(void);                  // G2F.x    (zoom to / from an icon pivots about the window's own centre; deliberate deviation)
 void BP_G3_Setup(void);                // G3.x
 void BP_G3B_Setup(void);               // G3B.x
 void G3C_Setup(void);                  // G3C.x
@@ -441,6 +442,7 @@ void EDE_Setup(void);                  // EDE.x    (ExtendedDisplayEnabler's pro
         G2C_Setup();                   // 16.2 auto hide of the window resize grabbers (after 2b / 1d: it uses -windowScene of the item container and the VC selectors)
         G2D_Setup();                   // home swipe cancels the touch stream of the app (SBGrabberTongue cancelsTouchesInView, switch g2d_homecancel)
         G2E_Setup();                   // smooth start of the home swipe close (SBHomeGestureSwitcherModifier tracking spring, switch g2e_closesmooth)
+        G2F_Setup();                   // symmetric shrink of the zoom to / from an icon (pin anchor about the window centre, switch g2f_closepivot; after G1B / G1C which build and trace the anchor)
         BP_G3_Setup();                 // group 3: plumbing
         BP_G3B_Setup();                // group 3b
         G3C_Setup();                   // group 3c: Zoom on a full-screen app
