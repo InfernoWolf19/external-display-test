@@ -3903,7 +3903,7 @@ static BOOL G1C_FS_ShouldEnableGrabbers(id self, SEL _cmd, long long role, id la
     BOOL embedded = G1B_SendB0(self, @selector(isDisplayEmbedded));
     BOOL onStage = G1C_FS_OnStage(self, layout);
     BOOL resizable = G1B_SendB1(self, @selector(appLayoutContainsOnlyResizableApps:), layout);
-    BOOL roleOK = (role == 1 || role == 2);                                                // SBLayoutRoleIsValidForSplitView (0x1c7894a30): primary / side
+    BOOL roleOK = G1C_Wdd_RoleValid(role);                                                 // _SBLayoutRoleIsValidForSplitView 0x1c7894a30: roles 1, 2 and 5..9 (every window of a stage of up to 4 windows), NOT only primary / side
     BOOL occluded = roleOK ? G1C_FS_Occluded(self, 0, role, layout) : NO;
     BOOL r = !strip && embedded && onStage && resizable && roleOK && !occluded;
     if (BP_LogEnabled()) {                                                                 // diagnostics: logged when the answer for a layout changes (resize corner dead after tapping a window)
