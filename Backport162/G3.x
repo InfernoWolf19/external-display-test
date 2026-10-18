@@ -616,7 +616,10 @@ static NSString *BP_G3_MenuTitles(id menu, int depth) {
 %group G3_ZoomTitle
 %hook SBTopAffordanceViewController
 - (void)updateContextMenuWithLayoutRole:(long long)r spaceConfiguration:(long long)s floatingConfiguration:(long long)f interfaceOrientation:(long long)o isZoomed:(BOOL)z {
-    if (!BP_G3_On("g3c")) { %orig; return; }
+    if (!BP_G3_On("g3c")) {
+        %orig;
+        return;
+    }
     BOOL early = BP_G3_On("g3zoomtitle");                                   // 16.2 order: title first, menu built from it afterwards
     NSString *t = BP_G3_ZoomTitle(self, z);
     id action = BP_G3_Ivar(self, "_maximizationAction");
