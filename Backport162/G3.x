@@ -530,6 +530,120 @@ static id BP_G3_KVC(id obj, NSString *key) {      // ivar by name, never throws
 // TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_ZOOM / ..._UNZOOM by isZoomed and the image by isZoomed on EVERY update (setTitle: on the existing action);
 // 16.0 (0x1c6459bd0) sets the title once (key TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION) and only refreshes the image.  The 16.2 keys are not in the 16.0
 // SpringBoard.loctable; when absent the 16.0 key is used for Zoom and "Unzoom" (the key's wording) for the zoomed state.
+//
+// 0.7.8, stale title of a fresh window (specs/ZOOM-TITLE-0.7.8.md).  isZoomed is NOT read when the menu opens.  It is the cached BOOL ivar _isZoomed (+0x420) of
+// SBMedusaDecoratedDeviceApplicationSceneViewController, written in exactly one place, -setLayoutRole:spaceConfiguration:floatingConfiguration:sizingPolicy:
+// (16.2 0x1c77cbcec == 16.0 0x1c632ac5c: _isZoomed = SBDisplayItemSizingPolicyAllowingLargestSize(supported policies of the app for the window) == the
+// sizingPolicy ARGUMENT) which then calls updateContextMenu...isZoomed: with it (0x1c77cbe54).  The menu is only touched again by the 3 other callers
+// (rotation 0x1c77cf370, style change 0x1c77cfe90, top affordance creation 0x1c77d0b24), all with the cached value; -topAffordanceViewControllerWillPresentMenu:
+// (16.2 0x1c77ceea8) does not refresh it.  The argument comes from the coordinator's overlay configuration (SBFullScreenSwitcherLiveContentOverlayCoordinator
+// -_configureLiveContentOverlayView:forTransitionContext:layoutRole: 16.2 0x1c74cd7a8 == 16.0 0x1c6051300: [toLayoutState layoutAttributesForElement:
+// [elementWithRole:]].sizingPolicy) at the BEGIN of each transition, i.e. from the layout state's element attributes, not from the committed app layout attributes
+// the window is displayed with.  Stock 16.0 / 16.2 are identical here; when the argument is not the displayed policy the cached value stays wrong until the next
+// setLayoutRole.  Deliberate deviation g3zoomtitle (default on): at the END of the transition (coordinator and VC) and when the menu is about to be
+// presented the committed policy of the window (current layout state of its switcher, app layout containing the display item: the same data
+// G3C_CommittedPolicy uses for the direction of the press) decides, _isZoomed is corrected and the menu updated with 16.2's own updateContextMenu...
+@interface NSObject (BPG3ZoomState)
+- (id)appLayout;
+- (id)floatingAppLayout;
+- (id)layoutAttributesForItem:(id)item;
+- (long long)sizingPolicy;
+- (id)displayItemRepresentation;
+- (unsigned long long)_supportedSizingPoliciesForContentOrientation:(long long)c containerOrientation:(long long)o;
+- (id)_medusaDecoratedDeviceApplicationSceneViewController;
+- (void)setImage:(UIImage *)i;
+@end
+@interface SBFullScreenSwitcherLiveContentOverlayCoordinator : NSObject @end
+
+// SBDisplayItemSizingPolicyAllowingLargestSize(mask)  16.2 0x1c795431c == 16.0 0x1c649d490 (same as G3C_LargestPolicy)
+static long long BP_G3_LargestPolicy(unsigned long long mask) { return (mask & 4) ? 2 : (long long)((mask >> 1) & 1); }
+
+typedef struct { long long policy, largest, content, container; unsigned long long mask; } BPG3ZoomState;
+// Committed (displayed) sizing policy of the window and the largest policy it supports.  NO when the layout state has no attributes for it.
+static BOOL BP_G3_ZoomState(id handle, BPG3ZoomState *st) {
+    memset(st, 0, sizeof *st); st->policy = -1; st->largest = -1;
+    id ws = [handle respondsToSelector:@selector(_windowScene)] ? [handle _windowScene] : nil;
+    id sc = [ws respondsToSelector:@selector(switcherController)] ? [ws switcherController] : nil;
+    id ls = [sc respondsToSelector:@selector(layoutState)] ? ((id (*)(id, SEL))objc_msgSend)(sc, @selector(layoutState)) : nil;
+    id item = [handle respondsToSelector:@selector(displayItemRepresentation)] ? [handle displayItemRepresentation] : nil;
+    SEL supS = NSSelectorFromString(@"_supportedSizingPoliciesForContentOrientation:containerOrientation:");
+    if (!ls || !item || ![handle respondsToSelector:supS]) return NO;
+    id attrs = nil;
+    for (NSString *n in @[ @"appLayout", @"floatingAppLayout" ]) {
+        SEL s = NSSelectorFromString(n);
+        id layout = [ls respondsToSelector:s] ? ((id (*)(id, SEL))objc_msgSend)(ls, s) : nil;
+        attrs = [layout respondsToSelector:@selector(layoutAttributesForItem:)] ? [layout layoutAttributesForItem:item] : nil;
+        if (attrs) break;
+    }
+    if (!attrs) return NO;
+    st->policy = [attrs sizingPolicy];
+    st->content = [handle currentInterfaceOrientation];
+    st->container = [sc respondsToSelector:@selector(interfaceOrientation)] ? ((long long (*)(id, SEL))objc_msgSend)(sc, @selector(interfaceOrientation)) : 0;
+    st->mask = ((unsigned long long (*)(id, SEL, long long, long long))objc_msgSend)(handle, supS, st->content, st->container);
+    st->largest = BP_G3_LargestPolicy(st->mask);
+    return YES;
+}
+
+// Title of the maximization action for isZoomed (16.2 keys; 16.0 key / the key's wording when the 16.2 keys are not in the 16.0 loctable).
+static NSString *BP_G3_ZoomTitle(id tvc, BOOL z) {
+    NSString *key162 = z ? @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_UNZOOM" : @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_ZOOM";
+    NSString *t = [tvc respondsToSelector:@selector(_localizedMenuTitleForKey:)] ? [tvc _localizedMenuTitleForKey:key162] : nil;
+    if (![t isKindOfClass:[NSString class]] || !t.length || [t isEqualToString:key162]) {
+        t = z ? @"Unzoom" : [tvc _localizedMenuTitleForKey:@"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION"];
+    }
+    return ([t isKindOfClass:[NSString class]] && t.length) ? t : nil;
+}
+
+static BOOL BP_G3_CachedZoomed(id vc, BOOL *out) {                  // the VC's _isZoomed ivar by name
+    Ivar iv = vc ? class_getInstanceVariable([vc class], "_isZoomed") : NULL;
+    const char *enc = iv ? ivar_getTypeEncoding(iv) : NULL;
+    if (!enc || (enc[0] != 'B' && enc[0] != 'c')) return NO;
+    *out = *((BOOL *)((char *)(__bridge void *)vc + ivar_getOffset(iv)));
+    return YES;
+}
+
+// Re-derive isZoomed of a Medusa decorated VC from the committed policy of its window (see above).  full: also run 16.2's updateContextMenu...
+// (transition end); otherwise only title and image of the existing action are set (menu about to be presented, the menu itself is not rebuilt).
+static void BP_G3_RefreshZoomTitle(id vc, const char *why, BOOL full) {
+    if (!vc || !BP_G3_On("g3zoomtitle") || !BP_G3_On("g3c")) return;
+    id tvc = BP_G3_KVC(vc, @"_topAffordanceViewController");
+    id h = BP_G3_KVC(vc, @"_deviceApplicationSceneHandle");
+    id action = tvc ? BP_G3_Ivar(tvc, "_maximizationAction") : nil;
+    if (!tvc || !h || !action) return;
+    BPG3ZoomState st = {0};
+    if (!BP_G3_ZoomState(h, &st)) {
+        BP_Log(@"[g3zoomtitle] %s: no committed attributes for the window, nothing refreshed", why);
+        return;
+    }
+    BOOL zc = st.policy == st.largest;
+    BOOL cached = NO;
+    BOOL haveCached = BP_G3_CachedZoomed(vc, &cached);
+    NSString *shown = [action respondsToSelector:@selector(title)] ? [action title] : nil;
+    NSString *want = BP_G3_ZoomTitle(tvc, zc);
+    BOOL titleOK = !want || [shown isEqualToString:want];
+    BP_Log(@"[g3zoomtitle] %s: committed policy %lld largest %lld (mask %llu content %lld container %lld) -> zoomed %d, cached _isZoomed %d, shown '%@' wanted '%@'%s",
+           why, st.policy, st.largest, st.mask, st.content, st.container, (int)zc, haveCached ? (int)cached : -1, shown, want, (haveCached && cached == zc && titleOK) ? " (up to date)" : " (REFRESH)");
+    if (haveCached && cached == zc && titleOK) return;
+    if (haveCached) {
+        Ivar iv = class_getInstanceVariable([vc class], "_isZoomed");
+        *((BOOL *)((char *)(__bridge void *)vc + ivar_getOffset(iv))) = zc;
+    }
+    long long ori = [h currentInterfaceOrientation];
+    if (full && [tvc respondsToSelector:@selector(updateContextMenuWithLayoutRole:spaceConfiguration:floatingConfiguration:interfaceOrientation:isZoomed:)]) {
+        [tvc updateContextMenuWithLayoutRole:[BP_G3_KVC(vc, @"_layoutRole") longLongValue]
+                          spaceConfiguration:[BP_G3_KVC(vc, @"_spaceConfiguration") longLongValue]
+                       floatingConfiguration:[BP_G3_KVC(vc, @"_floatingConfiguration") longLongValue]
+                        interfaceOrientation:ori
+                                    isZoomed:zc];
+        return;
+    }
+    if (want && [action respondsToSelector:@selector(setTitle:)]) [action setTitle:want];
+    Class tvcC = NSClassFromString(@"SBTopAffordanceViewController");              // +imageForAction:interfaceOrientation: (action 10 Zoom / 11 Unzoom, 16.2 0x1c790cb40)
+    SEL imgS = NSSelectorFromString(@"imageForAction:interfaceOrientation:");
+    id img = [tvcC respondsToSelector:imgS] ? ((id (*)(Class, SEL, long long, long long))objc_msgSend)(tvcC, imgS, zc ? 11 : 10, ori) : nil;
+    if (img && [action respondsToSelector:@selector(setImage:)]) [action setImage:img];
+}
+
 %group G3_ZoomTitle
 %hook SBTopAffordanceViewController
 - (void)updateContextMenuWithLayoutRole:(long long)r spaceConfiguration:(long long)s floatingConfiguration:(long long)f interfaceOrientation:(long long)o isZoomed:(BOOL)z {
@@ -537,12 +651,55 @@ static id BP_G3_KVC(id obj, NSString *key) {      // ivar by name, never throws
     if (!BP_G3_On("g3c")) return;
     id action = BP_G3_Ivar(self, "_maximizationAction");
     if (!action || ![action respondsToSelector:@selector(setTitle:)]) return;
-    NSString *key162 = z ? @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_UNZOOM" : @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_ZOOM";
-    NSString *t = [self respondsToSelector:@selector(_localizedMenuTitleForKey:)] ? [self _localizedMenuTitleForKey:key162] : nil;
-    if (![t isKindOfClass:[NSString class]] || !t.length || [t isEqualToString:key162]) {
-        t = z ? @"Unzoom" : [self _localizedMenuTitleForKey:@"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION"];
+    NSString *t = BP_G3_ZoomTitle(self, z);
+    if (t) [action setTitle:t];
+    if (BP_LogEnabled()) {
+        BPG3ZoomState st = {0};
+        id h = [self respondsToSelector:@selector(sceneHandle)] ? [self sceneHandle] : nil;
+        BOOL known = h && BP_G3_ZoomState(h, &st);
+        BP_Log(@"[g3zoomtitle] updateContextMenu: isZoomed passed %d, committed policy %lld largest %lld (mask %llu) -> title set '%@' (role %lld space %lld floating %lld orientation %lld)",
+               (int)z, known ? st.policy : -1LL, known ? st.largest : -1LL, known ? st.mask : 0ULL, t, r, s, f, o);
     }
-    if ([t isKindOfClass:[NSString class]] && t.length) [action setTitle:t];
+}
+%end
+
+%hook SBMedusaDecoratedDeviceApplicationSceneViewController
+// The only writer of _isZoomed (16.2 0x1c77cbcec): log the argument it derives it from.
+- (void)setLayoutRole:(long long)r spaceConfiguration:(long long)s floatingConfiguration:(long long)f sizingPolicy:(long long)p {
+    %orig;
+    if (!BP_LogEnabled()) return;
+    BOOL cached = NO;
+    BOOL have = BP_G3_CachedZoomed(self, &cached);
+    id h = BP_G3_KVC(self, @"_deviceApplicationSceneHandle");
+    BPG3ZoomState st = {0};
+    BOOL known = h && BP_G3_ZoomState(h, &st);
+    BP_Log(@"[g3zoomtitle] setLayoutRole: sizingPolicy argument %lld -> _isZoomed %d (committed policy %lld, largest %lld, mask %llu, role %lld space %lld floating %lld)",
+           p, have ? (int)cached : -1, known ? st.policy : -1LL, known ? st.largest : -1LL, known ? st.mask : 0ULL, r, s, f);
+}
+// The menu is about to be presented (16.2 0x1c77ceea8 does not refresh the title).
+- (void)topAffordanceViewControllerWillPresentMenu:(id)menu {
+    BP_G3_RefreshZoomTitle(self, "menu presented", NO);
+    %orig;
+}
+// Transition finished: the committed layout state is the displayed one.
+- (void)layoutStateTransitionCoordinator:(id)coordinator transitionDidEndWithTransitionContext:(id)ctx {
+    %orig;
+    BP_G3_RefreshZoomTitle(self, "transition end (VC)", YES);
+}
+%end
+
+%hook SBFullScreenSwitcherLiveContentOverlayCoordinator
+// Same from the overlay coordinator (16.2 0x1c74cb284), which owns the overlays that host the decorated VCs.
+- (void)layoutStateTransitionCoordinator:(id)coordinator transitionDidEndWithTransitionContext:(id)ctx {
+    %orig;
+    if (!BP_G3_On("g3zoomtitle")) return;
+    id dict = BP_G3_Ivar(self, "_appLayoutToLiveContentOverlayContext");
+    if (![dict isKindOfClass:[NSDictionary class]]) return;
+    for (id key in [(NSDictionary *)dict allKeys]) {
+        id overlay = BP_G3_KVC([(NSDictionary *)dict objectForKey:key], @"overlay");
+        id vc = [overlay respondsToSelector:@selector(_medusaDecoratedDeviceApplicationSceneViewController)] ? [overlay _medusaDecoratedDeviceApplicationSceneViewController] : nil;
+        BP_G3_RefreshZoomTitle(vc, "transition end (overlay)", YES);
+    }
 }
 %end
 %end // G3_ZoomTitle
