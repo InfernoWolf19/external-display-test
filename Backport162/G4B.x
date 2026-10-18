@@ -1516,6 +1516,37 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
 // ================================================================================================================
 // 6a. WINDOWS MIGRATE TO THE iPAD ON UNPLUG                                                            [DONE]
 // ================================================================================================================
+// 16.2 SBMainSwitcherControllerCoordinator -_switcherControllerForDisplayItem: (0x1c76e3130): the switcher controller whose window scene's scene manager holds a scene handle for the
+// item's scene identity (identity = [FBSSceneIdentity identityForIdentifier:[item uniqueIdentifier]]).  The 16.0 coordinator method _deviceApplicationSceneHandleForDisplayItem:
+// (0x1c623fa90) asks the ACTIVE display's scene manager instead, which at unplug time already answers the embedded one: it found no handle for an app of the extended display
+// ("migrate: moved 0 scenes" in 6 of 8 logged unplugs, specs/DISCONNECT-MIGRATE-0.7.4.md 5.1).
+static id G4B_MigrateSceneIdentity(id item) {
+    Class fi = NSClassFromString(@"FBSSceneIdentity");
+    SEL ui = NSSelectorFromString(@"uniqueIdentifier"), idf = NSSelectorFromString(@"identityForIdentifier:");
+    id uid = [item respondsToSelector:ui] ? G4B_Obj(item, ui) : nil;
+    return (uid && [(id)fi respondsToSelector:idf]) ? G4B_Obj1((id)fi, idf, uid) : nil;
+}
+static id G4B_MigrateOwnerSwitcher(id coord, id ident) {
+    NSMapTable *m = G4B_Ivar(coord, "_switcherControllersByWindowScene");
+    SEL ex = NSSelectorFromString(@"existingSceneHandleForSceneIdentity:");
+    if (!ident || ![m isKindOfClass:[NSMapTable class]]) return nil;
+    for (id ws in [[m keyEnumerator] allObjects]) {
+        id sc = [m objectForKey:ws];
+        id wscene = [sc respondsToSelector:@selector(windowScene)] ? G4B_Obj(sc, @selector(windowScene)) : nil;
+        id mgr = [wscene respondsToSelector:@selector(sceneManager)] ? G4B_Obj(wscene, @selector(sceneManager)) : nil;
+        if ([mgr respondsToSelector:ex] && G4B_Obj1(mgr, ex, ident)) return sc;
+    }
+    return nil;
+}
+// 16.2 SBSwitcherController -_deviceApplicationSceneHandleForDisplayItem: (0x1c76065ec): the owner's scene manager's handle for the identity, only a device application handle.
+static id G4B_MigrateSceneHandle(id owner, id ident) {
+    id wscene = [owner respondsToSelector:@selector(windowScene)] ? G4B_Obj(owner, @selector(windowScene)) : nil;
+    id mgr = [wscene respondsToSelector:@selector(sceneManager)] ? G4B_Obj(wscene, @selector(sceneManager)) : nil;
+    SEL ex = NSSelectorFromString(@"existingSceneHandleForSceneIdentity:"), isDev = NSSelectorFromString(@"isDeviceApplicationSceneHandle");
+    id h = (ident && [mgr respondsToSelector:ex]) ? G4B_Obj1(mgr, ex, ident) : nil;
+    return (h && [h respondsToSelector:isDev] && G4B_Bool(h, isDev)) ? h : nil;
+}
+
 %group G4B_Migrate
 
 %hook SBMainSwitcherControllerCoordinator
@@ -1535,13 +1566,16 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
             if (switcher && embSM && mdc && [embSM isKindOfClass:mdc] && [embSM respondsToSelector:take] && [self respondsToSelector:@selector(appLayoutsForSwitcherController:)]) {
                 BOOL moved = NO;
                 NSUInteger n = 0;
-                id srcSM = [scene respondsToSelector:@selector(sceneManager)] ? G4B_Obj(scene, @selector(sceneManager)) : nil;
+                id swScene = [switcher respondsToSelector:@selector(windowScene)] ? G4B_Obj(switcher, @selector(windowScene)) : nil;
+                id srcSM = [swScene respondsToSelector:@selector(sceneManager)] ? G4B_Obj(swScene, @selector(sceneManager)) : nil;      // 16.2: [[extSC windowScene] sceneManager] for every item
                 for (id layout in (id<NSFastEnumeration>)G4B_Obj1(self, @selector(appLayoutsForSwitcherController:), switcher)) {
                     id items = [layout respondsToSelector:@selector(allItems)] ? G4B_Obj(layout, @selector(allItems)) : nil;
                     for (id item in (id<NSFastEnumeration>)items) {
-                        SEL hs = @selector(_deviceApplicationSceneHandleForDisplayItem:);
-                        id h = [self respondsToSelector:hs] ? G4B_Obj1(self, hs, item) : nil;
+                        id ident = G4B_MigrateSceneIdentity(item);
+                        id owner = G4B_MigrateOwnerSwitcher(self, ident);
+                        id h = owner ? G4B_MigrateSceneHandle(owner, ident) : nil;
                         id sc = [h respondsToSelector:@selector(sceneIfExists)] ? G4B_Obj(h, @selector(sceneIfExists)) : nil;
+                        BP_Log(@"migrate: item %@ identity %@ owner switcher %p handle %p scene %p (external manager %p, embedded manager %p)", item, ident, (__bridge void *)owner, (__bridge void *)h, (__bridge void *)sc, (__bridge void *)srcSM, (__bridge void *)embSM);
                         if (!sc || !srcSM) continue;
                         ((void (*)(id, SEL, id, id))objc_msgSend)(embSM, take, sc, srcSM);
                         moved = YES; n++;
@@ -1554,7 +1588,7 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
                     SEL rq = NSSelectorFromString(@"requestTransitionWithOptions:builder:validator:");
                     if ([ws2 respondsToSelector:rq]) {
                         __weak id wEmb = embSM;
-                        BOOL (^builder)(id) = ^BOOL(id request) {          // 16.2 builder block 0x1c76c8b2c returns YES
+                        BOOL (^validator)(id) = ^BOOL(id request) {        // 16.2 validator block 0x1c76c8b2c (runs first inside the queued transition event) returns YES
                             SEL mac = NSSelectorFromString(@"modifyApplicationContext:");
                             if (![request respondsToSelector:mac]) return YES;
                             void (^mod)(id) = ^(id ctx) {
@@ -1571,7 +1605,10 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
                             ((void (*)(id, SEL, id))objc_msgSend)(request, mac, mod);
                             return YES;
                         };
-                        ((BOOL (*)(id, SEL, unsigned long long, id, id))objc_msgSend)(ws2, rq, 0, builder, nil);
+                        void (^builder)(id) = ^(id request) {              // 16.2 builder block 0x1c76c8b20: [req setSource:0x11] (ExternalDisplay, exists in 16.0's table too)
+                            if ([request respondsToSelector:NSSelectorFromString(@"setSource:")]) ((void (*)(id, SEL, long long))objc_msgSend)(request, NSSelectorFromString(@"setSource:"), 0x11);
+                        };
+                        ((BOOL (*)(id, SEL, unsigned long long, id, id))objc_msgSend)(ws2, rq, 0, builder, validator);
                     }
                 }
             }
