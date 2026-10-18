@@ -36,6 +36,22 @@
 // (identical code in 16.0 0x1c649d490 and 16.2 0x1c795431c).  Unspecified = {size {0,0}, referenceBounds CGRectNull, type 0} (16.2 0x1c75cedc4).
 // No arming window: the request is built synchronously from the live handle, so it works for a never-windowed item as well.
 // Switch: "g3c" (Backport162.off.g3c).  Last-line guards (selector missing because group 2b is off, nil handle) log under BP_LogEnabled() and fall to %orig.
+//
+// MULTI-WINDOW STAGE (0.7.8, specs/ZOOM-MULTIWINDOW-0.7.8.md).  The request above is right, and the layout state that the state manager builds from it carries it
+// (-[SBMainDisplayLayoutStateManager _layoutStateForApplicationTransitionContext:] 16.0 0x1c5e23430 loop 0x1c5e2551c, 16.2 0x1c7298454: requested attributes of the
+// context win over the previous state's element dictionary, which wins over the recents).  What is DISPLAYED is not read from that dictionary but from the SBAppLayout
+// objects, and those are interned: -[SBAppLayout initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:...] (16.0 0x1c628a6c0, 16.2 0x1c7723388,
+// same body) hashes everything except the attributes, takes `member:` from a global NSHashTable with value equality (pointer functions 0x1c628acd8, equality block
+// 0x1c628af34) and OVERWRITES the attribute dictionary (+0x50) of the cached instance with the new one (16.0 0x1c628ab00..0x1c628ab40, 16.2 0x1c77237c8..0x1c7723808).
+// Every equal layout therefore shares one attribute map, last writer wins.  With one window on the stage the layout
+// the switcher shows and the layout of the new state are the same instance, so the request is the last writer.  With several windows the new layout ([A]) is a different
+// instance than the shown stage ([A&B]), whose per-window attributes are still the OLD ones; the switcher re-derives the leaf layouts of the stage
+// (-[SBAppLayout leafAppLayouts] 16.0 0x1c628cc5c, called by -[SBFluidSwitcherViewController _rebuildCachedAdjustedAppLayouts] 0x1c5fddca8 and many more, then the
+// auto layout write-back) AFTER the new state's layout was created, and that overwrites the shared [A] with the old attributes (device log: committed layout after the
+// first transition = old size/policy, centre 0.5, user size Unspecified = the old leaf after the single-window auto layout, last interaction time 92 = the old one).  The
+// second request works because from and to are then the same instance.  Fix (switch "g3c_stagesync", deliberate addition, 16.2 has no equivalent): before the request
+// the requested attributes are also written into the shown stage layout (-appLayoutByModifyingLayoutAttributes:forItem: 16.0 0x1c628d78c goes through the same init), so
+// every later leaf derivation yields the request.  Only for stages with more than one window; one window is untouched.
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -71,6 +87,8 @@
 - (id)layoutAttributesForItem:(id)item;
 - (void)setRequestedLayoutAttributes:(id)attrs forEntity:(id)entity;
 - (void)setFencesAnimations:(BOOL)fences;
+- (id)appLayout;
+- (id)elementIdentifiersToLayoutAttributes;
 - (void)setRequestedPeekConfiguration:(long long)peek;
 - (id)attributesByModifyingSizingPolicy:(long long)policy;
 - (id)initWithApplicationSceneHandle:(id)handle;
@@ -122,6 +140,38 @@ static long long G3C_CommittedPolicy(id windowScene, id handle) {
 }
 
 static char kG3CPreZoomSize;                                            // NSData(BPG3CAttrSize) of the window before it was zoomed, on the scene handle
+static char kG3CZoomUID;                                                // on the transition context of a zoom request: unique identifier of the zoomed item (log only)
+
+// Multi-window stage: write the request into the SHOWN stage layout as well (header comment, "MULTI-WINDOW STAGE").  The shown stage layout is the app layout of the
+// switcher controller's current layout state; SBAppLayout is interned, so this is the instance the switcher and the model hold.  -appLayoutByModifyingLayoutAttributes:
+// forItem: (16.0 0x1c628d78c) returns self when the attributes are equal, else builds the modified layout through the interning init, which stores the new attribute map
+// into the cached instance.  undo keeps what is needed to put the old attributes back when the transition request is refused.
+static BOOL G3C_SyncStage(id windowScene, id handle, id attrs, NSMutableDictionary *undo) {
+    if (!attrs || !BP_OnName("g3c_stagesync")) return NO;
+    SEL modS = NSSelectorFromString(@"appLayoutByModifyingLayoutAttributes:forItem:"), allS = NSSelectorFromString(@"allItems");
+    id sc = [windowScene respondsToSelector:@selector(switcherController)] ? [windowScene switcherController] : nil;
+    id ls = [sc respondsToSelector:@selector(layoutState)] ? [sc layoutState] : nil;
+    id stage = [ls respondsToSelector:@selector(appLayout)] ? [ls appLayout] : nil;
+    id item = [handle respondsToSelector:@selector(displayItemRepresentation)] ? [handle displayItemRepresentation] : nil;
+    id items = [stage respondsToSelector:allS] ? ((id (*)(id, SEL))objc_msgSend)(stage, allS) : nil;
+    if (!stage || !item || ![items respondsToSelector:@selector(count)] || [(NSArray *)items count] < 2) return NO;                       // one window: same instance as the new layout
+    if (![stage respondsToSelector:modS] || ![stage respondsToSelector:@selector(layoutAttributesForItem:)]) return NO;
+    id old = [stage layoutAttributesForItem:item];
+    if (!old) return NO;                                                                                                              // the window is not on this stage
+    id synced = ((id (*)(id, SEL, id, id))objc_msgSend)(stage, modS, attrs, item);
+    undo[@"stage"] = stage;
+    undo[@"item"] = item;
+    undo[@"old"] = old;
+    BP_Log(@"[g3c] zoom: stage of %lu windows synced, policy %lld -> %lld (same shared layout %d)", (unsigned long)[(NSArray *)items count], (long long)[old sizingPolicy], (long long)[attrs sizingPolicy], synced == stage);
+    return YES;
+}
+static void G3C_UnsyncStage(NSMutableDictionary *undo) {
+    id stage = undo[@"stage"], item = undo[@"item"], old = undo[@"old"];
+    SEL modS = NSSelectorFromString(@"appLayoutByModifyingLayoutAttributes:forItem:");
+    if (!stage || !item || !old || ![stage respondsToSelector:modS]) return;
+    (void)((id (*)(id, SEL, id, id))objc_msgSend)(stage, modS, old, item);
+    BP_Log(@"[g3c] zoom: request refused, stage attributes restored");
+}
 
 // Zoom / Unzoom request (body of 16.2 block 0x1c77cd2e8 plus the un-zoom direction, see below).
 //
@@ -135,7 +185,7 @@ static char kG3CPreZoomSize;                                            // NSDat
 //                                          Unspecified (the calculator then resolves the 16.2 default window size), user size Unspecified
 //   * otherwise                        ->  remember the current attributed size, then exactly the 16.2 request (Largest, Unspecified, Unspecified)
 // Last-line guards (missing selector because group 2b is off) log under BP_LogEnabled() and use the 16.0 data model.
-static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
+static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene, NSMutableDictionary *undo) {
     Class entC = NSClassFromString(@"SBDeviceApplicationSceneEntity");
     SEL initS = @selector(initWithApplicationSceneHandle:);
     SEL supS = NSSelectorFromString(@"_supportedSizingPoliciesForContentOrientation:containerOrientation:");
@@ -188,6 +238,9 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
     BP_Log(@"[g3c] %s: policy mask %llu, committed %lld requested-base %lld -> %lld, size {%g, %g}, content %lld container %lld", zoomed ? "unzoom" : "zoom", mask, committed, (long long)[cur sizingPolicy], policy, size.normalizedSize.width, size.normalizedSize.height, contentOri, containerOri);
     [ctx setRequestedLayoutAttributes:a forEntity:entity];
     [ctx setFencesAnimations:YES];
+    SEL uidS = NSSelectorFromString(@"uniqueIdentifier");
+    if ([entity respondsToSelector:uidS]) objc_setAssociatedObject(ctx, &kG3CZoomUID, ((id (*)(id, SEL))objc_msgSend)(entity, uidS), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    (void)G3C_SyncStage(windowScene, handle, a, undo);
     return YES;
 }
 
@@ -197,14 +250,16 @@ static BOOL G3C_ZoomRequest(id ctx, id handle, id windowScene) {
 static uint64_t gG3CPressGen;
 static void G3C_SendZoom(id workspace, id cfg, long long source, id handle, id windowScene, int attempt) {
     uint64_t gen = ++gG3CPressGen;
-    long long before = G3C_CommittedPolicy(windowScene, handle);
+    long long before = G3C_CommittedPolicy(windowScene, handle);           // read BEFORE the stage sync of the request
+    NSMutableDictionary *undo = [NSMutableDictionary dictionary];
     id builder = ^(id req) {                                                // 16.2 block 0x1c77cd238
         [req setSource:source];
         [req modifyApplicationContext:^(id ctx) {                           // 16.2 block 0x1c77cd2e8
-            (void)G3C_ZoomRequest(ctx, handle, windowScene);
+            (void)G3C_ZoomRequest(ctx, handle, windowScene, undo);
         }];
     };
-    [workspace requestTransitionWithOptions:0 displayConfiguration:cfg builder:builder validator:nil];
+    BOOL accepted = [workspace requestTransitionWithOptions:0 displayConfiguration:cfg builder:builder validator:nil];
+    if (!accepted) G3C_UnsyncStage(undo);
     if (attempt >= 1) return;
     __weak id wh = handle, wws = windowScene, wwk = workspace;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -214,6 +269,8 @@ static void G3C_SendZoom(id workspace, id cfg, long long source, id handle, id w
         if (before >= 0 && after == before) {
             BP_Log(@"[g3c] zoom request had no effect (committed policy still %lld), repeating once", after);
             G3C_SendZoom(wk, cfg, source, h, ws, attempt + 1);
+        } else if (BP_LogEnabled()) {
+            BP_Log(@"[g3c] zoom request verified: committed policy %lld -> %lld, no repeat needed (%s)", before, after, attempt ? "after the repeat" : "first request");
         }
     });
 }
@@ -374,6 +431,16 @@ static id G3C_StateWith(id r, long long peek, long long mode) {
     return n;
 }
 
+// Log only (proves the header comment on the next device log): what the state built for a zoom request holds in its element dictionary.  -appLayout is NOT touched
+// here, the stock code creates it lazily and the order of the interned layout writes must stay as it is.
+static void G3C_LogZoomState(id state, id ctx) {
+    NSString *uid = objc_getAssociatedObject(ctx, &kG3CZoomUID);
+    if (!uid) return;
+    id d = [state respondsToSelector:@selector(elementIdentifiersToLayoutAttributes)] ? [state elementIdentifiersToLayoutAttributes] : nil;
+    id a = [d isKindOfClass:[NSDictionary class]] ? [(NSDictionary *)d objectForKey:uid] : nil;
+    BP_Log(@"[g3c] zoom state built: element %@ holds sizing policy %lld (the request asked for the policy of the 'zoom:'/'unzoom:' line above)", uid, a ? (long long)[a sizingPolicy] : -1LL);
+}
+
 %group G3C_Peek
 %hook SBMainDisplayLayoutStateManager
 - (id)_layoutStateForApplicationTransitionContext:(id)ctx {
@@ -386,6 +453,7 @@ static id G3C_StateWith(id r, long long peek, long long mode) {
     } @finally {
         if (merged) [ctx setRequestedPeekConfiguration:savedReq];
     }
+    if (r && ctx && BP_LogEnabled()) G3C_LogZoomState(r, ctx);
     if (merged && r && ([r peekConfiguration] != 1 || [r unlockedEnvironmentMode] != 3)) {                                       // 16.2 0x1c7296f40: mode 3, peek none
         if (BP_LogEnabled()) BP_Log(@"[g3c] endpeek: stock result had mode %lld peek %lld -> 16.2 mode 3 peek 1", [r unlockedEnvironmentMode], [r peekConfiguration]);
         r = G3C_StateWith(r, 1, 3);
