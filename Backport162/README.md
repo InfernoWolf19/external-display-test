@@ -131,6 +131,7 @@ Since 0.7.5 the former ExtendedDisplayEnabler tweak is part of this package (the
 | deferact | 100 ms deferred activation of external-display assertions | `deferact` |
 | lockedptr2 | per-window-scene SBLockedPointerManager, `_UIPointerUnlockAction` (replaces the removed 0.5.0 `lockedptr`) | `lockedptr2` |
 | migrate | windows move to the iPad on unplug | `migrate` |
+| migrate_stage | DELIBERATE deviation from 16.2: the windows of the extended display's current stage are put on the iPad's stage on unplug (home screen -> stage, or merged behind the windows already there, up to the stage limit); off = 16.2 behaviour (scenes only in the strip, iPad stays where it was); specs/DISCONNECT-MIGRATE-0.7.4.md section 8 | `migrate_stage` |
 | focuslock | per-display focus-lock reasons | `focuslock` |
 | arrange | `activeDisplayTrackingMethodology`, display arrangement item, `preferredArrangementOfDisplay:relativeTo:` | `arrange` |
 | methodology0 | **opt-in**: keyboard-following active display instead of the pointer-following default | `methodology0` |

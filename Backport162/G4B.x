@@ -63,6 +63,7 @@
 @interface SBWorkspaceKeyboardFocusController : NSObject @end
 @interface SBExternalDisplaySettings : NSObject @end
 @interface SBWindowSceneManager : NSObject @end
+@interface SBMainDisplayLayoutStateManager : NSObject @end
 @interface SBExternalDisplayService : NSObject @end
 // END INTEGRATION interfaces
 
@@ -1547,6 +1548,143 @@ static id G4B_MigrateSceneHandle(id owner, id ident) {
     return (h && [h respondsToSelector:isDev] && G4B_Bool(h, isDev)) ? h : nil;
 }
 
+
+// ----------------------------------------------------------------------------------------------------------------
+// 6a'. migrate_stage: DELIBERATE DEVIATION from 16.2 (specs/DISCONNECT-MIGRATE-0.7.4.md section 8).  16.2 only hands the scenes to the embedded scene manager
+// and issues an entity-less transition (the iPad stays where it was, the windows are only in its strip).  The user wants the windows of the extended display's
+// CURRENT STAGE on the iPad's stage: they are put into the transition request as entities (roles 1, 2, 5..9 like the 16.2 stage / the add-window pick of G3C.x),
+// the iPad leaves the Home Screen into the stage (unlocked environment mode 3), or, when it already shows a stage, the windows already there are merged in
+// behind them (hook of _layoutStateForApplicationTransitionContext: below).  Windows that were only in the external strip stay in the strip.
+// Switch: Backport162.off.migrate_stage (everything below is skipped, request = section 7 of the spec exactly).
+// ----------------------------------------------------------------------------------------------------------------
+static const char kG4BMigStageKey = 0;                 // associated object on the transition context: NSDictionary {max: NSNumber} while the merge hook must run
+
+static id G4B_MigrateHandleIn(id mgr, id ident) {      // the handle a scene manager holds for the scene identity (device application handles only)
+    SEL ex = NSSelectorFromString(@"existingSceneHandleForSceneIdentity:"), isDev = NSSelectorFromString(@"isDeviceApplicationSceneHandle");
+    id h = (ident && [mgr respondsToSelector:ex]) ? G4B_Obj1(mgr, ex, ident) : nil;
+    return (h && [h respondsToSelector:isDev] && G4B_Bool(h, isDev)) ? h : nil;
+}
+static BOOL G4B_MigrateStageRole(long long r) { return r == 1 || r == 2 || (r >= 5 && r <= 9); }       // _SBLayoutRoleIsValidForSplitView 16.2 0x1c7894a30
+static long long G4B_MigrateStageMax(void) {           // SBAppSwitcherDomain rootSettings chamoisSettings maximumNumberOfAppsOnStage (the cap G1C.x uses for drops)
+    id dom = G4B_Obj((id)NSClassFromString(@"SBAppSwitcherDomain"), NSSelectorFromString(@"rootSettings"));
+    id ch = G4B_Obj(dom, NSSelectorFromString(@"chamoisSettings"));
+    SEL mx = NSSelectorFromString(@"maximumNumberOfAppsOnStage");
+    long long n = [ch respondsToSelector:mx] ? G4B_LL(ch, mx) : 0;
+    return (n >= 1 && n <= 7) ? n : 4;                 // unknown: 4 stage windows (the iPadOS 16 limit); 7 = free roles
+}
+// The stage of the external display, read BEFORE its window scene starts to invalidate: item -> (role, attributes, lastInteractionTime) for the windows whose scene was
+// handed to the embedded manager (moved: unique identifier -> embedded handle).  Returns the plan {entities, attrs, front, max, text} or nil (then the request stays entity-less).
+static NSDictionary *G4B_MigrateStagePlan(id extSwitcher, NSDictionary *moved) {
+    Class entC = NSClassFromString(@"SBDeviceApplicationSceneEntity");
+    SEL initS = NSSelectorFromString(@"initWithApplicationSceneHandle:");
+    SEL lsS = NSSelectorFromString(@"layoutState"), alS = NSSelectorFromString(@"appLayout"), allS = NSSelectorFromString(@"allItems");
+    SEL roleS = NSSelectorFromString(@"layoutRoleForItem:"), laS = NSSelectorFromString(@"layoutAttributesForItem:"), tS = NSSelectorFromString(@"lastInteractionTime");
+    id ls = G4B_Obj(extSwitcher, lsS);
+    id stage = G4B_Obj(ls, alS);
+    id items = G4B_Obj(stage, allS);
+    if (!entC || ![entC instancesRespondToSelector:initS] || ![stage respondsToSelector:roleS] || ![items isKindOfClass:[NSArray class]] || !moved.count) {
+        BP_Log(@"migrate_stage: no plan (entity class %d initWithApplicationSceneHandle %d external layout state %p stage layout %p items %d moved %lu): entity-less request",
+               entC != nil, [entC instancesRespondToSelector:initS], (__bridge void *)ls, (__bridge void *)stage, [items isKindOfClass:[NSArray class]], (unsigned long)moved.count);
+        return nil;
+    }
+    NSMutableArray *cand = [NSMutableArray array];     // {role, uid, handle, attrs, time} of the stage windows that moved
+    NSMutableString *strip = [NSMutableString string];
+    for (id item in (NSArray *)items) {
+        NSString *uid = G4B_Obj(item, NSSelectorFromString(@"uniqueIdentifier"));
+        long long role = ((long long (*)(id, SEL, id))objc_msgSend)(stage, roleS, item);
+        id h = [uid isKindOfClass:[NSString class]] ? moved[uid] : nil;
+        if (!G4B_MigrateStageRole(role) || !h) {
+            [strip appendFormat:@" %@(role %lld%@)", uid, role, h ? @"" : @", no moved scene"];
+            continue;
+        }
+        id a = [stage respondsToSelector:laS] ? G4B_Obj1(stage, laS, item) : nil;
+        long long t = [a respondsToSelector:tS] ? G4B_LL(a, tS) : 0;
+        [cand addObject:@{ @"role": @(role), @"uid": uid, @"handle": h, @"attrs": a ?: [NSNull null], @"time": @(t) }];
+    }
+    for (NSString *uid in moved)                       // moved windows that are not in the stage layout at all (external strip only)
+        if (![[cand valueForKey:@"uid"] containsObject:uid] && [strip rangeOfString:uid].location == NSNotFound) [strip appendFormat:@" %@(external strip)", uid];
+    if (!cand.count) {
+        BP_Log(@"migrate_stage: the external stage holds no moved window, strip only:%@: entity-less request", strip);
+        return nil;
+    }
+    [cand sortUsingComparator:^NSComparisonResult(NSDictionary *x, NSDictionary *y) {      // front (largest lastInteractionTime) first, then by role
+        long long a = [x[@"time"] longLongValue], b = [y[@"time"] longLongValue];
+        if (a != b) return a > b ? NSOrderedAscending : NSOrderedDescending;
+        return [x[@"role"] compare:y[@"role"]];
+    }];
+    long long mx = G4B_MigrateStageMax();
+    NSMutableArray *ents = [NSMutableArray array], *attrs = [NSMutableArray array];
+    NSMutableString *txt = [NSMutableString string];
+    for (NSDictionary *c in cand) {
+        if ((long long)ents.count >= mx) { [strip appendFormat:@" %@(over the stage limit %lld)", c[@"uid"], mx]; continue; }
+        id e = ((id (*)(id, SEL, id))objc_msgSend)([entC alloc], initS, c[@"handle"]);
+        if (!e) { [strip appendFormat:@" %@(no entity)", c[@"uid"]]; continue; }
+        [ents addObject:e]; [attrs addObject:c[@"attrs"]];
+        [txt appendFormat:@" %@(was role %@, time %@)", c[@"uid"], c[@"role"], c[@"time"]];
+    }
+    BP_Log(@"migrate_stage: on the iPad stage (front first):%@; stay in the strip:%@ (stage limit %lld)", txt, strip.length ? strip : @" none", mx);
+    if (!ents.count) return nil;
+    return @{ @"entities": ents, @"attrs": attrs, @"max": @(mx) };
+}
+// Runs inside the validator (queued event, the transition context exists).  mode = the iPad's unlockedEnvironmentMode at that moment.
+static void G4B_MigrateStageApply(id ctx, NSDictionary *plan, long long mode) {
+    SEL setE = NSSelectorFromString(@"setEntities:withPolicy:centerEntity:floatingEntity:"), setA = NSSelectorFromString(@"setRequestedLayoutAttributes:forEntity:");
+    SEL front = NSSelectorFromString(@"_setRequestedFrontmostEntity:"), act = NSSelectorFromString(@"setActivatingEntity:"), um = NSSelectorFromString(@"setRequestedUnlockedEnvironmentMode:");
+    NSArray *ents = plan[@"entities"], *attrs = plan[@"attrs"];
+    if (!ents.count || ![ctx respondsToSelector:setE] || ![ctx respondsToSelector:front] || ![ctx respondsToSelector:um]) {
+        BP_Log(@"migrate_stage: context lacks setEntities %d / _setRequestedFrontmostEntity %d / setRequestedUnlockedEnvironmentMode %d: entity-less request",
+               [ctx respondsToSelector:setE], [ctx respondsToSelector:front], [ctx respondsToSelector:um]);
+        return;
+    }
+    ((void (*)(id, SEL, id, long long, id, id))objc_msgSend)(ctx, setE, ents, 0, nil, nil);      // roles 1, 2, 5.. in this order (16.2 setEntities:withPolicy:0, as the zoom request)
+    if ([ctx respondsToSelector:setA])
+        for (NSUInteger i = 0; i < ents.count && i < attrs.count; i++)
+            if (![attrs[i] isKindOfClass:[NSNull class]]) ((void (*)(id, SEL, id, id))objc_msgSend)(ctx, setA, attrs[i], ents[i]);   // the external window's own sizing policy / size / centre
+    if ([ctx respondsToSelector:act]) ((void (*)(id, SEL, id))objc_msgSend)(ctx, act, ents[0]);
+    ((void (*)(id, SEL, id))objc_msgSend)(ctx, front, ents[0]);
+    ((void (*)(id, SEL, long long))objc_msgSend)(ctx, um, 3);                                    // Home Screen / stage -> stage (an explicit 3 also keeps the ambiguous-launch rule from choosing App Expose)
+    objc_setAssociatedObject(ctx, &kG4BMigStageKey, @{ @"max": plan[@"max"] ?: @4 }, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    BP_Log(@"migrate_stage: request built: iPad mode before %lld -> 3, %lu entities, front %@", mode, (unsigned long)ents.count, ents[0]);
+}
+// Hook helper: the windows already on the iPad's stage go into the free roles behind the migrated ones (the 16.2 add-window merge, G3C.x G3C_EndPeekPick), up to the stage limit.
+static void G4B_MigrateStageMerge(id ctx, NSDictionary *mk) {
+    SEL prevE = NSSelectorFromString(@"previousEntities"), ent = NSSelectorFromString(@"entityForLayoutRole:"), setR = NSSelectorFromString(@"setEntity:forLayoutRole:");
+    SEL home = NSSelectorFromString(@"isHomeScreenEntity"), prevW = NSSelectorFromString(@"isPreviousWorkspaceEntity"), empty = NSSelectorFromString(@"isEmptyWorkspaceEntity"), lr = NSSelectorFromString(@"layoutRole");
+    if (![ctx respondsToSelector:prevE] || ![ctx respondsToSelector:ent] || ![ctx respondsToSelector:setR]) return;
+    id prevState = G4B_Obj(ctx, NSSelectorFromString(@"previousLayoutState"));
+    SEL pk = NSSelectorFromString(@"peekConfiguration");
+    long long peek = [prevState respondsToSelector:pk] ? G4B_LL(prevState, pk) : 1;
+    long long mx = [mk[@"max"] longLongValue];
+    static const long long kRoles[] = { 1, 2, 5, 6, 7, 8, 9 };
+    long long used = 0;
+    for (size_t i = 0; i < sizeof kRoles / sizeof *kRoles; i++) {
+        id e = ((id (*)(id, SEL, long long))objc_msgSend)(ctx, ent, kRoles[i]);
+        if (e && !G4B_Bool(e, empty)) used++;
+    }
+    if ((peek & ~1LL) == 2) { BP_Log(@"migrate_stage: the iPad was peeking (peek %lld): the add-window merge of G3C.x takes the previous windows", peek); return; }
+    NSSet *prev = G4B_Obj(ctx, prevE);
+    NSArray *sorted = [[prev allObjects] sortedArrayUsingComparator:^NSComparisonResult(id a, id b) {
+        long long x = G4B_LL(a, lr), y = G4B_LL(b, lr);
+        return x < y ? NSOrderedAscending : (x > y ? NSOrderedDescending : NSOrderedSame);
+    }];
+    NSSet *now = G4B_Obj(ctx, NSSelectorFromString(@"entities"));
+    NSMutableString *placed = [NSMutableString string], *dropped = [NSMutableString string];
+    for (id e in sorted) {
+        if (G4B_Bool(e, home) || G4B_Bool(e, prevW) || G4B_Bool(e, empty) || [now containsObject:e]) continue;
+        BOOL done = NO;
+        if (used < mx)
+            for (size_t i = 0; i < sizeof kRoles / sizeof *kRoles && !done; i++) {
+                id cur = ((id (*)(id, SEL, long long))objc_msgSend)(ctx, ent, kRoles[i]);
+                if (!cur || G4B_Bool(cur, empty)) {
+                    ((void (*)(id, SEL, id, long long))objc_msgSend)(ctx, setR, e, kRoles[i]);
+                    [placed appendFormat:@" %lld:%@", kRoles[i], e]; used++; done = YES;
+                }
+            }
+        if (!done) [dropped appendFormat:@" %@", e];
+    }
+    BP_Log(@"migrate_stage: iPad stage windows kept behind the migrated ones:%@; left in the strip (stage limit %lld):%@", placed.length ? placed : @" none", mx, dropped.length ? dropped : @" none");
+}
+
 %group G4B_Migrate
 
 %hook SBMainSwitcherControllerCoordinator
@@ -1566,6 +1704,7 @@ static id G4B_MigrateSceneHandle(id owner, id ident) {
             if (switcher && embSM && mdc && [embSM isKindOfClass:mdc] && [embSM respondsToSelector:take] && [self respondsToSelector:@selector(appLayoutsForSwitcherController:)]) {
                 BOOL moved = NO;
                 NSUInteger n = 0;
+                NSMutableDictionary *movedH = [NSMutableDictionary dictionary];       // migrate_stage: item unique identifier -> handle in the embedded manager
                 id swScene = [switcher respondsToSelector:@selector(windowScene)] ? G4B_Obj(switcher, @selector(windowScene)) : nil;
                 id srcSM = [swScene respondsToSelector:@selector(sceneManager)] ? G4B_Obj(swScene, @selector(sceneManager)) : nil;      // 16.2: [[extSC windowScene] sceneManager] for every item
                 for (id layout in (id<NSFastEnumeration>)G4B_Obj1(self, @selector(appLayoutsForSwitcherController:), switcher)) {
@@ -1579,10 +1718,27 @@ static id G4B_MigrateSceneHandle(id owner, id ident) {
                         if (!sc || !srcSM) continue;
                         ((void (*)(id, SEL, id, id))objc_msgSend)(embSM, take, sc, srcSM);
                         moved = YES; n++;
+                        id nh = G4B_MigrateHandleIn(embSM, ident);
+                        NSString *iuid = G4B_Obj(item, NSSelectorFromString(@"uniqueIdentifier"));
+                        if (nh && [iuid isKindOfClass:[NSString class]]) movedH[iuid] = nh;
+                        else BP_Log(@"migrate: item %@ has no handle in the embedded manager after takeScene", item);
                     }
                 }
                 BP_Log(@"migrate: moved %lu scenes to the embedded scene manager", (unsigned long)n);
                 if (moved) {
+                    // migrate_stage: the external stage is read NOW (its window scene is invalidating once %orig runs); the entities are applied in the validator below
+                    NSDictionary *stagePlan = nil;
+                    if (G4B_On("migrate_stage")) {
+                        @try {
+                            id embLS = G4B_Obj(embSM, @selector(currentLayoutState));
+                            SEL umS = NSSelectorFromString(@"unlockedEnvironmentMode"), pkS = NSSelectorFromString(@"peekConfiguration");
+                            BP_Log(@"migrate_stage: iPad layout state before: mode %lld peek %lld", [embLS respondsToSelector:umS] ? G4B_LL(embLS, umS) : -1LL, [embLS respondsToSelector:pkS] ? G4B_LL(embLS, pkS) : -1LL);
+                            stagePlan = G4B_MigrateStagePlan(switcher, movedH);
+                        } @catch (NSException *ex) {
+                            BP_Log(@"migrate_stage: plan raised %@: entity-less request", ex);
+                            stagePlan = nil;
+                        }
+                    }
                     Class mw = NSClassFromString(@"SBMainWorkspace");
                     id ws2 = [(id)mw respondsToSelector:@selector(mainWorkspace)] ? G4B_Obj((id)mw, @selector(mainWorkspace)) : nil;
                     SEL rq = NSSelectorFromString(@"requestTransitionWithOptions:builder:validator:");
@@ -1601,6 +1757,13 @@ static id G4B_MigrateSceneHandle(id owner, id ident) {
                                     ((void (*)(id, SEL, long long))objc_msgSend)(ctx, NSSelectorFromString(@"setRequestedWindowPickerRole:"), role);
                                 if ([ls respondsToSelector:uem] && G4B_LL(ls, uem) == 2 && [ctx respondsToSelector:NSSelectorFromString(@"setRequestedUnlockedEnvironmentMode:")])
                                     ((void (*)(id, SEL, long long))objc_msgSend)(ctx, NSSelectorFromString(@"setRequestedUnlockedEnvironmentMode:"), 2);
+                                if (stagePlan) {                                      // migrate_stage: home screen (1) or stage (3) -> the migrated windows on the stage; app switcher (2) keeps the entity-less request
+                                    long long m = [ls respondsToSelector:uem] ? G4B_LL(ls, uem) : 0;
+                                    if (m == 1 || m == 3) {
+                                        @try { G4B_MigrateStageApply(ctx, stagePlan, m); }
+                                        @catch (NSException *ex) { BP_Log(@"migrate_stage: request raised %@", ex); }
+                                    } else BP_Log(@"migrate_stage: iPad mode %lld (app switcher or unknown): windows stay in the strip, entity-less request", m);
+                                }
                             };
                             ((void (*)(id, SEL, id))objc_msgSend)(request, mac, mod);
                             return YES;
@@ -1631,6 +1794,22 @@ static id G4B_MigrateSceneHandle(id owner, id ident) {
 %end
 
 %end // G4B_Migrate
+
+%group G4B_MigrateStage
+%hook SBMainDisplayLayoutStateManager
+// migrate_stage: the previous stage windows of the iPad are known to the context only here (the wrapper fills ctx.previousEntities before this method); merge them in
+// behind the migrated windows exactly as G3C.x does for the add-window pick, then let the stock body build the layout state from [ctx entities].
+- (id)_layoutStateForApplicationTransitionContext:(id)ctx {
+    NSDictionary *mk = ctx ? objc_getAssociatedObject(ctx, &kG4BMigStageKey) : nil;
+    if (!mk || !G4B_On("migrate_stage")) return %orig;
+    @try { G4B_MigrateStageMerge(ctx, mk); }
+    @catch (NSException *ex) { BP_Log(@"migrate_stage: merge raised %@", ex); }
+    id r = %orig;
+    BP_Log(@"migrate_stage: layout state %@", r);
+    return r;
+}
+%end
+%end // G4B_MigrateStage
 
 // ================================================================================================================
 // 6b. PER-DISPLAY KEYBOARD-FOCUS LOCK REASONS                                                            [DONE, UNSURE md 6b]
@@ -1917,6 +2096,7 @@ void G4B_Setup(void) {
     if (G4B_On("edu"))       { %init(G4B_Edu); }
     if (G4B_On("lockedptr2")) { %init(G4B_LockedPtr); G4B_WrapDidSelectContainer(); }
     if (G4B_On("migrate"))   { %init(G4B_Migrate); }
+    if (G4B_On("migrate") && G4B_On("migrate_stage")) { %init(G4B_MigrateStage); }
     if (G4B_On("focuslock")) { %init(G4B_FocusLock); }
     BP_Log(@"group4b installed");
 }
