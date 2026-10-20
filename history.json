@@ -1,12 +1,4 @@
 {
- "0.7.3+140.c552e8e": {
-  "date": "2026-10-13T09:22:58Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+140.c552e8e_iphoneos-arm64.deb",
-  "run": 140,
-  "sha": "c552e8e8d2d8cf47dcdbaf8ee9674670d39e0bef",
-  "subject": "OPEN-ISSUES: peek retire, snapshot guard confirmed, kill path still open",
-  "version": "0.7.3+140.c552e8e"
- },
  "0.7.3+141.6c50406": {
   "date": "2026-10-13T09:38:25Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+141.6c50406_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "df331428c07e808a7c5417744dc2322f9fb7cb68",
   "subject": "BBD crash guard re-arms itself: strikes older than 30 minutes are forgotten (the guard kept the backboardd half out for good once tripped; standing rule: guards are a logged last line, never a permanent switch-off)",
   "version": "0.7.5+203.df33142"
+ },
+ "0.7.5+204.5f42e12": {
+  "date": "2026-10-20T19:16:14Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+204.5f42e12_iphoneos-arm64.deb",
+  "run": 204,
+  "sha": "5f42e1239745421788599355a1ccfe5412d9132c",
+  "subject": "REVIEW-PLUMBING-0.7.9: coverage matrix, fixed / open defects of the plumbing, display lifecycle and pointer area incl. SMT.x / SPK.c; README speaker row: new crash guard",
+  "version": "0.7.5+204.5f42e12"
  }
 }
