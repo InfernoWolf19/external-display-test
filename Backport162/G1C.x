@@ -5042,6 +5042,32 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 %end
 %end
 
+// ---- SBFluidSwitcherViewController -_scrollToAppLayout:animated:alignment:completion:  16.2 0x1c7452ff0 (16.0 0x1c5fd9c44)                                          with g1c_piles
+// 16.2 always scrolls to the index of the layout in -appLayouts. 16.0 under Stage Manager used the index of the layout's continuousExposeIdentifier in the VC's identifier list (one entry
+// per pile, an app's windows are one pile), and its AppSwitcherCE contentOffsetForIndex:alignment: counted piles too. The port answers contentOffsetForIndex:alignment: the 16.2 way
+// (G1C_As_ContentOffsetForIndex: index into appLayouts, the pile layout of 0x1c7812518), so the 16.0 VC body asked for the offset of the wrong window as soon as an app had more than
+// one window (reopen-closed-windows button, every scroll-to-layout response of the modifiers). The rest of the method is the same in both builds. With piles off the 16.0 pair is consistent: stock.
+%group G1C_VCScroll
+%hook SBFluidSwitcherViewController
+- (void)_scrollToAppLayout:(id)layout animated:(BOOL)animated alignment:(long long)alignment completion:(void (^)(BOOL))completion {
+    id root = G1C_IvarObj(self, "_rootModifier"), scroll = G1C_IvarObj(self, "_scrollView");
+    SEL co = NSSelectorFromString(@"contentOffsetForIndex:alignment:"), so = NSSelectorFromString(@"setContentOffset:animated:completion:");
+    if (!G1C_PilesOn() || !layout || !G1C_Resp(root, co) || !G1C_Resp(scroll, so) || !G1C_Resp(self, @selector(appLayouts))) {
+        %orig;
+        return;
+    }
+    NSUInteger idx = [G1C_AsArray(G1B_Send0(self, @selector(appLayouts))) indexOfObject:layout];
+    if (idx == NSNotFound) {
+        if (completion) completion(YES);
+        return;
+    }
+    if (G1C_Resp(self, @selector(_updateScrollViewSizeAndSpacing))) ((void (*)(id, SEL))objc_msgSend)(self, @selector(_updateScrollViewSizeAndSpacing));
+    CGPoint off = ((CGPoint (*)(id, SEL, unsigned long long, long long))objc_msgSend)(root, co, idx, alignment);
+    ((void (*)(id, SEL, CGPoint, BOOL, id))objc_msgSend)(scroll, so, off, animated, completion);
+}
+%end
+%end
+
 // ---- close trace (diagnostics only, BP_LogEnabled; user video 0dee8146 = Dopamine window, size jump at the start of the home-swipe close): what the composed root answers for the closing stage window during the home swipe ----
 // Armed when a home gesture starts in mode 3 (G1C_HGR_GestureChild), disarmed at phase 3 of the next transition.  Every line starts with "[g1c] close", carries the transition phase
 // (g = gesture still running, 1/2/3 = transition phases) and is logged only when the answer changed.  The values are exactly what the layout block (G2B BP2B_LayoutAppLayoutImpl) reads.
@@ -6316,6 +6342,7 @@ void G1C_Setup(void) {
     %init(G1C_WdEvent);
     %init(G1C_EventDefault);
     %init(G1C_ModelMap);
+    %init(G1C_VCScroll);
     %init(G1C_Root);
     %init(G1C_Producers);
     %init(G1C_OverflowRoot);
