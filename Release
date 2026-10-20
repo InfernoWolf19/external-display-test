@@ -1,0 +1,21 @@
+Origin: infernowolf19
+Label: Backport162
+Suite: stable
+Version: 1.0
+Codename: ios
+Architectures: iphoneos-arm64
+Components: main
+Description: Backport162 CI builds (iPadOS 16.2 Stage Manager / external display backport for iPadOS 16.0)
+Date: Tue, 20 Oct 2026 14:11:12 GMT
+MD5Sum:
+ caf281f7619742e05870ccaf50d813a5 1295 Packages
+ fb32f36741a91a98268f652783055d4a 704 Packages.gz
+ 46301b224a4f669be622f13751654223 778 Packages.bz2
+SHA1:
+ 0847633a83bdf1eb166bf2bad5253e3378126ee7 1295 Packages
+ 3533a8a9aa0bf28dd57ac8f7e8b9b54b3349540c 704 Packages.gz
+ 6781486de96b304bd20bf6ac0ee1e113b4d8a555 778 Packages.bz2
+SHA256:
+ c745257423e3d53e240b5dccd068e5edb84ae9ba0d85f8e95da545ab64fd5adb 1295 Packages
+ 2abb17eab0e6776ca9abd94712114165c462215248315657a5cdb14373a8d734 704 Packages.gz
+ faf3d97e50bc323f0da86ff98b424a92a09ae89d42296a37d42eeb68f84ba7c8 778 Packages.bz2
