@@ -34,8 +34,8 @@
 //
 // Safety: hooks are installed only if kern.osversion is exactly 20A8372 and the first three instructions of every
 // private function used match what was disassembled from that build; the policy table is touched only if it is a
-// 35-entry CFDictionary in writable memory. Crash guard: five launches in a row that die within 25 s disable the
-// tweak for this version (rule of the standalone package, kept on request).
+// 35-entry CFDictionary in writable memory. Crash guard: a logged last line (see boot_guard_ok): eight short-lived launches of the
+// same daemon within ten minutes keep the hooks out of that launch, loudly reported, and the counter forgets itself.
 //
 // Paths: the audio daemon is sandboxed and cannot WRITE to the jailbreak root, so the few files it writes live in the
 // system temp directory /var/tmp (which the daemon can read and write). It can READ <jbroot> (Dopamine sandbox extension, see BPDaemon.h), so the
@@ -60,6 +60,7 @@
 #include <string.h>
 #include <time.h>
 #include <os/log.h>
+#include <notify.h>
 #include <objc/message.h>
 #include <objc/runtime.h>
 #include <substrate.h>
@@ -74,8 +75,9 @@
 #define OFF_FILE          "/var/tmp/SpeakerPicker.off"          /* legacy kill switch of the standalone package, still honoured */
 #define DEBUG_FILE        "/var/tmp/SpeakerPicker.debug"        /* legacy debug flag, still honoured */
 #define LOG_FILE          "/var/tmp/SpeakerPicker.log"
-#define BOOT_FILE         "/var/tmp/SpeakerPicker." TWEAK_VERSION ".boot"
-#define MAX_BOOT_STRIKES  5
+#define BOOT_FILE_FMT     "/var/tmp/SpeakerPicker." TWEAK_VERSION ".%s.boot"   /* one counter per daemon (audiomxd / mediaserverd) */
+#define MAX_BOOT_STRIKES  8                 /* short-lived launches of ONE daemon within BOOT_WINDOW_SECONDS before the hooks stay out of that launch */
+#define BOOT_WINDOW_SECONDS 600             /* a counter whose last strike is older than this is forgotten: the guard re-arms itself */
 #define STABLE_SECONDS    25
 #define MAX_LOG_BYTES     (256 * 1024)
 
@@ -580,20 +582,42 @@ static bool os_build_ok(void) {
     return true;
 }
 
-// Crash-loop guard: BOOT_FILE counts launches; it is removed once the daemon has stayed up STABLE_SECONDS.
-// Touched only at launch.
-static bool boot_guard_ok(void) {
+// Crash-loop guard, a logged last line only (standing rule: nothing may silently switch a feature off).  The counter file holds "<strikes> <time of the last strike>"
+// and exists once per daemon: audiomxd and mediaserverd are restarted together by every userspace restart (a crash loop of something else, e.g. backboardd), and
+// with one shared file that doubled the count and tripped the guard after about three quick restarts although the audio code was fine.  A launch adds a strike, the file is
+// removed when the daemon stayed up STABLE_SECONDS.  The hooks stay out of a launch only after MAX_BOOT_STRIKES short-lived launches of the same daemon inside
+// BOOT_WINDOW_SECONDS; once the last strike is older than the window the counter starts again, so the guard can never stay on for good.  A trip is reported loudly:
+// os_log error, the opt-in file log, and a Darwin notification that SpringBoard's G2D.x writes into Backport162.log.  Touched only at launch.
+static void boot_note(const char *what) {
+    char name[160];
+    snprintf(name, sizeof name, "com.infernowolf19.backport162.load.spk.%s", what);
+    notify_post(name);
+}
+
+static bool boot_guard_ok(const char *daemon) {
+    char path[200];
+    snprintf(path, sizeof path, BOOT_FILE_FMT, daemon);
     int strikes = 0;
-    FILE *f = fopen(BOOT_FILE, "r");
-    if (f) { if (fscanf(f, "%d", &strikes) != 1) strikes = 0; fclose(f); }
+    long last = 0;
+    time_t now = time(NULL);
+    FILE *f = fopen(path, "r");
+    if (f) { if (fscanf(f, "%d %ld", &strikes, &last) < 1) strikes = 0; fclose(f); }
+    if (strikes > 0 && (last <= 0 || (long)now - last > BOOT_WINDOW_SECONDS || (long)now < last)) {
+        info("crash guard: %s counter of %d is older than %d s; starting again", daemon, strikes, BOOT_WINDOW_SECONDS);
+        strikes = 0;
+    }
     if (strikes >= MAX_BOOT_STRIKES) {
-        info("crash guard: %d short-lived launches in a row; inactive (delete %s to re-arm)", strikes, BOOT_FILE);
+        os_log_error(gLog, "crash guard TRIPPED: %{public}s had %d short-lived launches within %d s; SpeakerPicker stays out of this launch (the counter is forgotten %d s after the last strike, or delete %{public}s)",
+                     daemon, strikes, BOOT_WINDOW_SECONDS, BOOT_WINDOW_SECONDS, path);
+        dlog("crash guard TRIPPED: %s %d short-lived launches; inactive for this launch (delete %s to re-arm)", daemon, strikes, path);
+        boot_note("crash_guard_tripped");
         return false;
     }
-    f = fopen(BOOT_FILE, "w");
-    if (f) { fprintf(f, "%d", strikes + 1); fclose(f); }
+    f = fopen(path, "w");
+    if (f) { fprintf(f, "%d %ld", strikes + 1, (long)now); fclose(f); }
+    char *pcopy = strdup(path);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)STABLE_SECONDS * NSEC_PER_SEC),
-                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ unlink(BOOT_FILE); });
+                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ if (pcopy) { unlink(pcopy); free(pcopy); } });
     return true;
 }
 
@@ -604,6 +628,6 @@ static void speakerpicker_init(void) {
     gLog = os_log_create("com.infernowolf19.speakerpicker", "main");
     if (off_now()) { info("kill switch present (Backport162.off[.speaker] or /var/tmp/SpeakerPicker.off); inactive until the daemon is restarted without it"); return; }
     if (!os_build_ok()) return;
-    if (!boot_guard_ok()) return;
+    if (!boot_guard_ok(name)) return;
     _dyld_register_func_for_add_image(image_added);     // also fires for images that are already mapped
 }

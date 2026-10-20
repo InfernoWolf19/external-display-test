@@ -89,6 +89,7 @@ static void G2D_ListenForDaemonLoads(void) {
         "com.infernowolf19.backport162.load.bbd.crash_guard_tripped_leaving", "com.infernowolf19.backport162.load.bbd.installing",
         "com.infernowolf19.backport162.load.ptr.ctor_entered", "com.infernowolf19.backport162.load.ptr.not_pointeruid_leaving", "com.infernowolf19.backport162.load.ptr.build_mismatch_leaving",
         "com.infernowolf19.backport162.load.ptr.installing",
+        "com.infernowolf19.backport162.load.spk.crash_guard_tripped",      // SPK.c (audio daemons): its crash guard kept the hooks out of a launch
     };
     for (size_t i = 0; i < sizeof names / sizeof names[0]; i++) {
         const char *nm = names[i];
