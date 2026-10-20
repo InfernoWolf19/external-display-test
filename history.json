@@ -1,10 +1,482 @@
 {
+ "0.7.3+136.1b434d2": {
+  "date": "2026-10-13T02:40:25Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+136.1b434d2_iphoneos-arm64.deb",
+  "run": 136,
+  "sha": "1b434d2f9935482330610303facb644cf3c62efe",
+  "subject": "G1D: trace killContainer and removal events (last card closed on the \u2026",
+  "version": "0.7.3+136.1b434d2"
+ },
+ "0.7.3+137.1ac034d": {
+  "date": "2026-10-13T02:51:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+137.1ac034d_iphoneos-arm64.deb",
+  "run": 137,
+  "sha": "1ac034d74ed6d4767972b843a70252e47eb2c7c4",
+  "subject": "Trace removal events inside the existing _handleEvent: hook instead o\u2026",
+  "version": "0.7.3+137.1ac034d"
+ },
+ "0.7.3+138.b700f1c": {
+  "date": "2026-10-13T03:02:30Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+138.b700f1c_iphoneos-arm64.deb",
+  "run": 138,
+  "sha": "b700f1c5c85bf9c81efbcbeeaaf9c18ed36852a9",
+  "subject": "G1D: snapshot cache returns no entity without a scene handle provider\u2026",
+  "version": "0.7.3+138.b700f1c"
+ },
+ "0.7.3+139.130504d": {
+  "date": "2026-10-13T09:22:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+139.130504d_iphoneos-arm64.deb",
+  "run": 139,
+  "sha": "130504d0a1cd9dd4081b3527ba57b5933a2d425c",
+  "subject": "G1C: retire the stale peek child at the end of the peek transition",
+  "version": "0.7.3+139.130504d"
+ },
+ "0.7.3+140.c552e8e": {
+  "date": "2026-10-13T09:22:58Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+140.c552e8e_iphoneos-arm64.deb",
+  "run": 140,
+  "sha": "c552e8e8d2d8cf47dcdbaf8ee9674670d39e0bef",
+  "subject": "OPEN-ISSUES: peek retire, snapshot guard confirmed, kill path still open",
+  "version": "0.7.3+140.c552e8e"
+ },
+ "0.7.3+141.6c50406": {
+  "date": "2026-10-13T09:38:25Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+141.6c50406_iphoneos-arm64.deb",
+  "run": 141,
+  "sha": "6c504068d635a2b029b763cfaa66fced9f5a1e31",
+  "subject": "G1D: removal action runs on the switcher that owns the layout (16.2 0\u2026",
+  "version": "0.7.3+141.6c50406"
+ },
+ "0.7.3+142.ca14592": {
+  "date": "2026-10-13T10:03:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+142.ca14592_iphoneos-arm64.deb",
+  "run": 142,
+  "sha": "ca14592c958c46a9e2a5368a9c15667dc6c1301f",
+  "subject": "OPEN-ISSUES: disconnect migration findings, screen recording, video r\u2026",
+  "version": "0.7.3+142.ca14592"
+ },
+ "0.7.3+143.f1a53d2": {
+  "date": "2026-10-13T10:31:06Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+143.f1a53d2_iphoneos-arm64.deb",
+  "run": 143,
+  "sha": "f1a53d2cd811b6866f116796d97aa91f71c16cc5",
+  "subject": "AV: AVKit extended display gate for the second screen connection (16.\u2026",
+  "version": "0.7.3+143.f1a53d2"
+ },
+ "0.7.3+144.7ae2a5e": {
+  "date": "2026-10-13T10:51:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+144.7ae2a5e_iphoneos-arm64.deb",
+  "run": 144,
+  "sha": "7ae2a5e9a45fb84e1438ae738082cfb0dcede558",
+  "subject": "PIPStop: per-display PiP stop/expand port (16.2 SBPIPPegasusAdapter, \u2026",
+  "version": "0.7.3+144.7ae2a5e"
+ },
+ "0.7.3+145.9ebdf27": {
+  "date": "2026-10-13T11:05:28Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+145.9ebdf27_iphoneos-arm64.deb",
+  "run": 145,
+  "sha": "9ebdf2745be7d0b473dba961ce0c47c85e75039d",
+  "subject": "G1B: faithful split in the filtering modifier again (drag moves only \u2026",
+  "version": "0.7.3+145.9ebdf27"
+ },
+ "0.7.3+146.7dd2ad9": {
+  "date": "2026-10-13T11:22:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+146.7dd2ad9_iphoneos-arm64.deb",
+  "run": 146,
+  "sha": "7dd2ad942ee0b65b2dc0128a951db1e5d1bb6fd9",
+  "subject": "PIPStop/G1D: log the display identities used by the PiP expand restor\u2026",
+  "version": "0.7.3+146.7dd2ad9"
+ },
+ "0.7.3+147.2828d32": {
+  "date": "2026-10-13T14:58:43Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+147.2828d32_iphoneos-arm64.deb",
+  "run": 147,
+  "sha": "2828d3207c98ac028c217dd63271b2a3fd99e870",
+  "subject": "G2C: 16.2 resize grabber auto-hide update per item container, full li\u2026",
+  "version": "0.7.3+147.2828d32"
+ },
+ "0.7.3+148.9ec8247": {
+  "date": "2026-10-13T15:17:15Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+148.9ec8247_iphoneos-arm64.deb",
+  "run": 148,
+  "sha": "9ec82475e34a2659132dafb7e9656c36cc161a6f",
+  "subject": "OPEN-ISSUES: pointer cross-display findings, PiP expand flakiness; ad\u2026",
+  "version": "0.7.3+148.9ec8247"
+ },
+ "0.7.3+149.d71261f": {
+  "date": "2026-10-17T07:29:35Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.3+149.d71261f_iphoneos-arm64.deb",
+  "run": 149,
+  "sha": "d71261ffdd2f1a2ac76e6b59614381287e819578",
+  "subject": "BBD: post the 16.2 pointer exit to the global routes of the display t\u2026",
+  "version": "0.7.3+149.d71261f"
+ },
+ "0.7.4+150.63e1901": {
+  "date": "2026-10-17T07:35:10Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+150.63e1901_iphoneos-arm64.deb",
+  "run": 150,
+  "sha": "63e1901f7e3a8c5d5675650f7847dbcd91485b6c",
+  "subject": "Merge the backboardd tweak into the main package (one deb: SpringBoar\u2026",
+  "version": "0.7.4+150.63e1901"
+ },
+ "0.7.4+151.c7f54dd": {
+  "date": "2026-10-17T07:40:26Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+151.c7f54dd_iphoneos-arm64.deb",
+  "run": 151,
+  "sha": "c7f54ddb86d60528f5d3e095fb9ffd26d622ef04",
+  "subject": "Add the close-glitch analysis and note it in OPEN-ISSUES",
+  "version": "0.7.4+151.c7f54dd"
+ },
+ "0.7.4+152.37b5080": {
+  "date": "2026-10-17T07:52:45Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+152.37b5080_iphoneos-arm64.deb",
+  "run": 152,
+  "sha": "37b50806117e1f320c48af2b57e2cc5b008dce87",
+  "subject": "Add the pointer stale-pixel analysis (real 16.0 pointeruid vs 16.2) a\u2026",
+  "version": "0.7.4+152.37b5080"
+ },
+ "0.7.4+153.4f3d094": {
+  "date": "2026-10-17T07:55:17Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+153.4f3d094_iphoneos-arm64.deb",
+  "run": 153,
+  "sha": "4f3d0949122015d4fc14ac4c6484ab610aded68d",
+  "subject": "G1D: log why a live resize touch is accepted or refused (corner drag \u2026",
+  "version": "0.7.4+153.4f3d094"
+ },
+ "0.7.4+154.8ca8070": {
+  "date": "2026-10-17T07:55:35Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+154.8ca8070_iphoneos-arm64.deb",
+  "run": 154,
+  "sha": "8ca8070e1673ca92e56cdd5771b1b951dd2545a8",
+  "subject": "PTR.x: work in progress, pointeruid tweak (not built yet, not in the \u2026",
+  "version": "0.7.4+154.8ca8070"
+ },
+ "0.7.4+155.a588020": {
+  "date": "2026-10-17T07:57:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+155.a588020_iphoneos-arm64.deb",
+  "run": 155,
+  "sha": "a588020cedd00f254c2db51dc37d9729da5a4616",
+  "subject": "PiP expand: restore on the display the scene is shown on (scene setti\u2026",
+  "version": "0.7.4+155.a588020"
+ },
+ "0.7.4+156.2db7c86": {
+  "date": "2026-10-17T07:57:50Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+156.2db7c86_iphoneos-arm64.deb",
+  "run": 156,
+  "sha": "2db7c8637c595ba39ea9c8e5a7811a4050ff8cd6",
+  "subject": "PTR: pointeruid tweak (16.1 multi-display pointer changes: layer clas\u2026",
+  "version": "0.7.4+156.2db7c86"
+ },
+ "0.7.4+157.6ca5e9e": {
+  "date": "2026-10-17T07:58:59Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+157.6ca5e9e_iphoneos-arm64.deb",
+  "run": 157,
+  "sha": "6ca5e9e0a835c588efa57a81bcbd283fb019443d",
+  "subject": "G1C: log the inputs of the resize grabber enable decision when it cha\u2026",
+  "version": "0.7.4+157.6ca5e9e"
+ },
+ "0.7.4+159.6f7de5f": {
+  "date": "2026-10-17T08:08:50Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+159.6f7de5f_iphoneos-arm64.deb",
+  "run": 159,
+  "sha": "6f7de5fba50f3ba56204e9672d4034663d5afce9",
+  "subject": "BBD: crash guard block must not capture arrays (CI compile error)",
+  "version": "0.7.4+159.6f7de5f"
+ },
+ "0.7.4+160.f0ceede": {
+  "date": "2026-10-17T08:10:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+160.f0ceede_iphoneos-arm64.deb",
+  "run": 160,
+  "sha": "f0ceede4f9ba399a3e289e0a5d2d7ae18eec6b8e",
+  "subject": "G1C: resize grabbers for every stage role (_SBLayoutRoleIsValidForSpl\u2026",
+  "version": "0.7.4+160.f0ceede"
+ },
+ "0.7.4+161.84444b3": {
+  "date": "2026-10-17T08:22:17Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+161.84444b3_iphoneos-arm64.deb",
+  "run": 161,
+  "sha": "84444b35ff71f92115993d6ebae6775bf692823d",
+  "subject": "BBD/PTR: ctor marker files (Backport162BBD.ctor / Backport162PTR.ctor\u2026",
+  "version": "0.7.4+161.84444b3"
+ },
+ "0.7.4+162.cb281e3": {
+  "date": "2026-10-17T08:24:38Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+162.cb281e3_iphoneos-arm64.deb",
+  "run": 162,
+  "sha": "cb281e365f75f6eb7d2d5b861f789abba0cbb15e",
+  "subject": "OPEN-ISSUES: close glitch is stock behaviour (user confirmed)",
+  "version": "0.7.4+162.cb281e3"
+ },
+ "0.7.4+163.df2870a": {
+  "date": "2026-10-17T08:26:08Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+163.df2870a_iphoneos-arm64.deb",
+  "run": 163,
+  "sha": "df2870a777372e4fadc7305689d6b1bf974f6d26",
+  "subject": "OPEN-ISSUES: resize corner and PiP expand confirmed working, close gl\u2026",
+  "version": "0.7.4+163.df2870a"
+ },
+ "0.7.4+164.49bc330": {
+  "date": "2026-10-17T08:37:20Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+164.49bc330_iphoneos-arm64.deb",
+  "run": 164,
+  "sha": "49bc3304783a8e3a0716cfc9a318fa4036e8883a",
+  "subject": "G2D: the home swipe cancels the app's touch (g2d_homecancel): SBGrabb\u2026",
+  "version": "0.7.4+164.49bc330"
+ },
+ "0.7.4+165.bd691a9": {
+  "date": "2026-10-17T09:10:27Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+165.bd691a9_iphoneos-arm64.deb",
+  "run": 165,
+  "sha": "bd691a97d0da032226a3e4b4a47384bd6346f895",
+  "subject": "G1C: Root shouldScaleContentToFillBounds / shouldUseNonuniformSnapsho\u2026",
+  "version": "0.7.4+165.bd691a9"
+ },
+ "0.7.4+166.337c7b6": {
+  "date": "2026-10-17T09:21:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+166.337c7b6_iphoneos-arm64.deb",
+  "run": 166,
+  "sha": "337c7b64f2eac3672123007ea07b720ae8b2f394",
+  "subject": "BBD/PTR: report their start-up stage to SpringBoard through Darwin no\u2026",
+  "version": "0.7.4+166.337c7b6"
+ },
+ "0.7.4+167.03ade48": {
+  "date": "2026-10-17T13:14:44Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+167.03ade48_iphoneos-arm64.deb",
+  "run": 167,
+  "sha": "03ade48bdce195734fc286ca827f923afd47feef",
+  "subject": "BBD/PTR: daemon log, ctor markers and crash guard strikes go to a dir\u2026",
+  "version": "0.7.4+167.03ade48"
+ },
+ "0.7.4+168.c84e199": {
+  "date": "2026-10-17T13:16:48Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.4+168.c84e199_iphoneos-arm64.deb",
+  "run": 168,
+  "sha": "c84e199ce87ad2692e2bf229d77cc6e91ffa8b76",
+  "subject": "G2E: home swipe close - the closing card's instant gesture tracking (\u2026",
+  "version": "0.7.4+168.c84e199"
+ },
+ "0.7.5+169.8824678": {
+  "date": "2026-10-17T13:25:36Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+169.8824678_iphoneos-arm64.deb",
+  "run": 169,
+  "sha": "882467871c4eb7e9fbe502de2f68036a2a00a24a",
+  "subject": "Backport162 0.7.5: merge ExtendedDisplayEnabler 0.2.2 into the package",
+  "version": "0.7.5+169.8824678"
+ },
+ "0.7.5+170.8b1fe90": {
+  "date": "2026-10-17T13:43:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+170.8b1fe90_iphoneos-arm64.deb",
+  "run": 170,
+  "sha": "8b1fe905083645fc28acedc20cc808669db67eef",
+  "subject": "BBD/PTR: find the main executable by file type instead of image 0 (ev\u2026",
+  "version": "0.7.5+170.8b1fe90"
+ },
+ "0.7.5+171.f42f2a1": {
+  "date": "2026-10-17T13:49:45Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+171.f42f2a1_iphoneos-arm64.deb",
+  "run": 171,
+  "sha": "f42f2a1d43c9b3a16d7f37e89bccb86f7b18553e",
+  "subject": "G2D: keep the daemon log ingest timer alive (an unreferenced dispatch\u2026",
+  "version": "0.7.5+171.f42f2a1"
+ },
+ "0.7.5+172.2db2308": {
+  "date": "2026-10-17T14:06:39Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+172.2db2308_iphoneos-arm64.deb",
+  "run": 172,
+  "sha": "2db23082ff5fa843adb7e221170aa063281ec58b",
+  "subject": "G2F.x: work in progress, symmetric pivot for the home swipe close (no\u2026",
+  "version": "0.7.5+172.2db2308"
+ },
+ "0.7.5+173.c28de50": {
+  "date": "2026-10-17T14:07:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+173.c28de50_iphoneos-arm64.deb",
+  "run": 173,
+  "sha": "c28de50df4b2fa649579495f924ce805b042bf65",
+  "subject": "G2F: wire in the symmetric pivot for the home swipe close (switch g2f\u2026",
+  "version": "0.7.5+173.c28de50"
+ },
+ "0.7.5+174.5c3af21": {
+  "date": "2026-10-17T18:23:58Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+174.5c3af21_iphoneos-arm64.deb",
+  "run": 174,
+  "sha": "5c3af2161e05600cb9a467f2cf72b4a599293df3",
+  "subject": "PTR/G2G: stuck resize arrows (clear client hover regions at the point\u2026",
+  "version": "0.7.5+174.5c3af21"
+ },
+ "0.7.5+175.24816c1": {
+  "date": "2026-10-17T18:29:51Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+175.24816c1_iphoneos-arm64.deb",
+  "run": 175,
+  "sha": "24816c147cc4bf9a17bd1f96cc35c6682159ed9b",
+  "subject": "G2F: crop the closing card to the icon box together with the icon ove\u2026",
+  "version": "0.7.5+175.24816c1"
+ },
+ "0.7.5+176.8cadfda": {
+  "date": "2026-10-17T18:31:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+176.8cadfda_iphoneos-arm64.deb",
+  "run": 176,
+  "sha": "8cadfda070309c74231770ee94b2eb2e887132cb",
+  "subject": "CLOSE-CROP spec / OPEN-ISSUES: real 16.2 does not clamp the role fram\u2026",
+  "version": "0.7.5+176.8cadfda"
+ },
+ "0.7.5+178.764be4c": {
+  "date": "2026-10-17T19:13:22Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+178.764be4c_iphoneos-arm64.deb",
+  "run": 178,
+  "sha": "764be4c558cbc53f51333cbaeb0612cba53eaa89",
+  "subject": "G2I: add-window flow diagnostics (g2i_addwindiag), spec ADDWINDOW-GLI\u2026",
+  "version": "0.7.5+178.764be4c"
+ },
+ "0.7.5+179.5d96621": {
+  "date": "2026-10-17T19:14:04Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+179.5d96621_iphoneos-arm64.deb",
+  "run": 179,
+  "sha": "5d9662108d4ba7ecf273c0b758cbde9063535fc4",
+  "subject": "Log: rotate Backport162.log at 3 MiB instead of 256 KiB (with debug o\u2026",
+  "version": "0.7.5+179.5d96621"
+ },
+ "0.7.5+180.b2b596c": {
+  "date": "2026-10-17T19:30:50Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+180.b2b596c_iphoneos-arm64.deb",
+  "run": 180,
+  "sha": "b2b596c5d4e8bcc495c6985938bdcd946773476c",
+  "subject": "G2H: the crop mask of g2f_closecrop no longer clips the window shadow\u2026",
+  "version": "0.7.5+180.b2b596c"
+ },
+ "0.7.5+181.5ff2730": {
+  "date": "2026-10-17T19:32:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+181.5ff2730_iphoneos-arm64.deb",
+  "run": 181,
+  "sha": "5ff273064fc1dba4529077070f610db887db9abf",
+  "subject": "G2H: README switch rows, OPEN-ISSUES entry, spec OPEN-DIM-0.7.7 (wind\u2026",
+  "version": "0.7.5+181.5ff2730"
+ },
+ "0.7.5+182.58c233e": {
+  "date": "2026-10-17T19:38:17Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+182.58c233e_iphoneos-arm64.deb",
+  "run": 182,
+  "sha": "58c233e999bf35a9eaf9d013857fdb57a5c0a1a7",
+  "subject": "G2I: dump every item container (visible and hidden) during the pick t\u2026",
+  "version": "0.7.5+182.58c233e"
+ },
+ "0.7.5+183.ed3eb1b": {
+  "date": "2026-10-17T19:39:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+183.ed3eb1b_iphoneos-arm64.deb",
+  "run": 183,
+  "sha": "ed3eb1bbf5a5f6fe58f7e58ee8fec88e220a9060",
+  "subject": "G1B: routing guard 1 keeps the stock answer when it already covers ev\u2026",
+  "version": "0.7.5+183.ed3eb1b"
+ },
+ "0.7.5+184.7df60c8": {
+  "date": "2026-10-17T23:23:51Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+184.7df60c8_iphoneos-arm64.deb",
+  "run": 184,
+  "sha": "7df60c8fe8ceddda3c23fe3f1c9b578edff2e004",
+  "subject": "G2H: revert the mask inflation (it delayed the close crop by half the\u2026",
+  "version": "0.7.5+184.7df60c8"
+ },
+ "0.7.5+185.2e446cc": {
+  "date": "2026-10-17T23:30:14Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+185.2e446cc_iphoneos-arm64.deb",
+  "run": 185,
+  "sha": "2e446ccd2dcdedb53819e8979a0f744746ab61db",
+  "subject": "PTR/G2G: pointer jump at the resize corner: ptr_hover guard used _isF\u2026",
+  "version": "0.7.5+185.2e446cc"
+ },
+ "0.7.5+186.37ce511": {
+  "date": "2026-10-17T23:30:21Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+186.37ce511_iphoneos-arm64.deb",
+  "run": 186,
+  "sha": "37ce511e7dc38120f63cbf7419ce5e97ff2bfe92",
+  "subject": "POINTER-HOVER spec: do not quote an unverified count",
+  "version": "0.7.5+186.37ce511"
+ },
+ "0.7.5+187.5010f0e": {
+  "date": "2026-10-17T23:34:05Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+187.5010f0e_iphoneos-arm64.deb",
+  "run": 187,
+  "sha": "5010f0ed1d4265fc114da4413437da022feb0778",
+  "subject": "G2H: fade the layer that really draws the window shadow (SBFView r 70\u2026",
+  "version": "0.7.5+187.5010f0e"
+ },
+ "0.7.5+188.32e50c5": {
+  "date": "2026-10-17T23:34:18Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+188.32e50c5_iphoneos-arm64.deb",
+  "run": 188,
+  "sha": "32e50c5dc2a99bef899820363677766976a1cde0",
+  "subject": "OPEN-DIM spec: fade duration",
+  "version": "0.7.5+188.32e50c5"
+ },
+ "0.7.5+190.3e333eb": {
+  "date": "2026-10-17T23:56:43Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+190.3e333eb_iphoneos-arm64.deb",
+  "run": 190,
+  "sha": "3e333eb7ecc72ffd840cf8d24a37f122d6cb1766",
+  "subject": "PTR: ptr_edge cut check must not capture its out parameter in the wal\u2026",
+  "version": "0.7.5+190.3e333eb"
+ },
+ "0.7.5+191.e196b34": {
+  "date": "2026-10-18T00:04:06Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+191.e196b34_iphoneos-arm64.deb",
+  "run": 191,
+  "sha": "e196b34d1897a043300f6c473ebd934ac7e7fa16",
+  "subject": "OPEN-ISSUES / POINTER-HOVER spec: iPad -> monitor edge specks fixed (\u2026",
+  "version": "0.7.5+191.e196b34"
+ },
+ "0.7.5+192.61c782c": {
+  "date": "2026-10-18T00:07:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+192.61c782c_iphoneos-arm64.deb",
+  "run": 192,
+  "sha": "61c782c2485968ec2ea368d7198c400ded0358c0",
+  "subject": "G4B migrate: scene handle lookup through the owning switcher like 16.\u2026",
+  "version": "0.7.5+192.61c782c"
+ },
+ "0.7.5+193.c1b1736": {
+  "date": "2026-10-18T00:32:44Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+193.c1b1736_iphoneos-arm64.deb",
+  "run": 193,
+  "sha": "c1b17364fb5384348d8e3af941f43f278ff5d0cc",
+  "subject": "G3: Zoom/Unzoom menu title re-derived from the committed sizing polic\u2026",
+  "version": "0.7.5+193.c1b1736"
+ },
+ "0.7.5+194.2ba62f2": {
+  "date": "2026-10-18T00:49:59Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+194.2ba62f2_iphoneos-arm64.deb",
+  "run": 194,
+  "sha": "2ba62f261168b7e8cb28d9995889b444a531dfa7",
+  "subject": "G3C: Zoom on a stage with several windows applied the old attributes \u2026",
+  "version": "0.7.5+194.2ba62f2"
+ },
+ "0.7.5+196.a8aca00": {
+  "date": "2026-10-18T04:37:18Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+196.a8aca00_iphoneos-arm64.deb",
+  "run": 196,
+  "sha": "a8aca00dcc099180c7466e1629c2df7ad3ae5512",
+  "subject": "G3: zoom title hook: %orig; return; on separate lines (Logos drops th\u2026",
+  "version": "0.7.5+196.a8aca00"
+ },
+ "0.7.5+197.1ec6584": {
+  "date": "2026-10-18T04:41:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+197.1ec6584_iphoneos-arm64.deb",
+  "run": 197,
+  "sha": "1ec6584e7d894b7d4f724357dcc4c6269fe7ba1a",
+  "subject": "G4B migrate_stage: windows of the extended display's current stage go\u2026",
+  "version": "0.7.5+197.1ec6584"
+ },
  "0.7.5+198.51b4c69": {
-  "date": "2026-10-20T14:11:12Z",
+  "date": "2026-10-20T14:07:48Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+198.51b4c69_iphoneos-arm64.deb",
   "run": 198,
   "sha": "51b4c69570b1ad4688f0863c103da8dfd85379b3",
-  "subject": "CI: publish every successful build as a Sileo / Zebra repository on gh-pages with version history (version = control version + run + commit, commit subject in the description), optional backfill of earlier builds",
+  "subject": "CI: publish every successful build as a Sileo / Zebra repository on g\u2026",
   "version": "0.7.5+198.51b4c69"
+ },
+ "0.7.5+199.51b4c69": {
+  "date": "2026-10-20T14:17:56Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+199.51b4c69_iphoneos-arm64.deb",
+  "run": 199,
+  "sha": "51b4c69570b1ad4688f0863c103da8dfd85379b3",
+  "subject": "CI: publish every successful build as a Sileo / Zebra repository on gh-pages with version history (version = control version + run + commit, commit subject in the description), optional backfill of earlier builds",
+  "version": "0.7.5+199.51b4c69"
  }
 }
