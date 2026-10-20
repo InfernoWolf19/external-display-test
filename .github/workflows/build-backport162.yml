@@ -3,6 +3,11 @@ on:
   push:
     paths: ["Backport162/**", ".github/workflows/build-backport162.yml"]
   workflow_dispatch:
+    inputs:
+      backfill:
+        description: "also publish the previous successful builds of this branch to the Sileo repo (version history)"
+        type: boolean
+        default: false
 jobs:
   build:
     runs-on: macos-latest
@@ -43,3 +48,24 @@ jobs:
         with:
           name: Backport162-${{ steps.info.outputs.short }}
           path: Backport162/packages/*.deb
+  publish:
+    # Sileo / Zebra repository on GitHub Pages (branch gh-pages): every successful build of claude/backport162 is added as <version>+<run>.<commit>, older versions stay listed.
+    needs: build
+    if: github.ref == 'refs/heads/claude/backport162'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Backport162-*
+          merge-multiple: true
+          path: incoming
+      - name: Publish to the apt repo (gh-pages)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.run_number }}
+          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+          BACKFILL: ${{ inputs.backfill }}
+        run: .github/scripts/publish-apt-repo.sh
