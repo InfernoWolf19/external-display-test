@@ -4,6 +4,8 @@ Goal (user's instruction): port iPadOS 16.2 (20C65) Stage Manager and extended d
 
 User rules: separate branches per project (this one is `claude/backport162`), no PR unless asked, never force-push, logging opt-in only, kill switch + build guard on every build, commit trailers as in git log, no model identifier in commits. The user tests on the device and sends logs.
 
+0.7.9 (device-unverified): StageManagerToggle and SpeakerPicker 1.1.0~idle1 merged as dylibs Backport162SMT (SMT.x, switch `smtoggle`) and Backport162SPK (SPK.c, switch `speaker`); control Conflicts/Replaces the four old packages (also AudioRouteProbe, SwitcherDismissFix); analysis in specs/MERGE-SMT-SPK-0.7.9.md.
+
 ## USER DIRECTIVE (8 Oct, supersedes earlier "portable subset" plan)
 
 The user wants the FULL 16.2 Stage Manager + external display port. Nothing is deferred by choice: risky pieces are included, every item the specs called "NOT PORTABLE" is to be RECONSTRUCTED as new code (a full reimplementation from the 16.2 disassembly, not a small hook), including pieces that live outside Stage Manager / external display (other SpringBoard classes, UIKit-side categories, even other daemons such as backboardd via a separate tweak target) if that is what the behaviour needs. "Not portable" in the specs means "needs a full reimplementation", not "impossible". Everything default-on with `Backport162.off.<name>` switches. An independent adversarial reviewer agent (like specs/REVIEW-0.5.0.md) MUST review the final build and its confirmed findings must be fixed before handing it over. The user is on a limited plan: commit/push often, keep this file current.

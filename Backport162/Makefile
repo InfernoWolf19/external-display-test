@@ -5,7 +5,7 @@ INSTALL_TARGET_PROCESSES = SpringBoard
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = Backport162 Backport162AV Backport162BBD Backport162PTR
+TWEAK_NAME = Backport162 Backport162AV Backport162BBD Backport162PTR Backport162SMT Backport162SPK
 
 Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x BPCrash.m
 Backport162_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
@@ -26,5 +26,16 @@ Backport162PTR_FILES = PTR.x
 Backport162PTR_ARCHS = arm64e
 Backport162PTR_CFLAGS = -fobjc-arc -Wall -Werror -Wno-deprecated-declarations
 Backport162PTR_FRAMEWORKS = Foundation UIKit
+
+# Stage Manager toggle (merged StageManagerToggle 1.0.0; filter: SpringBoard + the Preferences app, Backport162SMT.plist; switch smtoggle)
+Backport162SMT_FILES = SMT.x
+Backport162SMT_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
+Backport162SMT_FRAMEWORKS = Foundation
+
+# audio daemon half (merged SpeakerPicker 1.1.0~idle1; filter: the audiomxd and mediaserverd executables, build 20A8372 only; plain C, no ARC; restart the audio daemons or reboot userspace after installing; switch speaker)
+Backport162SPK_FILES = SPK.c
+Backport162SPK_CFLAGS = -Wno-deprecated-declarations
+Backport162SPK_LDFLAGS = -lobjc
+Backport162SPK_FRAMEWORKS = CoreFoundation CydiaSubstrate
 
 include $(THEOS_MAKE_PATH)/tweak.mk
