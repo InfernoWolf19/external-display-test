@@ -9,3 +9,5 @@ One-time setup (repository settings, cannot be done from CI): Settings -> Pages 
 Version history of builds made before the repo existed: run the workflow once by hand (Actions -> Build Backport162 -> Run workflow on `claude/backport162`, tick *backfill*): the previous successful builds whose artifacts still exist (CI keeps them 90 days) are added with their own run number / commit.
 
 Notes: the version order is `base+run.sha`; raise `Version:` in `control` when a new release line starts. Install after a reboot of userspace (backboardd part).
+
+Userspace reboot prompt: `layout/DEBIAN/postinst` writes `finish:usreboot` to the finish channel Sileo opens for maintainer scripts (env `SILEO="6 1"`, Sileo `APTWrapper.swift` enum FINISH: back < uicache < reopen < restart < reload < reboot < usreboot, the highest action of the transaction wins). After installing or updating the package Sileo therefore offers *Userspace Reboot* instead of *Restart SpringBoard*; the backboardd / pointeruid / audio daemon parts only load when those daemons restart. dpkg / apt on the command line and other front ends only see the printed hint. The script cannot fail (always `exit 0`).

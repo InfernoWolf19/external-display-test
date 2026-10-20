@@ -1,0 +1,19 @@
+#!/var/jb/bin/sh
+# Backport162: ask the package manager for a USERSPACE REBOOT after an install / update instead of the usual "Restart SpringBoard" (the backboardd, pointeruid and
+# audio daemon parts of this package only load when those daemons start, a respring does not reload them).
+# Sileo: apt runs the maintainer scripts with env SILEO="6 1" (fd of the finish channel, version) and reads "finish:<action>" lines from it; the highest ranked
+# action of all packages in the transaction wins (return < uicache < reopen < restart < reload < reboot < usreboot), so "finish:usreboot" replaces the restart
+# that the MobileSubstrate / ElleKit trigger asks for (APTWrapper.swift, enum FINISH).  Other front ends (dpkg / apt on the command line, Zebra, Cydia) have no such
+# channel: they only get the message below.
+# This script must never fail: a non-zero exit would abort the installation.
+case "$1" in
+configure)
+    fd="${SILEO%% *}"
+    case "$fd" in
+    ''|*[!0-9]*) ;;
+    *) { eval "echo 'finish:usreboot' >&$fd"; } 2>/dev/null || true ;;
+    esac
+    echo "Backport162: reboot userspace after this install / update (backboardd and pointeruid parts)."
+    ;;
+esac
+exit 0
