@@ -394,6 +394,35 @@ static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinat
 + (id)newEntityWithApplication:(id)application sceneHandleProvider:(id)provider displayIdentity:(id)identity;
 @end
 
+// ---- device application scene handle of a display item (switch g1d_scenehandle) ----
+// 16.0 -[SBMainSwitcherControllerCoordinator _deviceApplicationSceneHandleForDisplayItem:] (0x1c623fa90) asks the scene manager of the ACTIVE display window scene
+// (-[SBWindowSceneManager activeDisplayWindowScene]: whichever display the pointer / last touch is on) for the item's scene; the data source query
+// -switcherContentController:deviceApplicationSceneHandleForDisplayItem: (0x1c623fa88) is a bare tail call into it. A window of the OTHER display therefore had no handle while
+// the user worked on the iPad: no supported sizing policies (the auto layout write-back of G2B kept the stale policy: Zoom / Unzoom state, resize limits), no
+// supportsCenterWindow / supported orientations, no home-gesture edge protection. 16.2 moved the lookup to the owner:
+//   data source query 0x1c76d3288: [[self _switcherControllerForContentViewController:vc] _deviceApplicationSceneHandleForDisplayItem:item]
+//   SBSwitcherController -_deviceApplicationSceneHandleForDisplayItem: 0x1c76065ec: handle of the controller's own window scene manager, device application handles only
+//   calculator 0x1c75a5784: the first handle any switcher controller finds (-enumerateSwitcherControllersWithBlock:, block 0x1c75a58dc)
+//   the other 16.0 coordinator callers (status bar inset / overlay blocks, supportsKilling, displayItemSupportsCenterRole, supportsTitleItems, _shouldPrioritizeSortOrder,
+//   _cancelPIPForDisplayItem) became per-owner SBSwitcherController sends; "first handle of any controller" answers them with the owner's handle (a scene lives in one manager).
+// -[SBApplicationController applicationForDisplayItem:] 16.2 0x1c742fdb0: type 0 or 3 = application by bundle identifier, type 5 = the web application, else nil (16.0 body: types 0 / 5).
+static id G1D_AppForItem(id item) {
+    Class ac = NSClassFromString(@"SBApplicationController");
+    id shared = ac ? G1B_Send0((id)ac, @selector(sharedInstance)) : nil;
+    long long type = G1B_SendLL0(item, @selector(type));
+    if (type == 0 || type == 3) return G1D_Msg1(shared, NSSelectorFromString(@"applicationWithBundleIdentifier:"), G1B_Send0(item, @selector(bundleIdentifier)));
+    if (type == 5) return G1B_Send0(shared, NSSelectorFromString(@"webApplication"));
+    return nil;
+}
+static id G1D_OwnerSceneHandle(id sc, id item) {                              // 16.2 SBSwitcherController -_deviceApplicationSceneHandleForDisplayItem: 0x1c76065ec
+    if (!sc || !item) return nil;
+    id mgr = G1B_Send0(G1B_Send0(sc, sWindowScene), NSSelectorFromString(@"sceneManager"));
+    id app = G1D_AppForItem(item);
+    id ident = G1D_Msg2(mgr, NSSelectorFromString(@"sceneIdentityForApplication:uniqueIdentifier:"), app, G1B_Send0(item, @selector(uniqueIdentifier)));
+    id handle = ident ? G1D_Msg1(mgr, NSSelectorFromString(@"existingSceneHandleForSceneIdentity:"), ident) : nil;
+    return (handle && G1B_SendB0(handle, NSSelectorFromString(@"isDeviceApplicationSceneHandle"))) ? handle : nil;
+}
+
 %group G1D_Coord
 %hook SBMainSwitcherControllerCoordinator
 
@@ -543,6 +572,24 @@ static __thread __unsafe_unretained id tEndSelf, tEndTo;            // coordinat
         G1B_SendV1(request, NSSelectorFromString(@"modifyApplicationContext:"), modify);
     };
     ((BOOL (*)(id, SEL, unsigned long long, id, id))objc_msgSend)(workspace, rt, 0, cfg, builder);
+}
+
+// 16.0 0x1c623fa90 / 0x1c623fa88 -> the owner's handle (G1D_OwnerSceneHandle, comment above); switch g1d_scenehandle
+- (id)_deviceApplicationSceneHandleForDisplayItem:(id)item {
+    if (!G1D_ON("g1d_scenehandle")) {
+        return %orig;
+    }
+    for (id sc in G1D_AllSCs((id)self)) {
+        id handle = G1D_OwnerSceneHandle(sc, item);
+        if (handle) return handle;
+    }
+    return nil;
+}
+- (id)switcherContentController:(id)controller deviceApplicationSceneHandleForDisplayItem:(id)item {
+    if (!G1D_ON("g1d_scenehandle")) {
+        return %orig;
+    }
+    return G1D_OwnerSceneHandle(G1D_Msg1((id)self, NSSelectorFromString(@"_switcherControllerForContentViewController:"), controller), item);
 }
 
 // ---- 16.2 window drag bookkeeping and broadcast (0x1c76d79e4 / 0x1c76d7ba8 / 0x1c76d7d18) ----
