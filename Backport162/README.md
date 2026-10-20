@@ -8,7 +8,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 - `CLASS_DELTA_NAMES.txt`: classes/methods added or removed in 16.2.
 - `specs/`: reconstructed 16.2 behaviour per class, and findings per group.
 
-## Features in this build (0.6.0) — everything is on by default
+## Features in this build (0.7.9) — everything is on by default
 
 0.6.0 integrates the reconstruction packages (groups 1b, 1c, 2, 2b, 3, 3b, 4b) on top of the 0.5.x external-display work. A feature is switched off with the file `<jbroot>/tmp/Backport162.off.<switch>`; everything with `<jbroot>/tmp/Backport162.off`. Every feature is on by default; the only two opt-ins (`edunative`, `methodology0`) are alternatives that would replace a 16.2 default. The tweak does nothing on any build but 20A8372. Source file in brackets.
 

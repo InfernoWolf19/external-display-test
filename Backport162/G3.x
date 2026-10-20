@@ -7,7 +7,7 @@
 // Every piece is tagged  // PORTABLE,  // PARTIAL: <why>  or  // NOT PORTABLE: <why>.
 //
 // Integration with Tweak.x (do not paste blindly):
-//   1. Feature switches (<jbroot>/tmp/Backport162.off.<name> turns one off): "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas", "g3embedded"; opt-in (Backport162.on.<name>): "g3bootorient",
+//   1. Feature switches (<jbroot>/tmp/Backport162.off.<name> turns one off): "g3handle", "g3snapshot", "g3topaff", "g3switcher", "g3canvas", "g3embedded"; "g3bootorient" (everything is on by default, the .off.<name> file is the only switch),
 //      "g3embedded", "g3pip", "g3kbwindow", "g3statusbar", "g3preflight" ... see BP_G3_On() below (names are strings, no enum edit needed).
 //   2. Call BP_G3_Setup() from the %ctor after the build check; it %init()s every group at the end of this file.
 //   3. Compile with ARC (-fobjc-arc), like Tweak.x.
@@ -494,7 +494,7 @@ static unsigned long long BP_G3_LayerRenderId(id layer) {
 %end // G3_Snapshot
 
 // ================================================================================================ SECTION 2: decorated scene VC
-// opt-in switch <jbroot>/tmp/Backport162.on.<name>
+// (historic name) not an opt-in: default ON, kill switch <jbroot>/tmp/Backport162.off.<name>
 static BOOL BP_G3_OptIn(const char *name) { return BP_OnName(name); }     // default ON (kill switch Backport162.off.<name>)
 static NSString *const kBPG3WMStyleNote = @"SBSwitcherControllerWindowManagementStyleDidChangeNotification";   // 16.2 extern NSString const
 

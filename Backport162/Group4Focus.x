@@ -10,7 +10,7 @@
 //   1. enum { ..., F_DISCONNECT, F_DISCSWITCH, F_ACTIVEDISPLAY, F_GESTUREGATE, F_LOCKEDPTR, F_COUNT };
 //      kFeatureNames: "disconnect", "discswitch", "activedisplay", "gesturegate", "lockedptr"
 //      (switch files <jbroot>/tmp/Backport162.off.<name>, as for the existing features).
-//      F_DISCSWITCH is OPT-IN: it only runs if <jbroot>/tmp/Backport162.on.discswitch exists.
+//      F_DISCSWITCH was OPT-IN in the draft; it is default ON now (kill switch Backport162.off.discswitch).
 //   2. Call BP_G4_Setup() from the %ctor after the existing %init (it does %init(G4) and the direct-function hook).
 //   3. Uses MSHookFunction (link CydiaSubstrate / ElleKit like the other hooks) for ONE direct (non-ObjC) function.
 //   4. Compile with ARC (-fobjc-arc), like Tweak.x.

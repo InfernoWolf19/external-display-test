@@ -1,6 +1,6 @@
 Package: com.infernowolf19.backport162
 Name: Backport162
-Version: 0.7.5
+Version: 0.7.9
 Architecture: iphoneos-arm64
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
 Maintainer: infernowolf19

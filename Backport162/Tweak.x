@@ -429,7 +429,7 @@ void EDE_Setup(void);                  // EDE.x    (ExtendedDisplayEnabler's pro
         BP_InitPaths();
         if (!BP_BuildMatches()) return;
         BP_InstallCrashRecorder(gTmpDir);   // own crash report: <jbroot>/tmp/Backport162.crash (ReportCrash writes nothing for some of these crashes)
-        BP_Log(@"Backport162 0.7.5 loaded");
+        BP_Log(@"Backport162 0.7.9 loaded");
         // BP2B_Early() must run before any message reaches a modifier class (+initialize of SBSwitcherModifier builds the
         // protocol tables); nothing above this line touches those classes.
         BP2B_Early();
