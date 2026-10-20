@@ -1,12 +1,4 @@
 {
- "0.7.3+142.ca14592": {
-  "date": "2026-10-13T10:03:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+142.ca14592_iphoneos-arm64.deb",
-  "run": 142,
-  "sha": "ca14592c958c46a9e2a5368a9c15667dc6c1301f",
-  "subject": "OPEN-ISSUES: disconnect migration findings, screen recording, video r\u2026",
-  "version": "0.7.3+142.ca14592"
- },
  "0.7.3+143.f1a53d2": {
   "date": "2026-10-13T10:31:06Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+143.f1a53d2_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "5f42e1239745421788599355a1ccfe5412d9132c",
   "subject": "REVIEW-PLUMBING-0.7.9: coverage matrix, fixed / open defects of the plumbing, display lifecycle and pointer area incl. SMT.x / SPK.c; README speaker row: new crash guard",
   "version": "0.7.5+204.5f42e12"
+ },
+ "0.7.9+205.6ff8b29": {
+  "date": "2026-10-20T19:18:08Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+205.6ff8b29_iphoneos-arm64.deb",
+  "run": 205,
+  "sha": "6ff8b2997cf12a2656e259288a49f135b37223c2",
+  "subject": "Backport162: FEATURES-0.7.9 feature-level completeness audit of the 16.2 port (checklist, TOP-15 gaps, unverified list)",
+  "version": "0.7.9+205.6ff8b29"
  },
  "0.7.9+206.24222ef": {
   "date": "2026-10-20T19:17:01Z",
