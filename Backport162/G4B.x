@@ -262,7 +262,8 @@ static int G4B_SendCloneMsg(NSString *uuid, unsigned mode, BOOL remove) {
     size_t ulen = strlen(u) + 1;
     if (ulen < 2 || ulen > 256) return -1;
     mach_port_t svc = MACH_PORT_NULL;
-    if (bootstrap_look_up(bootstrap_port, "com.apple.backboard.display.services", &svc) != KERN_SUCCESS || svc == MACH_PORT_NULL) return -1;
+    kern_return_t lk = bootstrap_look_up(bootstrap_port, "com.apple.backboard.display.services", &svc);
+    if (lk != KERN_SUCCESS || svc == MACH_PORT_NULL) { BP_Log(@"clonemirror: bootstrap_look_up(com.apple.backboard.display.services) failed kr=0x%x", lk); return -2; }
     struct {
         mach_msg_header_t Head;
         NDR_record_t NDR;
@@ -284,14 +285,17 @@ static int G4B_SendCloneMsg(NSString *uuid, unsigned mode, BOOL remove) {
     struct { mach_msg_header_t Head; NDR_record_t NDR; kern_return_t RetCode; mach_msg_trailer_t T; char pad[64]; } rep;
     memset(&rep, 0, sizeof rep);
     kern_return_t kr = mach_msg(&req.Head, MACH_SEND_MSG | MACH_RCV_MSG | MACH_SEND_TIMEOUT | MACH_RCV_TIMEOUT,
-                                req.Head.msgh_size, (mach_msg_size_t)sizeof rep, rp, 500, MACH_PORT_NULL);
+                                req.Head.msgh_size, (mach_msg_size_t)sizeof rep, rp, 2500, MACH_PORT_NULL);     // 2.5 s: backboardd handles its display service on one workloop, 0.5 s timed out while it was busy with a display connect (the request is executed anyway; only the reply was lost)
     mach_port_deallocate(mach_task_self(), svc);
     if (kr != KERN_SUCCESS) {
         if (kr == MACH_RCV_TIMED_OUT || kr == MACH_SEND_TIMED_OUT) mig_dealloc_reply_port(rp);
-        BP_Log(@"clonemirror: mach_msg kr=0x%x", kr);
-        return -1;
+        BP_Log(@"clonemirror: mach_msg kr=0x%x (%s)", kr, (kr == MACH_RCV_TIMED_OUT || kr == MACH_SEND_TIMED_OUT) ? "timed out: backboardd busy or not serving the id" : "failed");
+        return -3;
     }
-    if (rep.Head.msgh_id != req.Head.msgh_id + 100) return -1;      // a send-once notification (0x46): backboardd destroyed the request unanswered
+    if (rep.Head.msgh_id != req.Head.msgh_id + 100) {                // 0x46 = send-once notification: backboardd destroyed the request unanswered = its handler hook is not active (the stock demux drops unknown ids)
+        BP_Log(@"clonemirror: reply id %u instead of %u (a send-once notification 70 means the Backport162BBD handler hook is not installed in this backboardd)", (unsigned)rep.Head.msgh_id, (unsigned)req.Head.msgh_id + 100u);
+        return -4;
+    }
     return rep.RetCode;
 }
 
@@ -305,7 +309,7 @@ static void G4B_Transport(NSString *uuid, unsigned long long mode, BOOL remove) 
     dispatch_async(gG4BSendQ, ^{
         int r = G4B_SendCloneMsg(u, (unsigned)mode, remove);
         if (r == 0) BP_Log(@"clonemirror: backboardd %@ %@ mode %llu", remove ? @"removed" : @"set", u, mode);
-        else if (r < 0) BP_Log(@"clonemirror: backboardd did not answer the %@ request for %@ (Backport162BBD missing or not matching this build?)", remove ? @"remove" : @"set", u);
+        else if (r < 0) BP_Log(@"clonemirror: backboardd did not answer the %@ request for %@ (Backport162BBD missing or not matching this build? the reason is in the line before, code %d)", remove ? @"remove" : @"set", u, r);
         else BP_Log(@"clonemirror: backboardd refused the %@ request for %@ (MIG code %d)", remove ? @"remove" : @"set", u, r);
     });
 }
