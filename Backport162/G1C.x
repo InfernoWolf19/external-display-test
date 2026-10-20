@@ -5888,8 +5888,9 @@ static CGPoint G1C_PipR_AccAnchor(id self, SEL _cmd, CGPoint p, id layout) {    
 
 // 16.2 creators (SBFullScreenFluidSwitcherRootSwitcherModifier.transitionModifierForMainTransitionEvent: 0x1c762c998, _SBHomeScreenFloorSwitcherModifier.handleTransitionEvent: 0x1c750c194) build the nested
 // SBFullScreenToHomeIconZoomSwitcherModifier with setShouldForceDefaultAnchorPointForTransition:isChamoisWindowingUIEnabled and the SBPIPRestoreToFullScreenSwitcherModifier with
-// setShouldForceDefaultAnchorPointForTransition: / setShouldClippingTakeShadowIntoAccount: of the same value. Those two creators are not ported (their other 16.2 deltas belong to the root factory port), the 16.0
-// creators leave the flags NO, so the modifiers apply them when they are attached (the query isChamoisWindowingUIEnabled resolves to the same root / floor value the creator used).
+// setShouldForceDefaultAnchorPointForTransition: / setShouldClippingTakeShadowIntoAccount: of the same value. Those two creators ARE ported in G1B.x (G1B_FluidRoot / G1B_HomeFloor, 1.x creators) and set
+// the flags there; the didMoveToParentModifier: hooks below are the belt-and-braces path for a modifier built by a 16.0 creator that is still reached (the query isChamoisWindowingUIEnabled resolves to the
+// same root / floor value the creator used), so the two writes always agree.
 static IMP gPipDidMoveOrig;
 static void G1C_Pip_DidMove(id self, SEL _cmd, id parent) {
     ((void (*)(id, SEL, id))gPipDidMoveOrig)(self, _cmd, parent);
