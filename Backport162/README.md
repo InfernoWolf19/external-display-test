@@ -140,6 +140,13 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | arrange | `activeDisplayTrackingMethodology`, display arrangement item, `preferredArrangementOfDisplay:relativeTo:` | `arrange` |
 | methodology0 | **opt-in**: keyboard-following active display instead of the pointer-following default | `methodology0` |
 
+### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
+
+| feature | what it ports | switch |
+|---|---|---|
+| embedoverlay | (X2Overlay.x, gap G2 / audit row T1) Control Centre module, in-call, passcode and voice control overlays always present on the iPad's own display (16.2 `prefersEmbeddedDisplayPresentation = YES`), Spotlight when its presentation source is 1 or 7 (the pull-down gesture; Cmd-Space stays on the active display, exactly like 16.2), the new `-[SBMainWorkspaceTransitionRequest modifyTransientOverlayContext:]` (sets the context window scene for every present request, e.g. in-call and the interactive Spotlight transaction) and the display configuration of the interactive Spotlight request | `embedoverlay` |
+| embedoverlay_envmode | (X2Overlay.x) an overlay that preserves the app switcher reads the unlocked environment mode from the switcher of the display of its own request (16.2 `_executeTransientOverlayTransitionRequest:`), not from the active display's switcher (16.0) | `embedoverlay_envmode` |
+
 ### Backport162BBD (second package)
 
 `Backport162BBD/` is a separate tweak that runs inside backboardd (filter `backboardd`, arm64e): the daemon side of `clonemirror` (new MIG routines on the BackBoard display service and a per-display override in `updateClone`). Optional; reboot userspace after installing. Log lines are prefixed `g4b-bbd`.
