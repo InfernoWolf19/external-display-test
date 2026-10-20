@@ -38,7 +38,7 @@
 // Switches (checked at most once a second, in <jbroot>/tmp and /tmp; any access() failure means ON): Backport162.off.ptr_layerclass, .off.ptr_hidden, .off.ptr_scene, Backport162.off.
 // A is evaluated when a shape view is created, B when a display context is created (display attach), C when a display attaches; a switch needs `killall pointeruid` to take
 // effect on pointers that already exist.
-// Log: NSLog with prefix [Backport162PTR]; additionally (when Backport162.debug exists) appended to Backport162.daemon.log in a directory pointeruid can write to (BPDaemon.h); SpringBoard copies it into Backport162.log.
+// Log (only while Backport162.debug exists; nothing otherwise except the start-up markers): NSLog with prefix [Backport162PTR] and appended to Backport162.daemon.log in a directory pointeruid can write to (BPDaemon.h); SpringBoard copies it into Backport162.log.
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -94,11 +94,11 @@ static BOOL BPPTR_DebugOn(void) {
 
 static void BPPTR_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
 static void BPPTR_Log(NSString *fmt, ...) {
+    if (!BPPTR_DebugOn()) return;                                   // logging is opt-in (Backport162.debug), the system log stays silent otherwise (the always-written start-up markers are BPPTR_Marker's)
     va_list ap; va_start(ap, fmt);
     NSString *m = [[NSString alloc] initWithFormat:fmt arguments:ap];
     va_end(ap);
     NSLog(@"[Backport162PTR] %@", m);
-    if (!BPPTR_FileExists("Backport162.debug")) return;
     const char *u = m.UTF8String;                                   // pointeruid is sandboxed: BPDaemon.h picks a directory it can write to, SpringBoard copies the lines into Backport162.log
     if (u) BPDW_Line("ptr", u);
 }
