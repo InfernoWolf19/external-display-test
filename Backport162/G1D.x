@@ -574,6 +574,18 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
     ((BOOL (*)(id, SEL, unsigned long long, id, id))objc_msgSend)(workspace, rt, 0, cfg, builder);
 }
 
+// -failMultitaskingGesturesForReason: 16.2 0x1c76ce304 = every switcher controller's gesture manager (block 0x1c76ce398 inside -enumerateSwitcherControllersWithBlock:);
+// 16.0 0x1c623adb8 only the one of the ACTIVE display window scene, so a typing / window management style change on the iPad left the gestures of the extended display running. Switch g1d_failgestures.
+- (void)failMultitaskingGesturesForReason:(id)reason {
+    if (!G1D_ON("g1d_failgestures")) {
+        %orig;
+        return;
+    }
+    for (id sc in G1D_AllSCs((id)self)) {
+        id gm = G1B_Send0(sc, @selector(gestureManager));
+        if ([gm respondsToSelector:@selector(failMultitaskingGesturesForReason:)]) G1B_SendV1(gm, @selector(failMultitaskingGesturesForReason:), reason);
+    }
+}
 // 16.0 0x1c623fa90 / 0x1c623fa88 -> the owner's handle (G1D_OwnerSceneHandle, comment above); switch g1d_scenehandle
 - (id)_deviceApplicationSceneHandleForDisplayItem:(id)item {
     if (!G1D_ON("g1d_scenehandle")) {
