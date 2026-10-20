@@ -76,3 +76,23 @@ Consumers (all read the main bundle, table `SpringBoard`): `-[SBTopAffordanceVie
 ### Unproven
 
 No device run. The Control Centre "External Display" tile text belongs to the SMT.x/Control Centre side and is stock. `NEXT/PREVIOUS_APP_WINDOW_ON_STAGE_DISCOVERABILITY` are removed keys of 16.2 and not used any more by the port (the plain titles already exist in 16.0). The `SpringBoardEducation.app` strings (`EXTERNAL_DISPLAY_*`, audit E1) live in another bundle and were not embedded.
+
+## G9 pinOnButtonDown for the system gesture windows (audit P1) — X9Pin.x
+
+### 16.2 mechanism
+
+`-[SBSystemGestureManager _configureForNewSystemGestureWindowIfNecessary]` (16.0 0x1c6319958 / 16.2 0x1c77b912c) registers the display's system gesture window for global mouse events. 16.0 (call at 0x1c6319b88): `[[BKSMousePointerService sharedInstance] requestGlobalMouseEventsForDisplay:hardwareIdentifier targetContextID:contextId]`. 16.2 (call at 0x1c77b937c): the `options:` variant with `[BKSMousePointerGlobalContextOptions build:^(m){ [m setPinOnButtonDown:SBFIsChamoisExternalDisplayControllerAvailable()]; }]` (block 0x1c77b9458); the assertion is stored in the same ivar (+0x60). In BackBoardServices 16.0 the 2-argument method (0x18e2051d8) is a tail call of the 3-argument one (0x18e204d9c) with options nil, `+[BKSMousePointerGlobalContextOptions build:]` (0x18e228a68) and `-[BKSMutableMousePointerGlobalContextOptions setPinOnButtonDown:]` (0x18e2284b4) exist, and backboardd 16.0 reads the flag (bbd 0x100050f28, POINTER-CROSS-0.7.4 4.3). The only caller of both request methods in SpringBoard 16.0 and 16.2 is `_configureForNewSystemGestureWindowIfNecessary` (stub caller scan). The flag function is `SBFFeatureFlagsIsChamoisExternalDisplayControllerEnabled` in 16.0 (SpringBoardFoundation 0x18eb68fd4) and `SBFIsChamoisExternalDisplayControllerAvailable` in 16.2 (0x18ee096e4); the 16.0 plist has the feature ON, so the value is YES.
+
+The audit's outline (hook the 2-argument method and forward) was adapted: because the 2-argument method forwards to the 3-argument one with options nil, the hook sits on the 3-argument method and substitutes a nil options argument.
+
+### Implemented
+
+X9Pin.x: `_configureForNewSystemGestureWindowIfNecessary` hook raising a thread local while the original runs; `-[BKSMousePointerService requestGlobalMouseEventsForDisplay:targetContextID:options:]` hook that, while raised and when options is nil, builds the 16.2 options (dlsym of the 16.2 flag name, then the 16.0 name; missing class or selector -> request unchanged plus a log line).
+
+### Switch and logs
+
+`pinbuttondown` (default on; the hooks test it per call). Logs: `[x9] pinOnButtonDown for system gesture windows: installed | NOT installed`, `[x9] global mouse events for display ... options ... (pinOnButtonDown N)` (one line per display when its gesture window is created), error lines if the class or the flag function is missing.
+
+### Unproven
+
+Nothing was run. Drag a window by the pointer from one display over the boundary: it should keep following the pointer; the daemon log (`Backport162.daemon.log`, lines `g4b-bbd`/stock "pinning global destination") shows the pin. Only matters for system gesture windows created after the tweak loaded (the window of a display that is connected later is configured after load; the main display's window may have been configured before the tweak loaded on a respring-less install, a respring fixes that).
