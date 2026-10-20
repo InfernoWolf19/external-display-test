@@ -1,12 +1,4 @@
 {
- "0.7.3+145.9ebdf27": {
-  "date": "2026-10-13T11:05:28Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+145.9ebdf27_iphoneos-arm64.deb",
-  "run": 145,
-  "sha": "9ebdf2745be7d0b473dba961ce0c47c85e75039d",
-  "subject": "G1B: faithful split in the filtering modifier again (drag moves only \u2026",
-  "version": "0.7.3+145.9ebdf27"
- },
  "0.7.3+146.7dd2ad9": {
   "date": "2026-10-13T11:22:00Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+146.7dd2ad9_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "0b2d6e27e6a3bf274854775b3d7ab642b6de7d1b",
   "subject": "postinst: ask Sileo for a userspace reboot (finish:usreboot) instead of the restart SpringBoard button after install / update",
   "version": "0.7.9+208.0b2d6e2"
+ },
+ "0.7.9+209.968f1cf": {
+  "date": "2026-10-20T19:27:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+209.968f1cf_iphoneos-arm64.deb",
+  "run": 209,
+  "sha": "968f1cfd9cad3cc40f16eda03f91c530a5b30bf2",
+  "subject": "G1D: scene handle of a display item is looked up on the display that owns it (g1d_scenehandle)",
+  "version": "0.7.9+209.968f1cf"
  }
 }
