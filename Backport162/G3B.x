@@ -377,7 +377,7 @@ static BOOL BP_G3B_PreflightRequiredForBundle(NSString *bundleID) {   // -[PDCPr
 
 
 // ================================================================================================ ITEM 6: traits roles (AX split)
-// (spec section 6)  DONE, OPT-IN (Backport162.on.g3b_axroles): behaviour-neutral on 16.0. EyedropperUI / MomentsUI have no 16.0 consumer (skipped).
+// (spec section 6)  DONE, default ON like every feature (kill switch Backport162.off.g3b_axroles; the draft called it opt-in): behaviour-neutral on 16.0. EyedropperUI / MomentsUI have no 16.0 consumer (skipped).
 static NSString *const kBPRoleAXAssistiveTouch = @"SBTraitsParticipantRoleAXAssistiveTouchUI";
 static NSString *const kBPRoleAXFullKeyboard   = @"SBTraitsParticipantRoleAXFullKeyboardUI";
 static NSString *const kBPRoleAXVoiceControl   = @"SBTraitsParticipantRoleAXVoiceControlUI";

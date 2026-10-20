@@ -142,7 +142,7 @@ If a regulated-region user ever needs the real thing, the out-of-process route i
 
 ---
 
-## 6. New traits roles / scenes: Eyedropper, Moments, AX roles  (DONE; AX split opt-in because behaviour-neutral)
+## 6. New traits roles / scenes: Eyedropper, Moments, AX roles  (DONE; AX split default ON like every feature, kill switch `Backport162.off.g3b_axroles`)
 
 16.2 adds six `NSString *const` roles in SpringBoard (`_SBTraitsParticipantRole<X>`, value == the symbol name without the underscore, e.g. `@"SBTraitsParticipantRoleAXAssistiveTouchUI"`; data at 0x1d7b31e48 AXAssistiveTouchUI, 0x1d7b31e50 AXFullKeyboardUI,
 0x1d7b31e58 AXVoiceControlUI, 0x1d7b31e60 AXUIServer, 0x1d7b31eb8 EyedropperUI, 0x1d7b31f20 MomentsUI) and removes `SBTraitsParticipantRoleAccessibilityDaemonUI` (16.0 0x1d7b9d3e0, value `@"SBTraitsParticipantRoleAccessibilityDaemonUI"`).
@@ -162,8 +162,8 @@ Every user of the old constant was enumerated with `addrxref.py` (all 8 places i
 Each of the new roles sits in exactly the lists the old one sat in, so the traits policy of an AX overlay scene is **identical** in 16.2 (the split only gives each overlay its own role string). EyedropperUI/MomentsUI belong to two new
 scene controllers (`SBEyedropperUISceneController`, `SBMomentsUISceneController`, 16.2-only daemons/UI) with no Stage Manager or external-display involvement: **skipped, no 16.0 consumer** (they would only be listed in the same arrays).
 
-Port (group `G3B_AXRoles`, OPT-IN `Backport162.on.g3b_axroles`, because it is behaviour-neutral on 16.0 and every hook is a risk): the four `+_setupInfo` return `%orig` with `traitsRole` replaced by the new string, and the four list getters return `%orig` plus the four AX role strings
-(old role kept). Collection kind (NSArray/NSSet/NSOrderedSet) is preserved; the result is cached per original object so identity is stable. Check on device: `Backport162.on.g3b_axroles`, enable AssistiveTouch on the external display and verify that it still rotates/stages like before.
+Port (group `G3B_AXRoles`, DEFAULT ON (user directive: every feature is on; the draft proposed opt-in because it is behaviour-neutral on 16.0 and every hook is a risk), kill switch `Backport162.off.g3b_axroles`): the four `+_setupInfo` return `%orig` with `traitsRole` replaced by the new string, and the four list getters return `%orig` plus the four AX role strings
+(old role kept). Collection kind (NSArray/NSSet/NSOrderedSet) is preserved; the result is cached per original object so identity is stable. Check on device (it is on by default; `Backport162.off.g3b_axroles` restores stock): enable AssistiveTouch on the external display and verify that it still rotates/stages like before.
 
 ---
 
@@ -355,7 +355,7 @@ Only the type 9 body differs from 16.0 (16.0 toggles smallest/largest, 16.2 alwa
 **Confidence**: HIGH for 7, 2, 3, 5, 6 and the consumer/producer/handle parts of 1 (read from code, selectors verified present in 16.0); MEDIUM for 4 (region rule), 1.4 (guide: the arbiter-side behaviour depends on the 16.0 LiveOverlay policy specifier), 1.6; MEDIUM-LOW for 1.3 (candidate set and comparator are an approximation).
 **Not done on purpose** (UNSURE, each with a check): scene-orientation-request guiding (stays on AlterEgo), creator of the portaled overlay (cross-display drag), top-affordance "Full Screen" no-toggle change, a native 5-argument `SBDeviceApplicationSceneView` init.
 **Install order**: group 4 (active display, scale), group 1b (response class type 38 and `_performEventResponse:`), group 2 (`%new` `layoutRestrictionInfoForItem:` / `supportedContentInterfaceOrientationsForItem:` on `SBSwitcherModifier`), group 3 (`G3_Handle`, `g3switcher` poster, `G3_Snapshot`), then this file: call `BP_G3B_Setup()` once. `G3B_Orient` needs group 1b + group 2 + `G3_Handle`'s `%new` handle accessors; without them every piece degrades to the 16.0 behaviour (guards on selectors/classes). The handle hooks of 1.5 and `G3_Handle` can coexist; `G3B_Banner`/`G3B_Menu` replace the 16.0 toast path only on 16.2-style switcher controllers.
-**Switches**: `Backport162.off` (all) or `Backport162.off.<g3b_banner|g3b_menu|g3b_pip|g3b_kbwindow|g3b_statusbar|g3b_orient|g3b_grid|g3b_guide|g3b_split>`; opt-ins `g3b_preflightlog`, `g3b_axroles`.
+**Switches**: `Backport162.off` (all) or `Backport162.off.<g3b_banner|g3b_menu|g3b_pip|g3b_kbwindow|g3b_statusbar|g3b_orient|g3b_grid|g3b_guide|g3b_split>`; `g3b_preflightlog` and `g3b_axroles` were drafted as opt-ins and are default ON in the build (same kill switch files).
 **Open questions (device checks)**: banner wording on 16.2 (7), green-tea region rule (4), keyboard focus display with focus on the external display (2), the orthogonal snap point set (1.3), guided windows follow the shape (1.4a), rotated container rendering (1.6), `currentStatusBarHeight` of the portaled overlay.
 **Verification done**: `perl logos/bin/logos.pl` translates the whole hooks file without errors; no SDK compiler is available on this host, so `-Wall -Werror` was applied by review only (casts through `objc_msgSend`, `%orig` on its own line, no hard-coded ivar offsets: all ivars by name).
 

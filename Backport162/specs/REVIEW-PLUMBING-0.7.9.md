@@ -111,7 +111,7 @@ HIGH
 * H1 (unresolved, not provable statically): clone mirroring reply never observed on the device. All transport and daemon code checks out (section 2); the new log lines decide between "BBD hook not active", "timeout" and "look-up failure". If the hook is simply not installed, the daemon marker `install result:` line shows which check failed.
 
 MED
-* M1 G3B `g3b_axroles` is ON by default although the spec (group3b-reconstruct.md section 6) and the code comments call it opt-in "because every hook is a risk": it rewrites the traits role of four AX scene controllers (`+_setupInfo`) and appends four role strings to three provider lists. Unverified on a device (spec asks to test AssistiveTouch on the extended display). Decision needed: keep on (directive) or opt-in. Patch if opt-in: `BP_G3B_OptIn` -> `BP_OptInName` for "g3b_axroles" (one line) and a README note.
+* M1 (RESOLVED: stays ON by the standing directive; comments, spec and README corrected) G3B `g3b_axroles` is ON by default although the spec (group3b-reconstruct.md section 6) and the code comments call it opt-in "because every hook is a risk": it rewrites the traits role of four AX scene controllers (`+_setupInfo`) and appends four role strings to three provider lists. Unverified on a device (spec asks to test AssistiveTouch on the extended display). Decision needed: keep on (directive) or opt-in. Patch if opt-in: `BP_G3B_OptIn` -> `BP_OptInName` for "g3b_axroles" (one line) and a README note.
 * M2 Recording indicator and transient-UI interaction manager are not created for the extended display (3.1). Patch proposal in the matrix.
 * M3 `screenBoundsIgnoresSceneOrientation` not ported (3.2).
 * M4 SPK `hook_allow` retains an unverified object type (4).

@@ -99,7 +99,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | g3b_guide | SBSwitcherTraitsAssistant guide | `g3b_guide` |
 | g3b_split | split-view orientation | `g3b_split` |
 | g3b_preflightlog | log of the privacy-preflight decision (the PDCPreflightManager gate itself does not exist in 16.0) | `g3b_preflightlog` |
-| g3b_axroles | AX / Eyedropper / Moments traits roles | `g3b_axroles` |
+| g3b_axroles | AX traits roles (the four AX scene controllers and the role lists of the embedded / external traits providers get the 16.2 AX role names; Eyedropper / Moments skipped: no 16.0 consumer). Default ON like every feature; behaviour-neutral on 16.0 by design, not yet checked with AssistiveTouch on the extended display | `g3b_axroles` |
 
 ### Group 3c: top-affordance Zoom [G3C.x]
 
