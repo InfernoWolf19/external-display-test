@@ -1,12 +1,4 @@
 {
- "0.7.3+143.f1a53d2": {
-  "date": "2026-10-13T10:31:06Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+143.f1a53d2_iphoneos-arm64.deb",
-  "run": 143,
-  "sha": "f1a53d2cd811b6866f116796d97aa91f71c16cc5",
-  "subject": "AV: AVKit extended display gate for the second screen connection (16.\u2026",
-  "version": "0.7.3+143.f1a53d2"
- },
  "0.7.3+144.7ae2a5e": {
   "date": "2026-10-13T10:51:40Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+144.7ae2a5e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "24222ef15c252cad1b058e31b3d0cee57d8031ee",
   "subject": "g3b_axroles stays default ON (standing directive): G3B.x comment, group3b-reconstruct.md and README no longer call it opt-in; review note",
   "version": "0.7.9+206.24222ef"
+ },
+ "0.7.9+207.fc6e206": {
+  "date": "2026-10-20T19:19:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+207.fc6e206_iphoneos-arm64.deb",
+  "run": 207,
+  "sha": "fc6e2060e9a6644cb0e2eec28b92ffdb66a1b646",
+  "subject": "G1C: overlappingModelForAppLayout: asks for the model of the CONTAINING layout like 16.2 0x1c7652fc4 (g1c_modelmap)",
+  "version": "0.7.9+207.fc6e206"
  }
 }
