@@ -1,12 +1,4 @@
 {
- "0.7.4+150.63e1901": {
-  "date": "2026-10-17T07:35:10Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+150.63e1901_iphoneos-arm64.deb",
-  "run": 150,
-  "sha": "63e1901f7e3a8c5d5675650f7847dbcd91485b6c",
-  "subject": "Merge the backboardd tweak into the main package (one deb: SpringBoar\u2026",
-  "version": "0.7.4+150.63e1901"
- },
  "0.7.4+151.c7f54dd": {
   "date": "2026-10-17T07:40:26Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+151.c7f54dd_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "237c8ef40860c96a3ad58f40df049c471daef992",
   "subject": "G8: 16.2 zoom / full-screen / banner / education pill labels as fallback localisation (41 languages embedded from the 16.2 SpringBoard.loctable, switch l10n162); education pill reads the SpringBoard table",
   "version": "0.7.9+213.237c8ef"
+ },
+ "0.7.9+214.1229d25": {
+  "date": "2026-10-20T19:45:10Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+214.1229d25_iphoneos-arm64.deb",
+  "run": 214,
+  "sha": "1229d258e35a4a6ccdbfb40c4e38be9ee9c81fb4",
+  "subject": "G9: pinOnButtonDown for the system gesture windows (16.2 requestGlobalMouseEventsForDisplay:targetContextID:options:, switch pinbuttondown)",
+  "version": "0.7.9+214.1229d25"
  }
 }
