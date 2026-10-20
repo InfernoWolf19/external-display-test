@@ -27,6 +27,7 @@
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #import "BP.h"
+#import "BPLoc.h"
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 @interface SBFullKeyboardAccessUISceneController : NSObject @end
@@ -131,6 +132,7 @@ static NSString *BP_G3B_Localized(NSString *key16_2, NSString *key16_0, NSString
     NSBundle *b = [NSBundle mainBundle];
     NSString *s = [b localizedStringForKey:key16_2 value:@"" table:@"SpringBoard"];
     if (s.length && ![s isEqualToString:key16_2]) return s;                       // a 16.2-style strings table is installed
+    if (BP_OnName("l10n162")) return BPLoc_String(key16_2, key16_0, english);      // gap G8: the table embedded from the 16.2 loctable (BPLoc.h), then the 16.0 key, then english
     s = [b localizedStringForKey:key16_0 value:@"" table:@"SpringBoard"];         // 16.0 key with the same wording, localized
     if (s.length && ![s isEqualToString:key16_0]) return s;
     return english;
@@ -310,7 +312,10 @@ static __thread BOOL gBPG3BInBuildMenu;
             continue;
         }
         if (act && act == zoom) {
-            NSString *t = [[NSBundle mainBundle] localizedStringForKey:@"ENTER_FULL_SCREEN_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
+            // 16.2 0x1c7357a60: discoverabilityTitle = mainBundle localizedStringForKey:@"ENTER_FULL_SCREEN_DISCOVERABILITY" table:@"SpringBoard" (16.0 0x1c5ee3870: ZOOM_DISCOVERABILITY);
+            // the key is not in the 16.0 table: gap G8 answers it from the embedded 16.2 table (switch l10n162; off = only when the bundle has the key)
+            NSString *t = BP_OnName("l10n162") ? BPLoc_String(@"ENTER_FULL_SCREEN_DISCOVERABILITY", nil, @"Enter Full Screen")
+                                               : [[NSBundle mainBundle] localizedStringForKey:@"ENTER_FULL_SCREEN_DISCOVERABILITY" value:@"" table:@"SpringBoard"];
             if (t.length && ![t isEqualToString:@"ENTER_FULL_SCREEN_DISCOVERABILITY"] && [c respondsToSelector:@selector(setDiscoverabilityTitle:)]) [c setDiscoverabilityTitle:t];
         }
         [out addObject:c];

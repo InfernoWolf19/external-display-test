@@ -37,6 +37,7 @@
 #import <sys/sysctl.h>
 #import <UIKit/UIKit.h>
 #import "BP.h"
+#import "BPLoc.h"
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 @interface SBDisplayAssertionPreferences : NSObject @end
@@ -587,7 +588,10 @@ static NSString *G4B_SymString(const char *n) {            // exported NSString*
     void *p = dlsym(RTLD_DEFAULT, n);
     return p ? *(__unsafe_unretained NSString *const *)p : nil;
 }
+// 16.2 0x1c77e8104 (_pillSubtitleContentItem) and viewDidLoad read these with table @"SpringBoard" (this file used table:nil = Localizable.strings, which has none of them, so the pill always
+// showed the English fallback).  Keys that 16.0's SpringBoard.loctable lacks (STAGE_MANAGER_EXTENDED_DISPLAY, _ON, _OFF) come from the table embedded from the 16.2 loctable (BPLoc.h, gap G8).
 static NSString *G4B_Localized(NSString *key, NSString *fallback) {
+    if (BP_OnName("l10n162")) return BPLoc_String(key, nil, fallback);
     NSString *s = [[NSBundle mainBundle] localizedStringForKey:key value:@"" table:nil];
     return (s.length && ![s isEqualToString:key]) ? s : fallback;
 }
@@ -604,7 +608,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
 }
 - (id)_pillSubtitleContentItem {
     Class ci = NSClassFromString(@"PLPillContentItem");
-    NSString *t = _extendedDisplayEnabled ? G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY_ON", @"On") : G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY_OFF", @"Off");
+    NSString *t = _extendedDisplayEnabled ? G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY_ON", @"Stage Manager On") : G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY_OFF", @"Stage Manager Off");
     return ((id (*)(id, SEL, id, long long))objc_msgSend)([ci alloc], NSSelectorFromString(@"initWithText:style:"), t, 2);
 }
 - (void)viewDidLoad {
@@ -615,7 +619,7 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
     UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithHierarchicalColor:[UIColor labelColor]];
     UIImageView *lead = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"display" withConfiguration:cfg]];
     UIImageView *trail = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right"]];
-    NSString *title = G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY", @"Extended Display");
+    NSString *title = G4B_Localized(@"STAGE_MANAGER_EXTENDED_DISPLAY", @"External Display");
     UIView *pv = ((id (*)(id, SEL, id, id))objc_msgSend)([pill alloc], NSSelectorFromString(@"initWithLeadingAccessoryView:trailingAccessoryView:"), lead, trail);
     _pillView = pv;
     id titleItem = ((id (*)(id, SEL, id, long long))objc_msgSend)([ci alloc], NSSelectorFromString(@"initWithText:style:"), title, 1);

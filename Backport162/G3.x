@@ -31,6 +31,7 @@
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
 #import "BP.h"
+#import "BPLoc.h"
 
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 // END INTEGRATION interfaces
@@ -580,11 +581,14 @@ static BOOL BP_G3_ZoomState(id handle, BPG3ZoomState *st) {
 }
 
 // Title of the maximization action for isZoomed (16.2 keys; 16.0 key / the key's wording when the 16.2 keys are not in the 16.0 loctable).
+// 0.7.9 (gap G8, specs/GAPS-IMPLEMENTED-0.7.9.md): the 16.2 keys are answered from the table embedded from the 16.2 SpringBoard.loctable (BPLoc.h, 41 languages) when the 16.0 table lacks
+// them: not zoomed "Enter Full Screen", zoomed "Zoom" (16.2's own wording, en).  Switch l10n162 (default on); off = the old fallback (16.0 key for Zoom, the literal "Unzoom").
 static NSString *BP_G3_ZoomTitle(id tvc, BOOL z) {
     NSString *key162 = z ? @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_UNZOOM" : @"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION_ZOOM";
     NSString *t = [tvc respondsToSelector:@selector(_localizedMenuTitleForKey:)] ? [tvc _localizedMenuTitleForKey:key162] : nil;
     if (![t isKindOfClass:[NSString class]] || !t.length || [t isEqualToString:key162]) {
-        t = z ? @"Unzoom" : [tvc _localizedMenuTitleForKey:@"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION"];
+        t = BP_OnName("l10n162") ? BPLoc_String(key162, nil, z ? @"Zoom" : @"Enter Full Screen")
+                                 : (z ? @"Unzoom" : [tvc _localizedMenuTitleForKey:@"TOP_AFFORDANCE_MENU_TITLE_MAXIMIZATION"]);
     }
     return ([t isKindOfClass:[NSString class]] && t.length) ? t : nil;
 }
