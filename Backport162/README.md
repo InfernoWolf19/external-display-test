@@ -42,6 +42,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | group1c | AppSwitcher / InlineAppExpose / HomeScreen Continuous Expose modifiers, window drag (+ destination, root), Root floor / gesture factories, peek family, app drag-and-drop gesture family, grid swipe-up / slide / cycle / strip reveal and overflow transactions, ToHome and AppToApp / SwitcherToApp transitions, grabber and orientation producers | `group1c` |
 | g1c_piles | the pile layout of the app switcher | `g1c_piles` |
 | g1c_flyin | no 0.8-scale fly-in card after a home swipe that ends on the home screen (16.2 masks it under Stage Manager) | `g1c_flyin` |
+| g1c_modelmap | the overlapping model of a window layout is asked for the layout that contains it (16.2 0x1c7652fc4; the ported 16.2 callers got the model of the unmapped layout on 16.0) | `g1c_modelmap` |
 
 ### Group 2: layout data [G2.x, G2B.m]
 

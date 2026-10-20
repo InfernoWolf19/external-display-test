@@ -5016,6 +5016,32 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
 %end
 %end
 
+// ---- -[SBSwitcherModifier(SharedModifierUtilities) overlappingModelForAppLayout:]  16.2 0x1c7652fc4 (16.0 0x1c61c4450)                                            switch g1c_modelmap
+// 16.2 asks the calculator for the model of [self appLayoutContainingAppLayout:layout] (the query is answered down the chain: WindowDelete / WindowDrag / Split overrides, at the end the
+// view controller: the first unadjusted layout that is or contains the layout, else the layout itself, never nil: 0x1c7435e54). 16.0 passes `layout` unchanged, and in 16.0 this public method
+// has NO caller at all: the four classes that needed a model (FullScreen / Inline / AppSwitcher CE, strip overflow reveal) each had a private _overlappingModelForAppLayout: that already
+// did the mapping (16.0 0x1c5f1ee28 / 0x1c6141330 / 0x1c61fa2f4 / 0x1c636c1c4, instruction sequence identical to the 16.2 body). The ported 16.2 callers (FullScreen floor, Strip, Inline, F2S / XB
+// transitions via G1B_OverlapBBox, PIP morph transitionWillBegin, HomeScreen floor ...) call only the public one, so on 16.0 they got the model of the UNMAPPED layout (e.g. a leaf or
+// the closing window's own layout instead of the stage it belongs to: wrong bounding box / stage area / occlusion for exactly those). Wrapped in @try: a detached modifier copy that cannot
+// answer the mapping query gets the 16.0 answer.
+%group G1C_ModelMap
+%hook SBSwitcherModifier
+- (id)overlappingModelForAppLayout:(id)layout {
+    if (!G1C_ON() || !BP_OnName("g1c_modelmap") || !layout) {
+        return %orig;
+    }
+    id contained = layout;
+    @try {
+        id c = G1B_Send1(self, @selector(appLayoutContainingAppLayout:), layout);
+        if (c) contained = c;
+    } @catch (NSException *e) {
+        if (BP_LogEnabled()) BP_Log(@"GUARD overlappingModelForAppLayout: no implementor for appLayoutContainingAppLayout: (%@) -> unmapped layout", e.reason);
+    }
+    return %orig(contained);
+}
+%end
+%end
+
 // ---- close trace (diagnostics only, BP_LogEnabled; user video 0dee8146 = Dopamine window, size jump at the start of the home-swipe close): what the composed root answers for the closing stage window during the home swipe ----
 // Armed when a home gesture starts in mode 3 (G1C_HGR_GestureChild), disarmed at phase 3 of the next transition.  Every line starts with "[g1c] close", carries the transition phase
 // (g = gesture still running, 1/2/3 = transition phases) and is logged only when the answer changed.  The values are exactly what the layout block (G2B BP2B_LayoutAppLayoutImpl) reads.
@@ -6289,6 +6315,7 @@ void G1C_Setup(void) {
     G1C_BuildWindowDragFamily();
     %init(G1C_WdEvent);
     %init(G1C_EventDefault);
+    %init(G1C_ModelMap);
     %init(G1C_Root);
     %init(G1C_Producers);
     %init(G1C_OverflowRoot);
