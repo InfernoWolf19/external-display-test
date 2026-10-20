@@ -1,12 +1,4 @@
 {
- "0.7.3+144.7ae2a5e": {
-  "date": "2026-10-13T10:51:40Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+144.7ae2a5e_iphoneos-arm64.deb",
-  "run": 144,
-  "sha": "7ae2a5e9a45fb84e1438ae738082cfb0dcede558",
-  "subject": "PIPStop: per-display PiP stop/expand port (16.2 SBPIPPegasusAdapter, \u2026",
-  "version": "0.7.3+144.7ae2a5e"
- },
  "0.7.3+145.9ebdf27": {
   "date": "2026-10-13T11:05:28Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+145.9ebdf27_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "fc6e2060e9a6644cb0e2eec28b92ffdb66a1b646",
   "subject": "G1C: overlappingModelForAppLayout: asks for the model of the CONTAINING layout like 16.2 0x1c7652fc4 (g1c_modelmap)",
   "version": "0.7.9+207.fc6e206"
+ },
+ "0.7.9+208.0b2d6e2": {
+  "date": "2026-10-20T19:25:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+208.0b2d6e2_iphoneos-arm64.deb",
+  "run": 208,
+  "sha": "0b2d6e27e6a3bf274854775b3d7ab642b6de7d1b",
+  "subject": "postinst: ask Sileo for a userspace reboot (finish:usreboot) instead of the restart SpringBoard button after install / update",
+  "version": "0.7.9+208.0b2d6e2"
  }
 }
