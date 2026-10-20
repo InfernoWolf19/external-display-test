@@ -1,12 +1,4 @@
 {
- "0.7.3+149.d71261f": {
-  "date": "2026-10-17T07:29:35Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+149.d71261f_iphoneos-arm64.deb",
-  "run": 149,
-  "sha": "d71261ffdd2f1a2ac76e6b59614381287e819578",
-  "subject": "BBD: post the 16.2 pointer exit to the global routes of the display t\u2026",
-  "version": "0.7.3+149.d71261f"
- },
  "0.7.4+150.63e1901": {
   "date": "2026-10-17T07:35:10Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+150.63e1901_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "946d44bed6854105aabca238dbc79073a745e115",
   "subject": "G1C: VC _scrollToAppLayout:... scrolls to the index in appLayouts like 16.2 0x1c7452ff0 (with g1c_piles)",
   "version": "0.7.9+212.946d44b"
+ },
+ "0.7.9+213.237c8ef": {
+  "date": "2026-10-20T19:42:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+213.237c8ef_iphoneos-arm64.deb",
+  "run": 213,
+  "sha": "237c8ef40860c96a3ad58f40df049c471daef992",
+  "subject": "G8: 16.2 zoom / full-screen / banner / education pill labels as fallback localisation (41 languages embedded from the 16.2 SpringBoard.loctable, switch l10n162); education pill reads the SpringBoard table",
+  "version": "0.7.9+213.237c8ef"
  }
 }
