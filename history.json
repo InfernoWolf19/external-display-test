@@ -1,12 +1,4 @@
 {
- "0.7.3+147.2828d32": {
-  "date": "2026-10-13T14:58:43Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+147.2828d32_iphoneos-arm64.deb",
-  "run": 147,
-  "sha": "2828d3207c98ac028c217dd63271b2a3fd99e870",
-  "subject": "G2C: 16.2 resize grabber auto-hide update per item container, full li\u2026",
-  "version": "0.7.3+147.2828d32"
- },
  "0.7.3+148.9ec8247": {
   "date": "2026-10-13T15:17:15Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+148.9ec8247_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "cbdfb2ac24518ad10cde8744d99d43cc96ef3ba2",
   "subject": "G1D: failMultitaskingGesturesForReason: fails the gestures of every display (g1d_failgestures)",
   "version": "0.7.9+210.cbdfb2a"
+ },
+ "0.7.9+211.4db74f7": {
+  "date": "2026-10-20T19:34:55Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+211.4db74f7_iphoneos-arm64.deb",
+  "run": 211,
+  "sha": "4db74f706b5fb96e45146df4819553b2c992cf65",
+  "subject": "G2: overlays on the embedded display (16.2 prefersEmbeddedDisplayPresentation of Control Centre module, in-call, passcode, voice control, Spotlight; request modifyTransientOverlayContext:, interactive Spotlight display configuration, per display switcher mode)",
+  "version": "0.7.9+211.4db74f7"
  }
 }
