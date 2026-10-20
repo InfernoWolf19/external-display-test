@@ -1,12 +1,4 @@
 {
- "0.7.3+136.1b434d2": {
-  "date": "2026-10-13T02:40:25Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+136.1b434d2_iphoneos-arm64.deb",
-  "run": 136,
-  "sha": "1b434d2f9935482330610303facb644cf3c62efe",
-  "subject": "G1D: trace killContainer and removal events (last card closed on the \u2026",
-  "version": "0.7.3+136.1b434d2"
- },
  "0.7.3+137.1ac034d": {
   "date": "2026-10-13T02:51:40Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+137.1ac034d_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "51b4c69570b1ad4688f0863c103da8dfd85379b3",
   "subject": "CI: publish every successful build as a Sileo / Zebra repository on gh-pages with version history (version = control version + run + commit, commit subject in the description), optional backfill of earlier builds",
   "version": "0.7.5+199.51b4c69"
+ },
+ "0.7.5+201.65690f3": {
+  "date": "2026-10-20T19:10:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+201.65690f3_iphoneos-arm64.deb",
+  "run": 201,
+  "sha": "65690f3f4f74b8c33f08d13436f4a9d65ac6f304",
+  "subject": "G1C: comment fix: the 16.2 icon-zoom / PiP-restore creators are ported in G1B.x (review note, no code change)",
+  "version": "0.7.5+201.65690f3"
  }
 }
