@@ -1,12 +1,4 @@
 {
- "0.7.3+146.7dd2ad9": {
-  "date": "2026-10-13T11:22:00Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+146.7dd2ad9_iphoneos-arm64.deb",
-  "run": 146,
-  "sha": "7dd2ad942ee0b65b2dc0128a951db1e5d1bb6fd9",
-  "subject": "PIPStop/G1D: log the display identities used by the PiP expand restor\u2026",
-  "version": "0.7.3+146.7dd2ad9"
- },
  "0.7.3+147.2828d32": {
   "date": "2026-10-13T14:58:43Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+147.2828d32_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "968f1cfd9cad3cc40f16eda03f91c530a5b30bf2",
   "subject": "G1D: scene handle of a display item is looked up on the display that owns it (g1d_scenehandle)",
   "version": "0.7.9+209.968f1cf"
+ },
+ "0.7.9+210.cbdfb2a": {
+  "date": "2026-10-20T19:34:44Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+210.cbdfb2a_iphoneos-arm64.deb",
+  "run": 210,
+  "sha": "cbdfb2ac24518ad10cde8744d99d43cc96ef3ba2",
+  "subject": "G1D: failMultitaskingGesturesForReason: fails the gestures of every display (g1d_failgestures)",
+  "version": "0.7.9+210.cbdfb2a"
  }
 }
