@@ -1,12 +1,4 @@
 {
- "0.7.3+141.6c50406": {
-  "date": "2026-10-13T09:38:25Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+141.6c50406_iphoneos-arm64.deb",
-  "run": 141,
-  "sha": "6c504068d635a2b029b763cfaa66fced9f5a1e31",
-  "subject": "G1D: removal action runs on the switcher that owns the layout (16.2 0\u2026",
-  "version": "0.7.3+141.6c50406"
- },
  "0.7.3+142.ca14592": {
   "date": "2026-10-13T10:03:42Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+142.ca14592_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "5f42e1239745421788599355a1ccfe5412d9132c",
   "subject": "REVIEW-PLUMBING-0.7.9: coverage matrix, fixed / open defects of the plumbing, display lifecycle and pointer area incl. SMT.x / SPK.c; README speaker row: new crash guard",
   "version": "0.7.5+204.5f42e12"
+ },
+ "0.7.9+206.24222ef": {
+  "date": "2026-10-20T19:17:01Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+206.24222ef_iphoneos-arm64.deb",
+  "run": 206,
+  "sha": "24222ef15c252cad1b058e31b3d0cee57d8031ee",
+  "subject": "g3b_axroles stays default ON (standing directive): G3B.x comment, group3b-reconstruct.md and README no longer call it opt-in; review note",
+  "version": "0.7.9+206.24222ef"
  }
 }
