@@ -1,12 +1,4 @@
 {
- "0.7.3+139.130504d": {
-  "date": "2026-10-13T09:22:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+139.130504d_iphoneos-arm64.deb",
-  "run": 139,
-  "sha": "130504d0a1cd9dd4081b3527ba57b5933a2d425c",
-  "subject": "G1C: retire the stale peek child at the end of the peek transition",
-  "version": "0.7.3+139.130504d"
- },
  "0.7.3+140.c552e8e": {
   "date": "2026-10-13T09:22:58Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+140.c552e8e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "2e619c09aade21757e45e2ebbdaa31a772bb324d",
   "subject": "SPK: crash guard is a logged last line, not a silent switch-off: one counter per audio daemon (audiomxd and mediaserverd are restarted together, a shared file doubled the count and tripped after ~3 quick userspace restarts), 8 strikes within 600 s, counter forgets itself 600 s after the last strike, trip reported with os_log_error + Darwin note (G2D.x logs it)",
   "version": "0.7.5+202.2e619c0"
+ },
+ "0.7.5+203.df33142": {
+  "date": "2026-10-20T19:13:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+203.df33142_iphoneos-arm64.deb",
+  "run": 203,
+  "sha": "df331428c07e808a7c5417744dc2322f9fb7cb68",
+  "subject": "BBD crash guard re-arms itself: strikes older than 30 minutes are forgotten (the guard kept the backboardd half out for good once tripped; standing rule: guards are a logged last line, never a permanent switch-off)",
+  "version": "0.7.5+203.df33142"
  }
 }
