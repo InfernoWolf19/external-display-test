@@ -62,6 +62,7 @@
 #import <pthread.h>
 #import <signal.h>
 #import <errno.h>
+#import <time.h>
 #import <dlfcn.h>
 #if __has_include(<ptrauth.h>)
 #import <ptrauth.h>
@@ -705,7 +706,7 @@ static void BPD_InstallCloneMirror(void) {
 // ------------------------------------------------------------------------------------------------ crash loop guard
 // A crash of this tweak inside backboardd restarts the whole userspace (SpringBoard relaunches over and over: the ExtendedDisplayEnabler log of the first install of the merged package
 // shows "5 consecutive short-lived launches").  Each backboardd start counts a strike in <root>/Backport162BBD.strikes ("<build id> <count>"); the count is cleared when backboardd has
-// stayed up for 25 s.  With 3 strikes in a row the tweak stays out of backboardd (log line when Backport162.debug exists) until the file is removed or a different build is installed
+// stayed up for 25 s.  With 3 strikes in a row the tweak stays out of that backboardd launch (log line when Backport162.debug exists; the daemon marker "crash guard tripped, leaving" is always written); the strikes are forgotten 30 minutes after the last one, or when the file is removed or a different build is installed
 // (the build id is the compile time of this file).
 static BOOL BPD_CrashGuardTripped(void) {
     char path[1200];
@@ -713,19 +714,24 @@ static BOOL BPD_CrashGuardTripped(void) {
     char id[64]; snprintf(id, sizeof id, "%s_%s", __DATE__, __TIME__);
     for (char *c = id; *c; c++) if (*c == ' ') *c = '_';
     int strikes = 0;
+    long last = 0;
+    time_t now = time(NULL);
     FILE *f = fopen(path, "r");
     if (f) {
-        char oldId[64] = {0}; int n = 0;
-        if (fscanf(f, "%63s %d", oldId, &n) == 2 && strcmp(oldId, id) == 0) strikes = n;
+        char oldId[64] = {0}; int n = 0; long ts = 0;
+        int got = fscanf(f, "%63s %d %ld", oldId, &n, &ts);
+        if (got >= 2 && strcmp(oldId, id) == 0) { strikes = n; last = (got == 3) ? ts : 0; }
         fclose(f);
     }
-    if (strikes >= 3) { BPD_Log(@"crash guard: %d consecutive short-lived backboardd launches with this build, the backboardd tweak stays out. Remove %s to retry", strikes, path); return YES; }
+    // the guard re-arms itself: strikes whose last entry is older than 30 minutes are forgotten (a standing rule of the package: no guard may keep a feature off for good)
+    if (strikes > 0 && (last <= 0 || (long)now - last > 1800 || (long)now < last)) { BPD_Log(@"crash guard: %d old strikes forgotten", strikes); strikes = 0; }
+    if (strikes >= 3) { BPD_Log(@"crash guard: %d consecutive short-lived backboardd launches with this build, the backboardd tweak stays out of this launch (strikes are forgotten 30 minutes after the last one; or remove %s)", strikes, path); return YES; }
     f = fopen(path, "w");
-    if (f) { fprintf(f, "%s %d\n", id, strikes + 1); fclose(f); }
+    if (f) { fprintf(f, "%s %d %ld\n", id, strikes + 1, (long)now); fclose(f); }
     char *pathCopy = strdup(path), *idCopy = strdup(id);                    // blocks cannot capture arrays
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 25 * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         FILE *g = fopen(pathCopy, "w");
-        if (g) { fprintf(g, "%s 0\n", idCopy); fclose(g); }
+        if (g) { fprintf(g, "%s 0 0\n", idCopy); fclose(g); }
         free(pathCopy); free(idCopy);
     });
     return NO;
