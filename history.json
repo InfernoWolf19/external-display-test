@@ -1,12 +1,4 @@
 {
- "0.7.3+137.1ac034d": {
-  "date": "2026-10-13T02:51:40Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+137.1ac034d_iphoneos-arm64.deb",
-  "run": 137,
-  "sha": "1ac034d74ed6d4767972b843a70252e47eb2c7c4",
-  "subject": "Trace removal events inside the existing _handleEvent: hook instead o\u2026",
-  "version": "0.7.3+137.1ac034d"
- },
  "0.7.3+138.b700f1c": {
   "date": "2026-10-13T03:02:30Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+138.b700f1c_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "51b4c69570b1ad4688f0863c103da8dfd85379b3",
   "subject": "CI: publish every successful build as a Sileo / Zebra repository on gh-pages with version history (version = control version + run + commit, commit subject in the description), optional backfill of earlier builds",
   "version": "0.7.5+199.51b4c69"
+ },
+ "0.7.5+200.e8a0299": {
+  "date": "2026-10-20T19:11:51Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+200.e8a0299_iphoneos-arm64.deb",
+  "run": 200,
+  "sha": "e8a029982c52ed9a2819281e64e28cb3e7e6d68a",
+  "subject": "Merge StageManagerToggle 1.0.0 and SpeakerPicker 1.1.0~idle1 into Backport162 (dylibs Backport162SMT / Backport162SPK, switches smtoggle / speaker, Conflicts+Replaces for the old packages incl. AudioRouteProbe and SwitcherDismissFix, interference analysis)",
+  "version": "0.7.5+200.e8a0299"
  },
  "0.7.5+201.65690f3": {
   "date": "2026-10-20T19:10:16Z",
