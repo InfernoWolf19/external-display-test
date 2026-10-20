@@ -1,12 +1,4 @@
 {
- "0.7.3+138.b700f1c": {
-  "date": "2026-10-13T03:02:30Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.3+138.b700f1c_iphoneos-arm64.deb",
-  "run": 138,
-  "sha": "b700f1c5c85bf9c81efbcbeeaaf9c18ed36852a9",
-  "subject": "G1D: snapshot cache returns no entity without a scene handle provider\u2026",
-  "version": "0.7.3+138.b700f1c"
- },
  "0.7.3+139.130504d": {
   "date": "2026-10-13T09:22:16Z",
   "file": "debs/com.infernowolf19.backport162_0.7.3+139.130504d_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "65690f3f4f74b8c33f08d13436f4a9d65ac6f304",
   "subject": "G1C: comment fix: the 16.2 icon-zoom / PiP-restore creators are ported in G1B.x (review note, no code change)",
   "version": "0.7.5+201.65690f3"
+ },
+ "0.7.5+202.2e619c0": {
+  "date": "2026-10-20T19:12:27Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.5+202.2e619c0_iphoneos-arm64.deb",
+  "run": 202,
+  "sha": "2e619c09aade21757e45e2ebbdaa31a772bb324d",
+  "subject": "SPK: crash guard is a logged last line, not a silent switch-off: one counter per audio daemon (audiomxd and mediaserverd are restarted together, a shared file doubled the count and tripped after ~3 quick userspace restarts), 8 strikes within 600 s, counter forgets itself 600 s after the last strike, trip reported with os_log_error + Darwin note (G2D.x logs it)",
+  "version": "0.7.5+202.2e619c0"
  }
 }
