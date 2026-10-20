@@ -527,10 +527,25 @@ out:
     objc_release(session);
 }
 
+// True only for a live malloc'd Objective-C object whose class is registered and answers the two selectors idle_apply sends.  Checked BEFORE objc_retain: the first
+// argument of CMSUtility_IsAllowedToStartPlaying is assumed to be an audio session object, and a retain / message to anything else would crash the daemon.
+static bool is_session_object(uintptr_t v) {
+    if (!v || (v & 7) || (v >> 63) != 0 || malloc_size((const void *)v) < sizeof(void *)) return false;
+    Class cls = object_getClass((id)v);
+    if (!cls) return false;
+    const char *cn = class_getName(cls);
+    if (!cn || objc_lookUpClass(cn) != cls) return false;
+    return class_respondsToSelector(cls, sel_registerName("isActive")) && class_respondsToSelector(cls, sel_registerName("audioCategory"));
+}
+
 // CMSUtility_IsAllowedToStartPlaying(session) -> BOOL. Observed only.
 static uintptr_t hook_allow(ARGS8) {
     uintptr_t rv = orig_allow(PASS8);
-    if (gIdlePort && (rv & 0xff) && a0 && !(a0 & 7) && (void *)a0 != gIdleDoneSession && !killed()) {
+    if (gIdlePort && (rv & 0xff) && a0 && (void *)a0 != gIdleDoneSession && !killed()) {
+        if (!is_session_object(a0)) {                              // not what the disassembly led us to expect: pass through, never touch it
+            dlog("idle selection: argument %p of CMSUtility_IsAllowedToStartPlaying is not a session object; ignored", (void *)a0);
+            return rv;
+        }
         void *session = objc_retain((void *)a0);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 200 * NSEC_PER_MSEC), dispatch_get_global_queue(QOS_CLASS_UTILITY, 0),
                        ^{ idle_apply(session); });
