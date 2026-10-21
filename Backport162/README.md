@@ -174,6 +174,7 @@ Runs only inside the `pointeruid` executable (filter `Executables = pointeruid`,
 |---|---|---|
 | smtoggle | (Backport162SMT; SpringBoard + Preferences app) The Control Centre Stage Manager button and the Settings > Multitasking switch write only `SBChamoisWindowingEnabled` and never `SBChamoisWindowingEverEnabled`, so the first-run introduction is never shown. Off = stock behaviour. Takes effect at the next tap | `smtoggle` |
 | speaker | (Backport162SPK; `audiomxd` / `mediaserverd`, arm64e, build 20A8372 only) the iPad speaker stays in the audio picker while a monitor / wired headphones are connected, choosing it is accepted, and a speaker pick made while nothing plays is applied when the next media session starts. Off = stock. The audio daemon cannot write under the jailbreak root: the legacy `/var/tmp/SpeakerPicker.off`, `.debug` (file log `/var/tmp/SpeakerPicker.log`) and the launch counters `/var/tmp/SpeakerPicker.1.1.0~idle1-bp.<daemon>.boot` (crash guard, a logged last line: 8 short-lived launches of the SAME daemon within 10 minutes keep the hooks out of that launch with an os_log error; the counter forgets itself 10 minutes after the last strike, or delete the file) are still used. A switch that exists when the daemon starts keeps the hooks out; reboot userspace after installing or removing it | `speaker` |
+| report | "Send logs" (RPT.x in SpringBoard + the Settings pane `Backport162Prefs`, specs/SEND-LOGS-0.7.9.md). Settings > Backport162 > *Send logs now* asks SpringBoard (Darwin notification) to collect `Backport162.log` / `.log.1` (tails), the daemon log, the crash reports of the last 3 days of SpringBoard / backboardd / pointeruid / mediaserverd / audiomxd / Preferences and a system section (build, device, package version, switch file names, loaded images), gzip them and upload them to the GitHub repository typed into the pane (token with Contents: write); the id of the report is shown to tell the assistant. NOTHING is collected or sent without that tap. Without a token the report is saved on the device and *Share* works. Off = SpringBoard answers "disabled". Needs `preferenceloader` | `report` |
 
 ### Notes
 
@@ -187,6 +188,7 @@ Runs only inside the `pointeruid` executable (filter `Executables = pointeruid`,
 - `Backport162.off` disables everything; `Backport162.off.<feature>` disables one feature (names in the tables above). Hook behaviour is checked at most once a second, no respring needed; `nilock` and `directhook` are installed at launch, so those two need a respring after creating their `.off` file.
 - `Backport162.debug` turns logging on (`Backport162.log`, rotated at 256 KiB). Logging is off by default.
 - The tweak does nothing on any build other than 20A8372.
+- Settings > Backport162 > *Send logs now* uploads the logs to a GitHub repository on request only (see the `report` row); `Backport162.debug` makes the report much more useful.
 
 ## Review notes (0.5.1)
 

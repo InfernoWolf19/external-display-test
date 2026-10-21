@@ -97,3 +97,4 @@ Last CI-green build: `b700f1c` (0.7.3); `130504d` building. Last build the user 
 
 ## Added in 0.7.9 (device-unverified)
 - StageManagerToggle (`smtoggle`) and SpeakerPicker with idle selection (`speaker`) merged (specs/MERGE-SMT-SPK-0.7.9.md). Unproven: SMT together with the g3switcher / g3topaff hooks, the SPK launch-counter crash guard also trips on userspace-reboot loops (kept on request), new CI lines `TWEAK_NAME=Backport162SMT/SPK` not yet run.
+- Send logs (`report`: Settings pane `Backport162Prefs` + RPT.x, specs/SEND-LOGS-0.7.9.md) is device-unverified: first CI compile / link of the PreferenceLoader bundle (private Preferences framework or `-undefined dynamic_lookup`), PreferenceLoader entry, field storage, Darwin notifications Settings <-> SpringBoard, NSURLSession from SpringBoard, GitHub Contents API.
