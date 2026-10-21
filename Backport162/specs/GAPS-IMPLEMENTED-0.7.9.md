@@ -139,3 +139,17 @@ Not ported (not display related): the non modal call suppression (`acquireNonMod
 ### Unproven
 
 Nothing was run. Only observable with a call-capable app (FaceTime / Phone UI) whose scene is on the monitor while the monitor is unplugged or the scene is moved.
+
+## G5 Per-display recording indicator (audit R1) — X5Recording.x
+
+### 16.2 mechanism
+
+16.0 has one `SBRecordingIndicatorManager`, made for the main display window scene by `-[SpringBoard _startRecordingIndicatorForMainDisplayWindowScene:]` (0x1c5edc0e8: `initWithSensorActivityDataProvider:windowScene:` with `[SBApp sensorActivityDataProvider]`, kept by `SBEmbeddedDisplayWindowSceneDelegate`, getter 0x1c63a1564); `-[SpringBoard recordingIndicatorManagerForMainDisplay]` (0x1c5eecae0) is what the status bar code asks (callers: `SBDeviceApplicationSceneViewController _configureStatusBarWithCurrentStyleRequest` 0x1c6131a18, `SBStatusBarStateAggregator _updateSensorActivityItem`, `SBMainDisplaySceneLayoutStatusBarView` x2, `SBTransientOverlayScenePresenter _updateStatusBarWithCurrentExternalStatusBarSettings:animated:` 0x1c6496498, `SBRecordingIndicatorSystemApertureElement` x2). 16.2: every window scene delegate makes its own manager (`SBEmbeddedDisplayWindowSceneDelegate` 0x1c784b4b4, `SBExternalDisplayWindowSceneDelegate` 0x1c7467ed8: `initWithWindowScene:` 0x1c74617f0, stored in the `SBWindowSceneContext`), `-[SBWindowScene recordingIndicatorManager]` (0x1c77f82ac) hands it out and the per scene consumer asks its own scene (the view controller: `[[self _sbWindowScene] recordingIndicatorManager]` 0x1c75bc7c4); the aggregator / layout view / aperture element keep the main display, the overlay presenter no longer calls it. `_screenTypeForcesFastFadeAnimations` changed to the Jindo artwork subtypes (iPhone only). The manager class body is unchanged (only its init and `_createRecordingIndicatorForStatusBarLocation` 62 -> 66 instructions).
+
+### Implemented
+
+A manager per external window scene (16.0 initializer and provider, made after the original `_configureForConnectingWindowScene:windowSceneContext:`), kept by the external delegate (associated object plus `recordingIndicatorManager` / `setRecordingIndicatorManager:`), `SBWindowScene recordingIndicatorManager`, and the view controller's status bar configuration wrapped so that `recordingIndicatorManagerForMainDisplay` answers the manager of the VC's own window scene while it runs. Switch `recindicator`. Logs: `[x5] recording indicator manager ... for external window scene ...`, `[x5] per display recording indicator installed | NOT installed`.
+
+### Unproven
+
+Whether the 16.0 manager's `_createRecordingIndicatorForStandaloneLocation` / status bar location choices place the indicator sensibly on a monitor was not analysed (the same class code runs in 16.2 for the external scene). The status-bar half inside apps (UIKit `registerSensorActivityIndicator:forScreen:`) is app side and not done. Needs a device: camera / microphone app with a monitor connected, dot on the monitor.
