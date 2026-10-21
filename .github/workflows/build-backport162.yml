@@ -22,17 +22,21 @@ jobs:
         working-directory: Backport162
         run: |
           # compile every source file on its own so one run lists the compile errors of ALL files (the normal build stops at the first failing file)
-          for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x BPCrash.m; do
+          for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x BPCrash.m RPT.x; do
             rm -rf .theos
             echo "=== $f"
-            make all FINALPACKAGE=1 ARCHS=arm64e Backport162_FILES="$f" 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true
+            make all FINALPACKAGE=1 ARCHS=arm64e Backport162_FILES="$f" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true
           done
           # the separate dylibs (SMT.x, SPK.c) have their own flags and are not part of Backport162_FILES: build each one by itself (TWEAK_NAME on the command line replaces the Makefile list)
           for t in Backport162SMT Backport162SPK; do
             rm -rf .theos
             echo "=== $t"
-            make all FINALPACKAGE=1 ARCHS=arm64e TWEAK_NAME="$t" 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: " | head -60 || true
+            make all FINALPACKAGE=1 ARCHS=arm64e TWEAK_NAME="$t" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: " | head -60 || true
           done
+          # the Settings pane bundle (Backport162Prefs) alone: BP_ONLY_PREFS skips the tweak dylibs, so its compile and link errors are listed on their own
+          rm -rf .theos
+          echo "=== Backport162Prefs"
+          make all FINALPACKAGE=1 ARCHS=arm64e BP_ONLY_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: |framework not found" | head -60 || true
           rm -rf .theos
           make package FINALPACKAGE=1
       - name: Identify the build

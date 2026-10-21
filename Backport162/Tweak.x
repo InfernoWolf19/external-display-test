@@ -424,6 +424,7 @@ void EDE_Setup(void);                  // EDE.x    (ExtendedDisplayEnabler's pro
 void X7_Setup(void);                   // X7Keyboard.x (gap G7: keyboard focus tracker, display scoped keyboard suppression / resign active, external scene identities)
 void X9_Setup(void);                   // X9Pin.x (gap G9: pinOnButtonDown for the system gesture windows)
 void X2_Setup(void);                   // X2Overlay.x (gap G2: Control Centre / Spotlight / voice control / passcode / in-call overlays on the embedded display)
+void RPT_Setup(void);                  // RPT.x (Send logs: SpringBoard half, answers the request of the Settings pane; switch report)
 
 // ---------------------------------------------------------------- entry
 
@@ -460,5 +461,6 @@ void X2_Setup(void);                   // X2Overlay.x (gap G2: Control Centre / 
         X7_Setup();                    // gap G7: tracker class, display scoped suppression and resign active assertions, external scene identities (switches kbtracker, kbsuppress, kbextscenes)
         X9_Setup();                    // gap G9: pinOnButtonDown of the global mouse event request of the system gesture windows (switch pinbuttondown)
         X2_Setup();                    // gap G2: overlays on the embedded display (prefersEmbeddedDisplayPresentation of five overlay classes + the 16.2 consumers, switches embedoverlay / embedoverlay_envmode)
+        RPT_Setup();                   // Send logs (Settings pane > SpringBoard: collects + uploads the logs only when the user taps the button; switch report)
     }
 }

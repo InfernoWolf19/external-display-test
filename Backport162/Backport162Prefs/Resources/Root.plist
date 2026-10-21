@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>title</key>
+	<string>Backport162</string>
+	<key>items</key>
+	<array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>label</key>
+			<string>Logs</string>
+			<key>footerText</key>
+			<string>Send logs now collects the Backport162 log files, the crash reports of the last 3 days (SpringBoard, backboardd, pointeruid, mediaserverd, audiomxd, Preferences) and the system version, packs them into one compressed file and uploads it to the GitHub repository above, so the report id can be looked at. Nothing is collected or sent unless you tap the button. The token stays on this device (it is only used for that upload and is never part of the report). Without a token the report is only saved on the device and you can share it by hand. For more detail in the log create /var/jb/tmp/Backport162.debug first.</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSEditTextCell</string>
+			<key>id</key>
+			<string>BP162_REPO</string>
+			<key>label</key>
+			<string>Repository</string>
+			<key>placeholder</key>
+			<string>InfernoWolf19/backport162-reports</string>
+			<key>defaults</key>
+			<string>com.infernowolf19.backport162</string>
+			<key>key</key>
+			<string>reportRepo</string>
+			<key>keyboard</key>
+			<string>URL</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSecureEditTextCell</string>
+			<key>id</key>
+			<string>BP162_TOKEN</string>
+			<key>label</key>
+			<string>Token</string>
+			<key>placeholder</key>
+			<string>fine-grained token, Contents: write</string>
+			<key>defaults</key>
+			<string>com.infernowolf19.backport162</string>
+			<key>key</key>
+			<string>reportToken</string>
+			<key>noAutoCorrect</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>id</key>
+			<string>BP162_SEND</string>
+			<key>label</key>
+			<string>Send logs now</string>
+			<key>action</key>
+			<string>sendLogsNow:</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSButtonCell</string>
+			<key>id</key>
+			<string>BP162_SHARE</string>
+			<key>label</key>
+			<string>Share last report…</string>
+			<key>action</key>
+			<string>shareLastReport:</string>
+		</dict>
+	</array>
+</dict>
+</plist>

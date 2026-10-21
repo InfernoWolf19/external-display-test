@@ -7,9 +7,11 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Backport162 Backport162AV Backport162BBD Backport162PTR Backport162SMT Backport162SPK
 
-Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x BPCrash.m
+Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x BPCrash.m RPT.x
 Backport162_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
 Backport162_FRAMEWORKS = Foundation CoreGraphics UIKit QuartzCore
+# RPT.x (Send logs, SpringBoard half) gzips the report with zlib
+Backport162_LIBRARIES = z
 
 Backport162AV_FILES = AV.x
 Backport162AV_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
@@ -38,4 +40,25 @@ Backport162SPK_CFLAGS = -Wno-deprecated-declarations
 Backport162SPK_LDFLAGS = -lobjc
 Backport162SPK_FRAMEWORKS = CoreFoundation CydiaSubstrate
 
+# BP_ONLY_PREFS=1 (CI only) skips the tweak dylibs and builds just the Settings pane; BP_SKIP_PREFS=1 skips the pane.
+ifneq ($(BP_ONLY_PREFS),1)
 include $(THEOS_MAKE_PATH)/tweak.mk
+endif
+
+# Settings pane "Backport162" (PreferenceLoader bundle; Send logs / Share last report; UI only, the work is RPT.x in SpringBoard; specs/SEND-LOGS-0.7.9.md).
+# Loaded into Preferences.app only when the pane is opened. The Preferences framework is private: it is linked when the SDK has it, otherwise dyld resolves PSListController at run time
+# (Preferences.app has the framework loaded); the classes used are declared in Backport162PrefsRootListController.h.
+ifneq ($(BP_SKIP_PREFS),1)
+BUNDLE_NAME = Backport162Prefs
+Backport162Prefs_FILES = Backport162Prefs/Backport162PrefsRootListController.m
+Backport162Prefs_INSTALL_PATH = /Library/PreferenceBundles
+Backport162Prefs_RESOURCE_DIRS = Backport162Prefs/Resources
+Backport162Prefs_CFLAGS = -fobjc-arc -Wall -Wno-deprecated-declarations -ferror-limit=0
+Backport162Prefs_FRAMEWORKS = Foundation UIKit
+ifneq ($(wildcard $(SYSROOT)/System/Library/PrivateFrameworks/Preferences.framework),)
+Backport162Prefs_PRIVATE_FRAMEWORKS = Preferences
+else
+Backport162Prefs_LDFLAGS = -Wl,-undefined,dynamic_lookup
+endif
+include $(THEOS_MAKE_PATH)/bundle.mk
+endif
