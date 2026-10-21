@@ -1,12 +1,4 @@
 {
- "0.7.4+156.2db7c86": {
-  "date": "2026-10-17T07:57:50Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+156.2db7c86_iphoneos-arm64.deb",
-  "run": 156,
-  "sha": "2db7c8637c595ba39ea9c8e5a7811a4050ff8cd6",
-  "subject": "PTR: pointeruid tweak (16.1 multi-display pointer changes: layer clas\u2026",
-  "version": "0.7.4+156.2db7c86"
- },
  "0.7.4+157.6ca5e9e": {
   "date": "2026-10-17T07:58:59Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+157.6ca5e9e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "fbade747740bc8fcf26086312ae0e1acf9df958a",
   "subject": "G3: monitor mode choice like 16.2 (SDR CADisplayModeCriteria, published mode copies the current mode, logical scale 1 for display type 2; switches modecriteria, modebase, modelogical)",
   "version": "0.7.9+223.fbade74"
+ },
+ "0.7.9+224.47bde76": {
+  "date": "2026-10-21T01:44:34Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+224.47bde76_iphoneos-arm64.deb",
+  "run": 224,
+  "sha": "47bde76c182bd453f462ab26c81168824d1e2c53",
+  "subject": "Send logs spec / README: setup steps, privacy, Recommends, new state word and request",
+  "version": "0.7.9+224.47bde76"
  }
 }

@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 224, commit 47bde76: Send logs spec / README: setup steps, privacy, Recommends, new state word and request
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+224.47bde76
+Installed-Size: 3616
+Filename: debs/com.infernowolf19.backport162_0.7.9+224.47bde76_iphoneos-arm64.deb
+Size: 1143102
+MD5sum: 5f3f96b3cba976cce694435917ae1d85
+SHA1: 694ea072efdbf3d5c03c7816d4a483ad35fe604d
+SHA256: e86920119434bb55a959769eecb8d1d7e18f727f02e1a85ebfb4e27655a3c76a
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 223, commit fbade74: G3: monitor mode choice like 16.2 (SDR CADisplayModeCriteria, published mode copies the current mode, logical scale 1 for display type 2; switches modecriteria, modebase, modelogical)
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1225,23 +1247,3 @@ Size: 890798
 MD5sum: 6e9cdb6c7a1463c9cbec0e4af80a01b9
 SHA1: 69d83095910e3fb2c5c510ffa4fba8080c5c61a5
 SHA256: b2713ab355a157bcf73a46127fccbdbc9f754b58f3de9e206fe3b6a8b4d94d14
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 156, commit 2db7c86: PTR: pointeruid tweak (16.1 multi-display pointer changes: layer clas…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+156.2db7c86
-Installed-Size: 2520
-Filename: debs/com.infernowolf19.backport162_0.7.4+156.2db7c86_iphoneos-arm64.deb
-Size: 890238
-MD5sum: ae2b79abd3009517f2cf17b902366a5d
-SHA1: 23d79b48ab38b08226c9e481ab46e640df104bb1
-SHA256: d5a93292bebbde0c03293391abb98c2b2b2452cac7a58d1c1a8a13d6c36aaa79
