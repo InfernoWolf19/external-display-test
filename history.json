@@ -1,12 +1,4 @@
 {
- "0.7.4+152.37b5080": {
-  "date": "2026-10-17T07:52:45Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+152.37b5080_iphoneos-arm64.deb",
-  "run": 152,
-  "sha": "37b50806117e1f320c48af2b57e2cc5b008dce87",
-  "subject": "Add the pointer stale-pixel analysis (real 16.0 pointeruid vs 16.2) a\u2026",
-  "version": "0.7.4+152.37b5080"
- },
  "0.7.4+153.4f3d094": {
   "date": "2026-10-17T07:55:17Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+153.4f3d094_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4773dc9f26f75b06ba4bfe70a14509235743112f",
   "subject": "REVIEW-CORE-0.7.9: coverage matrix of the Stage Manager core, 4 fixed defects, open defects ranked, WORKLIST gap analysis",
   "version": "0.7.9+215.4773dc9"
+ },
+ "0.7.9+220.7cc0b19": {
+  "date": "2026-10-21T00:52:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+220.7cc0b19_iphoneos-arm64.deb",
+  "run": 220,
+  "sha": "7cc0b1977652496daae2592afaf2f33e7bbee05a",
+  "subject": "X7Keyboard: scope macro passed nil through (__bridge void *) (invalid on Apple clang, nil is void *): pointer helper X7_Ptr(id)",
+  "version": "0.7.9+220.7cc0b19"
  }
 }
