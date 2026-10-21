@@ -1792,6 +1792,16 @@ static void G4B_MigrateStageMerge(id ctx, NSDictionary *mk) {
 %hook SBSceneManager
 // 16.2 adds [oldHandle _noteReplacedWithSceneHandle:newHandle] after the move (0x1c73e9ba8)
 - (void)takeScene:(id)scene fromSceneManager:(id)other {
+    // 16.2 0x1c73e9a3c first tells the OLD manager's observers (the only implementer is SBInCallPresentationManager, X6InCall.x, gap G6)
+    SEL callout = NSSelectorFromString(@"_doObserverCalloutWithBlock:");
+    if (other && scene && G4B_On("migrate") && BP_OnName("incallscene") && [other respondsToSelector:callout]) {
+        id newMgr = self;
+        void (^cb)(id) = ^(id obs) {
+            SEL ds = NSSelectorFromString(@"sceneManager:didTransferManagementOfScene:toSceneManager:");
+            if ([obs respondsToSelector:ds]) ((void (*)(id, SEL, id, id, id))objc_msgSend)(obs, ds, other, scene, newMgr);
+        };
+        ((void (*)(id, SEL, id))objc_msgSend)(other, callout, cb);
+    }
     SEL ex = NSSelectorFromString(@"existingSceneHandleForScene:"), note = NSSelectorFromString(@"_noteReplacedWithSceneHandle:");
     id oldH = ([self respondsToSelector:ex] && scene && G4B_On("migrate")) ? G4B_Obj1(other ?: self, ex, scene) : nil;
     %orig;

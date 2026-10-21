@@ -421,6 +421,7 @@ void BP_G3B_Setup(void);               // G3B.x
 void G3C_Setup(void);                  // G3C.x
 void G4B_Setup(void);                  // G4B.x
 void EDE_Setup(void);                  // EDE.x    (ExtendedDisplayEnabler's provider registration, merged in 0.7.5)
+void X6_Setup(void);                   // X6InCall.x (gap G6: in-call presentation sessions follow the display of their scene handle)
 void X7_Setup(void);                   // X7Keyboard.x (gap G7: keyboard focus tracker, display scoped keyboard suppression / resign active, external scene identities)
 void X9_Setup(void);                   // X9Pin.x (gap G9: pinOnButtonDown for the system gesture windows)
 void X2_Setup(void);                   // X2Overlay.x (gap G2: Control Centre / Spotlight / voice control / passcode / in-call overlays on the embedded display)
@@ -458,6 +459,7 @@ void RPT_Setup(void);                  // RPT.x (Send logs: SpringBoard half, an
         EDE_Setup();                   // Extended display provider registration (was the separate ExtendedDisplayEnabler package, switch ede_provider)
         G2I_Setup();                   // diagnostics of the Add Another Window flow (switch g2i_addwindiag; wrappers installed last so they see every other hook's result)
         G2H_Setup();                   // shadow room in the crop mask of G2F (switch g2h_maskshadow) + open / close dim diagnostics (switch g2h_dimdiag); after G2F, whose mask it adopts
+        X6_Setup();                    // gap G6: in-call sessions per scene / display (switch incallscene)
         X7_Setup();                    // gap G7: tracker class, display scoped suppression and resign active assertions, external scene identities (switches kbtracker, kbsuppress, kbextscenes)
         X9_Setup();                    // gap G9: pinOnButtonDown of the global mouse event request of the system gesture windows (switch pinbuttondown)
         X2_Setup();                    // gap G2: overlays on the embedded display (prefersEmbeddedDisplayPresentation of five overlay classes + the 16.2 consumers, switches embedoverlay / embedoverlay_envmode)
