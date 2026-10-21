@@ -136,7 +136,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | lockedptr2 | per-window-scene SBLockedPointerManager, `_UIPointerUnlockAction` (replaces the removed 0.5.0 `lockedptr`) | `lockedptr2` |
 | migrate | windows move to the iPad on unplug | `migrate` |
 | migrate_stage | DELIBERATE deviation from 16.2: the windows of the extended display's current stage are put on the iPad's stage on unplug (home screen -> stage, or merged behind the windows already there, up to the stage limit); off = 16.2 behaviour (scenes only in the strip, iPad stays where it was); specs/DISCONNECT-MIGRATE-0.7.4.md section 8 | `migrate_stage` |
-| focuslock | per-display focus-lock reasons | `focuslock` |
+| focuslock | per-display keyboard focus locks like 16.2, ported by ADDRESS: MSHookFunction on the two objc_direct policy functions (`_keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget:` 16.0 0x1c6324e5c, `_applyDeferringRulesForPolicy:` 0x1c6325d8c; prologue and caller words verified, "not installing" logged otherwise): lock reasons count only for the app-focus display or the active display, the stealing window of the active display wins, the lock scene follows the active display; specs/DISPLAY-LEFTOVERS-0.7.9.md item 1 | `focuslock` |
 | arrange | `activeDisplayTrackingMethodology`, display arrangement item, `preferredArrangementOfDisplay:relativeTo:` | `arrange` |
 | methodology0 | **opt-in**: keyboard-following active display instead of the pointer-following default | `methodology0` |
 

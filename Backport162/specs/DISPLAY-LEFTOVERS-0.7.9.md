@@ -1,0 +1,56 @@
+# DISPLAY-LEFTOVERS-0.7.9: the display-side gaps that were left partial / "not ported" and are ported now
+
+Static analysis only (16.0 = 20A8372 and 16.2 = 20C65 dyld caches, SpringBoard image; no Apple SDK, nothing runs here). Addresses are unslid vm addresses of the SpringBoard image (16.0 / 16.2). Every switch is default ON; kill file `<jbroot>/tmp/Backport162.off.<switch>`. `BP_Log` lines appear in `<jbroot>/tmp/Backport162.log` only while `<jbroot>/tmp/Backport162.debug` exists.
+Work list items 1 to 7 of the display-leftovers order; one section per item, written after the item was committed.
+
+---------------------------------------------------------------------------------------------------
+
+## 1. Per-display keyboard focus locks (`focuslock`, G4B.x group G4B_FocusLock) : PORTED BY ADDRESS
+
+### 16.2 mechanism
+
+`SBWorkspaceKeyboardFocusController` decides which SpringBoard UI may take the hardware keyboard from the app that has it. Two methods of that decision are `objc_direct` in 16.0 and 16.2 (plain C functions `(self, _cmd, arg)`, not in the class method list, listed in the symbol table as "non-external (was a private external)"):
+
+| function | 16.0 | 16.2 | size 16.0 / 16.2 | callers 16.0 |
+|---|---|---|---|---|
+| `_keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget:` | 0x1c6324e5c | 0x1c77c58c8 | 948 / 972 insns | one: `_updateFocusPolicy` (0x1c6323d88) `bl` at 0x1c6323dc0 |
+| `_applyDeferringRulesForPolicy:` | 0x1c6325d8c | 0x1c77c6994 | ~1250 / ~1100 insns | one: `_reevaluatePolicyAndUpdateRulesIfNeeded` (0x1c6321b74) `bl` at 0x1c6321bc0 |
+
+Method-by-method comparison of the two builds (call sequences diffed, then the changed regions read instruction by instruction); everything not listed is the same sequence of calls:
+
+1. `lockFocusToSpringBoardWindowScene:forReason:` (16.0 0x1c6321c94, 16.2 0x1c77c19f0, ObjC visible): 16.2 validates scene (`SBWindowScene`) and reason (`NSString`), keeps `map[reason] = scene` in the new ivar `_windowSceneForSpringBoardFocusLockReasonMap` (0xb8, `strongToWeakObjectsMapTable`) and acquires with `acquireForReason:withContext:scene`; the assertion's state handler (block 0x1c77c1e04) removes the map entries of released reasons. 16.0 keeps ONE weak ivar `_springBoardFocusLockWindowScene` (0xa0) with the last scene and acquires with `acquireForReason:`. `requestFocusStealingForSpringBoardWindow:forReason:` is identical in both builds (sequence diff empty).
+2. Policy, lock reasons. 16.2 (0x1c77c5af0..0x1c77c5bf8): `appScene = [windowSceneManager windowSceneForDisplayIdentity:[[appTarget settings] sb_displayIdentityForSceneManagers]]` (nil without a target), `active = [windowSceneManager activeDisplayWindowSceneFollowingUserInteraction]`; for every reason of `[lockAssertions reasons]` the reason goes into the set that makes SpringBoard take focus only when `map[reason] == appScene || map[reason] == active` (pointer comparison `cmp x25,x0; ccmp x26,x0,#4,ne`). 16.0 (0x1c6325050): every reason of `[lockAssertions reasons]` (ivar 0x90) goes in.
+3. Policy, window stealing. Both builds reach it only when the reason set is empty. 16.0 (0x1c6325288..0x1c6325520): stealing assertion (ivar 0x98) active; if `_addingSpringBoardPreferredFocusWindowScene` (BOOL 0x40) is set the preferred scene is `orderedContext.lastObject._sbWindowScene` (flag cleared); else with `ext = _lastAcceptedArbiterSceneSuggestion` (0xf0) the first stealing window (set `[stealing context]`) whose window scene's display identity `isEqual:` ext's `sb_displayIdentityForSceneManagers`. 16.2 (0x1c77c5f34..0x1c77c62c4, ext at 0x118) adds, in the non-adding case: `pid = ext.clientHandle.processHandle.pid`; when `pid != getpid()` AND ext's display identity is not the active scene's `_fbsDisplayIdentity`, a stealing window whose scene is the ACTIVE scene (`bs_containsObjectPassingTest:` with block 0x1c77c8b10 = `[[w _sbWindowScene] isEqual:capturedActive]`) makes the preferred scene the active scene itself; otherwise the 16.0 search. (The earlier reading in group4b-reconstruct.md "counts only if its client pid is SpringBoard or the displays are equal" was loose: the real rule prefers the stealing window of the active display.)
+4. Apply. 16.2 (0x1c77c6a44..0x1c77c6b08): `active = ...FollowingUserInteraction`; `adviceP = policy.advicePolicy`; if `adviceP == 0` the lock scene is `lastObject` of `[[lockAssertions orderedContext] bs_filter:^(s){ s == active }]` (block 0x1c77c7d68), else nil. 16.0 (0x1c6325e3c): the lock scene is `objc_loadWeakRetained(self + 0xa0)`. The consumers of the lock scene (display compare with the target scene, log lines, preferred scene) are the same sequence in both.
+5. `multiDisplayUserInteractionCoordinator:updatedActiveWindowScene:` (16.2 0x1c77c56d8): `if ([lockAssertions isActive]) [self _reevaluatePolicyAndUpdateRulesIfNeeded]`. The controller registers itself as active-window-scene observer in `_init...` when `[externalDisplaySettings activeDisplayTrackingMethodology] == 1`; `settings:changedValueForKey:` (0x1c77c5724) adds / removes it on a change of that key and re-evaluates.
+
+### What was ported (G4B.x section 6b, replaces the former ObjC-level reconcile wrapper)
+
+* Both direct functions are hooked BY ADDRESS with `MSHookFunction` (resolved with `dlsym`), exactly like BBD.x does: the unslid 16.0 address plus the slide of the `SpringBoard.framework/SpringBoard` image; before patching, the 8 prologue words of the function (identical in both: `pacibsp; stp x28,x27,[sp,#-0x60]!; stp x26,x25; stp x24,x23; stp x22,x21; stp x20,x19; stp fp,lr; add fp,sp,#0x50`) AND the `bl` word of the single caller (`0x94000427` at 0x1c6323dc0, `0x94001073` at 0x1c6321bc0, which proves the address is the function that caller really calls) are compared with the bytes of the running image; the hook of a function whose check fails is not installed and `focuslock: <function> prologue mismatch ... not installing` / `caller word ... not expected ... not installing` is logged (also: no `MSHookFunction`, image not found, an ivar missing). The trampoline pointer is re-signed for arm64e like Group4Focus.x.
+* Not a rewrite of 2000 instructions: the 16.0 body runs unchanged and receives the 16.2 INPUTS at the exact points it reads them.
+  * item 2: the policy hook arms a thread-local context (`kfc`, `appScene`, `active`); `-[BSCompoundAssertion reasons]` (an ordinary ObjC method, hooked) answers, only while armed and only for the focus controller's lock assertion, the reasons whose recorded scene is `appScene` or `active`.
+  * item 3: the policy hook evaluates the 16.2 condition itself (stealing active, no adding flag, ext, pid, displays, a stealing window on the active scene). If it holds it sets the `adding` flag for the duration of the call and arms `-[BSCompoundAssertion orderedContext]` to answer `@[thatWindow]` for the stealing assertion: the unchanged 16.0 "adding" branch then yields exactly the 16.2 result (preferred scene = the active scene, policy type 2); the flag is put back afterwards.
+  * item 4: the apply hook writes the 16.2 lock scene (advice policy 0: the most recently acquired lock whose scene is the active scene; else nil) into the weak ivar `_springBoardFocusLockWindowScene` (offset checked to be 0xa0) before the 16.0 body reads it.
+  * item 1: `-lockFocusToSpringBoardWindowScene:forReason:` is hooked: the map (`reason -> scene`, associated object, `strongToWeakObjectsMapTable` like 16.2) and the acquisition order (stand-in for `orderedContext`, which 16.0 locks do not have because they are acquired without context) are recorded, then the 16.0 body acquires. Released reasons are pruned before each policy / apply evaluation (the 16.2 state handler's job).
+  * item 5: the controller gets `multiDisplayUserInteractionCoordinator:updatedActiveWindowScene:` (`%new`) and registers itself at the first `windowSceneDidConnect:` when `activeDisplayTrackingMethodology == 1`; a change of the setting (the `BP162ActiveDisplayTrackingMethodologyChanged` note of G4B_Arrange) adds / removes it and re-evaluates (16.2 `settings:changedValueForKey:`).
+* The old stand-in (own request list, proxy tokens, `-_bp_reconcile` on a later runloop turn) is removed: the filter is now evaluated inside the same policy computation as in 16.2 (no one-turn window with the unfiltered state), the real assertions are what callers receive.
+
+Deviations (documented): (a) the lock assertion is still acquired with `acquireForReason:` (not `withContext:`): the context part is replaced by the recorded acquisition order, which is all `orderedContext.lastObject` was used for; (b) the 16.2 map is not an ivar of the controller (a runtime cannot add ivars to the 16.0 class): associated object; (c) the PTSettings key observer / persistence for the methodology is not reproduced (value is session-only, default 1, `methodology0` opt-in as before).
+
+### Switch and log lines
+
+Switch `focuslock` (default on; the hooks test it per call, the install happens at launch when it is on). Log lines (all `BP_Log`):
+* install: `focuslock: _keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget: hooked at 0x... (16.0 0x1c6324e5c)`, `focuslock: _applyDeferringRulesForPolicy: hooked at ...`, `focuslock: direct hooks policy 1 apply 1 (slide 0x...)`; failures: `focuslock: ... not installing`.
+* behaviour: `focuslock: deferring lock <reason> (scene ... is neither the app-focus display scene ... nor the active scene ...)`, `focuslock: stealing window ... is on the active display ... preferred SpringBoard focus window scene = the active scene`, `focuslock: lock window scene for the deferring rules = ... (advice policy N, active ...)`.
+
+### Test recipe (plain words)
+
+1. Create `<jbroot>/tmp/Backport162.debug`, respring, connect the monitor in extended mode.
+2. Put a text app in front on the monitor, type something on the hardware keyboard. Leave the pointer on the monitor.
+3. Move the pointer to the iPad and open Spotlight on the iPad (pull-down). Spotlight's lock is on the iPad, the iPad is now the active display: typing goes into Spotlight (lock counted). Close Spotlight.
+4. Open Spotlight on the iPad by touch while the pointer rests on the monitor... the touch moves the active display to the iPad, so the same result. The interesting case is the reverse: with the pointer on the iPad and the focused app on the monitor, a lock held for the MONITOR (a notification banner long-look or the Control Centre of the monitor) must not take the keyboard from an app that is focused on the iPad.
+5. In `Backport162.log` look for the three install lines at the start and `focuslock: deferring lock ...` / `lock window scene for the deferring rules` while you do the above.
+
+### Unproven
+
+Nothing ran. The 16.0 body's behaviour when `reasons` returns an empty set for a lock is the same path as "no lock held" (verified by the code: count 0 goes on to the stealing check). The `adding` flag trick relies on the 16.0 branch at 0x1c6325294 (`ldrb [x28,#0x40]`, `cbz`) clearing the flag at 0x1c63252cc; restored afterwards in any case. If MSHookFunction on these two functions misbehaves on Dopamine the log says which line was last.

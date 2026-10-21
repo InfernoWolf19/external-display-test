@@ -196,6 +196,7 @@ static const void *kG4BKeyD = &kG4BKeyD;
 - (id)_deviceApplicationSceneHandleForDisplayItem:(id)item;
 - (id)addKeyboardFocusObserver:(id)observer;
 - (void)addActiveDisplayWindowSceneObserver:(id)observer;
+- (void)updateKeyboardFocusDeferringRules;
 - (id)requestFocusStealingForSpringBoardWindow:(id)window forReason:(id)reason;
 - (id)lockFocusToSpringBoardWindowScene:(id)scene forReason:(id)reason;
 - (unsigned int)edge;
@@ -1830,152 +1831,277 @@ static void G4B_MigrateStageMerge(id ctx, NSDictionary *mk) {
 %end // G4B_MigrateStage
 
 // ================================================================================================================
-// 6b. PER-DISPLAY KEYBOARD-FOCUS LOCK REASONS                                                            [DONE, UNSURE md 6b]
+// 6b. PER-DISPLAY KEYBOARD-FOCUS LOCK REASONS (16.2 0x1c77c19f0 / 0x1c77c58c8 / 0x1c77c6994), ported by ADDRESS
 // ================================================================================================================
-@interface G4BFocusReq : NSObject {
-@public
-    NSString *reason;
-    __weak id scene;          // SBWindowScene (lock) or the window's scene (steal)
-    __weak id window;
-    BOOL steal;
-    id real;                  // the real 16.0 BSInvalidatable while the request qualifies
-    BOOL dead;
-}
-@end
-@implementation G4BFocusReq
-@end
+// The two big methods are objc_direct in 16.0 and cannot be hooked by selector: they are plain C functions (self, _cmd, arg)
+//   -[SBWorkspaceKeyboardFocusController _keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget:]  16.0 0x1c6324e5c (16.2 0x1c77c58c8)
+//   -[SBWorkspaceKeyboardFocusController _applyDeferringRulesForPolicy:]                            16.0 0x1c6325d8c (16.2 0x1c77c6994)
+// Their only callers are _updateFocusPolicy (bl at 0x1c6323dc0, word 0x94000427) and _reevaluatePolicyAndUpdateRulesIfNeeded
+// (bl at 0x1c6321bc0, word 0x94001073). Both are hooked with MSHookFunction at the entry after the 8 prologue words (identical in both
+// functions: pacibsp, stp x28,x27,[sp,#-0x60]!, ..., add fp,sp,#0x50) and the bl word of the single caller were compared with the
+// bytes of THIS image (slide of the SpringBoard.framework image); any difference logs "focuslock: ... not installing" and leaves
+// the 16.0 behaviour (the logged last line, no silent skip).
+//
+// What 16.2 changed (decoded, 16.2 addresses; the rest of both bodies is the same sequence of calls as 16.0):
+//  1. lockFocusToSpringBoardWindowScene:forReason: (0x1c77c19f0) keeps map[reason] = scene (ivar _windowSceneForSpringBoardFocusLockReasonMap
+//     0xb8, strongToWeakObjectsMapTable) and acquires with acquireForReason:withContext:scene. 16.0 keeps one ivar with the LAST scene
+//     (_springBoardFocusLockWindowScene 0xa0). requestFocusStealing... is identical in both builds.
+//  2. policy, lock reasons (0x1c77c5b34..0x1c77c5bf8): appScene = windowSceneForDisplayIdentity:(appTarget.settings.sb_displayIdentityForSceneManagers),
+//     active = [windowSceneManager activeDisplayWindowSceneFollowingUserInteraction]; the reason set takes a lock reason only when
+//     map[reason] == appScene || map[reason] == active (16.0: every reason of [lockAssertions reasons]).
+//  3. policy, window stealing (0x1c77c5f34..0x1c77c62c4): when stealing is active and no "adding preferred scene" is pending, with
+//     ext = _lastAcceptedArbiterSceneSuggestion (16.2 ivar 0x118; 16.0 0xf0): if ext's client pid != getpid() and ext's display != the
+//     active display and a stealing window sits on the ACTIVE scene, the preferred SB focus window scene is the active scene (type 2);
+//     otherwise the 16.0 search (a stealing window on ext's display).
+//  4. apply (0x1c77c6a44..0x1c77c6b08): the lock scene is no longer the ivar: when policy.advicePolicy == 0 it is the last lock
+//     context equal to the active scene (bs_filter block 0x1c77c7d68), else nil. The consumers of the lock scene are the same.
+//  5. multiDisplayUserInteractionCoordinator:updatedActiveWindowScene: (0x1c77c56d8): re-evaluate while a lock is held; the kfc
+//     registers itself as active-window-scene observer when activeDisplayTrackingMethodology == 1 (settings:changedValueForKey: 0x1c77c5724).
+//
+// Port: 1. is the ObjC hook below (map + acquisition order as the stand-in of orderedContext); 2. and 3. run INSIDE the unchanged 16.0
+// policy body: the address hook arms a thread-local context, BSCompoundAssertion -reasons answers the filtered reason set for the lock
+// assertion and -orderedContext answers the chosen stealing window for the stealing assertion (the "adding" branch of the 16.0 body then
+// yields exactly the 16.2 result); 4. the apply hook writes the 16.2 lock scene into the weak ivar the 16.0 body reads.
+// Switch `focuslock`. Log lines: "focuslock: ..." (see specs/DISPLAY-LEFTOVERS-0.7.9.md).
+long long BP_G4_ActiveMethodology(void);
+@interface BSCompoundAssertion : NSObject @end
 
-@interface G4BFocusToken : NSObject <G4BInvalidatable>
-- (instancetype)initWithKFC:(id)kfc request:(G4BFocusReq *)r;
-@end
+static const void *kG4BLockMap   = &kG4BLockMap;      // NSMapTable reason -> scene
+static const void *kG4BLockOrder = &kG4BLockOrder;    // NSMutableArray of reasons, acquisition order (stand-in for orderedContext)
+static const void *kG4BLockObs   = &kG4BLockObs;      // registered as active-window-scene observer
 
-static BOOL gG4BInReconcile;
-static const void *kFocusList = &kFocusList;
-static const void *kFocusObs  = &kFocusObs;
-
-@interface G4BFocusObserver : NSObject
-@property (nonatomic, weak) id kfc;
-@end
+typedef struct { __unsafe_unretained id kfc; __unsafe_unretained id appScene; __unsafe_unretained id active; __unsafe_unretained id stealWindow; BOOL armed; } G4BFLCtx;
+static __thread G4BFLCtx gG4BFL;
 
 static id G4B_WindowSceneManager(void) {
     return [[UIApplication sharedApplication] respondsToSelector:@selector(windowSceneManager)] ? G4B_Obj([UIApplication sharedApplication], @selector(windowSceneManager)) : nil;
 }
-static id G4B_SceneDisplayWindowScene(id fbScene) {
-    id settings = [fbScene respondsToSelector:@selector(settings)] ? G4B_Obj(fbScene, @selector(settings)) : nil;
-    SEL ds = NSSelectorFromString(@"sb_displayIdentityForSceneManagers");
-    id ident = [settings respondsToSelector:ds] ? G4B_Obj(settings, ds) : nil;
-    id wsm = G4B_WindowSceneManager();
-    return (ident && [wsm respondsToSelector:@selector(windowSceneForDisplayIdentity:)]) ? G4B_Obj1(wsm, @selector(windowSceneForDisplayIdentity:), ident) : nil;
-}
-static void G4B_FocusReconcile(id kfc);
-
-@implementation G4BFocusToken {
-    __weak id _kfc;
-    G4BFocusReq *_req;
-}
-- (instancetype)initWithKFC:(id)kfc request:(G4BFocusReq *)r {
-    if ((self = [super init])) { _kfc = kfc; _req = r; }
-    return self;
-}
-- (void)invalidate {
-    G4BFocusReq *r = _req; _req = nil;
-    if (!r || r->dead) return;
-    r->dead = YES;
-    id real = r->real; r->real = nil;
-    if ([real respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)real invalidate];
-    id kfc = _kfc;
-    NSMutableArray *list = objc_getAssociatedObject(kfc, kFocusList);
-    [list removeObject:r];
-    if (kfc) G4B_FocusReconcile(kfc);
-}
-- (void)dealloc { [self invalidate]; }
-@end
-
-@implementation G4BFocusObserver
-- (void)keyboardFocusController:(id)c externalSceneDidAcquireFocus:(id)f { id k = self.kfc; if (k) G4B_FocusReconcile(k); }
-- (void)keyboardFocusController:(id)c didUpdateWindowSceneWithFocusFrom:(id)from to:(id)to { id k = self.kfc; if (k) G4B_FocusReconcile(k); }
-- (void)multiDisplayUserInteractionCoordinator:(id)c updatedActiveWindowScene:(id)ws { id k = self.kfc; if (k) G4B_FocusReconcile(k); }
-@end
-
-static void G4B_FocusReconcileNow(id kfc) {
-    NSMutableArray<G4BFocusReq *> *list = objc_getAssociatedObject(kfc, kFocusList);
-    if (!list.count || gG4BInReconcile) return;
-    id wsm = G4B_WindowSceneManager();
-    id appScene = G4B_SceneDisplayWindowScene(G4B_Ivar(kfc, "_externalSceneWithFocus"));
+static id G4B_ActiveUserScene(id wsm) {
     SEL fu = NSSelectorFromString(@"activeDisplayWindowSceneFollowingUserInteraction");
-    id active = [wsm respondsToSelector:fu] ? G4B_Obj(wsm, fu) : ([wsm respondsToSelector:@selector(activeDisplayWindowScene)] ? G4B_Obj(wsm, @selector(activeDisplayWindowScene)) : nil);
-    gG4BInReconcile = YES;
-    for (G4BFocusReq *r in [list copy]) {
-        if (r->dead) continue;
-        id sc = r->scene;
-        BOOL want = (!appScene && !active) || (sc && (sc == appScene || sc == active));
-        if (want && !r->real) {
-            id real = nil;
-            if (r->steal) {
-                real = ((id (*)(id, SEL, id, id))objc_msgSend)(kfc, @selector(requestFocusStealingForSpringBoardWindow:forReason:), r->window, r->reason);
-            } else {
-                real = ((id (*)(id, SEL, id, id))objc_msgSend)(kfc, @selector(lockFocusToSpringBoardWindowScene:forReason:), sc, r->reason);
+    return [wsm respondsToSelector:fu] ? G4B_Obj(wsm, fu) : nil;
+}
+static id G4B_FBSceneDisplayIdentity(id fbScene) {
+    id settings = G4B_Obj(fbScene, @selector(settings));
+    return G4B_Obj(settings, NSSelectorFromString(@"sb_displayIdentityForSceneManagers"));
+}
+static NSMapTable *G4B_LockMap(id kfc, BOOL create) {
+    NSMapTable *m = objc_getAssociatedObject(kfc, kG4BLockMap);
+    if (!m && create) { m = [NSMapTable strongToWeakObjectsMapTable]; objc_setAssociatedObject(kfc, kG4BLockMap, m, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    return m;
+}
+static NSMutableArray *G4B_LockOrder(id kfc) {
+    NSMutableArray *a = objc_getAssociatedObject(kfc, kG4BLockOrder);
+    if (!a) { a = [NSMutableArray array]; objc_setAssociatedObject(kfc, kG4BLockOrder, a, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    return a;
+}
+// the reasons the lock assertion holds right now (unfiltered)
+static NSSet *G4B_HeldLockReasons(id kfc) {
+    id la = G4B_Ivar(kfc, "_springBoardFocusLockAssertions");
+    id s = G4B_Obj(la, @selector(reasons));
+    return [s isKindOfClass:[NSSet class]] ? s : nil;
+}
+// the 16.2 state handler of the lock assertion (block 0x1c77c1e04) drops the map entries of released reasons
+static void G4B_PruneLocks(id kfc) {
+    NSSet *held = G4B_HeldLockReasons(kfc);
+    NSMapTable *m = G4B_LockMap(kfc, NO);
+    NSMutableArray *order = G4B_LockOrder(kfc);
+    for (NSString *r in [order copy]) if (![held containsObject:r]) { [order removeObject:r]; [m removeObjectForKey:r]; }
+}
+
+typedef id (*G4BPolicyFn)(id, SEL, id);
+typedef void (*G4BApplyFn)(id, SEL, id);
+static G4BPolicyFn gG4BOrigPolicy;
+static G4BApplyFn gG4BOrigApply;
+
+// _keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget: (16.0 0x1c6324e5c)
+static id G4B_hook_policy(id self, SEL cmd, id target) {
+    if (!self || !G4B_On("focuslock")) return gG4BOrigPolicy(self, cmd, target);
+    id wsm = G4B_WindowSceneManager();
+    id active = G4B_ActiveUserScene(wsm);
+    if (!wsm || !active) {
+        BP_Log(@"focuslock: no active display scene (window scene manager %p), the policy is computed unfiltered", (__bridge void *)wsm);
+        return gG4BOrigPolicy(self, cmd, target);
+    }
+    id ident = target ? G4B_FBSceneDisplayIdentity(target) : nil;
+    id appScene = (ident && [wsm respondsToSelector:@selector(windowSceneForDisplayIdentity:)]) ? G4B_Obj1(wsm, @selector(windowSceneForDisplayIdentity:), ident) : nil;
+    G4B_PruneLocks(self);
+    // window stealing (item 3)
+    id stealWindow = nil;
+    Ivar addIv = class_getInstanceVariable(object_getClass(self), "_addingSpringBoardPreferredFocusWindowScene");
+    BOOL adding = NO;
+    BOOL haveAdd = addIv && ivar_getTypeEncoding(addIv) && ivar_getTypeEncoding(addIv)[0] == 'B';
+    if (haveAdd) memcpy(&adding, (const char *)(__bridge const void *)self + ivar_getOffset(addIv), 1);
+    id stealA = G4B_Ivar(self, "_springBoardWindowFocusStealingAssertions");
+    if (haveAdd && !adding && stealA && G4B_Bool(stealA, @selector(isActive))) {
+        id ext = G4B_Ivar(self, "_lastAcceptedArbiterSceneSuggestion");
+        if (ext) {
+            id appId = G4B_FBSceneDisplayIdentity(ext);
+            id activeId = G4B_Obj(active, NSSelectorFromString(@"_fbsDisplayIdentity"));
+            id ph = G4B_Obj(G4B_Obj(ext, NSSelectorFromString(@"clientHandle")), NSSelectorFromString(@"processHandle"));
+            int pid = -1;
+            if ([ph respondsToSelector:@selector(pid)]) pid = ((int (*)(id, SEL))objc_msgSend)(ph, @selector(pid));
+            if (pid != (int)getpid() && !(appId && [appId isEqual:activeId])) {
+                id ctxs = G4B_Obj(stealA, @selector(context));
+                if ([ctxs respondsToSelector:@selector(countByEnumeratingWithState:objects:count:)]) {
+                    for (id w in ctxs) {
+                        id ws = G4B_Obj(w, NSSelectorFromString(@"_sbWindowScene"));
+                        if (ws && [ws isEqual:active]) { stealWindow = w; break; }
+                    }
+                }
             }
-            r->real = real;
-            BP_Log(@"focuslock: activating %@ (%@)", r->reason, r->steal ? @"steal" : @"lock");
-        } else if (!want && r->real) {
-            id real = r->real; r->real = nil;
-            if ([real respondsToSelector:@selector(invalidate)]) [(id<G4BInvalidatable>)real invalidate];
-            BP_Log(@"focuslock: deferring %@ (scene not on app-focus/active display)", r->reason);
         }
     }
-    gG4BInReconcile = NO;
+    G4BFLCtx saved = gG4BFL;
+    gG4BFL.kfc = self; gG4BFL.appScene = appScene; gG4BFL.active = active; gG4BFL.stealWindow = stealWindow; gG4BFL.armed = YES;
+    BOOL yes = YES;
+    if (stealWindow) memcpy((char *)(__bridge void *)self + ivar_getOffset(addIv), &yes, 1);   // the 16.0 body then takes the window of orderedContext.lastObject
+    id r = gG4BOrigPolicy(self, cmd, target);
+    if (stealWindow) {
+        memcpy((char *)(__bridge void *)self + ivar_getOffset(addIv), &adding, 1);
+        BP_Log(@"focuslock: stealing window %p is on the active display %p while the focused app is on another display: preferred SpringBoard focus window scene = the active scene", (__bridge void *)stealWindow, (__bridge void *)active);
+    }
+    gG4BFL = saved;
+    return r;
 }
-static void G4B_FocusReconcile(id kfc) {
-    __weak id w = kfc;
-    dispatch_async(dispatch_get_main_queue(), ^{ id k = w; if (k) G4B_FocusReconcileNow(k); });
+
+// _applyDeferringRulesForPolicy: (16.0 0x1c6325d8c)
+static void G4B_hook_apply(id self, SEL cmd, id policy) {
+    if (self && G4B_On("focuslock")) {
+        id wsm = G4B_WindowSceneManager();
+        id active = G4B_ActiveUserScene(wsm);
+        Ivar iv = class_getInstanceVariable(object_getClass(self), "_springBoardFocusLockWindowScene");
+        if (active && iv && ivar_getOffset(iv) == 0xa0) {
+            long long advice = [policy respondsToSelector:NSSelectorFromString(@"advicePolicy")] ? G4B_LL(policy, NSSelectorFromString(@"advicePolicy")) : 0;
+            id lockScene = nil;
+            if (advice == 0) {                                   // 16.2: [[lockAssertions orderedContext] bs_filter:^(s){ s == active }].lastObject
+                G4B_PruneLocks(self);
+                NSMapTable *m = G4B_LockMap(self, NO);
+                for (NSString *r in [[G4B_LockOrder(self) reverseObjectEnumerator] allObjects]) {
+                    id s = [m objectForKey:r];
+                    if (s && s == active) { lockScene = s; break; }
+                }
+            }
+            __weak id *slot = (__weak id *)(void *)((char *)(__bridge void *)self + ivar_getOffset(iv));     // the ivar is a weak reference
+            *slot = lockScene;
+            BP_Log(@"focuslock: lock window scene for the deferring rules = %p (advice policy %lld, active %p)", (__bridge void *)lockScene, advice, (__bridge void *)active);
+        }
+    }
+    gG4BOrigApply(self, cmd, policy);
+}
+
+typedef void (*G4BMSHookFn)(void *symbol, void *replace, void **result);
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#define G4B_STRIP(p)   ptrauth_strip((p), ptrauth_key_function_pointer)
+#define G4B_SIGN(p)    ptrauth_sign_unauthenticated(ptrauth_strip((p), ptrauth_key_function_pointer), ptrauth_key_function_pointer, 0)
+#else
+#define G4B_STRIP(p)   (p)
+#define G4B_SIGN(p)    (p)
+#endif
+
+static BOOL G4B_HookDirect(const char *what, uintptr_t vm, const uint32_t *prologue, int nWords, uintptr_t callerVm, uint32_t callerWord, intptr_t slide,
+                           G4BMSHookFn hookFn, void *replacement, void **origOut) {
+    uintptr_t entry = vm + (uintptr_t)slide;
+    if (memcmp((const void *)entry, prologue, (size_t)nWords * 4) != 0) {
+        BP_Log(@"focuslock: %@ prologue mismatch at %p, not installing", [NSString stringWithUTF8String:what], (void *)entry);
+        return NO;
+    }
+    uint32_t cw = *(const uint32_t *)(callerVm + (uintptr_t)slide);
+    if (cw != callerWord) {
+        BP_Log(@"focuslock: %@ caller word 0x%08x at %p is not the expected 0x%08x, not installing", [NSString stringWithUTF8String:what], cw, (void *)(callerVm + (uintptr_t)slide), callerWord);
+        return NO;
+    }
+    void *orig = NULL;
+    hookFn(G4B_STRIP((void *)entry), G4B_STRIP(replacement), &orig);
+    if (!orig) { BP_Log(@"focuslock: %@ MSHookFunction returned no trampoline, not installing", [NSString stringWithUTF8String:what]); return NO; }
+    *origOut = G4B_SIGN(orig);
+    BP_Log(@"focuslock: %@ hooked at %p (16.0 0x%lx)", [NSString stringWithUTF8String:what], (void *)entry, (unsigned long)vm);
+    return YES;
+}
+
+static void G4B_InstallFocusDirect(void) {
+    static const uint32_t kPrologue[8] = { 0xd503237f, 0xa9ba6ffc, 0xa90167fa, 0xa9025ff8, 0xa90357f6, 0xa9044ff4, 0xa9057bfd, 0x910143fd };
+    G4BMSHookFn hookFn = (G4BMSHookFn)dlsym(RTLD_DEFAULT, "MSHookFunction");
+    if (!hookFn) { BP_Log(@"focuslock: MSHookFunction not available, not installing the policy / apply hooks (16.0 lock behaviour)"); return; }
+    intptr_t slide = 0;
+    BOOL found = NO;
+    for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
+    }
+    if (!found) { BP_Log(@"focuslock: SpringBoard.framework image not found, not installing"); return; }
+    Class k = NSClassFromString(@"SBWorkspaceKeyboardFocusController");
+    if (!class_getInstanceVariable(k, "_springBoardFocusLockAssertions") || !class_getInstanceVariable(k, "_springBoardWindowFocusStealingAssertions") ||
+        !class_getInstanceVariable(k, "_lastAcceptedArbiterSceneSuggestion") || !class_getInstanceVariable(k, "_addingSpringBoardPreferredFocusWindowScene") ||
+        !class_getInstanceVariable(k, "_springBoardFocusLockWindowScene")) {
+        BP_Log(@"focuslock: an ivar of SBWorkspaceKeyboardFocusController is missing, not installing");
+        return;
+    }
+    BOOL a = G4B_HookDirect("_keyboardFocusPolicyForCurrentUIStateWithAppFocusTarget:", 0x1c6324e5c, kPrologue, 8, 0x1c6323dc0, 0x94000427, slide, hookFn, (void *)G4B_hook_policy, (void **)&gG4BOrigPolicy);
+    BOOL b = G4B_HookDirect("_applyDeferringRulesForPolicy:", 0x1c6325d8c, kPrologue, 8, 0x1c6321bc0, 0x94001073, slide, hookFn, (void *)G4B_hook_apply, (void **)&gG4BOrigApply);
+    BP_Log(@"focuslock: direct hooks policy %d apply %d (slide 0x%lx)", (int)a, (int)b, (long)slide);
 }
 
 %group G4B_FocusLock
 
+%hook BSCompoundAssertion
+// armed only inside the policy hook above, on the two assertions of the focus controller
+- (id)reasons {
+    id r = %orig;
+    if (!gG4BFL.armed || !gG4BFL.kfc || self != G4B_Ivar(gG4BFL.kfc, "_springBoardFocusLockAssertions") || ![r isKindOfClass:[NSSet class]]) return r;
+    NSMapTable *m = G4B_LockMap(gG4BFL.kfc, NO);
+    NSMutableSet *out = [NSMutableSet set];
+    for (id reason in r) {
+        id s = [m objectForKey:reason];
+        if (s == gG4BFL.appScene || s == gG4BFL.active) [out addObject:reason];       // 16.2 0x1c77c5bb0..0x1c77c5bd0 (pointer comparison)
+        else BP_Log(@"focuslock: deferring lock %@ (scene %p is neither the app-focus display scene %p nor the active scene %p)", reason, (__bridge void *)s, (__bridge void *)gG4BFL.appScene, (__bridge void *)gG4BFL.active);
+    }
+    return out;
+}
+- (id)orderedContext {
+    id r = %orig;
+    if (!gG4BFL.armed || !gG4BFL.stealWindow || !gG4BFL.kfc || self != G4B_Ivar(gG4BFL.kfc, "_springBoardWindowFocusStealingAssertions")) return r;
+    return @[gG4BFL.stealWindow];
+}
+%end
+
 %hook SBWorkspaceKeyboardFocusController
+// 16.2 0x1c77c19f0: map[reason] = scene, then acquire (the acquisition itself is the 16.0 body)
 - (id)lockFocusToSpringBoardWindowScene:(id)scene forReason:(id)reason {
-    if (gG4BInReconcile || !G4B_On("focuslock") || !scene || ![reason isKindOfClass:[NSString class]]) return %orig;
-    G4BFocusReq *r = [G4BFocusReq new];
-    r->reason = reason; r->scene = scene;
-    NSMutableArray *list = objc_getAssociatedObject(self, kFocusList);
-    if (!list) { list = [NSMutableArray array]; objc_setAssociatedObject(self, kFocusList, list, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
-    [list addObject:r];
-    G4B_FocusReconcileNow(self);
-    return [[G4BFocusToken alloc] initWithKFC:self request:r];
+    Class wsc = NSClassFromString(@"SBWindowScene");
+    if (!G4B_On("focuslock") || !scene || !wsc || ![scene isKindOfClass:wsc] || ![reason isKindOfClass:[NSString class]]) return %orig;
+    [G4B_LockMap(self, YES) setObject:scene forKey:reason];
+    NSMutableArray *order = G4B_LockOrder(self);
+    [order removeObject:reason];
+    [order addObject:reason];
+    return %orig;
 }
-- (id)requestFocusStealingForSpringBoardWindow:(id)window forReason:(id)reason {
-    if (gG4BInReconcile || !G4B_On("focuslock") || !window || ![reason isKindOfClass:[NSString class]]) return %orig;
-    G4BFocusReq *r = [G4BFocusReq new];
-    r->reason = reason; r->window = window; r->steal = YES;
-    r->scene = [window respondsToSelector:@selector(_sbWindowScene)] ? G4B_Obj(window, @selector(_sbWindowScene)) : nil;
-    NSMutableArray *list = objc_getAssociatedObject(self, kFocusList);
-    if (!list) { list = [NSMutableArray array]; objc_setAssociatedObject(self, kFocusList, list, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
-    [list addObject:r];
-    G4B_FocusReconcileNow(self);
-    return [[G4BFocusToken alloc] initWithKFC:self request:r];
+
+// 16.2 0x1c77c56d8
+%new
+- (void)multiDisplayUserInteractionCoordinator:(id)c updatedActiveWindowScene:(id)ws {
+    if (!G4B_On("focuslock")) return;
+    id la = G4B_Ivar(self, "_springBoardFocusLockAssertions");
+    if (la && G4B_Bool(la, @selector(isActive))) [self updateKeyboardFocusDeferringRules];
 }
-- (void)updateKeyboardFocusDeferringRules {
-    %orig;
-    if (G4B_On("focuslock")) G4B_FocusReconcile(self);
+%new
+- (void)bp_methodologyChanged:(NSNotification *)n {      // 16.2 settings:changedValueForKey: (0x1c77c5724): add / remove the observer, then re-evaluate
+    id sb = [UIApplication sharedApplication];
+    id coord = G4B_Obj(sb, NSSelectorFromString(@"multiDisplayUserInteractionCoordinator"));
+    if (BP_G4_ActiveMethodology() == 1) { if ([coord respondsToSelector:@selector(addActiveDisplayWindowSceneObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(coord, @selector(addActiveDisplayWindowSceneObserver:), self); }
+    else if ([coord respondsToSelector:@selector(removeActiveDisplayWindowSceneObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(coord, @selector(removeActiveDisplayWindowSceneObserver:), self);
+    [self updateKeyboardFocusDeferringRules];
 }
-- (void)removeKeyboardFocusFromScene:(id)scene {
-    %orig;
-    if (G4B_On("focuslock")) G4B_FocusReconcile(self);
-}
+
 - (void)windowSceneDidConnect:(id)ws {
     %orig;
-    if (!G4B_On("focuslock") || objc_getAssociatedObject(self, kFocusObs)) return;
-    G4BFocusObserver *o = [G4BFocusObserver new];
-    o.kfc = self;
-    if ([self respondsToSelector:@selector(addKeyboardFocusObserver:)]) {
-        id tok = G4B_Obj1(self, @selector(addKeyboardFocusObserver:), o);
-        objc_setAssociatedObject(self, kFocusObs, @[o, tok ?: [NSNull null]], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
+    if (!G4B_On("focuslock") || objc_getAssociatedObject(self, kG4BLockObs)) return;
+    objc_setAssociatedObject(self, kG4BLockObs, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     id sb = [UIApplication sharedApplication];
     SEL mc = NSSelectorFromString(@"multiDisplayUserInteractionCoordinator");     // provided by Group4Focus.x
     id coord = [sb respondsToSelector:mc] ? G4B_Obj(sb, mc) : nil;
-    if ([coord respondsToSelector:@selector(addActiveDisplayWindowSceneObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(coord, @selector(addActiveDisplayWindowSceneObserver:), o);
+    if (BP_G4_ActiveMethodology() == 1 && [coord respondsToSelector:@selector(addActiveDisplayWindowSceneObserver:)]) ((void (*)(id, SEL, id))objc_msgSend)(coord, @selector(addActiveDisplayWindowSceneObserver:), self);
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(bp_methodologyChanged:) name:@"BP162ActiveDisplayTrackingMethodologyChanged" object:nil];
 }
 %end
 
@@ -2115,7 +2241,7 @@ void G4B_Setup(void) {
     if (G4B_On("lockedptr2")) { %init(G4B_LockedPtr); G4B_WrapDidSelectContainer(); }
     if (G4B_On("migrate"))   { %init(G4B_Migrate); }
     if (G4B_On("migrate") && G4B_On("migrate_stage")) { %init(G4B_MigrateStage); }
-    if (G4B_On("focuslock")) { %init(G4B_FocusLock); }
+    if (G4B_On("focuslock")) { %init(G4B_FocusLock); G4B_InstallFocusDirect(); }
     BP_Log(@"group4b installed");
 }
 
