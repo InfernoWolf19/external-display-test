@@ -153,3 +153,32 @@ A manager per external window scene (16.0 initializer and provider, made after t
 ### Unproven
 
 Whether the 16.0 manager's `_createRecordingIndicatorForStandaloneLocation` / status bar location choices place the indicator sensibly on a monitor was not analysed (the same class code runs in 16.2 for the external scene). The status-bar half inside apps (UIKit `registerSensorActivityIndicator:forScreen:`) is app side and not done. Needs a device: camera / microphone app with a monitor connected, dot on the monitor.
+
+## G3 Monitor scale and mode choice (audit D1) — X3Mode.x
+
+### 16.2 mechanism (full reading with addresses in the X3Mode.x header)
+
+What was audited as "mapping, criteria, `_ensureCADisplayUpToDate`, cloningSupported not ported" turned out smaller once the 16.0 side was decoded:
+
+* `SBDisplayScaleMapping` (SpringBoardFoundation): the new `initWithDisplayHardwareIdentifier:nativePPI:nativeSize:scaleMethod:supportedScales:displayScaleToLogicalScale:` (16.2 0x18ee470f8) and the `availableModes` walk in `+withDisplay:allowWirelessDisplays:` (0x18ee471c4) only feed an `os_log` in both builds; `logicalScaleForDisplayScale:` returns the same value, `_defaultScale` is the 16.0 inline closest-PPI rule. Nothing to port (correction of the audit row).
+* The real change is the restructure around `SBSceneHostingDisplayPreferences` (16.2 policy `displayPreferencesForDisplayController:` 0x1c77dd034 -> init 0x1c788f4f4: logicalScale (L, L) from the mode settings scale, contentsScale ivar, `keepOtherModes` NO, `CADisplayModeCriteria` from a fresh `FBSMutableDisplayConfigurationRequest`: resolution (0,0), refresh rate 0, `hdrMode` = `_FBSDisplayHDRModeToCADisplayHDRMode(0)` = `kCADisplayModeSDR`). 16.0 computes the same inputs in the policy (`_preferredSizeInPixels...` 0x1c633a7a8, `_preferredSizeInPoints...` 0x1c633a890 = pixels / contents scale, `_preferredContentsScale` 0x1c633a94c, `_preferredModeForDisplayForTargetCADisplay:` 0x1c633a954) and the controller (`_preferredLogicalScale` 0x1c5f48360, which already clamps per axis). The apply block of `_ensureCADisplayUpToDate` is identical in both builds (0x1c5f487e4 / 0x1c73bd2c0), so only its inputs differ. Three differences:
+  1. mode criteria: 16.0 uses an empty `CADisplayModeCriteria` (QuartzCore hdr type 0, "no preference"), 16.2 SDR (hdr type 1) in `-[CADisplay preferredModeWithCriteria:]` (16.0 0x188446048 / 16.2 0x188572570, same code apart from one `create_mode` argument);
+  2. the published configuration copies the config's `preferredMode` in 16.0 (policy transform 0x1c633981c) but the `currentMode` in 16.2 (controller transform 0x1c73bb2b8, `_copyWithOverrideSize:scale:` at 0x1c73bb560), with `otherModes` nil in both (the policy's `keepOtherModes` is NO);
+  3. for a display of type 2 16.2 `_ensureCADisplayUpToDate` uses logical scale (1, 1) (0x1c73bcf28), 16.0 clamps in all cases.
+
+### Implemented (X3Mode.x, `X3_Setup()` from Tweak.x)
+
+* `modecriteria`: `-[SBSystemShellExtendedDisplayControllerPolicy _preferredModeForDisplayForTargetCADisplay:]` builds the 16.2 criteria (fresh request, `FBSDisplayHDRModeToCADisplayHDRMode` through dlsym, fallback strings) and asks the display. That one method feeds the pixel and point size (so the existing per-axis clamp of Tweak.x `scale` keeps working on the same mode), `preferredDisplayModeForDisplayController:` and `_ensureCADisplayUpToDate`. When the criteria find no mode the 16.0 answer is returned and the case is logged (this is the last line of that path, not a silent switch).
+* `modebase`: after the 16.0 policy transform, when `[config currentMode]` differs from `[config preferredMode]`, `setCurrentMode:preferredMode:otherModes:` is redone on the builder with `[currentMode _copyWithOverrideSize:<_preferredSizeInPoints...> scale:<_preferredContentsScale>]` for both modes, `otherModes` nil.
+* `modelogical`: `-[SBSceneHostingDisplayController _preferredLogicalScale]` answers (1, 1) when the `_caDisplay`'s `displayType` is 2.
+
+Unchanged and already in place: the per-axis clamp of the published pixel size (Tweak.x, switch `scale`).
+
+### Switches and logs
+
+`modecriteria`, `modebase`, `modelogical` (kill files `Backport162.off.<switch>`, README table). Debug log lines: `[x3] monitor mode choice installed ...`, `[x3] criteria preferred mode <new> instead of <default>`, `[x3] criteria preferred mode: no mode for ...`, `[x3] published mode is a copy of the current mode ...`, `[x3] logical scale ... -> 1x1 for display type 2`.
+
+### Not ported / unproven
+
+* Not ported (no SpringBoard part, or nothing observable): `SBDisplayScaleMapping` new initializer and mode walk (log only), `SBSceneHostingDisplayPreferences` as a class (its three consumers are covered), `-[CADisplayMode _initWithMode:display:rates:]` and `CAWindowServerDisplay maxLayerBandwidth` (QuartzCore of the system, not in SpringBoard), `setCloningSupported:` (clone mirroring is the `clonemirror` family), the "disconnect signal already signalled" early outs (identical in both builds).
+* Unproven (no device): every effect depends on the monitor. On a monitor that offers no HDR modes `modecriteria` returns the same mode as 16.0 (the debug line is then absent); on a monitor with HDR modes it may select another resolution / refresh rate entry than 16.0 did, which is exactly what 16.2 does. `modebase` only matters when the CADisplay's current mode differs from its preferred mode (after a mode change by `_ensureCADisplayUpToDate`). The exact C++ `ModeSet::preferred_mode_with_criteria` was not decoded: only that hdr type 0 and 1 are passed differently was verified, so which mode a given monitor yields is unknown without `[x3]` lines from a device.
