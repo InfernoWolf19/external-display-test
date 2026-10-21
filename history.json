@@ -1,12 +1,4 @@
 {
- "0.7.4+155.a588020": {
-  "date": "2026-10-17T07:57:40Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+155.a588020_iphoneos-arm64.deb",
-  "run": 155,
-  "sha": "a588020cedd00f254c2db51dc37d9729da5a4616",
-  "subject": "PiP expand: restore on the display the scene is shown on (scene setti\u2026",
-  "version": "0.7.4+155.a588020"
- },
  "0.7.4+156.2db7c86": {
   "date": "2026-10-17T07:57:50Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+156.2db7c86_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "024caa96dde7b13cc84e16fab1d8b923b253d4a3",
   "subject": "G5: one recording indicator manager per window scene (extended display gets its own camera / microphone indicator, switch recindicator)",
   "version": "0.7.9+222.024caa9"
+ },
+ "0.7.9+223.fbade74": {
+  "date": "2026-10-21T01:18:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+223.fbade74_iphoneos-arm64.deb",
+  "run": 223,
+  "sha": "fbade747740bc8fcf26086312ae0e1acf9df958a",
+  "subject": "G3: monitor mode choice like 16.2 (SDR CADisplayModeCriteria, published mode copies the current mode, logical scale 1 for display type 2; switches modecriteria, modebase, modelogical)",
+  "version": "0.7.9+223.fbade74"
  }
 }

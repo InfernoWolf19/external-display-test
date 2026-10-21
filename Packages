@@ -2,6 +2,27 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 223, commit fbade74: G3: monitor mode choice like 16.2 (SDR CADisplayModeCriteria, published mode copies the current mode, logical scale 1 for display type 2; switches modecriteria, modebase, modelogical)
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+223.fbade74
+Installed-Size: 3616
+Filename: debs/com.infernowolf19.backport162_0.7.9+223.fbade74_iphoneos-arm64.deb
+Size: 1141216
+MD5sum: 4fabbadcbcba9566bf63684ae7024fd2
+SHA1: 440c1718a150586d0e6199a2239432b2d8f1cd4c
+SHA256: 887fc57f293e37526b368aa188e447674af2fb466baf0579d99bdf11c11261db
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 222, commit 024caa9: G5: one recording indicator manager per window scene (extended display gets its own camera / microphone indicator, switch recindicator)
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1224,23 +1245,3 @@ Size: 890238
 MD5sum: ae2b79abd3009517f2cf17b902366a5d
 SHA1: 23d79b48ab38b08226c9e481ab46e640df104bb1
 SHA256: d5a93292bebbde0c03293391abb98c2b2b2452cac7a58d1c1a8a13d6c36aaa79
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps) and backboardd parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 155, commit a588020: PiP expand: restore on the display the scene is shown on (scene setti…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+155.a588020
-Installed-Size: 2444
-Filename: debs/com.infernowolf19.backport162_0.7.4+155.a588020_iphoneos-arm64.deb
-Size: 884758
-MD5sum: d0d42128336040bdaa3ba44085e1b91d
-SHA1: 746dd9b1c1fdaf671cc70ccc339fecab25615b88
-SHA256: 59d072e35b383664775afbf71538beb88de86ac386cb0a1a7175afb17f268658
