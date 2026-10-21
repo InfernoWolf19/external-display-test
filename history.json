@@ -1,12 +1,4 @@
 {
- "0.7.4+154.8ca8070": {
-  "date": "2026-10-17T07:55:35Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+154.8ca8070_iphoneos-arm64.deb",
-  "run": 154,
-  "sha": "8ca8070e1673ca92e56cdd5771b1b951dd2545a8",
-  "subject": "PTR.x: work in progress, pointeruid tweak (not built yet, not in the \u2026",
-  "version": "0.7.4+154.8ca8070"
- },
  "0.7.4+155.a588020": {
   "date": "2026-10-17T07:57:40Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+155.a588020_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "aa242d9d553d953429394f5e361baf8e0071d401",
   "subject": "G6: in-call presentation sessions follow the display of their scene handle (switch incallscene); remote alert targets recorded (reduce to 16.0 logic for 16.0 clients)",
   "version": "0.7.9+221.aa242d9"
+ },
+ "0.7.9+222.024caa9": {
+  "date": "2026-10-21T01:00:52Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+222.024caa9_iphoneos-arm64.deb",
+  "run": 222,
+  "sha": "024caa96dde7b13cc84e16fab1d8b923b253d4a3",
+  "subject": "G5: one recording indicator manager per window scene (extended display gets its own camera / microphone indicator, switch recindicator)",
+  "version": "0.7.9+222.024caa9"
  }
 }
