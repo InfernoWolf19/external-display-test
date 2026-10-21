@@ -1,12 +1,4 @@
 {
- "0.7.4+153.4f3d094": {
-  "date": "2026-10-17T07:55:17Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+153.4f3d094_iphoneos-arm64.deb",
-  "run": 153,
-  "sha": "4f3d0949122015d4fc14ac4c6484ab610aded68d",
-  "subject": "G1D: log why a live resize touch is accepted or refused (corner drag \u2026",
-  "version": "0.7.4+153.4f3d094"
- },
  "0.7.4+154.8ca8070": {
   "date": "2026-10-17T07:55:35Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+154.8ca8070_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "7cc0b1977652496daae2592afaf2f33e7bbee05a",
   "subject": "X7Keyboard: scope macro passed nil through (__bridge void *) (invalid on Apple clang, nil is void *): pointer helper X7_Ptr(id)",
   "version": "0.7.9+220.7cc0b19"
+ },
+ "0.7.9+221.aa242d9": {
+  "date": "2026-10-21T00:55:46Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+221.aa242d9_iphoneos-arm64.deb",
+  "run": 221,
+  "sha": "aa242d9d553d953429394f5e361baf8e0071d401",
+  "subject": "G6: in-call presentation sessions follow the display of their scene handle (switch incallscene); remote alert targets recorded (reduce to 16.0 logic for 16.0 clients)",
+  "version": "0.7.9+221.aa242d9"
  }
 }
