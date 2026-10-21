@@ -379,6 +379,8 @@ static BPMultiDisplayCoordinator *BP_Coordinator(BOOL create) {
     return c;
 }
 
+BOOL X7_TrackerScene(id manager, id *out);          // X7Keyboard.x
+
 // Scene validation shared by the active-display paths: 16.2 -[SBWindowSceneManager _validateSuggestedActiveWindowScene:
 // usingMethodology:] (0x1c74bf960): an invalidating or invalidated scene, and ALSO a nil suggestion (0x1c74bfb0c `cbz x19`),
 // is replaced by the embedded scene.  So 16.2 never answers nil for the active display (about 60 callers rely on it).
@@ -584,9 +586,13 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 }
 
 // Fidelity helpers with the 16.2 selectors (used by other groups' hooks if any).
+// 16.2 0x1c74bf244: [self _validateSuggestedActiveWindowScene:[self.keyboardFocusTracker activeWindowScene] usingMethodology:0].  The tracker is X7Keyboard.x (gap G7); when it is not installed
+// (switch kbtracker off) the focus controller is asked directly, which is what it does itself (same scene).
 %new
 - (id)activeDisplayWindowSceneFollowingKeyboard {
-    return BP_ValidateActiveScene(self, [BP_KeyboardFocusController() windowSceneWithFocus], 0);
+    id suggested = nil;
+    if (!X7_TrackerScene(self, &suggested)) suggested = [BP_KeyboardFocusController() windowSceneWithFocus];
+    return BP_ValidateActiveScene(self, suggested, 0);
 }
 
 %new
