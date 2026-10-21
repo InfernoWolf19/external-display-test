@@ -244,7 +244,8 @@ static id X7_OldAcquire(id self, SEL _cmd, id reason, id predicate) {
 // ---------------------------------------------------------------------------------------------- caller wrappers
 // Each wrapped 16.0 method keeps its own body; the scope is armed around the original call and restored afterwards.
 
-#define X7_ARM(TLS, KIND, OBJ, ARG) X7Scope prev_ = TLS; if (X7_SUPPRESS_ON()) { TLS.kind = (KIND); TLS.obj = (__bridge void *)(OBJ); TLS.arg = (__bridge void *)(ARG); TLS.eager = NULL; }
+static inline void *X7_Ptr(id o) { return (__bridge void *)o; }      // nil is a plain (void *)0 on Apple platforms: never write (__bridge void *)(nil) in a macro
+#define X7_ARM(TLS, KIND, OBJ, ARG) X7Scope prev_ = TLS; if (X7_SUPPRESS_ON()) { TLS.kind = (KIND); TLS.obj = X7_Ptr(OBJ); TLS.arg = X7_Ptr(ARG); TLS.eager = NULL; }
 #define X7_DISARM(TLS) TLS = prev_
 
 // resign active (reason 5) assertions
