@@ -12,7 +12,7 @@
 			<key>label</key>
 			<string>Logs</string>
 			<key>footerText</key>
-			<string>Send logs now collects the Backport162 log files, the crash reports of the last 3 days (SpringBoard, backboardd, pointeruid, mediaserverd, audiomxd, Preferences) and the system version, packs them into one compressed file and uploads it to the GitHub repository above, so the report id can be looked at. Nothing is collected or sent unless you tap the button. The token stays on this device (it is only used for that upload and is never part of the report). Without a token the report is only saved on the device and you can share it by hand. For more detail in the log create /var/jb/tmp/Backport162.debug first.</string>
+			<string>Send logs now packs the Backport162 log files, the crash reports of the last 3 days (SpringBoard, backboardd, pointeruid, mediaserverd, audiomxd, Preferences: up to 4, the first 200 KB of each) and some system facts (iPadOS build, iPad model, tweak version) into one compressed file, keeps a copy on this iPad and uploads it to the GitHub repository above. Logs and crash reports can contain bundle identifiers and names of apps and displays that were in use, file paths and the iPad model: use a PRIVATE repository. No preferences and no token are added. Nothing is collected or sent unless you tap Send logs now (Share instead and Share last report never upload). The token is stored in this iPad's settings and is only sent to GitHub for that upload. Logging is off by default: for detail, create /var/jb/tmp/Backport162.debug and reproduce the problem first.</string>
 		</dict>
 		<dict>
 			<key>cell</key>

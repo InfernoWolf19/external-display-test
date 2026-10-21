@@ -8,8 +8,8 @@
 //   * the token is only ever read from the preferences to test that it is not empty. It is never logged, never shown, never copied anywhere.
 //
 // Protocol (RPT.x header and specs/SEND-LOGS-0.7.9.md):
-//   post  com.infernowolf19.backport162.report.request   (no data)
-//   wait  com.infernowolf19.backport162.report.done      (150 s), then read reportStatus / reportMessage / reportID / reportURL / reportFile / reportTime from CFPreferences.
+//   post  com.infernowolf19.backport162.report.request   (no data; ".request.local" for "Share instead": SpringBoard then never uploads)
+//   wait  com.infernowolf19.backport162.report.done      (170 s), then read reportStatus / reportMessage / reportID / reportURL / reportFile / reportTime from CFPreferences.
 #import "Backport162PrefsRootListController.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <notify.h>
@@ -19,8 +19,10 @@
 
 #define BP_DOMAIN CFSTR("com.infernowolf19.backport162")
 static const char kBPRequestName[] = "com.infernowolf19.backport162.report.request";
+static const char kBPLocalName[]   = "com.infernowolf19.backport162.report.request.local";     // "Share instead": same job, SpringBoard never uploads
 static const char kBPDoneName[]    = "com.infernowolf19.backport162.report.done";
-static const NSTimeInterval kBPWaitSeconds = 150.0;
+// SpringBoard needs < 10 s to collect and at most 130 s for the upload (RPT.x: semaphore); 170 s leaves a margin for a slow disk.
+static const NSTimeInterval kBPWaitSeconds = 170.0;
 
 // ---------------------------------------------------------------- preferences access (CFPreferences, same domain as the fields' `defaults` key)
 
@@ -61,6 +63,7 @@ static BOOL BPValidRepo(NSString *repo) {
 // A report file Settings may offer to share: where SpringBoard puts them, readable by this process, not empty, not huge. (The path comes from a preference: do not trust it blindly.)
 static BOOL BPShareableFile(NSString *path) {
     if (path.length == 0 || path.length > 1000) return NO;
+    if ([path rangeOfString:@"/../"].location != NSNotFound || [path hasSuffix:@"/.."]) return NO;
     if ([path rangeOfString:@"/Backport162Reports/report-"].location == NSNotFound || ![path hasSuffix:@".txt.gz"]) return NO;
     struct stat st;
     if (stat(path.fileSystemRepresentation, &st) != 0 || !S_ISREG(st.st_mode)) return NO;
@@ -187,7 +190,7 @@ static BOOL BPShareableFile(NSString *path) {
             typeof(self) s = weakSelf;
             if (s && s->_busy && s->_run == run) [s bp_timeout];
         });
-        (void)notify_post(kBPRequestName);
+        (void)notify_post(shareOnly ? kBPLocalName : kBPRequestName);
     } @catch (NSException *e) {
         [self bp_finishWaitingRestoreUI];
     }
@@ -293,7 +296,7 @@ static BOOL BPShareableFile(NSString *path) {
         PSSpecifier *send = [self specifierForID:@"BP162_SEND"];
         if (send) {
             [send setProperty:@(!waiting) forKey:@"enabled"];
-            [send setName:waiting ? @"Collecting…" : @"Send logs now"];
+            [send setName:waiting ? @"Working…" : @"Send logs now"];
             [self reloadSpecifier:send animated:NO];
         }
     } @catch (NSException *e) {}
