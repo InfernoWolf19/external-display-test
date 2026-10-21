@@ -74,6 +74,7 @@ static BOOL BPShareableFile(NSString *path) {
     BOOL _busy;                   // a request is in flight (set at the tap, cleared by an answer / timeout / leaving the pane)
     BOOL _shareOnly;              // the request was made with "Share instead": an answer with a report file goes straight to the share sheet
     BOOL _observing;
+    BOOL _loadingSpecifiers;      // re-entrancy guard of -specifiers (setSpecifiers: may ask for them again)
     int _notifyToken;
     NSUInteger _run;              // generation: a timeout / answer of an older request is ignored
     double _requestTime;          // seconds since 1970 at the request; an answer older than that (reportTime) is a leftover
@@ -82,15 +83,18 @@ static BOOL BPShareableFile(NSString *path) {
 
 - (NSArray *)specifiers {
     NSArray *s = nil;
+    if (_loadingSpecifiers) return @[];
     @try {
         s = [super specifiers];
         if (s.count == 0) {
+            _loadingSpecifiers = YES;
             s = [self loadSpecifiersFromPlistName:@"Root" target:self];
             if (s.count > 0) [self setSpecifiers:s];
         }
     } @catch (NSException *e) {
         s = nil;
     }
+    _loadingSpecifiers = NO;
     return s ?: @[];          // an empty pane is better than a crash of Settings
 }
 
