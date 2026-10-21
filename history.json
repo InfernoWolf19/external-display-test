@@ -1,12 +1,4 @@
 {
- "0.7.4+159.6f7de5f": {
-  "date": "2026-10-17T08:08:50Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+159.6f7de5f_iphoneos-arm64.deb",
-  "run": 159,
-  "sha": "6f7de5fba50f3ba56204e9672d4034663d5afce9",
-  "subject": "BBD: crash guard block must not capture arrays (CI compile error)",
-  "version": "0.7.4+159.6f7de5f"
- },
  "0.7.4+160.f0ceede": {
   "date": "2026-10-17T08:10:42Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+160.f0ceede_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "e783a7b61a14bf9066bbe26dc1c2423f3eafec26",
   "subject": "REVIEW-SENDLOGS-0.7.9: checklist verdicts, 9 defects fixed, what leaves the device, open items",
   "version": "0.7.9+225.e783a7b"
+ },
+ "0.7.9+226.b1d8482": {
+  "date": "2026-10-21T08:03:23Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+226.b1d8482_iphoneos-arm64.deb",
+  "run": 226,
+  "sha": "b1d848261a29382a741cb0a0e0b8a1caa8b39710",
+  "subject": "G4B focuslock: per-display keyboard focus locks ported by address (MSHookFunction on the two objc_direct policy functions, prologue + caller verified), 16.2 lock reason filter / stealing window / lock scene, observer; replaces the reconcile wrapper",
+  "version": "0.7.9+226.b1d8482"
  }
 }

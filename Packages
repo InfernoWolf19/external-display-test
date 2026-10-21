@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 226, commit b1d8482: G4B focuslock: per-display keyboard focus locks ported by address (MSHookFunction on the two objc_direct policy functions, prologue + caller verified), 16.2 lock reason filter / stealing window / lock scene, observer; replaces the reconcile wrapper
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+226.b1d8482
+Installed-Size: 3632
+Filename: debs/com.infernowolf19.backport162_0.7.9+226.b1d8482_iphoneos-arm64.deb
+Size: 1145190
+MD5sum: 1ecde089c89d22d9141531a8673e451a
+SHA1: 89f04dc4ad9fef252e64a6782d3d83ecfc1199f7
+SHA256: 3052a480bfc91e69a7ab4039e65af5335953752c006b12c1001d3ce7b5e01525
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 225, commit e783a7b: REVIEW-SENDLOGS-0.7.9: checklist verdicts, 9 defects fixed, what leaves the device, open items
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1229,23 +1251,3 @@ Size: 891396
 MD5sum: 87a75671331695b51743cb37b18480b8
 SHA1: fc50f6f64e18d4f75f82d5bace0ffb3d7fc27c48
 SHA256: 78b5d4772d53a58306f96ced0f8fb43d86d5b7eeb9b8f4f019b9d47667fa1010
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 159, commit 6f7de5f: BBD: crash guard block must not capture arrays (CI compile error)
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+159.6f7de5f
-Installed-Size: 2520
-Filename: debs/com.infernowolf19.backport162_0.7.4+159.6f7de5f_iphoneos-arm64.deb
-Size: 891344
-MD5sum: fcfd851dc9a1bcb22db77eb43d366068
-SHA1: f455dbb27dae8d3c537f9c40479a305e9eb772e7
-SHA256: c9e9176ff456017432d0ef948cb03245bdfa0d78a9578a40475cb5c39856d7b7
