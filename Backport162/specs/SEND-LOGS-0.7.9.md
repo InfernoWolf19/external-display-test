@@ -7,7 +7,8 @@ Everything below comes from reading code and documentation; nothing was run on a
 * A pane **Settings > Backport162** (Tweaks section) with two fields, **Repository** (`owner/name`) and **Token** (fine-grained GitHub token, Contents: write on that repository), and two buttons, **Send logs now** and **Share last report...**.
 * **Nothing is automatic.** SpringBoard collects and sends a report only after the user taps *Send logs now* (or *Share instead*). No timer, no upload at boot, no upload on a crash. Without the tap the code in `RPT.x` does nothing but wait for a Darwin notification.
 * The token is typed into Settings, stored in the preferences domain `com.infernowolf19.backport162` (key `reportToken`, readable only by the mobile user and system processes, not by sandboxed apps), read by SpringBoard at the moment of the upload and used only in the `Authorization` header of that one request. It is never logged (`BP_Log` prints only HTTP status + GitHub's `message` text), never part of the report, never put in the answer keys.
-* The report contains the tweak's own files and some system facts (section 3); **no preferences contents**. The logs can contain bundle identifiers, scene names and similar of the apps that were open: use a **private** repository.
+* The report contains the tweak's own files, crash reports and some system facts (section 3); **no preferences contents**. The logs can contain bundle identifiers, scene names, display identifiers and similar of the apps and displays that were in use, and crash reports contain the iPad model, the iPadOS build, process / library paths and call stacks (and the pseudonymous `crashReporterKey` of the device): use a **private** repository. The pane's footer says this.
+* The token is kept in plain text in `/var/mobile/Library/Preferences/com.infernowolf19.backport162.plist` (like every tweak setting; it is part of an unencrypted backup of the device and readable by other injected tweaks). Use a fine-grained token limited to the one reports repository and `Contents: Read and write`; revoke it when you are done.
 
 ## 2. Architecture
 
@@ -32,7 +33,7 @@ Files:
 | `Backport162Prefs/Resources/Info.plist`, `Root.plist` | bundle info (`NSPrincipalClass`), the specifier list (fields, buttons, footer text) |
 | `layout/Library/PreferenceLoader/Preferences/Backport162.plist` | the PreferenceLoader entry (PSLinkCell, `bundle` Backport162Prefs, `detail` Backport162PrefsRootListController, `isController`); Theos moves `layout/` under the rootless prefix |
 | `Makefile` | `BUNDLE_NAME = Backport162Prefs` next to the tweaks (`bundle.mk`); `BP_ONLY_PREFS=1` builds only the bundle, `BP_SKIP_PREFS=1` only the tweaks (used by the CI loops) |
-| `control` | `Depends: mobilesubstrate, preferenceloader` |
+| `control` | `Depends: mobilesubstrate`, `Recommends: preferenceloader` (review 0.7.9: a hard `Depends:` that a user's repositories cannot resolve would BLOCK the whole install over a Settings pane; without PreferenceLoader the pane is simply absent, everything else works. Dopamine ships PreferenceLoader, so normally nothing is missing) |
 
 The class is called `Backport162PrefsRootListController` (the same name in the entry plist `detail` and in `NSPrincipalClass`).
 
@@ -45,7 +46,7 @@ One text document, gzip (RFC 1952, zlib `deflateInit2(level 6, windowBits 15+16)
 ```
 Backport162 report <id> (format 1)
 Made by the Send logs button ... Contains NO token and NO preferences.
-NOTE: Backport162.debug did not exist ... (only when it did not)       <- the log is sparse without the debug flag
+NOTE: Backport162.debug did not exist ... (only when it did not)       <- logging is off by default: Backport162.log is normally empty / missing without the flag
 TRUNCATED FOR SIZE: ...                                                 <- only when the 4 MiB cap forced a cut
 sections:
   <name> (<n> bytes)  ...
@@ -59,10 +60,10 @@ sections:
 ===== end of report =====
 ```
 
-* **system section:** report id, local time + time zone name, package version (field `Version` of the `com.infernowolf19.backport162` stanza of `<jbroot>/Library/dpkg/status`; the stanza is found by the exact line `Package: com.infernowolf19.backport162`, so `...backport162bbd` cannot match), `kern.osversion` (the build, e.g. 20A8372), `kern.osrelease`, `hw.machine`, `operatingSystemVersionString`, uptime (`kern.boottime`), pid, whether `Backport162.debug` exists (with the explanation that the log is sparse without it), the **names** of the `Backport162.*` files in `<jbroot>/tmp` (switch files `off.*`, `debug`, the logs; no contents), the **names** of the loaded images containing `Backport162` (dyld image list).
-* **crash reports:** `/var/mobile/Library/Logs/CrashReporter` and its `Retired` folder, files `*.ips` / `*.crash` whose name starts with `SpringBoard`, `backboardd`, `pointeruid`, `mediaserverd`, `audiomxd` or `Preferences` followed by `-`, `_` or `.`, modified in the last 3 days; the index lists up to 20 candidates, the 4 newest overall are included. At most 2000 directory entries are looked at per directory.
+* **system section:** report id, local time + time zone name, package version (field `Version` of the `com.infernowolf19.backport162` stanza of `<jbroot>/var/lib/dpkg/status`, else `<jbroot>/Library/dpkg/status`; the stanza is found by the exact line `Package: com.infernowolf19.backport162`, so `...backport162bbd` cannot match), `kern.osversion` (the build, e.g. 20A8372), `kern.osrelease`, `hw.machine`, `operatingSystemVersionString`, uptime (`kern.boottime`), pid, whether `Backport162.debug` exists (with the explanation that logging is off by default and the log is empty without it), the **names** of the `Backport162.*` files in `<jbroot>/tmp` (switch files `off.*`, `debug`, the logs; no contents), the **names** of the loaded images containing `Backport162` (dyld image list).
+* **crash reports:** `/var/mobile/Library/Logs/CrashReporter` and its `Retired` folder, files `*.ips` / `*.crash` whose name starts with `SpringBoard`, `backboardd`, `pointeruid`, `mediaserverd`, `audiomxd` or `Preferences` followed by `-`, `_` or `.`, modified in the last 3 days; the index lists up to 20 candidates, the 4 newest overall are included. At most 20000 directory entries are looked at per crash directory (2000 in the tmp directory). Files are opened with `O_NOFOLLOW` (and found with `lstat`), so a symlink planted in a log / crash location cannot make the report read another file; in addition every collected section is scanned for the token text and scrubbed (`[removed]`) before it is compressed.
 * **size:** the compressed report must be at most 4 MiB. If it is larger, the oldest half of every log tail is dropped (whole lines), up to 10 passes, and the header says so (`TRUNCATED FOR SIZE`, and the section heading says how many oldest bytes are missing). In practice text compresses 8:1 and the cap is never reached.
-* **memory:** about 4.3 MiB of text, the gzip (typically < 1 MiB), then for the upload base64 (x 1.34) + the JSON body (x 1.34) of the gzip: well below 12 MiB even at the 4 MiB worst case; the dpkg status file (read up to 6 MiB) is released before the logs are read (own autorelease pool).
+* **memory:** about 4.3 MiB of text, the gzip (typically < 1 MiB), then for the upload base64 (x 1.34) + the JSON body (x 1.34) of the gzip, all alive together at the moment the body is built: 15 MiB at the 4 MiB worst case (never reached), about 3 MiB typically; the dpkg status file (read up to 6 MiB) is released before the logs are read (own autorelease pool).
 
 ## 4. Protocol
 
@@ -71,6 +72,7 @@ sections:
 | name | from -> to | meaning |
 |---|---|---|
 | `com.infernowolf19.backport162.report.request` | Settings -> SpringBoard | "collect and send a report now" |
+| `com.infernowolf19.backport162.report.request.local` | Settings -> SpringBoard | "collect a report, never upload" (*Share instead*) |
 | `com.infernowolf19.backport162.report.done` | SpringBoard -> Settings | "the answer is in the preferences" |
 
 ### Preferences domain `com.infernowolf19.backport162` (`kCFPreferencesCurrentUser`, `kCFPreferencesAnyHost`)
@@ -86,27 +88,27 @@ sections:
 | `reportFile` | SpringBoard | local path of the `.txt.gz` (removed when it could not be written) |
 | `reportTime` | SpringBoard | seconds since 1970 (a number) of the answer |
 
-Sequence in Settings: validate the fields (alert with *Share instead* if missing) -> `endEditing` -> register the observer for `.done` **first** -> post `.request` -> wait up to 150 s. On `.done` (main queue): read `reportTime`; an answer older than the request (minus 1 s) is a leftover of an earlier job and is ignored (keep waiting); otherwise show the alert. At the timeout the keys are read once more (the notification can be held back while Settings is in the background) before *"SpringBoard did not answer: is Backport162 loaded? Respring"* is shown. Leaving the pane (`viewDidDisappear`) cancels the observer and the pending timeout; the job keeps running in SpringBoard and its answer stays in the preferences for *Share last report...*.
+Sequence in Settings: validate the fields (alert with *Share instead* if missing) -> `endEditing` -> register the observer for `.done` **first** -> post `.request` (`.request.local` for *Share instead*) -> wait up to 170 s. On `.done` (main queue): read `reportTime`; an answer older than the request (minus 1 s) is a leftover of an earlier job and is ignored (keep waiting); otherwise show the alert. At the timeout the keys are read once more (the notification can be held back while Settings is in the background) before *"SpringBoard did not answer: is Backport162 loaded? Respring"* is shown. Leaving the pane (`viewDidDisappear`) cancels the observer and the pending timeout; the job keeps running in SpringBoard and its answer stays in the preferences for *Share last report...*.
 
-Sequence in SpringBoard (`RPT.x`), on the private serial queue (QoS utility), after the main queue has won the atomic flag `gRPTRunning`:
+Sequence in SpringBoard (`RPT.x`), on the private serial queue (QoS utility), after the main queue has moved the atomic state word `gRPTState` (job serial << 2 | idle / running / answering) from idle to running (one compare-and-swap; `RPT_Finish` moves running -> answering with another one, so exactly one answer per job, and a stale call of an old job cannot touch a newer one):
 1. `BP_OnName("report")` false (file `Backport162.off.report` or `Backport162.off`) -> answer `error`, "disabled: ...".
 2. Less than 5 s after the start of the previous job -> answer `error`, "two requests less than 5 s apart".
 3. Collect (section 3), assemble + gzip (<= 4 MiB).
 4. Write `<jbroot>/var/mobile/Library/Caches/Backport162Reports/report-<id>.txt.gz` (directory 0755, file 0644, written as `.tmp` then renamed; the 5 newest `report-*.txt.gz` are kept, stale `*.tmp` removed). A write failure is not fatal: the upload still happens, `reportFile` is just not set.
-5. Read `reportRepo` / `reportToken` (after `CFPreferencesAppSynchronize`). Missing -> answer `error` "no token / repository set: report saved only on the device, use Share" (with `reportFile`). Invalid repo name / token characters -> `error` with the matching text, also with `reportFile`.
-6. Upload (section 5), then `RPT_Finish`: write the keys, `CFPreferencesSynchronize`, **clear the running flag, then post `.done`** (so an immediate second tap is not refused as "running").
+5. `reportRepo` / `reportToken` were read at the start of the job (after `CFPreferencesAppSynchronize`; the token is only used for the scrub of the collected text and the header of the one upload). For *Share instead* (`.request.local`) the job ends here with `error` "report saved on the device only (not uploaded, as asked)" + `reportFile`: no repository or token is looked at. Missing -> answer `error` "no token / repository set: report saved only on the device, use Share" (with `reportFile`). Invalid repo name / token characters -> `error` with the matching text, also with `reportFile`.
+6. Upload (section 5), then `RPT_Finish`: write the keys, `CFPreferencesSynchronize`, **set the state to idle, then post `.done`** (so an immediate second tap is not refused as "running").
 
 ### Upload
 
-`PUT https://api.github.com/repos/<owner>/<name>/contents/reports/<yyyy-mm-dd>/<id>.txt.gz`, headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: Backport162`, `Content-Type: application/json`, body `{"message":"report <id>","content":"<base64>"}`. Ephemeral `NSURLSession`, `timeoutIntervalForRequest` 30, `timeoutIntervalForResource` 120, `waitsForConnectivity` NO, no cookies, no cache, one upload task with a completion handler; the private queue waits on a semaphore for at most 130 s. Create the repository with at least one commit (e.g. an initial README) and a fine-grained token limited to that repository with *Contents: Read and write*.
+`PUT https://api.github.com/repos/<owner>/<name>/contents/reports/<yyyy-mm-dd>/<id>.txt.gz`, headers `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: Backport162`, `Content-Type: application/json`, body `{"message":"report <id>","content":"<base64>"}`. Ephemeral `NSURLSession`, `timeoutIntervalForRequest` 30, `timeoutIntervalForResource` 120, `waitsForConnectivity` NO, no cookies, no cache, one upload task with a completion handler; the private queue waits on a semaphore for at most 130 s (resource timeout 120 s fires first; Settings waits 170 s in all: up to ~10 s of collection + 130 s + margin).
 
 ## 5. Failure table
 
 | situation | where handled | what the user sees |
 |---|---|---|
-| repository / token empty or repo malformed (Settings) | `bp_validateAndStart` | alert "Cannot upload" + *Share instead* (runs the same collection with no upload and opens the share sheet) |
-| tapped twice / second request while a job runs | `_busy` in Settings; `gRPTRunning` in SpringBoard | the second tap is ignored; the one answer comes once |
-| SpringBoard does not answer (tweak not loaded, build is not 20A8372, respring in the middle) | 150 s timeout in Settings (after one more read of the keys) | "SpringBoard did not answer: is Backport162 loaded? Respring and try again." |
+| repository / token empty or repo malformed (Settings) | `bp_validateAndStart` | alert "Cannot upload" + *Share instead* (posts `.request.local`: the same collection, SpringBoard NEVER uploads, then the share sheet opens) |
+| tapped twice / second request while a job runs | `_busy` in Settings; `gRPTState` in SpringBoard | the second tap is ignored; the one answer comes once |
+| SpringBoard does not answer (tweak not loaded, build is not 20A8372, respring in the middle) | 170 s timeout in Settings (after one more read of the keys) | "SpringBoard did not answer: is Backport162 loaded? Respring and try again." |
 | Settings closed / left while the job runs | observer cancelled in `viewDidDisappear` / `dealloc`; `.done` has no listener | nothing; *Share last report...* has the file |
 | SpringBoard respring while the job runs | flag and queue are in memory only | the timeout above; at most a stale `report-*.tmp`, removed by the next write |
 | `Backport162.off.report` / `Backport162.off` | RPT job step 1 | "disabled: ..." |
@@ -125,7 +127,7 @@ Sequence in SpringBoard (`RPT.x`), on the private serial queue (QoS utility), af
 | other status | | "HTTP <code> (<GitHub message>)" |
 | transport error | | `localizedDescription` + "(no network?)" |
 | no completion within 130 s | semaphore timeout, task cancelled, session invalidated | "upload timed out (no network?)" |
-| an exception anywhere in the job | `@try/@catch/@finally` in `RPT_RunJob`, `RPT_Finish` is idempotent per job (`gRPTSerial`) | `error` "internal error while collecting the report"; the running flag is always cleared |
+| an exception anywhere in the job | `@try/@catch/@finally` in `RPT_RunJob`, `RPT_Finish` is idempotent per job (the `gRPTState` compare-and-swap) | `error` "internal error while collecting the report"; the state always returns to idle |
 | failure answers | `bp_presentResult` | alert with the message and *Share report...* when `reportFile` exists, is under `.../Backport162Reports/report-*.txt.gz`, regular, readable by Settings, <= 16 MiB |
 
 Share sheet: the file is first copied into Settings' own temporary directory (share extensions cannot read the jailbreak root); on the iPad the sheet is a popover with an explicit source rect (a popover without a source throws). Presenting uses the top of the presented chain and does nothing when the pane is not on screen.
@@ -147,4 +149,11 @@ Download `reports/<date>/<id>.txt.gz` from the repository (or take the shared fi
 * That the sandbox of Preferences.app allows `notify_post` / `notify_register_dispatch` for these names and reading the answer keys of that domain (the usual way tweak preference panes talk to SpringBoard), and that Settings can read the report under `<jbroot>/var/mobile/Library/Caches/Backport162Reports` (otherwise *Share report...* is simply not offered).
 * That SpringBoard can use `NSURLSession` (network entitlements, DNS) and read `/var/mobile/Library/Logs/CrashReporter`; that the dpkg status file is at `<jbroot>/Library/dpkg/status` and readable (otherwise the package version reads "unknown ...").
 * That the GitHub Contents API accepts the first file of a repository that has at least one commit as documented; an entirely empty repository may answer 404/409/422.
-* Whether `Backport162.log` really holds what is needed without `Backport162.debug` (it is sparse by design; the report header says so).
+* Whether `Backport162.log` really holds what is needed without `Backport162.debug`: it does not (`BP_Log` writes only while the flag exists); the report header says so. Create `/var/jb/tmp/Backport162.debug`, reproduce, then send.
+
+## 9. Setup (what the user does once)
+
+1. On github.com create a **private** repository for the reports, e.g. `<you>/backport162-reports`, **with an initial commit** (tick *Add a README file*). The Contents API may refuse the very first file of a completely empty repository (404 / 409 / 422); with a README it works as documented.
+2. Settings (github.com) > Developer settings > Personal access tokens > *Fine-grained tokens* > Generate: *Resource owner* = you, *Repository access* = **Only select repositories** > the reports repository, *Permissions* > Repository permissions > **Contents: Read and write** (Metadata: Read-only is added automatically), an expiry of a few weeks. Copy the token (`github_pat_...`).
+3. On the iPad: Settings > Backport162 (a userspace reboot / restart of Settings after the install makes the entry appear) > *Repository* `<you>/backport162-reports`, *Token* the copied token > *Send logs now*. A classic token with `repo` scope works too but is far broader: prefer the fine-grained one.
+4. For a useful report create `/var/jb/tmp/Backport162.debug`, reproduce the problem, then press *Send logs now*; tell the assistant the report id shown (also *Copy id*). The assistant reads `reports/<date>/<id>.txt.gz` in the repository.
