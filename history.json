@@ -1,12 +1,4 @@
 {
- "0.7.4+157.6ca5e9e": {
-  "date": "2026-10-17T07:58:59Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+157.6ca5e9e_iphoneos-arm64.deb",
-  "run": 157,
-  "sha": "6ca5e9e0a835c588efa57a81bcbd283fb019443d",
-  "subject": "G1C: log the inputs of the resize grabber enable decision when it cha\u2026",
-  "version": "0.7.4+157.6ca5e9e"
- },
  "0.7.4+159.6f7de5f": {
   "date": "2026-10-17T08:08:50Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+159.6f7de5f_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "47bde76c182bd453f462ab26c81168824d1e2c53",
   "subject": "Send logs spec / README: setup steps, privacy, Recommends, new state word and request",
   "version": "0.7.9+224.47bde76"
+ },
+ "0.7.9+225.e783a7b": {
+  "date": "2026-10-21T01:48:18Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+225.e783a7b_iphoneos-arm64.deb",
+  "run": 225,
+  "sha": "e783a7b61a14bf9066bbe26dc1c2423f3eafec26",
+  "subject": "REVIEW-SENDLOGS-0.7.9: checklist verdicts, 9 defects fixed, what leaves the device, open items",
+  "version": "0.7.9+225.e783a7b"
  }
 }
