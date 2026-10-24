@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 257, commit 6661b44: Item 4 (H2): the inline ids updates of the 16.0 transition blocks are suppressed for app-to-app switches (caller identified by return address against the verified 16.0 block ranges); close / home / zoom keep them; switch g1c_ids16supp
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+257.6661b44
+Installed-Size: 4052
+Filename: debs/com.infernowolf19.backport162_0.7.9+257.6661b44_iphoneos-arm64.deb
+Size: 1327764
+MD5sum: eae230feae12f075c7949580a2382d2d
+SHA1: 7420fb5374ed47294426397b4e657a21dfe471e7
+SHA256: 6bb65cb6f29a302d986d4dd62035fd12a1ec007de2b6fc2d736472e1c84df726
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 256, commit 3a899d0: Docs: focuslock test recipe steps 3 and 4 rewritten as two plain cases
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1263,24 +1285,3 @@ Size: 976900
 MD5sum: 8dd6e67599d5fe64dfa5bc89db841cb1
 SHA1: 8c95c7484f0da6e48c77469819196a636d33c1ef
 SHA256: 8b74053e1fa26fa3e6a8b43038b0017d9814e512c7386608bd42c24a2e407f7a
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice). Reboot userspace after installing (backboardd).
- .
- Build 185, commit 2e446cc: PTR/G2G: pointer jump at the resize corner: ptr_hover guard used _isF…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.5+185.2e446cc
-Installed-Size: 2720
-Filename: debs/com.infernowolf19.backport162_0.7.5+185.2e446cc_iphoneos-arm64.deb
-Size: 976930
-MD5sum: 397f93c74d8d95232170f73817fc027b
-SHA1: 05665238710f232914bf7b1e5394ee73eac06990
-SHA256: 836ade54971319f257e048ccff3bccf1c3a015d7ff1397f126a44b4d53d4a2c8
