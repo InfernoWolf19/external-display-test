@@ -1,12 +1,4 @@
 {
- "0.7.4+167.03ade48": {
-  "date": "2026-10-17T13:14:44Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+167.03ade48_iphoneos-arm64.deb",
-  "run": 167,
-  "sha": "03ade48bdce195734fc286ca827f923afd47feef",
-  "subject": "BBD/PTR: daemon log, ctor markers and crash guard strikes go to a dir\u2026",
-  "version": "0.7.4+167.03ade48"
- },
  "0.7.4+168.c84e199": {
   "date": "2026-10-17T13:16:48Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+168.c84e199_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "a02046e062ca334e562fa8e69b224582ce30901c",
   "subject": "edu: the native education alert is chosen automatically when the installed SpringBoardEducation.app has no external display content controller (switch eduauto), 16.2 app strings embedded in 41 languages, live hardware recommendation",
   "version": "0.7.9+232.a02046e"
+ },
+ "0.7.9+233.d6916dc": {
+  "date": "2026-10-24T18:02:35Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+233.d6916dc_iphoneos-arm64.deb",
+  "run": 233,
+  "sha": "d6916dce9a6e91b6a5810f163d02dd7667cc8a98",
+  "subject": "H1/M1/M7: multi-display gesture workspace transaction (P1Drag.m): shared active transaction, per-display layout state, ancillary layout transactions, scene hand-over, 16.2 manager/coordinator/switcher controller sides; switches p1_*",
+  "version": "0.7.9+233.d6916dc"
  },
  "0.7.9+234.11803ed": {
   "date": "2026-10-24T18:02:24Z",

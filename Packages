@@ -24,6 +24,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 233, commit d6916dc: H1/M1/M7: multi-display gesture workspace transaction (P1Drag.m): shared active transaction, per-display layout state, ancillary layout transactions, scene hand-over, 16.2 manager/coordinator/switcher controller sides; switches p1_*
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+233.d6916dc
+Installed-Size: 3856
+Filename: debs/com.infernowolf19.backport162_0.7.9+233.d6916dc_iphoneos-arm64.deb
+Size: 1235954
+MD5sum: 07ab0d7a22db8318ab6f361bdab92bce
+SHA1: 7daa659474f82a0d25a9ef26ee4e7293c50404cf
+SHA256: 953b1b9a20b146f0bb5286a28203181950bb6566cdb8e5db2fb33cbbd3d2acf3
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 232, commit a02046e: edu: the native education alert is chosen automatically when the installed SpringBoardEducation.app has no external display content controller (switch eduauto), 16.2 app strings embedded in 41 languages, live hardware recommendation
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1245,23 +1267,3 @@ Size: 904326
 MD5sum: 2961307f1f1546bd2b7a3f08fd8b6d80
 SHA1: af3e1e575ccf4a88ff246f0a4161cd9775711c49
 SHA256: 4a04af838a65ff6d6a8228d3f7009fe8462a56ec81e0a795d7c218fa897d87a4
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 167, commit 03ade48: BBD/PTR: daemon log, ctor markers and crash guard strikes go to a dir…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+167.03ade48
-Installed-Size: 2540
-Filename: debs/com.infernowolf19.backport162_0.7.4+167.03ade48_iphoneos-arm64.deb
-Size: 901148
-MD5sum: a7c768aff2da9301d3924c452e31edef
-SHA1: 4ce7082486691de5445cd5d9f2853f77dc763885
-SHA256: be626114b863042a507e51d9776a53e01fc49df64bf07dbf89feffde39e49697
