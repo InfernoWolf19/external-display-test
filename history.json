@@ -1,12 +1,4 @@
 {
- "0.7.4+160.f0ceede": {
-  "date": "2026-10-17T08:10:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+160.f0ceede_iphoneos-arm64.deb",
-  "run": 160,
-  "sha": "f0ceede4f9ba399a3e289e0a5d2d7ae18eec6b8e",
-  "subject": "G1C: resize grabbers for every stage role (_SBLayoutRoleIsValidForSpl\u2026",
-  "version": "0.7.4+160.f0ceede"
- },
  "0.7.4+161.84444b3": {
   "date": "2026-10-17T08:22:17Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+161.84444b3_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b1d848261a29382a741cb0a0e0b8a1caa8b39710",
   "subject": "G4B focuslock: per-display keyboard focus locks ported by address (MSHookFunction on the two objc_direct policy functions, prologue + caller verified), 16.2 lock reason filter / stealing window / lock scene, observer; replaces the reconcile wrapper",
   "version": "0.7.9+226.b1d8482"
+ },
+ "0.7.9+227.4dbfe23": {
+  "date": "2026-10-24T07:51:45Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+227.4dbfe23_iphoneos-arm64.deb",
+  "run": 227,
+  "sha": "4dbfe232cc523c09fdf4ef3509b7ccf77ee3c156",
+  "subject": "X7Keyboard: SBUniversalControlServer block (hook by address, display scoped suppression), OverlayUI requesting-focus tracking and the 16.2 _filterFocusedSceneIdentityToken: consumer",
+  "version": "0.7.9+227.4dbfe23"
  }
 }
