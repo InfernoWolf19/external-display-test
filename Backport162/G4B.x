@@ -584,26 +584,70 @@ static id G4B_ExternalDisplayDefaults(void) {
 }
 static void G4B_EduSetReasons(unsigned long long r) { G4B_EduReasonsWrite(r); }
 
-// ---- native fallback alert (md 2.6) --------------------------------------------------------------------------
+// ---- native education alert (md 2.6; default when the installed SpringBoardEducation.app cannot show EducationType 1, specs/DISPLAY-LEFTOVERS-0.7.9.md item 7) -----------------------------
+// 16.2 presents the education through the remote alert com.apple.SpringBoardEducation / SBERemoteViewController with userInfo EducationType = 1; the 16.2 app answers it with
+// SBEExternalDisplayContentViewController (title EXTERNAL_DISPLAY_FIRST_TIME_ONBOARDING_TITLE, body ..._BODY, the recommendation label EXTERNAL_DISPLAY_KEYBOARD_MOUSE_RECOMMENDATION while the
+// keyboard / pointer requirement is not met, a "Continue" button = completion(YES) = extended display, a "Use Screen Mirroring" button = completion(NO) = mirroring, and the tutorial video).
+// An app without that class does not know type 1.  The native alert shows the same texts (strings embedded from the 16.2 app in all 41 languages, BPL10NEdu.h) and returns the same answers.
 static UIWindow *gG4BNativeWindow;
+static __weak UIAlertController *gG4BNativeAlertController;
+static BOOL gG4BNativeHardware;
+static NSString *G4B_NativeEduMessage(BOOL hardwareOK) {
+    NSString *body = BPLoc_EduString(@"EXTERNAL_DISPLAY_FIRST_TIME_ONBOARDING_BODY", @"Using an iPad and an external display, you can create the ideal extended workspace. Multitask with ease, move apps and resize windows on either display, see multiple overlapping windows in a single view, and quickly switch between apps.");
+    if (hardwareOK) return body;
+    NSString *rec = BPLoc_EduString(@"EXTERNAL_DISPLAY_KEYBOARD_MOUSE_RECOMMENDATION", @"An external keyboard and mouse are required to use iPad with an Extended Display");
+    return [NSString stringWithFormat:@"%@\n\n%@", body, rec];
+}
+// -externalDisplayHardwareRequirementsSatisfiedChanged: of the 16.2 content controller (0x100005b20 in SpringBoardEducation): re-evaluate the recommendation
+static void G4B_NativeAlertHardwareChanged(BOOL satisfied) {
+    G4B_Main(^{
+        UIAlertController *a = gG4BNativeAlertController;
+        if (!a || gG4BNativeHardware == satisfied) return;
+        gG4BNativeHardware = satisfied;
+        a.message = G4B_NativeEduMessage(satisfied);
+    });
+}
 static void G4B_NativeAlert(BOOL hardwareInWindow, void (^done)(NSUInteger result)) {
     G4B_Main(^{
         id wsm = [[UIApplication sharedApplication] respondsToSelector:@selector(windowSceneManager)] ? G4B_Obj([UIApplication sharedApplication], @selector(windowSceneManager)) : nil;
         id scene = [wsm respondsToSelector:@selector(embeddedDisplayWindowScene)] ? G4B_Obj(wsm, @selector(embeddedDisplayWindowScene)) : nil;
-        if (![scene isKindOfClass:[UIWindowScene class]]) { done(0); return; }
+        if (![scene isKindOfClass:[UIWindowScene class]]) { BP_Log(@"edu: native alert: no embedded window scene, nothing presented"); done(0); return; }
         UIWindow *w = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
         w.windowLevel = UIWindowLevelAlert + 10;
         w.rootViewController = [UIViewController new];
         w.hidden = NO;
         gG4BNativeWindow = w;
-        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"External Display"
-            message:hardwareInWindow ? @"A keyboard and pointer are connected. Use this display as an extended display?" : @"Use this display as an extended display? Connect a keyboard and pointer to use it fully."
-            preferredStyle:UIAlertControllerStyleAlert];
+        gG4BNativeHardware = hardwareInWindow;
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:BPLoc_EduString(@"EXTERNAL_DISPLAY_FIRST_TIME_ONBOARDING_TITLE", @"Stage Manager with an External Display")
+            message:G4B_NativeEduMessage(hardwareInWindow) preferredStyle:UIAlertControllerStyleAlert];
+        gG4BNativeAlertController = a;
         void (^finish)(NSUInteger) = ^(NSUInteger r) { gG4BNativeWindow.hidden = YES; gG4BNativeWindow = nil; done(r); };
-        [a addAction:[UIAlertAction actionWithTitle:@"Extended Display" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) { finish(1); }]];
-        [a addAction:[UIAlertAction actionWithTitle:@"Mirror" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) { finish(2); }]];
+        [a addAction:[UIAlertAction actionWithTitle:BPLoc_EduString(@"EXTERNAL_DISPLAY_OPT_IN_BUTTON", @"Continue") style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) { finish(1); }]];                 // enableExternalDisplaySupport: -> completion(YES)
+        [a addAction:[UIAlertAction actionWithTitle:BPLoc_EduString(@"EXTERNAL_DISPLAY_OPT_OUT_BUTTON", @"Use Screen Mirroring") style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) { finish(2); }]];    // dismissEducationViewController: -> completion(NO)
         [w.rootViewController presentViewController:a animated:YES completion:nil];
+        BP_Log(@"edu: native alert presented (hardware requirement met: %d)", (int)hardwareInWindow);
     });
+}
+
+// Can the installed SpringBoardEducation.app show EducationType 1?  16.2's app has the class SBEExternalDisplayContentViewController (its -prepareForActivationWithContext:completion:,
+// 0x10000416c, builds it for type 1 and SBEChamoisContentViewController for type 0; any other type presents nothing); an app without that class has no content for type 1.
+// The decision reads the app's executable (once per launch).  Not found / unreadable = not supported (the native alert always works).
+static BOOL G4B_EduAppSupportsExternalDisplay(void) {
+    static BOOL supported; static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        static const char *paths[] = { "/Applications/SpringBoardEducation.app/SpringBoardEducation", "/System/Applications/SpringBoardEducation.app/SpringBoardEducation" };
+        for (size_t i = 0; i < sizeof paths / sizeof paths[0] && !supported; i++) {
+            NSData *d = [NSData dataWithContentsOfFile:[NSString stringWithUTF8String:paths[i]] options:NSDataReadingMappedIfSafe error:nil];
+            if (!d.length) continue;
+            const char *needle = "SBEExternalDisplayContentViewController";
+            BOOL found = memmem(d.bytes, d.length, needle, strlen(needle)) != NULL;
+            BP_Log(@"edu: %s (%lu bytes): external display content controller %s", paths[i], (unsigned long)d.length, found ? "present (EducationType 1 supported)" : "ABSENT (EducationType 1 not supported)");
+            supported = found;
+            if (!found) break;
+        }
+        if (!supported) BP_Log(@"edu: the installed SpringBoardEducation.app cannot show the external display education: the native alert (16.2 strings) is used (switch eduauto)");
+    });
+    return supported;
 }
 
 // ---- pill view controller (md 2.4) ---------------------------------------------------------------------------
@@ -764,6 +808,8 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
             id proxy = [_xpcConnection remoteObjectProxy];
             if ([proxy respondsToSelector:@selector(externalDisplayHardwareRequirementsSatisfiedChanged:)])
                 [(id<SBExternalDisplayHardwareRequirementsChangedProtocol>)proxy externalDisplayHardwareRequirementsSatisfiedChanged:_isHardwareAvailable];
+        } else if (gG4BNativeAlertController) {
+            G4B_NativeAlertHardwareChanged(_isHardwareAvailable);
         } else if (_educationBannerViewController) {
             [_educationBannerViewController updateExtendedDisplayEnabled:_isHardwareAvailableDuringDisplayConnectionWindow];
         }
@@ -793,7 +839,8 @@ static NSString *G4B_Localized(NSString *key, NSString *fallback) {
         BP_Log(@"edu: received response from user. externalDisplayEnabled: %d", result == 1);
         completion(result);
     };
-    if (G4B_OptIn("edunative")) { G4B_NativeAlert(hwInWindow, complete); return; }       // opt-in fallback, md 2.6
+    if (G4B_OptIn("edunative")) { BP_Log(@"edu: native alert forced by Backport162.on.edunative"); G4B_NativeAlert(hwInWindow, complete); return; }
+    if (BP_OnName("eduauto") && !G4B_EduAppSupportsExternalDisplay()) { G4B_NativeAlert(hwInWindow, complete); return; }     // DELIBERATE deviation (item 7): the 16.0 app has no content for type 1
 
     Class defC = NSClassFromString(@"SBSRemoteAlertDefinition"), cfgC = NSClassFromString(@"SBSRemoteAlertConfigurationContext");
     Class handleC = NSClassFromString(@"SBSRemoteAlertHandle"), actC = NSClassFromString(@"SBSRemoteAlertActivationContext");

@@ -4,6 +4,7 @@
 // with the same wording (optional), then the English literal.
 #import <Foundation/Foundation.h>
 #import "BPL10N.h"
+#import "BPL10NEdu.h"
 
 // loctable language code for a BCP-47 tag of -[NSLocale preferredLanguages] ("zh-Hant-HK" -> zh_HK ...), the candidate list for one tag: [specific, base]
 static inline NSArray<NSString *> *BPLoc_Candidates(NSString *tag) {
@@ -57,4 +58,18 @@ static inline NSString *BPLoc_String(NSString *key, NSString *key160, NSString *
         if (s.length && ![s isEqualToString:key160]) return s;
     }
     return english;
+}
+
+// The text of an external display education key (SpringBoardEducation.app's Localizable table, embedded from the 16.2 app in 41 languages) for the user's language; `english` when
+// nothing matches (never: the table has the English entry).
+static inline NSString *BPLoc_EduString(NSString *key, NSString *english) {
+    NSDictionary *table = BPL10NEdu_Table();
+    for (NSString *tag in [NSLocale preferredLanguages]) {
+        for (NSString *code in BPLoc_Candidates(tag)) {
+            NSString *e = table[code][key];
+            if (e.length) return e;
+        }
+    }
+    NSString *en = table[@"en"][key];
+    return en.length ? en : english;
 }

@@ -130,7 +130,8 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | autoext | 16.2 hardware-window auto "extended" mode on connect, and (0.7.5, from ExtendedDisplayEnabler) the user's saved mirror / extended choice, which beats the automatic decision on every connect; the beta-5 default `!_areRuntimeAvailabilityRequirementsMet` otherwise; the education observer's forced `mirroringEnabled = YES` is skipped | `autoext` |
 | mirrorsvc | `SBExternalDisplayService setDisplayMirroringEnabled:forDisplay:` fix (both values, main queue, remembered as the saved choice, "ever enabled" flag; the one implementation since 0.7.5, from ExtendedDisplayEnabler) | `mirrorsvc` |
 | edu | external-display education session / pill / observer | `edu` |
-| edunative | **opt-in**: native alert instead of the SpringBoardEducation remote alert | `edunative` |
+| edunative | **opt-in**: always use the native education alert (16.2 strings from the 16.2 app) instead of the SpringBoardEducation remote alert | `edunative` |
+| eduauto | DELIBERATE deviation (specs/DISPLAY-LEFTOVERS-0.7.9.md item 7): the education alert is the native one (title / body / recommendation / Continue / Use Screen Mirroring, texts embedded from the 16.2 SpringBoardEducation.app in 41 languages) whenever the installed SpringBoardEducation.app has no `SBEExternalDisplayContentViewController` (EducationType 1); an app that has it gets the remote alert as in 16.2. Off = the remote alert always | `eduauto` |
 | presubset | `boundPointerUIScenes` subset + policy presentation update | `presubset` |
 | deferact | 100 ms deferred activation of external-display assertions | `deferact` |
 | lockedptr2 | per-window-scene SBLockedPointerManager, `_UIPointerUnlockAction` (replaces the removed 0.5.0 `lockedptr`) | `lockedptr2` |
