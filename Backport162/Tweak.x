@@ -281,6 +281,10 @@ static BOOL BP_UsesInputSystemUI(void) {
 @interface SBExternalDisplayCoverSheetController : NSObject
 - (BOOL)_isScreenOn;
 - (id)_sbWindowScene;
+- (BOOL)_isCoverSheetPresented;
+- (BOOL)_embeddedHasAnyLockState;
+- (void)_setScreenOn:(BOOL)on;
+- (void)_updateExternalDisplayCoverSheetExistence;
 @end
 
 static const char kWakeGestureKey = 0, kWakeHelperKey = 0, kWakeSceneKey = 0;
@@ -323,9 +327,10 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
     SBWindowScene *scene = [controller _sbWindowScene];
     NSString *hw = [[scene _sbDisplayConfiguration] hardwareIdentifier];
     if (!hw) { BP_Log(@"blank: no hardwareIdentifier, not changing the display"); return; }
-    gSetBlanked(hw, blanked);
+    BP_Log(@"blank: BKSDisplayServicesSetDisplayBlanked(%@, %d) ...", hw, (int)blanked);
+    gSetBlanked(hw, blanked);                                   // a MIG routine of backboardd (16.0 id 0x5b916a, 16.2 identical); void, no result: the daemon's own log shows the other end
     gWeBlanked = blanked;
-    BP_Log(@"blank: display %@ blanked=%d", hw, blanked);
+    BP_Log(@"blank: display %@ blanked=%d (call returned)", hw, (int)blanked);
 }
 
 // 16.0's external-display gesture manager only arms an explicit set of system-gesture types and refuses 0x42 (verified
@@ -335,6 +340,47 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
     if (type == 0x42 && BP_On(F_BLANK)) return YES;
     return %orig;
+}
+%end
+
+// ---- 16.2 pieces of the external cover sheet controller that 16.0 lacks (specs/DISPLAY-LEFTOVERS-0.7.9.md item 8) -----------------------------------------
+// 16.2 chain on the monitor (decoded): hasAnyLockState (aggregate lock state note, 0x1c7790784) -> _updateExternalDisplayCoverSheetExistence (0x1c77908f8): show = cover sheet window
+// (wallpaper, status bar, "locked" content) + suspend the scene manager under lock; hide = _setScreenOn:YES FIRST (0x1c77909e8), then the window goes; backlight observer (0x1c77905f8):
+// factor 0 / 1 from a source that is not ignored -> _setScreenOn: -> BKSDisplayServicesSetDisplayBlanked(hw, !on) + the mouse wake gesture; _isInvalidated and the
+// presentation manager's DismissedSinceKeyBagLock observer (0x1c7790898).  Every step logs (prefix "blank:").
+static const char kCSInvalidatedKey = 0;
+static BOOL BP_CSInvalidated(id c) { return [objc_getAssociatedObject(c, &kCSInvalidatedKey) boolValue]; }
+static NSString *BP_BacklightSourceName(long long s) {
+    static NSArray *names;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ names = @[@"programmatic", @"home button", @"lock button", @"volume button", @"other button", @"keyboard", @"smart cover", @"idle timer", @"touch", @"plugin", @"invalid", @"notification", @"prox", @"Siri", @"boot", @"pocket state", @"external request", @"external app request", @"springboard request", @"lift to wake", @"logout", @"notification center", @"AC power change", @"charging accessory change", @"restoring", @"transient overlay", @"language change", @"unknown user event", @"cover sheet", @"SOS dismiss", @"invalid", @"camera button", @"Power Down dismiss", @"mouse button", @"accessibility", @"accessory attached", @"user authentication", @"swipe to wake", @"cover gesture", @"session alert", @"system aperture client request"]; });
+    return (s >= 1 && s <= (long long)names.count) ? names[(NSUInteger)s - 1] : @"invalid";
+}
+
+// 16.2 SBCoverSheetPresentationManager: addDismissalObserver: / removeDismissalObserver: and the callout coverSheetPresentationManagerDidChangeDismissedSinceKeyBagLock: when
+// hasBeenDismissedSinceKeybagLock changes (0x1c72ef618; 16.0 0x1c5e7cc58 only sets the flag).  Observers are held weakly.
+static const char kDismissalObsKey = 0;
+%hook SBCoverSheetPresentationManager
+%new
+- (void)addDismissalObserver:(id)observer {
+    NSHashTable *t = objc_getAssociatedObject(self, &kDismissalObsKey);
+    if (!t) { t = [NSHashTable weakObjectsHashTable]; objc_setAssociatedObject(self, &kDismissalObsKey, t, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    if (observer) [t addObject:observer];
+}
+%new
+- (void)removeDismissalObserver:(id)observer {
+    NSHashTable *t = objc_getAssociatedObject(self, &kDismissalObsKey);
+    if (observer) [t removeObject:observer];
+}
+- (void)setHasBeenDismissedSinceKeybagLock:(BOOL)flag {
+    SEL gs = NSSelectorFromString(@"hasBeenDismissedSinceKeybagLock");
+    BOOL was = [(id)self respondsToSelector:gs] ? ((BOOL (*)(id, SEL))objc_msgSend)((id)self, gs) : flag;
+    %orig;
+    if (was == flag) return;
+    NSHashTable *t = objc_getAssociatedObject(self, &kDismissalObsKey);
+    BP_Log(@"blank: cover sheet presentation manager: hasBeenDismissedSinceKeybagLock %d -> %d (%lu observers)", (int)was, (int)flag, (unsigned long)t.count);
+    SEL cb = @selector(coverSheetPresentationManagerDidChangeDismissedSinceKeyBagLock:);
+    for (id o in [t allObjects]) if ([o respondsToSelector:cb]) ((void (*)(id, SEL, id))objc_msgSend)(o, cb, self);
 }
 %end
 
@@ -362,6 +408,9 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
     }
     [g setEnabled:![me _isScreenOn]];
     BP_Log(@"blank: wake gesture installed");
+    Class pm = NSClassFromString(@"SBCoverSheetPresentationManager");
+    id mgr2 = [pm respondsToSelector:@selector(sharedInstanceIfExists)] ? [pm performSelector:@selector(sharedInstanceIfExists)] : nil;
+    if ([mgr2 respondsToSelector:@selector(addDismissalObserver:)]) [mgr2 performSelector:@selector(addDismissalObserver:) withObject:me];     // 16.2 init
     return me;
 }
 
@@ -380,8 +429,10 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
 - (void)_setScreenOn:(BOOL)on {
     BOOL was = [self _isScreenOn];
     %orig;
+    BOOL active0 = BP_On(F_BLANK) && BP_BlankReady();
+    BP_Log(@"blank: _setScreenOn:%d (was %d, feature %s, lock state %d, cover sheet presented %d)", (int)on, (int)was, active0 ? "active" : "OFF", (int)[self _embeddedHasAnyLockState], (int)[self _isCoverSheetPresented]);
     if (was == on) return;
-    BOOL active = BP_On(F_BLANK) && BP_BlankReady();
+    BOOL active = active0;
     if (active) {
         BP_SetExternalBlanked(self, !on);
         id g = objc_getAssociatedObject(self, &kWakeGestureKey);
@@ -391,7 +442,44 @@ static void BP_SetExternalBlanked(id controller, BOOL blanked) {
     }
 }
 
+- (void)_embeddedLockStateDidChange:(id)note {
+    BP_Log(@"blank: lock state notification %@: hasAnyLockState=%d screenOn=%d presented=%d invalidated=%d", [note respondsToSelector:@selector(name)] ? [note name] : @"?", (int)[self _embeddedHasAnyLockState], (int)[self _isScreenOn], (int)[self _isCoverSheetPresented], (int)BP_CSInvalidated(self));
+    if (BP_CSInvalidated(self)) return;                            // 16.2 0x1c7790784: only logs when invalidated
+    %orig;
+}
+
+- (void)_updateExternalDisplayCoverSheetExistence {
+    BOOL lock = [self _embeddedHasAnyLockState], presented = [self _isCoverSheetPresented];
+    BP_Log(@"blank: update cover sheet: hasAnyLockState=%d presented=%d screenOn=%d -> %@", (int)lock, (int)presented, (int)[self _isScreenOn], lock ? (presented ? @"no change (already shown)" : @"show") : (presented ? @"hide (screen on first)" : @"no change (already hidden)"));
+    if (BP_On(F_BLANK) && !lock && presented) [self _setScreenOn:YES];     // 16.2 0x1c77909e8: the display must be awake before the cover sheet goes away
+    %orig;
+    BP_Log(@"blank: cover sheet now presented=%d screenOn=%d", (int)[self _isCoverSheetPresented], (int)[self _isScreenOn]);
+}
+
+- (void)backlightController:(id)controller willAnimateBacklightToFactor:(float)factor source:(long long)source {
+    BP_Log(@"blank: embedded backlight -> factor %.3f, source %lld (%@), invalidated=%d", factor, source, BP_BacklightSourceName(source), (int)BP_CSInvalidated(self));
+    if (BP_On(F_BLANK) && BP_CSInvalidated(self)) return;          // 16.2 0x1c779068c: invalidated controllers ignore it
+    %orig;
+}
+
+%new
+- (void)coverSheetPresentationManagerDidChangeDismissedSinceKeyBagLock:(id)manager {      // 16.2 0x1c7790898
+    BP_Log(@"blank: presentation manager: dismissed since keybag lock changed");
+    if (!BP_CSInvalidated(self) && BP_On(F_BLANK)) [self _updateExternalDisplayCoverSheetExistence];
+}
+
+%new
+- (void)invalidate {                                              // 16.2 0x1c77901fc: stop observing, drop the assertion, remember it
+    BP_Log(@"blank: external cover sheet controller invalidated");
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    Class pm = NSClassFromString(@"SBCoverSheetPresentationManager");
+    id mgr = [pm respondsToSelector:@selector(sharedInstanceIfExists)] ? [pm performSelector:@selector(sharedInstanceIfExists)] : nil;
+    if ([mgr respondsToSelector:@selector(removeDismissalObserver:)]) [mgr performSelector:@selector(removeDismissalObserver:) withObject:self];
+    objc_setAssociatedObject(self, &kCSInvalidatedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 - (void)_setBlankingWindowVisible:(BOOL)visible fadeDuration:(double)duration {
+    BP_Log(@"blank: _setBlankingWindowVisible:%d fade %.2f (%@)", (int)visible, duration, (BP_On(F_NOWINDOW) && BP_On(F_BLANK) && BP_BlankReady()) ? @"suppressed: the display itself is blanked" : @"16.0 black window");
     // 16.2 has no blanking window: the display itself is blanked (feature "nowindow", on by default, does the same here;
     // create Backport162.off.nowindow to bring the 16.0 black window back as a fallback).
     if (BP_On(F_NOWINDOW) && BP_On(F_BLANK) && BP_BlankReady()) return;

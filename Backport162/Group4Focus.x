@@ -699,6 +699,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
         id cover = [self valueForKey:@"coverSheetController"];
         if (cover) {
             [[NSNotificationCenter defaultCenter] removeObserver:cover];
+            if ([cover respondsToSelector:NSSelectorFromString(@"invalidate")]) ((void (*)(id, SEL))objc_msgSend)(cover, NSSelectorFromString(@"invalidate"));     // 16.2 -invalidate (Tweak.x)
             [self setValue:nil forKey:@"coverSheetController"];
         }
     } @catch (NSException *e) { BP_Log(@"disconnect: cover sheet controller release skipped: %@", e); }

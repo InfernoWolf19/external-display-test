@@ -152,3 +152,45 @@ The native alert (UIAlertController on the iPad's own window scene) shows the 16
 
 ### Unproven
 Nothing ran. If the installed app contains the class but its `prepareForActivation` does not map type 1 to it (not expected: the class only exists for that dispatch), the remote alert would still show nothing; `Backport162.on.edunative` is the manual override for that case.
+
+---------------------------------------------------------------------------------------------------
+
+## 8. Lock / power button on the monitor (external cover sheet, switch `blank`)
+
+User report: locking the iPad with the monitor connected leaves the monitor ON showing black; the power button shows wallpaper + status bar + the locked text on the monitor (no big clock, no dock); unlock shows the normal extended desktop. All logs sent so far only contain `blank: display <uuid> blanked=0` (written once per connect by the init-time `_setScreenOn:YES`), never `blanked=1`, so they contain no lock event or the screen-off path did not run: unknown, hence the logging below.
+
+### Real call chain (16.0 20A8372 vs 16.2 20C65, `SBExternalDisplayCoverSheetController`)
+
+| step | 16.0 | 16.2 |
+|---|---|---|
+| observers (init) | `[backlight addObserver:self]`, `_setScreenOn:[backlight screenIsOn]`, `_embeddedLockStateDidChange:` for `SBDeviceLockStateChangedNotification` AND `SBAggregateLockStateDidChangeNotification` (0x1c62f2b4c) | backlight observer, `_setScreenOn:`, the lock handler for `SBAggregateLockStateDidChangeNotification` only, plus the presentation manager (`presentationManager:` init argument) as DismissalObserver (0x1c778fc38) |
+| lock state change | `_embeddedLockStateDidChange:` (0x1c62f3408) -> `_updateExternalDisplayCoverSheetExistence` | 0x1c7790784: `_isInvalidated` check, then the same; `_shouldShowExternalCoverSheet` = `[lockStateProvider hasAnyLockState]` (0x1c7790f9c) |
+| existence (0x1c62f34d4 / 0x1c77908f8) | show (`hasAnyLockState` and not presented): will(YES), `_setCoverSheetWindowVisible:YES fade 0.5`, `[sceneManager setSuspendedUnderLock:YES]`, `setDisplayLayoutElementActive:YES`, did(YES). hide: the same with NO | show: identical plus `_postNotificationForExternalCoverSheetVisibilityDidChange:`. hide: will(NO), **`_setScreenOn:YES` first (0x1c77909e8)**, window hidden, `setSuspendedUnderLock:NO`, notification, layout element inactive, did(NO) |
+| backlight observer (0x1c62f333c / 0x1c77905f8) | source ignored when `(0x401003 >> s) & (s < 0x17)` (programmatic, invalid, notification, notification center), else factor == 0 -> `_setScreenOn:NO`, factor == 1 -> `_setScreenOn:YES`, intermediate factors ignored | same, plus `_isInvalidated` ignores it |
+| `_setScreenOn:` (0x1c62f367c / 0x1c7790b4c) | stores the flag, `_setBlankingWindowVisible:(!on) fadeDuration:0.5` = a black full-screen window above the cover sheet | stores the flag; **no window**: `BKSDisplayServicesSetDisplayBlanked(hardwareIdentifier, !on)` and `[_mouseButtonDownGesture setEnabled:!on]` |
+| content on the monitor | cover sheet window = `SBExternalDisplayCoverSheetViewController` (the same class): wallpaper, status bar and the locked text | identical |
+
+Backlight source names of the enum (SpringBoard table 0x1d7b9a7a8): 1 programmatic, 2 home button, 3 lock button, 8 idle timer, 12 notification, 22 notification center, 34 mouse button, 38 swipe to wake ...; the lock button (3), idle timer (8) and power events are NOT ignored, so the lock path does reach `_setScreenOn:`.
+
+### (a) What 16.2 shows on the monitor
+
+Locked, screen on: the cover sheet window (wallpaper, status bar, locked text; no clock / dock). Screen off (power button or idle): the display is blanked through BackBoard, no window at all. Power button: backlight factor 1 -> `_setScreenOn:YES` -> unblank, the cover sheet content is visible again. Unlock: the lock state clears -> hide path (`_setScreenOn:YES` first) -> normal desktop. It never shows a black window.
+
+### (b) 16.0 vs our port
+
+16.0 covers the cover sheet with a black window on screen off (display still driven with that content). The port (`blank`, default on) suppresses that window (`nowindow`) and calls `BKSDisplayServicesSetDisplayBlanked` like 16.2: it exists in the 16.0 BackBoardServices (0x18e200948 -> MIG routine id 0x5b916a, the same id as 16.2, handled by backboardd `_BKDisplayXXSetDisplayBlanked`; the backboardd routine "Set Blanked / Set %@ Blanked / BKDisplaySetDisplayBlanked" is the same call sequence in 16.0 0x1000251bc and 16.2 0x100025164). So at the API level the port and 16.2 do the same thing; the logs show the hook runs (the connect-time `_setScreenOn:YES`).
+
+### (c) What the monitor receives while blanked (the question "does it sleep")
+
+`-[CAWindowServerDisplay setBlanked:]` (16.0 0x18841fb28 / 16.2 0x18854bf64) calls `CA::WindowServer::Server::set_blanked(bool)` (16.0 0x18841510c / 16.2 0x1885412f8) whose body creates / destroys a "blank context" (`create_blank_context` / `destroy_blank_context`, render context commit, `invalidate_all`, analytics event): blanking is a black render context, NOT a power-down of the display pipeline. Neither build powers the panel / link down from this call, so in 16.2 as well the monitor keeps receiving a (black) signal while the iPad is locked with the screen off; "monitor ON showing black" is therefore what 16.2 produces too, as far as the blank call is concerned. Whether 16.2 removes the signal after some idle time through another mechanism (display power management in backboardd / `SBDisplayManager`) was not found in this analysis (`Server::set_blanked` differs in 16.2 by one extra virtual capability test before `invalidate_all`, not decoded). UNPROVEN: the exact behaviour of the physical link; nothing here can run.
+
+### What was ported (Tweak.x, switch `blank`, default on) and the log lines
+
+* `_updateExternalDisplayCoverSheetExistence` hide path: `_setScreenOn:YES` first (16.2 0x1c77909e8) (the "cover sheet extras" row of the plumbing review).
+* `SBCoverSheetPresentationManager`: `addDismissalObserver:` / `removeDismissalObserver:` and the callout `coverSheetPresentationManagerDidChangeDismissedSinceKeyBagLock:` when `hasBeenDismissedSinceKeybagLock` changes (hook of `setHasBeenDismissedSinceKeybagLock:`, 16.2 0x1c72ef618); the controller registers itself at init (16.2 0x1c778fc38) and implements the callback (0x1c7790898).
+* `-invalidate` (16.2 0x1c77901fc: remove observers, invalidated flag), called from the ported `sceneDidDisconnect:` (Group4Focus.x step 8); an invalidated controller ignores lock notifications and backlight changes (0x1c7790784 / 0x1c779068c).
+* Debug lines (prefix `blank:`) at every step: `lock state notification <name>: hasAnyLockState=N screenOn=N presented=N invalidated=N`, `update cover sheet: hasAnyLockState=N presented=N screenOn=N -> show | hide (screen on first) | no change ...` and `cover sheet now presented=N screenOn=N`, `embedded backlight -> factor F, source S (<name>), invalidated=N`, `_setScreenOn:N (was N, feature active|OFF, lock state N, cover sheet presented N)`, `BKSDisplayServicesSetDisplayBlanked(<uuid>, N) ...` and `display <uuid> blanked=N (call returned)`, `_setBlankingWindowVisible:N fade F (suppressed ... | 16.0 black window)`, `presentation manager: hasBeenDismissedSinceKeybagLock A -> B (N observers)`, `external cover sheet controller invalidated`.
+* Kill switches unchanged: `Backport162.off.blank`, `Backport162.off.nowindow` (16.0 black window again).
+
+### Test recipe
+With `Backport162.debug`: lock with the power button with the monitor connected, press the power button, unlock. The log must show `lock state notification ...: hasAnyLockState=1`, `update cover sheet ... -> show`, `embedded backlight -> factor 0.000, source 3 (lock button)`, `_setScreenOn:0 ...`, `BKSDisplayServicesSetDisplayBlanked(<uuid>, 1)`; power button: `factor 1.000 ... _setScreenOn:1 ... blanked=0`; unlock: `-> hide (screen on first)`. A missing `embedded backlight` line at lock means the backlight observer never fired (then that, not the blank API, is the defect).
