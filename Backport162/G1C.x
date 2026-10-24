@@ -27,6 +27,10 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
+#import <mach-o/dyld.h>
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#endif
 #import <string.h>
 #import <unistd.h>
 #import <math.h>
@@ -867,15 +871,67 @@ static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     id r = two ? ((id (*)(id, SEL, id, id))objc_msgSend)(root, sel, a, b) : ((id (*)(id, SEL, id))objc_msgSend)(root, sel, a);
     return [r isKindOfClass:[NSArray class]] ? r : nil;
 }
+// H2 (specs/CORE-LEFTOVERS-0.7.9.md section 4, REVIEW-CORE H2): the two inline calls of the 16.0 -performTransitionWithContext:animated:completion: blocks, 16.0 20A8372 unslid addresses
+//   (A) ___82-[SBFluidSwitcherViewController performTransitionWithContext:animated:completion:]_block_invoke   0x1c5fc4fc0 (181 insns): animated transition, right after the begin event is dispatched:
+//       update(event.fromAppLayout, event.toAppLayout, animated:YES)
+//   (B) ..._block_invoke_9 0x1c5fc5cc0 (161 insns): NON animated transition, before the end event: update([[ctx previousLayoutState] appLayout], [[ctx layoutState] appLayout], animated:NO)
+// 16.2 has neither (diff of the blocks: 0x1c743dc4c / 0x1c743e90c); its update comes from the SBInvalidateContinuousExposeIdentifiersEventResponse (-_performInvalidateContinuousExposeIdentifiersResponse: 0x1c745ec0c),
+// which the Root appends AFTER its stage bookkeeping (this file, "stage bookkeeping" above, switch g1c_invalidate). The inline call runs BEFORE that handler, with the old stage layout: it produced the interim list
+// (strip [.. Filza ..] -> [.. Filza ..]) and one more ids changed event / layout pass per transition (device log 19479b05: the 0.1 s window flicker after an app-to-app switch).
+// Scope (conservative, so the close by home swipe / open from the home screen / zoom keep their 16.0 timing): only calls whose caller is (A) or (B) AND whose from AND to layouts are both non-nil (app-to-app).
+// The caller is identified by the return address (no hook of the blocks needed); the two functions are first checked against the first two instruction words of the 16.0 image
+// (pacibsp, sub sp,sp,#0xd0 / #0x60); any mismatch (another build) logs once and leaves every call alone. Switch g1c_ids16supp (default on), needs g1c_invalidate.
+static void *G1C_StripRA(void *ra) {
+#if __has_feature(ptrauth_calls)
+    return ptrauth_strip(ra, ptrauth_key_return_address);
+#else
+    return ra;
+#endif
+}
+static int G1C_Ids16CallerKind(void *ra0) {
+    static intptr_t slide;
+    static int resolved;                                                                // 1 = blocks verified, -1 = not this build
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        BOOL found = NO;
+        for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
+            const char *name = _dyld_get_image_name(i);
+            if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
+        }
+        const uint32_t *a = found ? (const uint32_t *)(uintptr_t)(0x1c5fc4fc0 + slide) : NULL, *b = found ? (const uint32_t *)(uintptr_t)(0x1c5fc5cc0 + slide) : NULL;
+        if (found && a[0] == 0xd503237f && a[1] == 0xd10343ff && b[0] == 0xd503237f && b[1] == 0xd10183ff) {
+            resolved = 1;
+            BP_Log(@"g1c: ids16supp: the 16.0 transition blocks verified at %p / %p (slide 0x%lx)", (void *)a, (void *)b, (long)slide);
+        } else {
+            resolved = -1;
+            BP_Log(@"g1c: ids16supp: the 16.0 transition blocks are not at the expected addresses (image found %d), the inline ids updates stay (16.0 behaviour)", (int)found);
+        }
+    });
+    if (resolved != 1) return 0;
+    uintptr_t u = (uintptr_t)ra0 - (uintptr_t)slide;
+    if (u >= 0x1c5fc4fc0 && u < 0x1c5fc4fc0 + 181 * 4) return 1;
+    if (u >= 0x1c5fc5cc0 && u < 0x1c5fc5cc0 + 161 * 4) return 2;
+    return 0;
+}
 %group G1C_VCIds
 %hook SBFluidSwitcherViewController
 - (void)_updateContinuousExposeIdentifiersTransitioningFromAppLayout:(id)from toAppLayout:(id)to animated:(BOOL)animated {
+    void *callerRA = __builtin_return_address(0);
     BOOL ok = G1C_ON() && gIdsEventCls && [self respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && [self respondsToSelector:@selector(_dispatchEventAndHandleAction:)];
     if (!ok) {
         %orig;
         return;
     }
     if (!G1B_SendB0(self, @selector(isChamoisWindowingUIEnabled))) return;
+    if (from && to && gInvalidateRespCls && BP_OnName("g1c_ids16supp") && BP_OnName("g1c_invalidate")) {
+        int kind = G1C_Ids16CallerKind(G1C_StripRA(callerRA));
+        if (kind) {
+            static unsigned long n;
+            n++;
+            if (n <= 12 || n % 50 == 0) BP_Log(@"g1c: ids16supp: inline ids update of the 16.0 %s block suppressed (#%lu) from=%@ to=%@ animated=%d (the 16.2 response updates after the stage bookkeeping)", kind == 1 ? "begin" : "end", n, G1C_DbgLayout(from), G1C_DbgLayout(to), (int)animated);
+            return;
+        }
+    }
     BP162VCState *st = BP_G2_VCStateFor(self);
     if (!st) {
         %orig;

@@ -163,3 +163,22 @@ Reasons it is left out: (1) the 16.0 SBSwitcherController ivar layout cannot cha
 (2) the policy numbers feed `updateAllParticipants:` / the 16.0 `_updateParticipantsAndPoliciesWithSwitcherPolicy:...`, whose enum semantics were not shown to be the same, so porting only the decisions would mix two meanings;
 (3) a mistake here breaks the traits arbiter of the MAIN display (device rotation, orientation lock) on the device the tweak runs on, and nothing of it is exercised by the external display path; (4) it cannot be verified without a device.
 What the traits assistant gives in 16.2 (guiding participants for orientation-locked Stage Manager windows) is therefore absent. If a rotation problem with Stage Manager windows is seen, this is the first suspect.
+
+## 4. H2: the 16.0 inline `_updateContinuousExposeIdentifiers...` calls next to the 16.2 response  - ported (scoped), device-unverified
+
+**16.2 mechanism.** 16.2 has no inline call in the `performTransitionWithContext:animated:completion:` blocks. Its only caller is `-_performInvalidateContinuousExposeIdentifiersResponse:` (0x1c745ec0c: `[self _update...:[r transitioningFromAppLayout] toAppLayout:[r transitioningToAppLayout] animated:[r animated]]`),
+driven by the `SBInvalidateContinuousExposeIdentifiersEventResponse` that the Root modifier appends AFTER its stage bookkeeping (G1C, switch `g1c_invalidate`, already ported). The 16.0 blocks (addresses of 20A8372, unslid):
+* (A) `___82-[SBFluidSwitcherViewController performTransitionWithContext:animated:completion:]_block_invoke` 0x1c5fc4fc0 (181 instructions; 16.2 0x1c743dc4c has 165): for an animated transition, right after the begin event (phase 1) is dispatched,
+  `update(event.fromAppLayout, event.toAppLayout, animated:YES)`.
+* (B) `..._block_invoke_9` 0x1c5fc5cc0 (161; 16.2 0x1c743e90c has 134): for a NON animated transition, before the end event, `update([[ctx previousLayoutState] appLayout], [[ctx layoutState] appLayout], animated:NO)`.
+Both run before the Root's handler has stored the new stage layout, so with the response path active they produce the interim list (log 19479b05: strip `[.. Filza ..] -> [.. Filza ..]` at phase 1, the real change only at the end) and one more ids event / layout pass per transition.
+
+**What was ported.** The call is suppressed (G1C.x, the VC ids update replacement, switch `g1c_ids16supp`, default on, requires `g1c_invalidate`) when ALL hold: the caller is block (A) or (B) (identified by the return address against the unslid address ranges,
+after the first two instruction words of both functions matched the 16.0 image: `pacibsp`, `sub sp, sp, #0xd0` / `#0x60`; another build logs `g1c: ids16supp: the 16.0 transition blocks are not at the expected addresses` once and nothing is suppressed),
+the VC is in Stage Manager, and `from` AND `to` are both non-nil (app-to-app). Nothing needs hooking by address: the existing hook of the method looks at its own return address.
+**Deliberately not suppressed (regression guard):** calls with a nil `from` or `to`, i.e. closing an app by the home swipe, going home, opening an app from the home screen, PiP and zoom transitions keep the 16.0 inline update and therefore their 16.0 timing.
+Log lines: `g1c: ids16supp: the 16.0 transition blocks verified at ...` (once), `g1c: ids16supp: inline ids update of the 16.0 begin|end block suppressed (#n) from=.. to=.. animated=..` (first 12, then every 50th).
+**Test.** (1) Switch from one app to another inside Stage Manager (dock, App Switcher, Cmd-Tab): the 0.1 s window flicker in the strip right after the switch (OPEN-ISSUES 7 / 6) should be gone; the log shows `ids16supp ... begin block suppressed`
+and the `GLITCH VC ids update` lines of that switch show one update at phase 2 with the new stage instead of an interim and a final one. (2) Close an app with the home swipe, open an app from the home screen, pinch / zoom: identical to the build without this switch
+(no `ids16supp` line for them). If anything in (2) differs, or the strip fails to update after an app-to-app switch, create `Backport162.off.g1c_ids16supp` and report.
+**Unproven:** that the OPEN-ISSUES 6 / 7 flicker is caused by this (the review's hypothesis, supported by the log excerpt above); the suppression is logged and switchable so the next device log decides.

@@ -166,6 +166,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | p1_defroles | 16.2 `SBDefaultImplementationsSwitcherModifier` role scale (model based: occluded / partially occluded windows) and role frame (peeking centre, partially occluded overlap shift) with Stage Manager on; risky for close / zoom, own switch | `p1_defroles` |
 | p1_asynceval | 16.2 `SBMainSwitcherControllerCoordinator -_evaluateAsynchronousRenderingEnablement` is empty (async rendering only through the per-display VC flags); can change transition timing | `p1_asynceval` |
 | p1_orient | M5 orientation family of REVIEW-CORE that works on the 16.0 traits code: `SBLayoutState` `...unknownAllowed:`, `coordinateSpaceForLayoutElement:layoutState:` and `sceneEntityFrameForWorkspaceEntity:inLayoutState:` use the layout state orientation with Stage Manager, `_updateAppTransitionContext:withOrientationActuationContext:`, scene settings orientation of `SBApplicationSceneHandle` (the 16.2 SBSwitcherTraitsAssistant rework is not ported, see the spec) | `p1_orient` |
+| g1c_ids16supp | the 16.0 inline `_updateContinuousExposeIdentifiers...` calls of the transition blocks are not made for app-to-app switches (16.2 has only the response driven update after the stage bookkeeping); close / home / zoom keep them; needs `g1c_invalidate` | `g1c_ids16supp` |
 
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 
@@ -251,6 +252,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y3_containersb | (Y3StatusBar.x) container status bar hide like 16.2: level 6 settings assertion held only in app / switcher mode, alpha change with UIStatusBarStyleAnimationParameters instead of a UIView animation |
 | y4_alertscene | (Y4Home.x) the hide / delete confirmation of a home screen icon prefers the iPad home screen's own window scene (16.2 SBAlertItem preferred activation scene; 16.0: whichever display was active) |
 | y4_widgetfocus | (Y4Home.x) widget gallery: the home screen window steals keyboard focus while it is up and becomes key (16.2), assertion released when it goes away |
+| y5_sbpool | (Y5Apps.x) a window's status bar is recycled into the reuse pool it came from (window dragged to the other display), new status bars get the pool's screen as target screen (16.2) |
+| y5_classicsize | (Y5Apps.x) iPhone-only (classic mode) app launch size table is used on the external display too (16.0: display bounds there) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
