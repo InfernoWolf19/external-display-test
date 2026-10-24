@@ -229,6 +229,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y1_scenestyle | (Y1Workspace.x) `_modifyApplicationSceneSettings:...`: the scene's user interface style (app's supported style or the arbiter's current one) is set for every display, 16.0 only for the main display: apps on the extended display follow dark mode | `y1_scenestyle` |
 | y1_extaction | (Y1Workspace.x) `UIDestroySceneAction` of an app window on the extended display is handled (16.2 handles it in the `SBSceneManager` base class, 16.0 only in the main display's manager): an app can close its own window on the monitor | `y1_extaction` |
 | y1_takescene | (Y1Workspace.x) after `takeScene:fromSceneManager:` the new scene handle's `wantsEnhancedWindowingEnabled` follows the NEW display's Stage Manager state | `y1_takescene` |
+| y2_tuiscene | (Y2Gestures.x) transient UI gestures per window scene: the tap / indirect-pan "dismiss" recognizers of the window menu (top affordance) and the shelf register with the manager of THEIR window scene (16.0: always the main display's gesture manager, so a tap on the monitor never dismissed them); the top affordance's tap-to-unhide controller follows its scene | `y2_tuiscene` |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
