@@ -84,66 +84,100 @@ static BOOL BP_Logging(void) { static uint64_t n; static BOOL l; return BP_FileF
 
 // Per-name switch state, cached one second. The first F_COUNT slots belong to the enum features, further slots are made
 // on demand for sub-switches that packages check by name (a name that is also in kFeatureNames shares that slot).
+// P3 (specs/FINDINGS-DRAG-LOOP-0.7.9.md): the hot path (BP_OnName / BP_OptInName / BP_On, called thousands of times a second during a drag) takes no lock and does no
+// linear scan: a small pointer-keyed table maps the (string literal) name pointer to its slot (verified with one strcmp, so a transient buffer can never answer for another
+// name), the one-second file test is refreshed by whichever caller wins a compare-and-swap.  Slot creation (rare) still takes gSlotMu.
 typedef struct { char name[40]; uint64_t nextOff, nextOn; BOOL off, on; } BPSlot;
-enum { kSlotMax = 160 };
+enum { kSlotMax = 512, kSlotCacheSize = 512 };
 static BPSlot gSlots[kSlotMax];
-static int gSlotCount;
+static int gSlotCount;                                          // written under gSlotMu, read atomically
+typedef struct { const char *ptr; int slot; } BPSlotCache;
+static BPSlotCache gSlotCache[kSlotCacheSize];                  // open addressing, 8 probes, entries are never removed
+static BOOL gSlotOverflowLogged;
 
-static int BP_SlotFor(const char *name) {         // gMu held
-    if (gSlotCount == 0) {
+static void BP_SlotsInitOnce(void) {                            // names of the enum features: once, before any lock-free read
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
         for (int i = 0; i < F_COUNT; i++) snprintf(gSlots[i].name, sizeof gSlots[i].name, "%s", kFeatureNames[i] ? kFeatureNames[i] : "");
-        gSlotCount = F_COUNT;
-    }
-    for (int i = 0; i < gSlotCount; i++) if (strcmp(gSlots[i].name, name) == 0) return i;
-    if (gSlotCount >= kSlotMax) return -1;
-    snprintf(gSlots[gSlotCount].name, sizeof gSlots[0].name, "%s", name);
-    return gSlotCount++;
+        __atomic_store_n(&gSlotCount, F_COUNT, __ATOMIC_RELEASE);
+    });
 }
-static BOOL BP_SlotOn(int i, BOOL wantOnFile) {   // gMu held; killed was checked by the caller
+static int BP_SlotFor(const char *name) {                       // any thread; fast path lock-free
+    BP_SlotsInitOnce();
+    size_t h = ((uintptr_t)name >> 3) % kSlotCacheSize;
+    for (int k = 0; k < 8; k++) {
+        BPSlotCache *e = &gSlotCache[(h + (size_t)k) % kSlotCacheSize];
+        const char *p = __atomic_load_n(&e->ptr, __ATOMIC_ACQUIRE);
+        if (!p) break;
+        if (p == name) { int i = e->slot; if (strcmp(gSlots[i].name, name) == 0) return i; break; }
+    }
+    pthread_mutex_lock(&gSlotMu);
+    int found = -1;
+    int n = __atomic_load_n(&gSlotCount, __ATOMIC_ACQUIRE);
+    for (int i = 0; i < n; i++) if (strcmp(gSlots[i].name, name) == 0) { found = i; break; }
+    if (found < 0) {
+        if (n >= kSlotMax) {
+            if (!gSlotOverflowLogged) {                         // loud, once: a switch name that cannot get a slot answers its default (YES for on-by-default switches)
+                gSlotOverflowLogged = YES;
+                NSLog(@"[Backport162] switch table full (%d names): '%s' and every further new name answers its default; raise kSlotMax in Tweak.x", (int)kSlotMax, name);
+            }
+        } else {
+            snprintf(gSlots[n].name, sizeof gSlots[0].name, "%s", name);
+            __atomic_store_n(&gSlotCount, n + 1, __ATOMIC_RELEASE);
+            found = n;
+        }
+    }
+    if (found >= 0) {
+        for (int k = 0; k < 8; k++) {
+            BPSlotCache *e = &gSlotCache[(h + (size_t)k) % kSlotCacheSize];
+            if (!e->ptr) { e->slot = found; __atomic_store_n(&e->ptr, name, __ATOMIC_RELEASE); break; }
+            if (e->ptr == name) break;
+        }
+    }
+    pthread_mutex_unlock(&gSlotMu);
+    return found;
+}
+static BOOL BP_SlotOn(int i, BOOL wantOnFile) {                 // lock-free; killed was checked by the caller
     BPSlot *s = &gSlots[i];
     uint64_t t = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
     char p[1200];
-    if (t >= s->nextOff) {
-        s->nextOff = t + 1000000000ull;
+    uint64_t no = __atomic_load_n(&s->nextOff, __ATOMIC_RELAXED);
+    if (t >= no && __atomic_compare_exchange_n(&s->nextOff, &no, t + 1000000000ull, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
         snprintf(p, sizeof p, "%s/Backport162.off.%s", gTmpDir, s->name);
-        s->off = gTmpDir[0] && access(p, F_OK) == 0;
+        __atomic_store_n(&s->off, (BOOL)(gTmpDir[0] && access(p, F_OK) == 0), __ATOMIC_RELAXED);
     }
-    if (s->off) return NO;
+    if (__atomic_load_n(&s->off, __ATOMIC_RELAXED)) return NO;
     if (!wantOnFile) return YES;
-    if (t >= s->nextOn) {
-        s->nextOn = t + 1000000000ull;
+    uint64_t nn = __atomic_load_n(&s->nextOn, __ATOMIC_RELAXED);
+    if (t >= nn && __atomic_compare_exchange_n(&s->nextOn, &nn, t + 1000000000ull, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {
         snprintf(p, sizeof p, "%s/Backport162.on.%s", gTmpDir, s->name);
-        s->on = gTmpDir[0] && access(p, F_OK) == 0;
+        __atomic_store_n(&s->on, (BOOL)(gTmpDir[0] && access(p, F_OK) == 0), __ATOMIC_RELAXED);
     }
-    return s->on;
+    return __atomic_load_n(&s->on, __ATOMIC_RELAXED);
 }
 BOOL BP_OnName(const char *name) {
     if (BP_Killed()) return NO;
-    pthread_mutex_lock(&gSlotMu);
     int i = BP_SlotFor(name);
-    BOOL r = i >= 0 ? BP_SlotOn(i, NO) : YES;
-    pthread_mutex_unlock(&gSlotMu);
-    return r;
+    return i >= 0 ? BP_SlotOn(i, NO) : YES;
 }
 BOOL BP_OptInName(const char *name) {
     if (BP_Killed()) return NO;
-    pthread_mutex_lock(&gSlotMu);
     int i = BP_SlotFor(name);
-    BOOL r = i >= 0 ? BP_SlotOn(i, YES) : NO;
-    pthread_mutex_unlock(&gSlotMu);
-    return r;
+    return i >= 0 ? BP_SlotOn(i, YES) : NO;
 }
 BOOL BP_On(int f) {
     if (f < 0 || f >= F_COUNT || BP_Killed()) return NO;
-    pthread_mutex_lock(&gSlotMu);
-    if (gSlotCount == 0) (void)BP_SlotFor(kFeatureNames[0]);
-    BOOL r = BP_SlotOn(f, kOptIn[f]);
-    pthread_mutex_unlock(&gSlotMu);
-    return r;
+    BP_SlotsInitOnce();
+    return BP_SlotOn(f, kOptIn[f]);
 }
 
 BOOL BP_LogEnabled(void) { return BP_Logging(); }
 
+// P3: the log file descriptor stays open (O_APPEND, so other processes that append to the same file stay consistent); the rotation test (size above 3 MiB, file removed or replaced by
+// another process, e.g. Send logs) runs at most once a second; one write(2) per line, so nothing is buffered and a crash loses no line.  File name and line format are unchanged.
+static int gLogFd = -1;
+static ino_t gLogIno;
+static uint64_t gLogNextCheck;
 void BP_Log(NSString *fmt, ...) {
     if (!BP_Logging()) return;
     va_list ap;
@@ -155,15 +189,22 @@ void BP_Log(NSString *fmt, ...) {
     struct tm tmv;
     localtime_r(&ts.tv_sec, &tmv);
     NSString *line = [NSString stringWithFormat:@"%02d:%02d:%02d.%03ld %@\n", tmv.tm_hour, tmv.tm_min, tmv.tm_sec, ts.tv_nsec / 1000000, msg];
+    const char *u = line.UTF8String;
     pthread_mutex_lock(&gMu);
-    struct stat st;
-    if (stat(gLogPath, &st) == 0 && st.st_size > 3 * 1024 * 1024) rename(gLogPath, gLogOldPath);
-    int fd = open(gLogPath, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-    if (fd >= 0) {
-        const char *u = line.UTF8String;
-        (void)!write(fd, u, strlen(u));
-        close(fd);
+    uint64_t now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+    if (gLogFd < 0 || now >= gLogNextCheck) {
+        gLogNextCheck = now + 1000000000ull;
+        struct stat ps;
+        BOOL have = stat(gLogPath, &ps) == 0;
+        if (gLogFd >= 0 && (!have || ps.st_ino != gLogIno)) { close(gLogFd); gLogFd = -1; }                                     // removed or rotated by someone else
+        else if (gLogFd >= 0 && ps.st_size > 3 * 1024 * 1024) { rename(gLogPath, gLogOldPath); close(gLogFd); gLogFd = -1; }     // our own rotation
     }
+    if (gLogFd < 0) {
+        gLogFd = open(gLogPath, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+        struct stat fs;
+        if (gLogFd >= 0 && fstat(gLogFd, &fs) == 0) gLogIno = fs.st_ino;
+    }
+    if (gLogFd >= 0 && u) (void)!write(gLogFd, u, strlen(u));
     pthread_mutex_unlock(&gMu);
 }
 
