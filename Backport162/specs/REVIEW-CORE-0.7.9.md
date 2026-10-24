@@ -100,6 +100,8 @@ Totals: 246 methods, 53 without a direct hit = 12 runtime-only, 7 ported under a
 
 ## 4. Open defects (ranked)
 
+**Resolution status (specs/CORE-LEFTOVERS-0.7.9.md):** H1 RESOLVED (P1Drag.m, device-unverified), M1 RESOLVED (note: the 16.2 body calls the VC's own `handleFluidSwitcherGestureManager:didUpdateGesture:`, not a coordinator broadcast), M7 RESOLVED (note: async rendering is switched OFF for dragged layouts). Other items: see the leftovers doc as they land.
+
 ### HIGH (impact high, not fixed - fix not local or not safe)
 
 **H1. Base gesture workspace transaction is only partly ported** (`SBFluidSwitcherGestureWorkspaceTransaction`, 16.2 0x1c74ae6f4.. / 16.0 0x1c60339d8..).

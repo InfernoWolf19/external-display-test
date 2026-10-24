@@ -2569,7 +2569,9 @@ static BOOL G1D_SGM_PiPAllows(id sgm, CGPoint loc) {
 %end
 %end // G1D_SnapshotNoScene
 
+extern void P1Drag_Setup(void);                     // P1Drag.m: multi-display gesture workspace transaction (specs/CORE-LEFTOVERS-0.7.9.md item 1)
 void G1D_Setup(void) {
+    P1Drag_Setup();                                 // after G1C / G2B (it replaces the G1C forwarders of the 16.2 transaction names); has its own switches (p1_drag ...)
     if (!BP_OnName("g1d")) return;
     G1D_InitSels();
     G1D_InstallWindowDragSupport();

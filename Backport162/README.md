@@ -141,6 +141,17 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | arrange | `activeDisplayTrackingMethodology`, display arrangement item, `preferredArrangementOfDisplay:relativeTo:` | `arrange` |
 | methodology0 | **opt-in**: keyboard-following active display instead of the pointer-following default | `methodology0` |
 
+### Core leftovers: multi-display gesture transaction and view controller ports (specs/CORE-LEFTOVERS-0.7.9.md) [P1Drag.m]
+
+| feature | what it ports | switch |
+|---|---|---|
+| p1_drag | umbrella of P1Drag.m (decided per gesture transaction when it is created, so a switch never changes a running gesture) | `p1_drag` |
+| p1_txn | the 16.2 multi-display `SBFluidSwitcherGestureWorkspaceTransaction`: per switcher controller layout state maps, request built from the gesture manager's display, one scene layout transaction per display (ancillary requests), scenes of a dropped window move to the target display's scene manager, completions of all layout transactions | `p1_txn` |
+| p1_share | the transaction is shared by the gesture managers of all displays through the coordinator (16.2 `setActiveGestureTransaction:`), `-[SBSwitcherController _currentLayoutState]` per display | `p1_share` |
+| p1_ancillary | `-[SBSwitcherController _ancillaryTransitionRequestForTransitionRequest:]` 16.2 body (the source display gets a request without the windows that moved away; also used by the app launch transactions) | `p1_ancillary` |
+| p1_modupdate | modifier requested gesture updates go through the 16.2 `handleFluidSwitcherGestureManager:didUpdateGesture:` entry (cross-display window drag event conversion) | `p1_modupdate` |
+| p1_asyncdrag | 16.2 `_updateAsyncRenderingAndResizesHostedContext`: no async rendering for a window that is being dragged, resizes hosted content with Stage Manager | `p1_asyncdrag` |
+
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 
 | feature | what it ports | switch |
