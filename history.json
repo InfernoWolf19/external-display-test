@@ -1,12 +1,4 @@
 {
- "0.7.5+181.5ff2730": {
-  "date": "2026-10-17T19:32:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+181.5ff2730_iphoneos-arm64.deb",
-  "run": 181,
-  "sha": "5ff273064fc1dba4529077070f610db887db9abf",
-  "subject": "G2H: README switch rows, OPEN-ISSUES entry, spec OPEN-DIM-0.7.7 (wind\u2026",
-  "version": "0.7.5+181.5ff2730"
- },
  "0.7.5+182.58c233e": {
   "date": "2026-10-17T19:38:17Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+182.58c233e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "f7e180dfb0fd3fafa7af867877197c1ec7d86c64",
   "subject": "Y4Home: alert items prefer the home screen's own window scene (SBAlertItem preferred activation scene, presenter resolver), widget gallery keyboard focus (switches y4_alertscene, y4_widgetfocus); DELTA-SWEEP SBIconController verdicts, Y3 sha",
   "version": "0.7.9+252.f7e180d"
+ },
+ "0.7.9+253.92a22e8": {
+  "date": "2026-10-24T23:29:52Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+253.92a22e8_iphoneos-arm64.deb",
+  "run": 253,
+  "sha": "92a22e89d60c7f42ad991abce4ed2e792c8e7f5f",
+  "subject": "Item 3 (M5): P1SW.m orientation family on the 16.0 traits code: SBLayoutState unknownAllowed methods, scene settings orientation, coordinate space / scene entity frame with the layout state orientation under Stage Manager, 2 argument transition context update; switch p1_orient; SBSwitcherTraitsAssistant rework documented as not ported",
+  "version": "0.7.9+253.92a22e8"
  }
 }
