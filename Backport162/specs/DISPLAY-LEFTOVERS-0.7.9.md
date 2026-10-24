@@ -194,3 +194,18 @@ Locked, screen on: the cover sheet window (wallpaper, status bar, locked text; n
 
 ### Test recipe
 With `Backport162.debug`: lock with the power button with the monitor connected, press the power button, unlock. The log must show `lock state notification ...: hasAnyLockState=1`, `update cover sheet ... -> show`, `embedded backlight -> factor 0.000, source 3 (lock button)`, `_setScreenOn:0 ...`, `BKSDisplayServicesSetDisplayBlanked(<uuid>, 1)`; power button: `factor 1.000 ... _setScreenOn:1 ... blanked=0`; unlock: `-> hide (screen on first)`. A missing `embedded backlight` line at lock means the backlight observer never fired (then that, not the blank API, is the defect).
+
+## 9. P6: `SBSceneHandle _noteSceneDestroyed:` guard and probe (G4B.x group G4B_SceneGuard, switch `y1_scenedestroyguard`) : PORTED, DEVICE-UNPROVEN
+
+**Mechanism (16.0 SpringBoardUI, stock, see FINDINGS-DRAG-LOOP-0.7.9 section 4).** `-[SBSceneHandle _noteSceneDestroyed:]` at 0x1f1185b3c asserts `_manuallyControlsLifecycle` (line 0x11f), asserts `_scene == destroyed` (line 0x120), then runs `[self _setScene:nil]`. The device crash was the second assertion. Returning from the assertion handler is not a fix, because stock then clears the live scene of the handle that tracks a different scene (a blank window). The hook is therefore on the method itself; `NSAssertionHandler` is not touched.
+
+**What was ported.** A hook of `-_noteSceneDestroyed:` (selector hook, ivar `_scene` read by name through `G4B_Ivar`):
+* `_scene == destroyed`: `%orig`, nothing logged (normal path, no cost).
+* mismatch: always the probe, in `Backport162.debug` logs: `scenedestroy probe: handle H tracks scene [ptr identifier], destroy of scene [ptr identifier]; display of destroyed scene D1, of tracked scene D2`, then one line per window scene of the switcher coordinator (`windowScene W display X manager M: handle for destroyed identity .. (it tracks ..), handle for tracked identity ..`) and `dragging app layouts: ...`. These answer which handle/scene pair mismatched (C1/C2/C3 of the findings).
+* then, with the switch on (default): `GUARD scene handle H tracks scene [..], destroy of scene [..] ignored ...` and return without `%orig`. `Backport162.off.y1_scenedestroyguard` (or `.off` file) makes stock run after the probe, assertion included.
+
+The probe only reads state (ivars, selectors guarded by `respondsToSelector:`), it creates nothing and does not retain anything.
+
+**Test recipe in plain words.** Turn on `Backport162.debug`. With the monitor connected in extended mode, drag an app window (for example Clock) to the monitor and back twice, reopen it from the dock, then close it. Before this build SpringBoard crashed at the end of the close animation. Now it must stay up. Open `<jbroot>/tmp/Backport162.log` and search for `scenedestroy probe`: if the lines are absent, the stock case did not occur this time. If they are present, send them together with the `GUARD` line and tell me whether any window on either screen turned blank afterwards (a blank window after a GUARD line means the handle that was skipped was the one that should have been cleared, and the probe shows which).
+
+**Unproven.** That the mismatch really occurs in this flow after the drag fixes (P1/P4) landed; that skipping the destroy leaves no handle without scene (the probe lists the managers' handles to tell); everything on device.

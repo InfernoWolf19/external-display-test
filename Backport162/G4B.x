@@ -52,6 +52,7 @@
 @interface SBExternalDisplayEducationObserver : NSObject @end
 @interface SpringBoard : NSObject @end
 @interface SBSceneManager : NSObject @end
+@interface SBSceneHandle : NSObject @end
 @interface SBMousePointerManager : NSObject @end
 @interface _SBDisplayAssertionStack : NSObject @end
 @interface SBDisplayAssertionCoordinator : NSObject @end
@@ -2307,6 +2308,69 @@ static void G4B_WrapDidSelectContainer(void) {      // 16.2 didSelectContainer:m
     class_replaceMethod(vc, sel, wrap, method_getTypeEncoding(m));
 }
 
+// ================================================================================================================
+// P6 (FINDINGS-DRAG-LOOP-0.7.9 section 6): -[SBSceneHandle _noteSceneDestroyed:] (SpringBoardUI 16.0 0x1f1185b3c, SBSceneHandle.m)               [DEVICE-UNPROVEN]
+// ================================================================================================================
+// Stock 16.0 body:  NSAssert(_manuallyControlsLifecycle) (line 0x11f); NSAssert(_scene == destroyed) (line 0x120); [self _setScene:nil].
+// The device crash was the second assertion: a destroyed FBScene reached a handle that tracks a different FBScene.  A handler that merely returns would go on into
+// _setScene:nil and clear the live scene of that handle (blank window), so the only safe last line is here: ignore a destroy of a scene the handle does not track.
+// Probe (always, only on a mismatch, so it costs nothing in normal operation): handle, tracked scene, destroyed scene, display of the destroyed scene, and for every
+// window scene's manager which handle it holds for the destroyed scene's identity and for the tracked scene's identity; plus the coordinator's dragging layouts.
+// Switch y1_scenedestroyguard (default ON): off = the probe still logs and stock runs (including its assertion).  Never repaired through NSAssertionHandler.
+static NSString *G4B_SGDesc(id o) {
+    if (!o) return @"nil";
+    SEL idf = NSSelectorFromString(@"identifier");
+    NSString *i = [o respondsToSelector:idf] ? G4B_Obj(o, idf) : nil;
+    return [NSString stringWithFormat:@"%p %@", (__bridge void *)o, [i isKindOfClass:[NSString class]] ? i : @"?"];
+}
+static id G4B_SGDisplay(id scene) {
+    id st = G4B_Obj(scene, @selector(settings));
+    SEL ds = NSSelectorFromString(@"sb_displayIdentityForSceneManagers");
+    return [st respondsToSelector:ds] ? G4B_Obj(st, ds) : nil;
+}
+static void G4B_SGProbe(id handle, id tracked, id destroyed) {
+    BP_Log(@"scenedestroy probe: handle %p tracks scene [%@], destroy of scene [%@]; display of destroyed scene %@, of tracked scene %@",
+           (__bridge void *)handle, G4B_SGDesc(tracked), G4B_SGDesc(destroyed), G4B_SGDisplay(destroyed), G4B_SGDisplay(tracked));
+    Class cc = NSClassFromString(@"SBMainSwitcherControllerCoordinator");
+    id coord = [(id)cc respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)cc, @selector(sharedInstance)) : nil;
+    NSMapTable *m = G4B_Ivar(coord, "_switcherControllersByWindowScene");
+    SEL ex = NSSelectorFromString(@"existingSceneHandleForSceneIdentity:");
+    SEL sid = NSSelectorFromString(@"identity");
+    id dIdent = [destroyed respondsToSelector:sid] ? G4B_Obj(destroyed, sid) : nil;
+    id tIdent = [tracked respondsToSelector:sid] ? G4B_Obj(tracked, sid) : nil;
+    if ([m isKindOfClass:[NSMapTable class]]) {
+        for (id ws in [[m keyEnumerator] allObjects]) {
+            id mgr = [ws respondsToSelector:@selector(sceneManager)] ? G4B_Obj(ws, @selector(sceneManager)) : nil;
+            id fid = [ws respondsToSelector:@selector(_fbsDisplayIdentity)] ? G4B_Obj(ws, @selector(_fbsDisplayIdentity)) : nil;
+            id hD = [mgr respondsToSelector:ex] && dIdent ? G4B_Obj1(mgr, ex, dIdent) : nil;
+            id hT = [mgr respondsToSelector:ex] && tIdent ? G4B_Obj1(mgr, ex, tIdent) : nil;
+            BP_Log(@"scenedestroy probe:   windowScene %p display %@ manager %p: handle for destroyed identity %p (it tracks %@), handle for tracked identity %p",
+                   (__bridge void *)ws, fid, (__bridge void *)mgr, (__bridge void *)hD, G4B_SGDesc(G4B_Ivar(hD, "_scene")), (__bridge void *)hT);
+        }
+    }
+    id drag = [coord respondsToSelector:@selector(draggingAppLayouts)] ? G4B_Obj(coord, @selector(draggingAppLayouts)) : nil;
+    BP_Log(@"scenedestroy probe:   dragging app layouts: %@", drag ? [drag description] : @"(none)");
+}
+
+%group G4B_SceneGuard
+
+%hook SBSceneHandle
+- (void)_noteSceneDestroyed:(id)destroyed {
+    id tracked = G4B_Ivar(self, "_scene");
+    if (tracked != destroyed) {
+        G4B_SGProbe(self, tracked, destroyed);
+        if (BP_OnName("y1_scenedestroyguard")) {
+            BP_Log(@"GUARD scene handle %p tracks scene [%@], destroy of scene [%@] ignored (stock would assert at SBSceneHandle.m:0x120 and clear the tracked scene); display of destroyed scene %@",
+                   (__bridge void *)self, G4B_SGDesc(tracked), G4B_SGDesc(destroyed), G4B_SGDisplay(destroyed));
+            return;
+        }
+    }
+    %orig;
+}
+%end
+
+%end
+
 void G4B_Setup(void) {
     if (!G4B_BuildMatches()) return;
     G4B_RegisterArrangementItem();
@@ -2320,6 +2384,7 @@ void G4B_Setup(void) {
     if (G4B_On("migrate"))   { %init(G4B_Migrate); }
     if (G4B_On("migrate") && G4B_On("migrate_stage")) { %init(G4B_MigrateStage); }
     if (G4B_On("focuslock")) { %init(G4B_FocusLock); G4B_InstallFocusDirect(); }
+    %init(G4B_SceneGuard);      // probe always; the skip itself is the switch y1_scenedestroyguard (default ON), checked per call
     BP_Log(@"group4b installed");
 }
 
