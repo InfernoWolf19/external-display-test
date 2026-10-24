@@ -1,12 +1,4 @@
 {
- "0.7.5+180.b2b596c": {
-  "date": "2026-10-17T19:30:50Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+180.b2b596c_iphoneos-arm64.deb",
-  "run": 180,
-  "sha": "b2b596c5d4e8bcc495c6985938bdcd946773476c",
-  "subject": "G2H: the crop mask of g2f_closecrop no longer clips the window shadow\u2026",
-  "version": "0.7.5+180.b2b596c"
- },
  "0.7.5+181.5ff2730": {
   "date": "2026-10-17T19:32:42Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+181.5ff2730_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "3d6977c9d47c8b0c867463b172c27998e79b11d6",
   "subject": "Item 3 (M4, M6, M8): P1SW.m ports the 16.2 home gesture scroll target, the default role scale / frame of SBDefaultImplementationsSwitcherModifier (with the fully occluded peeking centre the review missed) and the empty async rendering evaluation; switches p1_sw p1_homescroll p1_defroles p1_asynceval",
   "version": "0.7.9+251.3d6977c"
+ },
+ "0.7.9+252.f7e180d": {
+  "date": "2026-10-24T23:29:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+252.f7e180d_iphoneos-arm64.deb",
+  "run": 252,
+  "sha": "f7e180dfb0fd3fafa7af867877197c1ec7d86c64",
+  "subject": "Y4Home: alert items prefer the home screen's own window scene (SBAlertItem preferred activation scene, presenter resolver), widget gallery keyboard focus (switches y4_alertscene, y4_widgetfocus); DELTA-SWEEP SBIconController verdicts, Y3 sha",
+  "version": "0.7.9+252.f7e180d"
  }
 }
