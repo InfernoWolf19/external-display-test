@@ -379,14 +379,15 @@ static BOOL G1B_RT_StockCoversAll(id rt, NSArray *all) {
     gRtCovered = (maxFound != kRtNotFound && maxFound == all.count - 1);
     return gRtCovered;
 }
-// one log line per (kind, class, layout) and 2 s (the guard is asked ~1300 times during one pick)
-static void G1B_RT_GuardLog(NSString *key, NSString *msg) {
-    static NSString *lastKey; static double lastT; static unsigned suppressed;
+// one log line per (kind, class, layout, index) and 2 s (the guard is asked ~1300 times during one pick, ~54 times per layout pass in a window drag: specs/FINDINGS-DRAG-LOOP-0.7.9.md P1).
+// The suppression test comes FIRST and uses only scalars; the message is built by a block that runs only for a line that is really written (the old code formatted two NSStrings per query).
+static void G1B_RT_GuardLog(int kind, Class cls, const void *all, NSUInteger idx, NSString *(^msg)(void)) {
+    static int lastKind = -1; static Class lastCls; static const void *lastAll; static NSUInteger lastIdx; static double lastT; static unsigned suppressed;
     double now = CFAbsoluteTimeGetCurrent();
-    if (lastKey && [lastKey isEqualToString:key] && now - lastT < 2.0) { suppressed++; return; }
+    if (lastKind == kind && lastCls == cls && lastAll == all && lastIdx == idx && now - lastT < 2.0) { suppressed++; return; }
     if (suppressed) BP_Log(@"g1b: routing162: (%u identical lines suppressed)", suppressed);
-    suppressed = 0; lastKey = key; lastT = now;
-    BP_Log(@"%@", msg);
+    suppressed = 0; lastKind = kind; lastCls = cls; lastAll = all; lastIdx = idx; lastT = now;
+    BP_Log(@"%@", msg());
 }
 
 // Guard 1 (NOT in 16.2): the child's last filtered layout is not an element of the context list although the child owns layouts, AND no other child's stock answer covers the last context index (so
@@ -401,9 +402,9 @@ static unsigned long long G1B_RT_GuardLastIndex(id rt, id modifier) {
     NSArray *all = G1B_SUPER(id, gRtSuper, rt, ap, (struct objc_super *, SEL));
     if (![all isKindOfClass:[NSArray class]]) return kRtNotFound;
     if (G1B_RT_StockCoversAll(rt, all)) {                               // stock answer (this child owns nothing) is complete: keep it
-        if (BP_LogEnabled()) G1B_RT_GuardLog([NSString stringWithFormat:@"cover|%@|%p", NSStringFromClass(object_getClass(modifier)), (__bridge void *)all],
-                [NSString stringWithFormat:@"g1b: routing162: %@ owns no index (its last layout is a half that is not in the %lu layout context list, the unsplit merged stage); another child already covers the last index, stock answer kept",
-                    NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count]);
+        if (BP_LogEnabled()) G1B_RT_GuardLog(0, object_getClass(modifier), (__bridge const void *)all, 0, ^NSString *{
+            return [NSString stringWithFormat:@"g1b: routing162: %@ owns no index (its last layout is a half that is not in the %lu layout context list, the unsplit merged stage); another child already covers the last index, stock answer kept",
+                    NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count]; });
         return kRtNotFound;
     }
     id old = G1B_RT_Current(rt);
@@ -415,13 +416,13 @@ static unsigned long long G1B_RT_GuardLastIndex(id rt, id modifier) {
     for (NSUInteger i = all.count; i-- > 0;) {
         NSArray *cut = ((NSArray *(*)(id, SEL, id, NSArray *, id))objc_msgSend)(del, fs, rt, @[ all[i] ], modifier);
         if ([cut isKindOfClass:[NSArray class]] && cut.lastObject == last) {
-            if (BP_LogEnabled()) G1B_RT_GuardLog([NSString stringWithFormat:@"cut|%@|%p|%lu", NSStringFromClass(object_getClass(modifier)), (__bridge void *)all, (unsigned long)i],
-                    [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list (%lu layouts) and no other child covers the last index, taken from layout %lu: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, (unsigned long)i, all[i]]);
+            if (BP_LogEnabled()) G1B_RT_GuardLog(1, object_getClass(modifier), (__bridge const void *)all, i, ^NSString *{
+                return [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list (%lu layouts) and no other child covers the last index, taken from layout %lu: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, (unsigned long)i, all[i]]; });
             return i;
         }
     }
-    if (BP_LogEnabled()) G1B_RT_GuardLog([NSString stringWithFormat:@"none|%@|%p", NSStringFromClass(object_getClass(modifier)), (__bridge void *)all],
-            [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list and was cut from none of its %lu layouts: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, last]);
+    if (BP_LogEnabled()) G1B_RT_GuardLog(2, object_getClass(modifier), (__bridge const void *)all, 0, ^NSString *{
+        return [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list and was cut from none of its %lu layouts: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, last]; });
     return kRtNotFound;
 }
 
