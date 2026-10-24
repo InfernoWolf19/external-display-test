@@ -53,6 +53,7 @@
 @interface SpringBoard : NSObject @end
 @interface SBSceneManager : NSObject @end
 @interface SBSceneHandle : NSObject @end
+@interface SBWorkspaceTransientOverlayTransitionContext : NSObject @end
 @interface SBMousePointerManager : NSObject @end
 @interface _SBDisplayAssertionStack : NSObject @end
 @interface SBDisplayAssertionCoordinator : NSObject @end
@@ -2309,6 +2310,74 @@ static void G4B_WrapDidSelectContainer(void) {      // 16.2 didSelectContainer:m
 }
 
 // ================================================================================================================
+// 5. Remote alert Siri exception (`siriexception`)                                                          [DEVICE-UNPROVEN]
+// ================================================================================================================
+// -[SpringBoard remoteTransientOverlaySessionManager:performPresentationRequest:forSession:]  16.0 0x1c5ee6ca0, 16.2 0x1c735acb8.
+// 16.0 reads [request shouldDismissSiri] inside the transition builder block (0x1c5ee756c) and hands it to setShouldDismissSiriUponPresentation: on the
+// SBWorkspaceTransientOverlayTransitionContext.  16.2 computes it before the block (0x1c735b18c..0x1c735b1ec): from the display's presenter (the request's
+// window scene, else the scene of the default overlay display; windowSceneManager windowSceneForDisplayIdentity:) it takes the topmost presented view controller, cast
+// to SBRemoteTransientOverlayViewController, and when that controller isActivatingForSiri and the request's target predicate matches it
+// (predicate matchesOverlayViewController: = [vc isPresentedByProcess: process], 0x1c7787e8c) the flag is cleared: presenting an overlay of the process that
+// presented Siri must not dismiss that Siri.  16.0 clients can only build a process target (16.0 SpringBoardServices has no targetPredicate), so the predicate is
+// reduced to [target targetProcess]; no process -> no predicate -> no exception (16.2 the same).
+// The hook arms a thread-local for the duration of the stock call; the setter hook passes NO instead of YES when armed and the exception applies.  The decision
+// is logged once per presentation that asked to dismiss Siri.
+static __thread int tG4BSiriState;       // 0 = not armed, 1 = armed and exception applies, 2 = armed, exception does not apply
+static BOOL G4B_SiriExceptionApplies(id request, id session, NSString **why) {
+    SEL pt = NSSelectorFromString(@"presentationTarget"), tp = NSSelectorFromString(@"targetProcess");
+    id target = G4B_Obj(request, pt);
+    id process = G4B_Obj(target, tp);
+    if (!process) { if (why) *why = @"target has no process (no predicate)"; return NO; }
+    id ws = G4B_Obj(request, NSSelectorFromString(@"windowScene"));
+    id dcfg = G4B_Obj(ws, NSSelectorFromString(@"_fbsDisplayConfiguration"));
+    if (!dcfg) {
+        Class mw = NSClassFromString(@"SBWorkspace");
+        id main = [(id)mw respondsToSelector:NSSelectorFromString(@"mainWorkspace")] ? G4B_Obj((id)mw, NSSelectorFromString(@"mainWorkspace")) : nil;
+        id mgr = G4B_Obj(main, NSSelectorFromString(@"transientOverlayPresentationManager"));
+        dcfg = G4B_Obj(mgr, NSSelectorFromString(@"defaultDisplayConfigurationForTransientOverlayPresentation"));
+    }
+    id ident = G4B_Obj(dcfg, NSSelectorFromString(@"identity"));
+    id app = [UIApplication sharedApplication];
+    id wsm = G4B_Obj(app, NSSelectorFromString(@"windowSceneManager"));
+    id scene = G4B_Obj1(wsm, NSSelectorFromString(@"windowSceneForDisplayIdentity:"), ident);
+    id presenter = G4B_Obj(scene, NSSelectorFromString(@"transientOverlayPresenter"));
+    id top = G4B_Obj(presenter, NSSelectorFromString(@"topmostPresentedViewController"));
+    Class rc = NSClassFromString(@"SBRemoteTransientOverlayViewController");
+    if (!top || !rc || ![top isKindOfClass:rc]) { if (why) *why = [NSString stringWithFormat:@"topmost presented controller %@ of display %@ is not a remote overlay", top ? NSStringFromClass([top class]) : @"nil", ident]; return NO; }
+    if (!G4B_Bool(top, NSSelectorFromString(@"isActivatingForSiri"))) { if (why) *why = @"topmost remote overlay is not activating for Siri"; return NO; }
+    BOOL m = ((BOOL (*)(id, SEL, id))objc_msgSend)(top, NSSelectorFromString(@"isPresentedByProcess:"), process);
+    if (why) *why = m ? @"the Siri overlay on that display was presented by the target's process" : @"the Siri overlay on that display belongs to another process";
+    return m;
+}
+
+%group G4B_SiriExc
+
+%hook SpringBoard
+- (BOOL)remoteTransientOverlaySessionManager:(id)manager performPresentationRequest:(id)request forSession:(id)session {
+    int prev = tG4BSiriState;
+    tG4BSiriState = 0;
+    if (BP_OnName("siriexception") && G4B_Bool(request, NSSelectorFromString(@"shouldDismissSiri"))) {
+        NSString *why = nil;
+        BOOL apply = G4B_SiriExceptionApplies(request, session, &why);
+        tG4BSiriState = apply ? 1 : 2;
+        BP_Log(@"siri exception: request %p asks to dismiss Siri; %@ -> %s", (__bridge void *)request, why ?: @"?", apply ? "Siri is NOT dismissed (16.2 behaviour)" : "Siri is dismissed (unchanged)");
+    }
+    BOOL r = %orig;
+    tG4BSiriState = prev;
+    return r;
+}
+%end
+
+%hook SBWorkspaceTransientOverlayTransitionContext
+- (void)setShouldDismissSiriUponPresentation:(BOOL)v {
+    if (tG4BSiriState == 1 && v) { BP_Log(@"siri exception: setShouldDismissSiriUponPresentation: YES replaced by NO"); v = NO; }
+    %orig(v);
+}
+%end
+
+%end
+
+// ================================================================================================================
 // P6 (FINDINGS-DRAG-LOOP-0.7.9 section 6): -[SBSceneHandle _noteSceneDestroyed:] (SpringBoardUI 16.0 0x1f1185b3c, SBSceneHandle.m)               [DEVICE-UNPROVEN]
 // ================================================================================================================
 // Stock 16.0 body:  NSAssert(_manuallyControlsLifecycle) (line 0x11f); NSAssert(_scene == destroyed) (line 0x120); [self _setScene:nil].
@@ -2384,6 +2453,7 @@ void G4B_Setup(void) {
     if (G4B_On("migrate"))   { %init(G4B_Migrate); }
     if (G4B_On("migrate") && G4B_On("migrate_stage")) { %init(G4B_MigrateStage); }
     if (G4B_On("focuslock")) { %init(G4B_FocusLock); G4B_InstallFocusDirect(); }
+    if (G4B_On("siriexception")) { %init(G4B_SiriExc); }
     %init(G4B_SceneGuard);      // probe always; the skip itself is the switch y1_scenedestroyguard (default ON), checked per call
     BP_Log(@"group4b installed");
 }
