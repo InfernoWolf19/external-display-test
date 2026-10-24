@@ -1,12 +1,4 @@
 {
- "0.7.5+176.8cadfda": {
-  "date": "2026-10-17T18:31:40Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+176.8cadfda_iphoneos-arm64.deb",
-  "run": 176,
-  "sha": "8cadfda070309c74231770ee94b2eb2e887132cb",
-  "subject": "CLOSE-CROP spec / OPEN-ISSUES: real 16.2 does not clamp the role fram\u2026",
-  "version": "0.7.5+176.8cadfda"
- },
  "0.7.5+178.764be4c": {
   "date": "2026-10-17T19:13:22Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+178.764be4c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "7e3599cec68ccf72af194c1e5b372667eac16966",
   "subject": "Item 2: P1VC.m ports the remaining SBFluidSwitcherViewController / item container / footer / layer methods of REVIEW-CORE 2.1 (keyboard shortcut actions, keyboard suppression, plus button, dock level assertion, overlay frame, focus, footer tap, layer transform); switches p1_vc*",
   "version": "0.7.9+248.7e3599c"
+ },
+ "0.7.9+249.32d525e": {
+  "date": "2026-10-24T23:17:20Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+249.32d525e_iphoneos-arm64.deb",
+  "run": 249,
+  "sha": "32d525e94e03674c7e518d29460314b74158550f",
+  "subject": "Item 5 (G6 A1 remote alert targets): decision with call chain; 16.2 Siri exception of performPresentationRequest:forSession: ported over the 16.0 body (switch siriexception, decision logged)",
+  "version": "0.7.9+249.32d525e"
  }
 }
