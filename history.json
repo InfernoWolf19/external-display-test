@@ -1,12 +1,4 @@
 {
- "0.7.4+168.c84e199": {
-  "date": "2026-10-17T13:16:48Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+168.c84e199_iphoneos-arm64.deb",
-  "run": 168,
-  "sha": "c84e199ce87ad2692e2bf229d77cc6e91ffa8b76",
-  "subject": "G2E: home swipe close - the closing card's instant gesture tracking (\u2026",
-  "version": "0.7.4+168.c84e199"
- },
  "0.7.5+169.8824678": {
   "date": "2026-10-17T13:25:36Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+169.8824678_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "11803ed6caa84b474a1ffd203cf788ad08fb1a0f",
   "subject": "FINDINGS-SLOWTOUCH-0.7.9: slow touch after hours without external display: log audit, ranked hypotheses, always-on diagnostics plan, user test order",
   "version": "0.7.9+234.11803ed"
+ },
+ "0.7.9+235.19f760d": {
+  "date": "2026-10-24T18:04:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+235.19f760d_iphoneos-arm64.deb",
+  "run": 235,
+  "sha": "19f760d1302406732e12c11dadb7496913acd002",
+  "subject": "G4B: G4B_LPMInv reads the invalidated flag lock-free (no main-thread dispatch_sync onto SBLockedPointerManager's queue, FINDINGS-SLOWTOUCH S2)",
+  "version": "0.7.9+235.19f760d"
  }
 }

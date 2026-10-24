@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 235, commit 19f760d: G4B: G4B_LPMInv reads the invalidated flag lock-free (no main-thread dispatch_sync onto SBLockedPointerManager's queue, FINDINGS-SLOWTOUCH S2)
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+235.19f760d
+Installed-Size: 3856
+Filename: debs/com.infernowolf19.backport162_0.7.9+235.19f760d_iphoneos-arm64.deb
+Size: 1235562
+MD5sum: 659a67831f08e6221297b6eacec5a4e1
+SHA1: 1ca08ca75ee18109df723aa15a236f25e78c644e
+SHA256: aee10741d8e5e599f9f61cedd042697ca37e244de2b267014ac11ae29bfc8dab
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 234, commit 11803ed: FINDINGS-SLOWTOUCH-0.7.9: slow touch after hours without external display: log audit, ranked hypotheses, always-on diagnostics plan, user test order
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1247,23 +1269,3 @@ Size: 912832
 MD5sum: 2170b3602fc6b63ed06d9fa7535939f0
 SHA1: ceb1f0b09c5e411dbd91909dd12ac8286ceea793
 SHA256: 3d6195dbf4d4a3fe6ad13e364c8fae358f20862c361653f31965a26d53cc7fff
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 168, commit c84e199: G2E: home swipe close - the closing card's instant gesture tracking (…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+168.c84e199
-Installed-Size: 2540
-Filename: debs/com.infernowolf19.backport162_0.7.4+168.c84e199_iphoneos-arm64.deb
-Size: 904326
-MD5sum: 2961307f1f1546bd2b7a3f08fd8b6d80
-SHA1: af3e1e575ccf4a88ff246f0a4161cd9775711c49
-SHA256: 4a04af838a65ff6d6a8228d3f7009fe8462a56ec81e0a795d7c218fa897d87a4
