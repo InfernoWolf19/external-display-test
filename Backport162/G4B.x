@@ -1270,11 +1270,9 @@ static void G4B_SyncOnQueue(dispatch_queue_t q, dispatch_block_t body) {
     dispatch_queue_set_specific(q, kLPMQueueMark, (__bridge void *)q, NULL);
     dispatch_sync(q, body);
 }
-static BOOL G4B_LPMInv(id m) {                               // snapshot taken with dispatch_sync on the manager's queue, like 16.2
-    dispatch_queue_t q = (dispatch_queue_t)G4B_Ivar(m, "_stateSerialQueue");
-    __block BOOL inv = NO;
-    G4B_SyncOnQueue(q, ^{ inv = [objc_getAssociatedObject(m, kLPMInv) boolValue]; });
-    return inv;
+static BOOL G4B_LPMInvOnQueue(id m);
+static BOOL G4B_LPMInv(id m) {                               // lock-free read of the associated flag (set to YES exactly once, in invalidate; never reset): a main-thread dispatch_sync onto the manager's _stateSerialQueue can wait on backboardd and freeze touch handling (specs/FINDINGS-SLOWTOUCH-0.7.9.md S2)
+    return G4B_LPMInvOnQueue(m);
 }
 static BOOL G4B_LPMInvOnQueue(id m) { return [objc_getAssociatedObject(m, kLPMInv) boolValue]; }
 static void G4B_SetObjIvar(id obj, const char *name, id v) {
