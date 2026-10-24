@@ -727,6 +727,7 @@ static void P1_MgrSetActive(id self, SEL _cmd, id txn) {
 }
 
 // ------------------------------------------------------------------------------------------------ SBMainSwitcherControllerCoordinator (16.2 0x1c76e2bd4 / 0x1c76e2164 / 0x1c76e2bcc / 0x1c76e2d00)
+extern void G1C_FinishStaleGestureChildren(void);       // G1C.x
 static char kP1CoordTxn, kP1CoordSuspended;
 static NSArray *P1_AllControllers(id coord) {
     NSMutableArray *out = [NSMutableArray array];
@@ -751,7 +752,15 @@ static void P1_CoordSetActive(id self, SEL _cmd, id txn) {
     NSUInteger n = 0;
     for (id sc in P1_AllControllers(self)) { P1_V1(P1_S0(sc, "gestureManager"), "setActiveGestureTransaction:", txn); n++; }
     tBroadcast--;
-    if (BP_LogEnabled()) BP_Log(@"p1: coordinator %@ gesture transaction %p to %lu gesture manager(s)", txn ? @"hands out" : @"clears the", (__bridge void *)txn, (unsigned long)n);
+    if (BP_LogEnabled()) BP_Log(@"p1: coordinator %@ gesture transaction %p to %lu gesture manager(s)", txn ? @"hands out" : @"clears the", (__bridge void *)(txn ?: old), (unsigned long)n);
+    if (!txn && old) {
+        // FINDINGS-DRAG-LOOP P4: one run loop turn after the shared transaction ended (all transition events delivered) a gesture root that still holds its 'Gesture' child is stale
+        __weak id weakCoord = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            id c = weakCoord;
+            if (c && !objc_getAssociatedObject(c, &kP1CoordTxn)) G1C_FinishStaleGestureChildren();
+        });
+    }
 }
 static void P1_CoordTxnDone(id self, SEL _cmd, id txn) {
     if (objc_getAssociatedObject(self, &kP1CoordTxn) == txn) P1_CoordSetActive(self, 0, nil);

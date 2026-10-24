@@ -151,6 +151,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | p1_ancillary | `-[SBSwitcherController _ancillaryTransitionRequestForTransitionRequest:]` 16.2 body (the source display gets a request without the windows that moved away; also used by the app launch transactions) | `p1_ancillary` |
 | p1_modupdate | modifier requested gesture updates go through the 16.2 `handleFluidSwitcherGestureManager:didUpdateGesture:` entry (cross-display window drag event conversion) | `p1_modupdate` |
 | p1_asyncdrag | 16.2 `_updateAsyncRenderingAndResizesHostedContext`: no async rendering for a window that is being dragged, resizes hosted content with Stage Manager | `p1_asyncdrag` |
+| g1c_endguard | when the shared gesture transaction ends, a gesture root that still holds its 'Gesture' child (its display got no transition, e.g. the other display of a drag inside one display) finishes and removes it instead of waiting for the next drag (logged `GUARD(end)`; the begin-time GUARD stays) | `g1c_endguard` |
 
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 

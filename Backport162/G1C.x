@@ -411,8 +411,26 @@ static id G1C_GR_GM(id self) {
 // the base class removes finished children. A gesture whose touch ended on another display never produced that transition here (crash log: pointer drag whose touch up came
 // from the external scene, no end event, no transition; the next drag crashed the root), so the child was still active when the next gesture began.
 // Last-line guard (16.2 itself has none): finish and remove the stale child exactly like the base class' removal pass would, and say so in the debug log.
+// Gesture roots that have begun a gesture (weak): the shared gesture transaction (P1Drag.m) calls G1C_FinishStaleGestureChildren() when it ends, so the root of a display whose
+// drag produced no transition (FINDINGS-DRAG-LOOP-0.7.9.md 2.6 / P4: a drag that starts and ends on display B transitions only B) does not keep its 'Gesture' child until the next drag.
+static NSHashTable *gGestureRoots;
+static void G1C_GR_Note(id root) {
+    if (!gGestureRoots) gGestureRoots = [NSHashTable weakObjectsHashTable];
+    [gGestureRoots addObject:root];
+}
+void G1C_FinishStaleGestureChildren(void) {
+    if (!G1C_ON() || !BP_OnName("g1c_endguard") || !gGestureRoots) return;
+    for (id root in [gGestureRoots allObjects]) {
+        id stale = G1C_GR_GM(root);
+        if (!stale) continue;
+        if (BP_LogEnabled()) BP_Log(@"GUARD(end) gesture root %@: the gesture transaction ended and its 'Gesture' child %@ is still active (no transition reached this display) -> finishing and removing it", G1C_DbgCls(root), G1C_DbgCls(stale));
+        if (G1C_Resp(stale, @selector(setState:))) G1B_SendVLL(stale, @selector(setState:), 1);
+        if (G1C_Resp(root, @selector(removeChildModifier:))) G1B_SendV1(root, @selector(removeChildModifier:), stale);
+    }
+}
 static void G1C_GR_Guard(id self, id event) {
     if (!G1C_ON() || !event || !G1C_Resp(event, @selector(phase)) || G1B_SendLL0(event, @selector(phase)) != 1) return;
+    G1C_GR_Note(self);
     if (!G1C_Resp(event, @selector(gestureType)) || !G1C_Resp(self, @selector(gestureType)) || G1B_SendLL0(event, @selector(gestureType)) != G1B_SendLL0(self, @selector(gestureType))) return;
     id stale = G1C_GR_GM(self);
     if (!stale) return;
