@@ -557,6 +557,7 @@ void X9_Setup(void);                   // X9Pin.x (gap G9: pinOnButtonDown for t
 void X3_Setup(void);                   // X3Mode.x (gap G3: monitor mode choice with the 16.2 criteria, published base mode, logical scale of display type 2)
 void X2_Setup(void);                   // X2Overlay.x (gap G2: Control Centre / Spotlight / voice control / passcode / in-call overlays on the embedded display)
 void RPT_Setup(void);                  // RPT.x (Send logs: SpringBoard half, answers the request of the Settings pane; switch report)
+void Z1_Setup(void);                   // Z1Diag.x (always-on diagnostics: stall watchdog, touch latency probe, vitals, state dump; switch diag)
 
 // ---------------------------------------------------------------- entry
 
@@ -597,5 +598,6 @@ void RPT_Setup(void);                  // RPT.x (Send logs: SpringBoard half, an
         X2_Setup();                    // gap G2: overlays on the embedded display (prefersEmbeddedDisplayPresentation of five overlay classes + the 16.2 consumers, switches embedoverlay / embedoverlay_envmode)
         X3_Setup();                    // gap G3: monitor mode choice (switches modecriteria, modebase, modelogical)
         RPT_Setup();                   // Send logs (Settings pane > SpringBoard: collects + uploads the logs only when the user taps the button; switch report)
+        Z1_Setup();                    // always-on diagnostics (stall watchdog, touch latency probe, vitals, state dump; switch diag; specs/DIAG-0.7.9.md)
     }
 }
