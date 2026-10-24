@@ -246,6 +246,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y3_scenectl | (Y3StatusBar.x) the coordinator queries that take a window scene (status bar insets / style requests / overlay data / actions / in-app hidden / avoidance frame, focused icon shortcut action, neighbouring app layout) use the layout of THAT scene's switcher controller (16.0: the active display's, so the status bar of the monitor was built from the other display's layout) |
 | y3_avoidorient | (Y3StatusBar.x) Stage Manager: the status bar avoidance frame asks the layout state's own interface orientation (16.2) |
 | y3_containersb | (Y3StatusBar.x) container status bar hide like 16.2: level 6 settings assertion held only in app / switcher mode, alpha change with UIStatusBarStyleAnimationParameters instead of a UIView animation |
+| y4_alertscene | (Y4Home.x) the hide / delete confirmation of a home screen icon prefers the iPad home screen's own window scene (16.2 SBAlertItem preferred activation scene; 16.0: whichever display was active) |
+| y4_widgetfocus | (Y4Home.x) widget gallery: the home screen window steals keyboard focus while it is up and becomes key (16.2), assertion released when it goes away |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
