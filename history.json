@@ -1,12 +1,4 @@
 {
- "0.7.5+183.ed3eb1b": {
-  "date": "2026-10-17T19:39:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+183.ed3eb1b_iphoneos-arm64.deb",
-  "run": 183,
-  "sha": "ed3eb1bbf5a5f6fe58f7e58ee8fec88e220a9060",
-  "subject": "G1B: routing guard 1 keeps the stock answer when it already covers ev\u2026",
-  "version": "0.7.5+183.ed3eb1b"
- },
  "0.7.5+184.7df60c8": {
   "date": "2026-10-17T23:23:51Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+184.7df60c8_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "1636f3be73795ff7e472cea18c7aafb7b1c0cc3d",
   "subject": "Item 4: disconnect extras decoded row by row; discguard guards the three 16.2 signal blocks by address, discextras ports the in-window-scene overlay dismissal and the switcher view controller invalidate teardown; PiP, assertion coordinator, kfc, nilock, non-interactive policy shown equal",
   "version": "0.7.9+254.1636f3b"
+ },
+ "0.7.9+255.678d17d": {
+  "date": "2026-10-24T23:32:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+255.678d17d_iphoneos-arm64.deb",
+  "run": 255,
+  "sha": "678d17d584296e3630e58a1cf0b9d94635c31a88",
+  "subject": "Docs: REVIEW-PLUMBING rows and GAPS pointer updated for the display leftovers (items 1 to 8)",
+  "version": "0.7.9+255.678d17d"
  }
 }
