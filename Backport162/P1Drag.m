@@ -896,6 +896,7 @@ static void P1_Add(const char *cls, const char *sel, IMP imp, const char *types,
 }
 
 extern void P1VC_Setup(void);
+extern void P1SW_Setup(void);
 void P1Drag_Setup(void) {
     if (!BP_OnName("p1_drag")) { BP_Log(@"p1: switch p1_drag is off at launch: the 16.0 gesture transaction stays (transactions created later still honour the switches)"); }
     const char *T = "SBFluidSwitcherGestureWorkspaceTransaction", *M = "SBFluidSwitcherGestureManager", *C = "SBMainSwitcherControllerCoordinator", *S = "SBSwitcherController", *V = "SBFluidSwitcherViewController";
@@ -944,6 +945,7 @@ void P1Drag_Setup(void) {
 
     P1_Replace(V, "gestureHandlingModifierRequestsUpdate:", (IMP)P1_VCModUpdate, &sOrigGestureModUpdate);
     P1_Replace(V, "_updateAsyncRenderingAndResizesHostedContext", (IMP)P1_VCAsync, &sOrigAsyncRendering);
+    P1SW_Setup();                                                               // P1SW.m: M4 default role frame / scale, M6 async rendering evaluation, M8 home gesture scroll target (item 3)
     P1VC_Setup();                                                               // P1VC.m: the remaining view controller / container / footer / layer methods (item 2)
     BP_Log(@"p1: installed (transaction %p, manager %p, coordinator %p)", (__bridge void *)NSClassFromString([NSString stringWithUTF8String:T]), (__bridge void *)NSClassFromString([NSString stringWithUTF8String:M]), (__bridge void *)NSClassFromString([NSString stringWithUTF8String:C]));
 }

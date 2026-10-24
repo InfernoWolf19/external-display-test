@@ -159,6 +159,10 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | p1_kbsuppress | 16.2 `_acquireKeyboardSuppressionAssertionForMode:` (hosted keyboard state of the view controller's own window scene, 3 argument manager method) | `p1_kbsuppress` |
 | p1_vcmisc | 16.2 `_updatePlusButtonPresence`, `_leafAppLayoutInLiveContentOverlaysWithLayoutRole:`, `_updateFloatingDockWindowLevelAssertion`, `_updateHomeScreenPointerInteractions`, `overlayAccessoryViewFrameForIconOverlayView:fullPresented:`, `_performModifierIconViewVisibilityUpdateResponse:` | `p1_vcmisc` |
 | p1_container | 16.2 item container (`initWithCoder:`, `didUpdateFocusInContext:`), footer view (`_handleTapGestureRecognizer:`, `_makeSubtitleLabel`) and layer (`setTransform:` skips an equal transform) | `p1_container` |
+| p1_sw | umbrella of P1SW.m (M4, M6, M8 of REVIEW-CORE, specs/CORE-LEFTOVERS-0.7.9.md section 3) | `p1_sw` |
+| p1_homescroll | 16.2 `SBHomeGestureToSwitcherSwitcherModifier -_appLayoutToScrollToDuringTransition` (from the home screen with Stage Manager the scroll target is the first window of the first pile; the mode-3 index 0 tweak is skipped) | `p1_homescroll` |
+| p1_defroles | 16.2 `SBDefaultImplementationsSwitcherModifier` role scale (model based: occluded / partially occluded windows) and role frame (peeking centre, partially occluded overlap shift) with Stage Manager on; risky for close / zoom, own switch | `p1_defroles` |
+| p1_asynceval | 16.2 `SBMainSwitcherControllerCoordinator -_evaluateAsynchronousRenderingEnablement` is empty (async rendering only through the per-display VC flags); can change transition timing | `p1_asynceval` |
 
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 

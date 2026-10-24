@@ -90,3 +90,47 @@ Per method (16.2 address; what the 16.0 method did differently; result):
 | `+[SBSwitcherChamoisSettings settingsControllerModule]` | 0x1c78c28dc: five more rows (Pile Compacting Factor, Rasterize Scaled Apps, Switcher Height for Icons and Labels Under Each Pile, Switcher Pile Card Peek Amount, Swticher Layout) in the internal Settings (PTSettings) UI | **not ported**: the module is only reachable from the Internal Settings app on an internal install; the settings keys behind the rows are consumed where they exist (G2 chamois settings port); nothing a retail device can show. Listed, not silent |
 
 Switches: `p1_vc` (all), `p1_vckeys`, `p1_kbsuppress`, `p1_vcmisc`, `p1_container`.
+
+## 3. M4 / M6 / M8: switcher modifier and coordinator leftovers (P1SW.m)  - ported, device-unverified
+
+All three are `class_replaceMethod` bodies decoded from the 16.2 disassembly; each checks its switch at call time and runs the saved 16.0 IMP when the kill file is present.
+Master switch `p1_sw` (nothing of this section is installed without it). Log: `p1sw:` (one install line at start-up, plus one line per one-time condition).
+
+### M8 `SBHomeGestureToSwitcherSwitcherModifier -_appLayoutToScrollToDuringTransition` (16.2 0x1c795038c, 16.0 0x1c6499a54)  - switch `p1_homescroll`
+* 16.2 reads `isChamoisWindowingUIEnabled` first. Start from the home screen (`_startingEnvironmentMode` +0x98 == 1) with Stage Manager: the first app layout of the FIRST
+  continuous expose identifier (`[[self appLayoutsForContinuousExposeIdentifier:[[self continuousExposeIdentifiersInSwitcher] firstObject]] firstObject]`, nil without an identifier);
+  16.0 (and 16.2 without Stage Manager) returns `[appLayouts firstObject]`.
+* Every other mode: identical arithmetic (index of `_appLayout` +0x88, `_liftOffVelocity.x` +0xa0 / `_liftOffTranslation.x` +0xb0 against `velocityXThresholdForUnconditionalArcSwipe` x
+  `_SBMainScreenPointsPerMillimeter` and half of the container width, clamp to 0..count-1) except the 16.0 selection tweak (mode 3 and new index 0 -> `w8 ^ 1`), which 16.2 skips with
+  Stage Manager. The decode of the branch ladder was re-verified against both disassemblies (the two differ only by the chamois test).
+* `_SBMainScreenPointsPerMillimeter` is a private static of SpringBoard (not exported). Reimplemented from its block (0x1c6396bb0): `(MGCopyAnswer("main-screen-pitch") / 25.4) / [[UIScreen mainScreen] nativeScale]`, once.
+* Test: with Stage Manager on, open the switcher from the home screen with the home gesture (swipe up and hold): the first pile / window of the strip order is the scroll target,
+  not simply the first app layout. A mode-3 (app switcher) swipe at index 0 no longer snaps to index 1.
+* Unproven: the effect (needs device); the guard for an empty layout list returns nil (16.2 would raise on `objectAtIndex:-1`).
+
+### M4 `SBDefaultImplementationsSwitcherModifier` role scale and frame (16.2 0x1c788a930 / 0x1c788a480; 16.0 0x1c63df6b8 / 0x1c63df34c)  - switch `p1_defroles`
+* `scaleForLayoutRole:inAppLayout:`: 16.0 is the constant 1.0. 16.2 with Stage Manager: model scale of the item (fully occluded -> `stageOcclusionDodgingPeekScale`, partially occluded ->
+  `partiallyOccludedStageScaleForItemWithSize:[model sizeForItem:]`, else 1.0). Without Stage Manager 1.0.
+* `frameForLayoutRole:inAppLayout:withBounds:`: environment 2 / 3, Stage Manager off and role 4 are untouched (saved 16.0 body). The model path adds (a) **the peeking centre of a fully
+  occluded item** (`unoccludedPeekingCenterForItem:` unless CGPointZero) - this was NOT in the review, it is in the 16.2 disassembly - and (b) for layouts with two or more items the
+  scale about the overlapping anchor of a partially occluded item (`origin -= (centerForItem - overlappingScaleAnchorCenterForItem) * (1 - scale)`), then `UIRectIntegralWithScale`.
+* The three model / attribute selectors of 16.2 (`unoccludedPeekingCenterForItem:`, `overlappingScaleAnchorCenterForItem:`, `partiallyOccludedStageScaleForItemWithSize:`) do not exist in
+  16.0; G2 adds them. When any is missing the 16.0 bodies stay (one `p1sw: defroles` line says so).
+* This is the **risky one for the regression guard** (close by home swipe, zoom, peek): the FullScreen floor (`G1C_FS_RoleScale` / `G1C_FS_RoleFrame`) answers these queries first in the Stage
+  Manager chains, so the default is reached only by chains without a floor above it (HomeToGrid pass-through, transition modifiers whose parent does not answer). It has its own switch so
+  that one kill file (`Backport162.off.p1_defroles`) isolates it.
+* Test: close an app by home swipe from a stage with several overlapping windows, and drag a window over a stage so that others are partially occluded / peeking: the other windows keep
+  their position and scale during the transition (16.2 shows them shifted toward their overlap anchor and scaled by the partial occlusion scale, not at full size). If the close animation
+  of a single window changed, switch `p1_defroles` off first.
+* Unproven: all of it on device.
+
+### M6 `SBMainSwitcherControllerCoordinator -_evaluateAsynchronousRenderingEnablement` (16.2 0x1c76e1fcc is a bare `ret`; 16.0 0x1c624ce08, 275 instructions)  - switch `p1_asynceval`
+* The 16.0 body toggled `setAsyncRenderingDisabled:` of the main display's switcher VC and the layer target's async rendering mode around every transition into / out of the switcher
+  (unlocked environment mode 3). 16.2 does it only through the per-display VC response flags, `_updateAsyncRenderingAndResizesHostedContext` (ported in P1Drag.m, M7 / `p1_asyncdrag`).
+  The port makes the coordinator method a no-op (one `p1sw:` line the first time).
+* Behaviour risk (the reason it has its own switch): the timing of every switcher transition on the iPad can change (synchronous vs asynchronous rendering of the switcher window during
+  the transition). Look for: snapshot / window flicker at the start or end of the app switcher open and close, and a change of animation smoothness. Kill file
+  `Backport162.off.p1_asynceval` restores the 16.0 body.
+* Unproven: that 16.0's VC code needs nothing the 16.0 coordinator body used to set (the 16.2 VC reads the response flags only).
+
+Switches: `p1_sw` (all), `p1_homescroll`, `p1_defroles`, `p1_asynceval`.

@@ -100,7 +100,7 @@ Totals: 246 methods, 53 without a direct hit = 12 runtime-only, 7 ported under a
 
 ## 4. Open defects (ranked)
 
-**Resolution status (specs/CORE-LEFTOVERS-0.7.9.md):** H1 RESOLVED (P1Drag.m, device-unverified), M1 RESOLVED (note: the 16.2 body calls the VC's own `handleFluidSwitcherGestureManager:didUpdateGesture:`, not a coordinator broadcast), M7 RESOLVED (note: async rendering is switched OFF for dragged layouts). Other items: see the leftovers doc as they land.
+**Resolution status (specs/CORE-LEFTOVERS-0.7.9.md):** H1 RESOLVED (P1Drag.m, device-unverified), M1 RESOLVED (note: the 16.2 body calls the VC's own `handleFluidSwitcherGestureManager:didUpdateGesture:`, not a coordinator broadcast), M7 RESOLVED (note: async rendering is switched OFF for dragged layouts). M2 and M3 RESOLVED (P1VC.m, section 2 of the leftovers doc; M2 needs `-[SBWindowScene medusaHostedKeyboardWindowController]` from G3B, otherwise its fallbacks apply), the 18 listed VC / container / footer / layer methods RESOLVED (one equivalent, one internal-settings-only not ported), M4 RESOLVED (P1SW.m `p1_defroles`; the disassembly shows one more 16.2 delta than this review: the peeking centre of a fully occluded item), M6 RESOLVED (P1SW.m `p1_asynceval`, no-op like 16.2, timing risk documented), M8 RESOLVED (P1SW.m `p1_homescroll`). Other items: see the leftovers doc as they land.
 
 ### HIGH (impact high, not fixed - fix not local or not safe)
 
