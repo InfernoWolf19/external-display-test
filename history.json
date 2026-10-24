@@ -1,12 +1,4 @@
 {
- "0.7.5+182.58c233e": {
-  "date": "2026-10-17T19:38:17Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+182.58c233e_iphoneos-arm64.deb",
-  "run": 182,
-  "sha": "58c233e999bf35a9eaf9d013857fdb57a5c0a1a7",
-  "subject": "G2I: dump every item container (visible and hidden) during the pick t\u2026",
-  "version": "0.7.5+182.58c233e"
- },
  "0.7.5+183.ed3eb1b": {
   "date": "2026-10-17T19:39:16Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+183.ed3eb1b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "92a22e89d60c7f42ad991abce4ed2e792c8e7f5f",
   "subject": "Item 3 (M5): P1SW.m orientation family on the 16.0 traits code: SBLayoutState unknownAllowed methods, scene settings orientation, coordinate space / scene entity frame with the layout state orientation under Stage Manager, 2 argument transition context update; switch p1_orient; SBSwitcherTraitsAssistant rework documented as not ported",
   "version": "0.7.9+253.92a22e8"
+ },
+ "0.7.9+254.1636f3b": {
+  "date": "2026-10-24T23:30:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+254.1636f3b_iphoneos-arm64.deb",
+  "run": 254,
+  "sha": "1636f3be73795ff7e472cea18c7aafb7b1c0cc3d",
+  "subject": "Item 4: disconnect extras decoded row by row; discguard guards the three 16.2 signal blocks by address, discextras ports the in-window-scene overlay dismissal and the switcher view controller invalidate teardown; PiP, assertion coordinator, kfc, nilock, non-interactive policy shown equal",
+  "version": "0.7.9+254.1636f3b"
  }
 }
