@@ -218,6 +218,8 @@ static id BP_KeyboardFocusController(void) {
     NSHashTable *_connected;                                // weak set of scenes that "have sniffers" (16.2: _sceneToEventSniffers keys)
     NSHashTable *_activeObservers;                          // weak
     NSHashTable *_pointerObservers;                         // weak
+    NSUInteger _flipProbeCount;                             // P5 step 1 (specs/FINDINGS-DRAG-LOOP-0.7.9.md): flips of the active pointer display since the last pointer touch down (log-only probe)
+    __unsafe_unretained id _probeTouch;                     // the touch whose move is being handled (valid only inside handleSendEvent:)
 }
 
 - (instancetype)init {
@@ -314,7 +316,9 @@ static id BP_KeyboardFocusController(void) {
             BOOL activePhase = (ph == 4) ? NO : (ph != 2);
             if (same || !activePhase) continue;
             if (BP_G4_Type(t) != 0) continue;                         // 16.2 0x1c795f0d4: `cbz type` is the qualifying case, literally
+            _probeTouch = t;
             [self _pointerMovedInScene:ws];
+            _probeTouch = nil;
             break;
         }
     } @catch (NSException *e) {
@@ -327,6 +331,7 @@ static id BP_KeyboardFocusController(void) {
     if (!ws) return;
     BP_Log(@"coordinator: %s pointer touch down window scene %p (previous %p)", _touchDownWS ? "re-setting" : "setting", ws, _touchDownWS);
     _touchDownWS = ws;
+    _flipProbeCount = 0;
 }
 - (void)_pointerTouchUp {
     if (!_touchDownWS) return;
@@ -341,6 +346,18 @@ static id BP_KeyboardFocusController(void) {
     _activePointerWS = ws;
     if (ws != old) {
         BP_Log(@"coordinator: updating active pointer display from %p to %p", old, ws);
+        if (BP_LogEnabled() && _flipProbeCount < 12) {       // P5 step 1, log only: where is the pointer (in the view of the event's touch) when the display flips while a button is held?
+            _flipProbeCount++;
+            id t = _probeTouch;
+            id v = [t respondsToSelector:@selector(view)] ? [t view] : nil;
+            id w = [v respondsToSelector:@selector(window)] ? [v window] : ([t respondsToSelector:@selector(window)] ? [t window] : nil);
+            CGPoint loc = [t respondsToSelector:@selector(locationInView:)] ? [t locationInView:v] : CGPointZero;
+            CGRect wb = [w respondsToSelector:@selector(bounds)] ? [w bounds] : CGRectZero;
+            unsigned int cid = [w respondsToSelector:@selector(_contextId)] ? ((unsigned int (*)(id, SEL))objc_msgSend)(w, @selector(_contextId)) : 0;
+            BP_Log(@"coordinator: flip probe %lu/12: ws %p touchDownWS %p (press scene %s) location in view (%.1f, %.1f) window %p bounds (%.0f, %.0f, %.0f x %.0f) %s contextID %u phase %lld",
+                   (unsigned long)_flipProbeCount, ws, _touchDownWS, (_touchDownWS == ws) ? "= event scene" : "!= event scene", loc.x, loc.y, w, wb.origin.x, wb.origin.y, wb.size.width, wb.size.height,
+                   CGRectContainsPoint(wb, loc) ? "location INSIDE the window" : "location OUTSIDE the window", cid, t ? (long long)[t phase] : -1LL);
+        }
         for (id o in [_pointerObservers allObjects])
             if ([o respondsToSelector:@selector(pointerDidMoveToFromWindowScene:toWindowScene:)])
                 [o pointerDidMoveToFromWindowScene:old toWindowScene:ws];
