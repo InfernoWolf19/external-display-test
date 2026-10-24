@@ -419,7 +419,11 @@ static void BPD_Serve(mach_msg_header_t *hdr) {
         if (sk != KERN_SUCCESS) {
             BPD_Log(@"reply send failed 0x%x", sk);
             mach_msg_destroy(&reply.Head);
+        } else {
+            BPD_Log(@"clonemirror reply sent: id %u, MIG code %d", (unsigned)reply.Head.msgh_id, (int)kr);   // SpringBoard logs "<<< reply id ..." for the same request
         }
+    } else {
+        BPD_Log(@"clonemirror: no reply port in the request, MIG code %d not delivered", (int)kr);
     }
 }
 

@@ -76,3 +76,26 @@ Sequence diff of the two bodies: only the "arbiter advice" route differs. Both t
 
 ### Test recipe / unproven
 With `Backport162.debug`: open Control Centre on the iPad with an app on the monitor in front (both displays keep the keyboard of the monitor app; `[x7] acquireKeyboardSuppression... for display` line names the display). OverlayUI (share sheet, Siri-less overlays) cases: only observable by the two `[x7] OverlayUI` lines. Nothing ran; the hook of the filter is a pre-check with the 16.0 body as fallback, so a wrong decision can at worst call the 16.0 answer or ignore one OverlayUI request.
+
+---------------------------------------------------------------------------------------------------
+
+## 6. Clone mirroring transport (client G4B.x `G4B_SendCloneMsg`, daemon BBD.x `BPD_Serve`) : the "reply id 0" line explained and made truthful
+
+Device evidence (0.7.9 logs, `u1/L1.txt`, `3-Backport162.log.1`): the daemon marker shows `install result: updateClone 1 handler 1 ...`, the daemon logs `clone mirror mode request:2 destinationDisplay:... from pid:...`, `updateClone ... prevailing mode 2`, `clone mirror mode remove ...`, and the user confirms that switching mirror / extended works. SpringBoard nevertheless logged on every request `clonemirror: reply id 0 instead of 6004840 (... hook is not installed ...)` and `... 6004841` for the remove request.
+
+### Why the reply id read 0 (proven from the numbers of that log)
+
+`mach_msg(MACH_SEND_MSG | MACH_RCV_MSG, ...)` sends and receives in ONE buffer, its first argument. The old code passed `&req.Head` but read the answer from a different local struct `rep` that nothing ever wrote (zero filled): so `rep.Head.msgh_id` was always 0 and `rep.RetCode` 0, whatever came back. The real reply had arrived and had overwritten `req.Head.msgh_id`: the request ids are 0x5b9fa0 = 6004640 (set) / 0x5b9fa1 = 6004641 (remove), the MIG reply id is request + 100 = 6004740 / 6004741, and the failing comparison printed `req.Head.msgh_id + 100` AFTER the overwrite = 6004740 + 100 = 6004840 and 6004741 + 100 = 6004841: exactly the two numbers of the log (with an untouched request id the line would have said 6004740 / 6004741). So: the daemon half (handler hook, reply built like libdispatch's demux: bits `& 0x1f` = MOVE_SEND_ONCE, id + 100, 0x24 byte reply with NDR and return code) was correct; the check read the wrong memory. No message was lost and the feature worked; only the diagnostic lied. (The earlier review's "an answer CAN arrive" was right; the miss was in the client's receive.)
+
+### What changed (behaviour of the request / reply exchange is unchanged)
+
+* G4B.x: the answer is read from the receive buffer itself (`G4BCloneRep` view of `req`): reply id must be sent id + 100, not complex, at least 0x24 bytes; the MIG code is returned from it (before, always 0, so a daemon refusal such as KERN_NO_ACCESS or MIG_BAD_ARGUMENTS would have been invisible; now it is logged as `refused (MIG code N)`).
+* Truthful lines (BP_Log): `clonemirror: >>> SET request for <uuid> mode N (msg id 6004640, size S) sent to com.apple.backboard.display.services`, `clonemirror: <<< reply id 6004740, MIG code 0 after T ms`; failures start with `clonemirror: XXX` and say what failed (`XXX answer is not the reply of this request: msg id N (expected M; 70 = send-once notification = the Backport162BBD handler hook is not installed ...)` is now only printed when the id really differs).
+* Bounded retry of the service look-up when the first look-up fails (6 attempts, 250 ms apart, on the serial send queue; logs `attempt N failed kr=...`, `succeeded on attempt N`, and a final `XXX no port ... the request is lost`). Normal case: first attempt succeeds, no delay.
+* BBD.x: the daemon logs `clonemirror reply sent: id 6004740, MIG code 0` (or `reply send failed 0x..`, or `no reply port in the request`) next to its existing request line, so one request now shows as: SpringBoard `>>>` -> daemon `clone mirror mode request` -> `updateClone ... prevailing mode` -> daemon `clonemirror reply sent` -> SpringBoard `<<<`.
+
+### Chain facts re-verified (unchanged)
+Service `com.apple.backboard.display.services`; request ids 0x5b9fa0 / 0x5b9fa1 are above the stock subsystem (start id 6001000 = 0x5b9168, 16.0 routines end below 0x5b9fa0 per the earlier review); stock handler 0x100026d14 forwards the dispatch_mach message to `dispatch_mach_mig_demux` with the subsystem as context, our handler hook (`reason == 2`, context == subsystem) answers the two ids and passes everything else to the stock handler; message layout 24 header + 8 NDR + 4 length + padded uuid (+4 mode); reply 0x24 bytes.
+
+### Test recipe
+With `Backport162.debug`: switch mirroring on / off in Settings > Display. Expect in the log, in this order, for each change: `clonemirror: >>> SET ...`, daemon `clone mirror mode request`, `updateClone ... prevailing mode`, daemon `clonemirror reply sent: id 6004740, MIG code 0`, `clonemirror: <<< reply id 6004740, MIG code 0 after N ms`. Any `XXX` line names the failing step.

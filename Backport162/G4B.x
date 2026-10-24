@@ -28,6 +28,7 @@
 #import <objc/message.h>
 #import <mach/mach.h>
 #import <mach/mig.h>
+#import <mach/mach_time.h>
 #import <mach-o/dyld.h>
 #import <dispatch/dispatch.h>
 #import <dlfcn.h>
@@ -257,21 +258,46 @@ extern kern_return_t bootstrap_look_up(mach_port_t bp, const char *service_name,
 #define G4B_MSG_REMOVE 0x5b9fa1u
 
 // One routine call to backboardd (16.2: _BKSDisplaySetCloneMirroringModeForDestinationDisplay / ...Remove...).
-// Returns the MIG return code, or -1 if the request never got a MIG reply (no port, or the daemon does not serve the id).
+// Returns the MIG return code, or a negative value if the request never got a MIG reply: -1 bad arguments, -2 no port (look-up
+// failed after the bounded retries), -3 mach_msg failed / timed out, -4 the answer is not the reply of this request.
+//
+// ROOT CAUSE of the "reply id 0 instead of 6004840" lines of the 0.7.9 device logs (static proof, the numbers of the log):
+// mach_msg(MACH_SEND_MSG | MACH_RCV_MSG) sends AND receives in the SAME buffer (the first argument, `req`).  The code before this
+// fix read the answer from a different, never written struct (`rep`, all zero), so every reply looked like "id 0, code 0".
+// The reply HAD arrived: it overwrote req.Head.msgh_id with 6004740 (= 0x5b9fa0 + 100, the correct MIG reply id of the set request)
+// and the failing comparison printed req.Head.msgh_id + 100 = 6004840 (remove: 6004641 + 100 = 6004741 -> printed 6004841);
+// with the request id 0x5b9fa0 = 6004640 untouched the expected value would have been 6004740.  The daemon side was right all along
+// (its log shows the request, the prevailing mode and the removal).  The reply is now read from the receive buffer itself.
 static int G4B_SendCloneMsg(NSString *uuid, unsigned mode, BOOL remove) {
     const char *u = uuid.UTF8String;
     if (!u) return -1;
     size_t ulen = strlen(u) + 1;
     if (ulen < 2 || ulen > 256) return -1;
     mach_port_t svc = MACH_PORT_NULL;
-    kern_return_t lk = bootstrap_look_up(bootstrap_port, "com.apple.backboard.display.services", &svc);
-    if (lk != KERN_SUCCESS || svc == MACH_PORT_NULL) { BP_Log(@"clonemirror: bootstrap_look_up(com.apple.backboard.display.services) failed kr=0x%x", lk); return -2; }
-    struct {
+    kern_return_t lk = KERN_FAILURE;
+    for (int attempt = 1; attempt <= 6; attempt++) {                 // bounded retry (about 1.25 s): backboardd may not have registered its display service yet right after a userspace restart, the request itself must not be lost then
+        svc = MACH_PORT_NULL;
+        lk = bootstrap_look_up(bootstrap_port, "com.apple.backboard.display.services", &svc);
+        if (lk == KERN_SUCCESS && svc != MACH_PORT_NULL) {
+            if (attempt > 1) BP_Log(@"clonemirror: bootstrap look-up of com.apple.backboard.display.services succeeded on attempt %d", attempt);
+            break;
+        }
+        BP_Log(@"clonemirror: bootstrap_look_up(com.apple.backboard.display.services) attempt %d failed kr=0x%x", attempt, lk);
+        usleep(250 * 1000);
+    }
+    if (lk != KERN_SUCCESS || svc == MACH_PORT_NULL) { BP_Log(@"clonemirror: XXX no port of com.apple.backboard.display.services after 6 attempts: the request is lost (kr=0x%x)", lk); return -2; }
+    typedef struct {
         mach_msg_header_t Head;
         NDR_record_t NDR;
         uint32_t len;
         char data[256 + 8];
-    } req;
+    } G4BCloneReq;
+    typedef struct {                                                 // what the daemon answers (generated MIG reply shape, BPDReply in BBD.x) plus the default receive trailer
+        mach_msg_header_t Head;
+        NDR_record_t NDR;
+        kern_return_t RetCode;
+    } G4BCloneRep;
+    G4BCloneReq req;
     memset(&req, 0, sizeof req);
     uint32_t padded = (uint32_t)((ulen + 3) & ~3u);
     memcpy(req.data, u, ulen);
@@ -283,22 +309,29 @@ static int G4B_SendCloneMsg(NSString *uuid, unsigned mode, BOOL remove) {
     req.Head.msgh_size = (mach_msg_size_t)(0x24 + padded + (remove ? 0 : 4));
     req.Head.msgh_remote_port = svc;
     req.Head.msgh_local_port = rp;
-    req.Head.msgh_id = remove ? G4B_MSG_REMOVE : G4B_MSG_SET;
-    struct { mach_msg_header_t Head; NDR_record_t NDR; kern_return_t RetCode; mach_msg_trailer_t T; char pad[64]; } rep;
-    memset(&rep, 0, sizeof rep);
+    mach_msg_id_t sentId = remove ? G4B_MSG_REMOVE : G4B_MSG_SET;
+    req.Head.msgh_id = sentId;
+    mach_msg_size_t sendSize = req.Head.msgh_size;
+    BP_Log(@"clonemirror: >>> %@ request for %@ mode %u (msg id %u, size %u) sent to com.apple.backboard.display.services", remove ? @"REMOVE" : @"SET", uuid, mode, (unsigned)sentId, (unsigned)sendSize);
+    uint64_t t0 = mach_absolute_time();
+    // One call sends the request and receives the answer INTO THE SAME BUFFER (`req`): the answer is read from it below.
     kern_return_t kr = mach_msg(&req.Head, MACH_SEND_MSG | MACH_RCV_MSG | MACH_SEND_TIMEOUT | MACH_RCV_TIMEOUT,
-                                req.Head.msgh_size, (mach_msg_size_t)sizeof rep, rp, 2500, MACH_PORT_NULL);     // 2.5 s: backboardd handles its display service on one workloop, 0.5 s timed out while it was busy with a display connect (the request is executed anyway; only the reply was lost)
+                                sendSize, (mach_msg_size_t)sizeof req, rp, 2500, MACH_PORT_NULL);     // 2.5 s: backboardd handles its display service on one workloop, 0.5 s timed out while it was busy with a display connect (the request is executed anyway; only the reply was lost)
     mach_port_deallocate(mach_task_self(), svc);
     if (kr != KERN_SUCCESS) {
         if (kr == MACH_RCV_TIMED_OUT || kr == MACH_SEND_TIMED_OUT) mig_dealloc_reply_port(rp);
-        BP_Log(@"clonemirror: mach_msg kr=0x%x (%s)", kr, (kr == MACH_RCV_TIMED_OUT || kr == MACH_SEND_TIMED_OUT) ? "timed out: backboardd busy or not serving the id" : "failed");
+        BP_Log(@"clonemirror: XXX mach_msg kr=0x%x (%s)", kr, (kr == MACH_RCV_TIMED_OUT || kr == MACH_SEND_TIMED_OUT) ? "timed out: backboardd busy or not serving the id" : "failed");
         return -3;
     }
-    if (rep.Head.msgh_id != req.Head.msgh_id + 100) {                // 0x46 = send-once notification: backboardd destroyed the request unanswered = its handler hook is not active (the stock demux drops unknown ids)
-        BP_Log(@"clonemirror: reply id %u instead of %u (a send-once notification 70 means the Backport162BBD handler hook is not installed in this backboardd)", (unsigned)rep.Head.msgh_id, (unsigned)req.Head.msgh_id + 100u);
+    const G4BCloneRep *rep = (const G4BCloneRep *)(const void *)&req;                // the received reply
+    mach_timebase_info_data_t tb; mach_timebase_info(&tb);
+    unsigned long long ms = (unsigned long long)((mach_absolute_time() - t0) * tb.numer / tb.denom / 1000000ull);
+    if (rep->Head.msgh_id != sentId + 100 || (rep->Head.msgh_bits & MACH_MSGH_BITS_COMPLEX) || rep->Head.msgh_size < sizeof(G4BCloneRep)) {   // 70 = send-once notification: backboardd destroyed the request unanswered = its handler hook is not active (the stock demux drops unknown ids)
+        BP_Log(@"clonemirror: XXX answer is not the reply of this request: msg id %u (expected %u; 70 = send-once notification = the Backport162BBD handler hook is not installed in this backboardd), size %u", (unsigned)rep->Head.msgh_id, (unsigned)sentId + 100u, (unsigned)rep->Head.msgh_size);
         return -4;
     }
-    return rep.RetCode;
+    BP_Log(@"clonemirror: <<< reply id %u, MIG code %d after %llu ms", (unsigned)rep->Head.msgh_id, (int)rep->RetCode, ms);
+    return (int)rep->RetCode;
 }
 
 // Transport of the 16.2 client: the request goes to the daemon, nothing else.  A daemon that does not serve the routines (the
