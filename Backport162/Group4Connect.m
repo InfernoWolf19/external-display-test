@@ -39,6 +39,10 @@
 #import <sys/stat.h>
 #import <time.h>
 #import <unistd.h>
+#import <mach-o/dyld.h>
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#endif
 #if defined(__APPLE__)
 #import <sys/sysctl.h>
 #import <os/lock.h>
@@ -632,7 +636,7 @@ static id hk_niInit(id self, SEL _cmd, id ref, id provider, id binder) {
 // displayIdentityDidDisconnect: (before the new policy callback displayControllerWillDisconnect:sceneManager:); the
 // connect completion block (0x1c73bbfac) and the presentation-update blocks (0x1c73be154 / 0x1c73be3c0) test it and
 // bail.  A flag in an associated object plays the signal's role.
-// PARTIAL: only the two entry points are guarded (the blocks themselves cannot be edited).
+// The two entry points are guarded below, and the three blocks that 16.2 gives the signal test are guarded by address (BP4_InstallBlockGuards).
 
 static const char kBP4DiscKey = 0;
 static BOOL BP4_Disconnected(id c) { return c && [objc_getAssociatedObject(c, &kBP4DiscKey) boolValue]; }
@@ -653,6 +657,68 @@ static void hk_ctrlRunUpdate(id self, SEL _cmd, id label, id completion) {
     // may be waiting for it, so that path always runs.
     if (!completion && BP4_On(BP4_DISCGUARD) && BP4_Disconnected(self)) { BP4_Log(@"discguard: skip root update %@", label); return; }
     orig_ctrlRunUpdate(self, _cmd, label, completion);
+}
+
+// The three blocks that 16.2 gives the signal test (by address; 16.0 SpringBoard, verified by prologue words; the blocks are static functions, so a function hook is the
+// only way).  Same semantics as 16.2: a block that finds the controller disconnected logs and ends without doing its work (16.2 connect completion 0x1c73bbfac
+// "log, then return" before `_connectionCompleted = YES`; 16.2 presentation update blocks 0x1c73be154 / 0x1c73be3c0 test the controller's signal next to the update's
+// own cancel signal and end the same way).  16.0 equivalents: connect completion 0x1c5f47584 (controller at block+0x20), update blocks 0x1c5f4972c / 0x1c5f49970
+// (update signal at +0x20, controller at +0x28).  Not ported: the second signal test in the middle of 16.2's block 2 (after updateWithPreferences:, invalidates the
+// transition assertion): both ends run on the main thread, only a re-entrant disconnect from inside updateWithPreferences: could flip it.
+typedef void (*BP4MSHookFn)(void *symbol, void *replace, void **result);
+#if __has_feature(ptrauth_calls)
+#define BP4_STRIP(p)   ptrauth_strip((p), ptrauth_key_function_pointer)
+#define BP4_SIGN(p)    ptrauth_sign_unauthenticated(ptrauth_strip((p), ptrauth_key_function_pointer), ptrauth_key_function_pointer, 0)
+#else
+#define BP4_STRIP(p)   (p)
+#define BP4_SIGN(p)    (p)
+#endif
+static void (*orig_blkConnect)(void *);
+static void (*orig_blkUpdate2)(void *);
+static void (*orig_blkUpdate3)(void *);
+static id BP4_BlockController(void *blk, size_t off) { return (__bridge id)*(void *const *)((const char *)blk + off); }
+static void hk_blkConnect(void *blk) {
+    id c = BP4_BlockController(blk, 0x20);
+    if (BP4_On(BP4_DISCGUARD) && BP4_Disconnected(c)) { BP4_Log(@"discguard: connect completion block ran after the disconnect of %p, skipped (16.2 behaviour)", (__bridge void *)c); return; }
+    orig_blkConnect(blk);
+}
+static void hk_blkUpdate2(void *blk) {
+    id c = BP4_BlockController(blk, 0x28);
+    if (BP4_On(BP4_DISCGUARD) && BP4_Disconnected(c)) { BP4_Log(@"discguard: presentation update block (apply) skipped, controller %p is disconnected (16.2 behaviour)", (__bridge void *)c); return; }
+    orig_blkUpdate2(blk);
+}
+static void hk_blkUpdate3(void *blk) {
+    id c = BP4_BlockController(blk, 0x28);
+    if (BP4_On(BP4_DISCGUARD) && BP4_Disconnected(c)) { BP4_Log(@"discguard: presentation update block (finish) skipped, controller %p is disconnected (16.2 behaviour)", (__bridge void *)c); return; }
+    orig_blkUpdate3(blk);
+}
+static BOOL BP4_HookBlock(const char *what, uintptr_t vm, const uint32_t *words, int n, intptr_t slide, BP4MSHookFn hookFn, void *repl, void **origOut) {
+    uintptr_t entry = vm + (uintptr_t)slide;
+    if (memcmp((const void *)entry, words, (size_t)n * 4) != 0) { BP4_Log(@"discguard: block %s prologue mismatch at %p, not installing", what, (void *)entry); return NO; }
+    void *orig = NULL;
+    hookFn(BP4_STRIP((void *)entry), BP4_STRIP(repl), &orig);
+    if (!orig) { BP4_Log(@"discguard: block %s: MSHookFunction returned no trampoline, not installing", what); return NO; }
+    *origOut = BP4_SIGN(orig);
+    BP4_Log(@"discguard: block %s hooked at %p (16.0 0x%lx)", what, (void *)entry, (unsigned long)vm);
+    return YES;
+}
+static void BP4_InstallBlockGuards(void) {
+    static const uint32_t kConnect[7] = { 0xd503237f, 0xd100c3ff, 0xa9014ff4, 0xa9027bfd, 0x910083fd, 0xaa0003f3, 0xf9401008 };
+    static const uint32_t kUpd2[7]    = { 0xd503237f, 0xd10283ff, 0xa90757f6, 0xa9084ff4, 0xa9097bfd, 0x910243fd, 0xaa0003f3 };
+    static const uint32_t kUpd3[7]    = { 0xd503237f, 0xd10143ff, 0xa90257f6, 0xa9034ff4, 0xa9047bfd, 0x910103fd, 0xaa0003f3 };
+    BP4MSHookFn hookFn = (BP4MSHookFn)dlsym(RTLD_DEFAULT, "MSHookFunction");
+    if (!hookFn) { BP4_Log(@"discguard: MSHookFunction not available, the three presentation blocks are not guarded (entry points still are)"); return; }
+    intptr_t slide = 0;
+    BOOL found = NO;
+    for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
+        const char *nm = _dyld_get_image_name(i);
+        if (nm && strstr(nm, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
+    }
+    if (!found) { BP4_Log(@"discguard: SpringBoard.framework image not found, blocks not guarded"); return; }
+    BOOL a = BP4_HookBlock("connect completion", 0x1c5f47584, kConnect, 7, slide, hookFn, (void *)hk_blkConnect, (void **)&orig_blkConnect);
+    BOOL b = BP4_HookBlock("update apply", 0x1c5f4972c, kUpd2, 7, slide, hookFn, (void *)hk_blkUpdate2, (void **)&orig_blkUpdate2);
+    BOOL c = BP4_HookBlock("update finish", 0x1c5f49970, kUpd3, 7, slide, hookFn, (void *)hk_blkUpdate3, (void **)&orig_blkUpdate3);
+    BP4_Log(@"discguard: block guards connect %d apply %d finish %d (slide 0x%lx)", (int)a, (int)b, (int)c, (long)slide);
 }
 
 // ================================================================================================================
@@ -756,6 +822,7 @@ static void BP4_Install(void) {
     BP4_Hook(ctl, @selector(displayIdentityDidDisconnect:), (IMP)hk_ctrlDidDisconnect, (IMP *)&orig_ctrlDidDisconnect);
     BP4_Hook(ctl, @selector(_enqueueEvaluateAndApplyPresentationUpdate), (IMP)hk_ctrlEnqueue, (IMP *)&orig_ctrlEnqueue);
     BP4_Hook(ctl, @selector(_runRootUpdateTransactionWithLabel:completion:), (IMP)hk_ctrlRunUpdate, (IMP *)&orig_ctrlRunUpdate);
+    if (BP4_On(BP4_DISCGUARD)) BP4_InstallBlockGuards();      // evaluated once at launch: with Backport162.off.discguard the blocks are not touched
 
     // --- provmap
     BP4_Hook("SBSceneHostingDisplayControllerProvider", @selector(displayManager:didDisconnectIdentity:), (IMP)hk_provDidDisconnect, (IMP *)&orig_provDidDisconnect);

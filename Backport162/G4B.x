@@ -53,6 +53,8 @@
 @interface SpringBoard : NSObject @end
 @interface SBSceneManager : NSObject @end
 @interface SBSceneHandle : NSObject @end
+@interface SBTransientOverlayPresentationManager : NSObject @end
+@interface SBTransientOverlayDismissalRequest : NSObject @end
 @interface SBWorkspaceTransientOverlayTransitionContext : NSObject @end
 @interface SBMousePointerManager : NSObject @end
 @interface _SBDisplayAssertionStack : NSObject @end
@@ -2378,6 +2380,97 @@ static BOOL G4B_SiriExceptionApplies(id request, id session, NSString **why) {
 %end
 
 // ================================================================================================================
+// 4b. Disconnect extras (`discextras`)                                                                         [DEVICE-UNPROVEN]
+// ================================================================================================================
+// REVIEW-PLUMBING "16.2 disconnect extras", decoded one by one (16.0 / 16.2):
+//  * SBTransientOverlayPresentationManager -windowSceneDidDisconnect:  0x1c616ca94 / 0x1c75f45c0: the same walk (presenter of the scene, dismiss everything, drop the
+//    presenter, dismiss the paired remote overlays); 16.2 builds the first request with +dismissalRequestForAllViewControllersInWindowScene:scene (16.0 uses
+//    ...ForAllViewControllers; both class methods exist in 16.0) and performs it with performDismissalRequest:outerCompletionHandler:nil (16.0 performDismissalRequest:).
+//    PORTED below: the 16.0 body runs unchanged while a thread-local holds the scene; the class method hook answers with the in-window-scene request.
+//  * SBFluidSwitcherViewController -invalidate  0x1c5fc335c / 0x1c743bc98: 16.0 only invalidates the live content overlay coordinator; 16.2 also runs the teardown that
+//    16.0 does in -dealloc (0x1c5fbcc50: default center removeObserver:, page content provider / scroll view / snapshot cache delegates nil, iconManager searchGesture
+//    removeObserver:, the invalidatable ivars) and adds the removal of the search presenter observation, then sets _isInvalidated.  A switcher view controller that
+//    outlives its disconnected scene (a transition still holds it) therefore kept observing; PORTED below as a hook after the 16.0 body (by ivar name, idempotent with
+//    the later dealloc).  _isInvalidated has no ivar in 16.0 (the 16.2 observers of SBAppInteractionEventSourceManager / systemPointerInteractionManager that it also
+//    removes do not exist in 16.0, there is nothing to remove).
+//  * SBPIPController -_windowSceneDidDisconnect: 0x1c64721cc / 0x1c7927a24 and SBWindowScenePIPManager -windowSceneDidDisconnect: 0x1c5ecab4c / 0x1c733e3c8: decoded,
+//    EQUAL end state (move the contexts of the scene to the active display scene, drop three map entries); 16.2 only restructures the loop (per context either move or
+//    _updateOffScreenHyperregionComposersForContext:, instead of one _updateOffScreenHyperregionComposers after the removals).  Not ported, nothing to change.
+//  * SBDisplayAssertionCoordinator -rootDisplayDidDisconnect: 0x1c633af88 / 0x1c77de838: 16.0 already calls it from -[SBDisplayManager displayMonitor:willDisconnectIdentity:]
+//    (0x1c64d53e4); the 16.2 body differs by one log line and by the delegate callout selector (assertionCoordinator:updatedAssertionPreferences:oldPreferences:forDisplay:,
+//    an internal protocol change whose receiver in 16.0 implements the 16.0 selector).  Nothing to port.
+//  * kfc -windowSceneDidDisconnect: 0x1c77c3b14: complete in Group4Focus.x (the objc_direct callees `_removeSceneFromRecents...` and `_reevaluatePolicy...` are the 16.0
+//    -removeKeyboardFocusFromScene: and -updateKeyboardFocusDeferringRules (a branch to the same code); the per-scene re-evaluation 16.2 skips is suppressed by the
+//    delegate's own suppression assertion that is held during the whole call).
+static __thread __unsafe_unretained id tG4BDiscScene;
+
+static void G4B_FluidTeardown(id vc) {
+    SEL rs = NSSelectorFromString(@"_removeSearchPresenterObservation");
+    if ([vc respondsToSelector:rs]) ((void (*)(id, SEL))objc_msgSend)(vc, rs);                         // 16.2 has the method; 16.0 never removes the observation
+    else {
+        Class ic = NSClassFromString(@"SBIconController");
+        id ctl = [(id)ic respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)ic, @selector(sharedInstance)) : nil;
+        id sp = G4B_Obj(ctl, NSSelectorFromString(@"searchPresenter"));
+        SEL rm = NSSelectorFromString(@"removeSearchPresenterObserver:");
+        if ([sp respondsToSelector:rm]) ((void (*)(id, SEL, id))objc_msgSend)(sp, rm, vc);
+    }
+    [[NSNotificationCenter defaultCenter] removeObserver:vc];
+    SEL sd = NSSelectorFromString(@"setDelegate:");
+    static const char *const kDelegateIvars[] = { "_pageContentViewProvider", "_scrollView", "_snapshotCache" };
+    for (size_t i = 0; i < sizeof kDelegateIvars / sizeof kDelegateIvars[0]; i++) {
+        id o = G4B_Ivar(vc, kDelegateIvars[i]);
+        if ([o respondsToSelector:sd]) ((void (*)(id, SEL, id))objc_msgSend)(o, sd, nil);
+    }
+    Class ic2 = NSClassFromString(@"SBIconController");
+    id ctl2 = [(id)ic2 respondsToSelector:@selector(sharedInstance)] ? G4B_Obj((id)ic2, @selector(sharedInstance)) : nil;
+    id gesture = G4B_Obj(G4B_Obj(ctl2, NSSelectorFromString(@"iconManager")), NSSelectorFromString(@"searchGesture"));
+    SEL ro = NSSelectorFromString(@"removeObserver:");
+    if ([gesture respondsToSelector:ro]) ((void (*)(id, SEL, id))objc_msgSend)(gesture, ro, vc);
+    SEL inv = NSSelectorFromString(@"invalidate");
+    static const char *const kInvalidatables[] = { "_stateCaptureInvalidatable", "_chamoisWindowingUIEnabledObserver", "_chamoisWindowingUIEverEnabledObserver", "_chamoisDefaultsObserver", "_wallpaperRequireAssertion" };
+    for (size_t i = 0; i < sizeof kInvalidatables / sizeof kInvalidatables[0]; i++) {
+        Ivar iv = class_getInstanceVariable(object_getClass(vc), kInvalidatables[i]);
+        if (!iv) continue;
+        id o = object_getIvar(vc, iv);
+        if ([o respondsToSelector:inv]) ((void (*)(id, SEL))objc_msgSend)(o, inv);
+        object_setIvar(vc, iv, nil);
+    }
+}
+
+%group G4B_DiscExtras
+
+%hook SBTransientOverlayPresentationManager
+- (void)windowSceneDidDisconnect:(id)scene {
+    __unsafe_unretained id prev = tG4BDiscScene;
+    tG4BDiscScene = BP_OnName("discextras") ? scene : nil;
+    %orig;
+    tG4BDiscScene = prev;
+}
+%end
+
+%hook SBTransientOverlayDismissalRequest
++ (id)dismissalRequestForAllViewControllers {
+    __unsafe_unretained id scene = tG4BDiscScene;
+    if (scene && [self respondsToSelector:NSSelectorFromString(@"dismissalRequestForAllViewControllersInWindowScene:")]) {
+        BP_Log(@"discextras: transient overlays of the disconnecting window scene %p are dismissed with the in-window-scene request (16.2)", (__bridge void *)scene);
+        return G4B_Obj1((id)self, NSSelectorFromString(@"dismissalRequestForAllViewControllersInWindowScene:"), scene);
+    }
+    return %orig;
+}
+%end
+
+%hook SBFluidSwitcherViewController
+- (void)invalidate {
+    %orig;
+    if (!BP_OnName("discextras")) return;
+    BP_Log(@"discextras: switcher view controller %p invalidated, observers and delegates released now (16.2 -invalidate)", (__bridge void *)self);
+    G4B_FluidTeardown(self);
+}
+%end
+
+%end
+
+// ================================================================================================================
 // P6 (FINDINGS-DRAG-LOOP-0.7.9 section 6): -[SBSceneHandle _noteSceneDestroyed:] (SpringBoardUI 16.0 0x1f1185b3c, SBSceneHandle.m)               [DEVICE-UNPROVEN]
 // ================================================================================================================
 // Stock 16.0 body:  NSAssert(_manuallyControlsLifecycle) (line 0x11f); NSAssert(_scene == destroyed) (line 0x120); [self _setScene:nil].
@@ -2454,6 +2547,7 @@ void G4B_Setup(void) {
     if (G4B_On("migrate") && G4B_On("migrate_stage")) { %init(G4B_MigrateStage); }
     if (G4B_On("focuslock")) { %init(G4B_FocusLock); G4B_InstallFocusDirect(); }
     if (G4B_On("siriexception")) { %init(G4B_SiriExc); }
+    if (G4B_On("discextras")) { %init(G4B_DiscExtras); }
     %init(G4B_SceneGuard);      // probe always; the skip itself is the switch y1_scenedestroyguard (default ON), checked per call
     BP_Log(@"group4b installed");
 }
