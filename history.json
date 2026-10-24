@@ -1,12 +1,4 @@
 {
- "0.7.5+174.5c3af21": {
-  "date": "2026-10-17T18:23:58Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+174.5c3af21_iphoneos-arm64.deb",
-  "run": 174,
-  "sha": "5c3af2161e05600cb9a467f2cf72b4a599293df3",
-  "subject": "PTR/G2G: stuck resize arrows (clear client hover regions at the point\u2026",
-  "version": "0.7.5+174.5c3af21"
- },
  "0.7.5+175.24816c1": {
   "date": "2026-10-17T18:29:51Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+175.24816c1_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "780b69ab995aca575dc4d96ef11b68eea3d9be24",
   "subject": "P3: BP_Log keeps its fd open (rotation / replacement test once a second, one write per line), BP_OnName / BP_OptInName / BP_On lock-free with a pointer-keyed slot cache, switch table overflow is logged once",
   "version": "0.7.9+240.780b69a"
+ },
+ "0.7.9+247.aeac0c2": {
+  "date": "2026-10-24T23:12:34Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+247.aeac0c2_iphoneos-arm64.deb",
+  "run": 247,
+  "sha": "aeac0c2dd89d56fb848dec55321dcb2277d12da3",
+  "subject": "Fix CI: P5 probe read the window bounds through a selector the file does not declare; message it with an explicit CGRect return cast",
+  "version": "0.7.9+247.aeac0c2"
  }
 }
