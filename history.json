@@ -1,12 +1,4 @@
 {
- "0.7.5+186.37ce511": {
-  "date": "2026-10-17T23:30:21Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+186.37ce511_iphoneos-arm64.deb",
-  "run": 186,
-  "sha": "37ce511e7dc38120f63cbf7419ce5e97ff2bfe92",
-  "subject": "POINTER-HOVER spec: do not quote an unverified count",
-  "version": "0.7.5+186.37ce511"
- },
  "0.7.5+187.5010f0e": {
   "date": "2026-10-17T23:34:05Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+187.5010f0e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "6661b44a8dc8530ef23c2e7207bfc47499a91fe7",
   "subject": "Item 4 (H2): the inline ids updates of the 16.0 transition blocks are suppressed for app-to-app switches (caller identified by return address against the verified 16.0 block ranges); close / home / zoom keep them; switch g1c_ids16supp",
   "version": "0.7.9+257.6661b44"
+ },
+ "0.7.9+258.eb694cd": {
+  "date": "2026-10-24T23:44:18Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+258.eb694cd_iphoneos-arm64.deb",
+  "run": 258,
+  "sha": "eb694cd5704f8a64fab959008d36230cd8030ef6",
+  "subject": "Y5Apps: status bar goes back into the reuse pool it came from (window dragged between displays), pool target screen, classic (iPhone-only) launch size table on every display (switches y5_sbpool, y5_classicsize); DELTA-SWEEP status bar / app verdicts",
+  "version": "0.7.9+258.eb694cd"
  }
 }
