@@ -1,12 +1,4 @@
 {
- "0.7.4+166.337c7b6": {
-  "date": "2026-10-17T09:21:47Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+166.337c7b6_iphoneos-arm64.deb",
-  "run": 166,
-  "sha": "337c7b64f2eac3672123007ea07b720ae8b2f394",
-  "subject": "BBD/PTR: report their start-up stage to SpringBoard through Darwin no\u2026",
-  "version": "0.7.4+166.337c7b6"
- },
  "0.7.4+167.03ade48": {
   "date": "2026-10-17T13:14:44Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+167.03ade48_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "a02046e062ca334e562fa8e69b224582ce30901c",
   "subject": "edu: the native education alert is chosen automatically when the installed SpringBoardEducation.app has no external display content controller (switch eduauto), 16.2 app strings embedded in 41 languages, live hardware recommendation",
   "version": "0.7.9+232.a02046e"
+ },
+ "0.7.9+234.11803ed": {
+  "date": "2026-10-24T18:02:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+234.11803ed_iphoneos-arm64.deb",
+  "run": 234,
+  "sha": "11803ed6caa84b474a1ffd203cf788ad08fb1a0f",
+  "subject": "FINDINGS-SLOWTOUCH-0.7.9: slow touch after hours without external display: log audit, ranked hypotheses, always-on diagnostics plan, user test order",
+  "version": "0.7.9+234.11803ed"
  }
 }

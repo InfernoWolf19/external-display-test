@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 234, commit 11803ed: FINDINGS-SLOWTOUCH-0.7.9: slow touch after hours without external display: log audit, ranked hypotheses, always-on diagnostics plan, user test order
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+234.11803ed
+Installed-Size: 3856
+Filename: debs/com.infernowolf19.backport162_0.7.9+234.11803ed_iphoneos-arm64.deb
+Size: 1235908
+MD5sum: d0085e8cfcab5142f547f0e36b0fd1e4
+SHA1: ee2a065297250662bf4a54590079f10e7b6e1acf
+SHA256: fbb2a20b9b055e1f63c9c786f2e40d0e44aa08c01ac4ededb8dee4cf3ecb95c9
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 232, commit a02046e: edu: the native education alert is chosen automatically when the installed SpringBoardEducation.app has no external display content controller (switch eduauto), 16.2 app strings embedded in 41 languages, live hardware recommendation
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1243,23 +1265,3 @@ Size: 901148
 MD5sum: a7c768aff2da9301d3924c452e31edef
 SHA1: 4ce7082486691de5445cd5d9f2853f77dc763885
 SHA256: be626114b863042a507e51d9776a53e01fc49df64bf07dbf89feffde39e49697
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 166, commit 337c7b6: BBD/PTR: report their start-up stage to SpringBoard through Darwin no…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+166.337c7b6
-Installed-Size: 2536
-Filename: debs/com.infernowolf19.backport162_0.7.4+166.337c7b6_iphoneos-arm64.deb
-Size: 898342
-MD5sum: 1d08582a10357365b4cfd3fefc4e67a5
-SHA1: 1b343a1eafbe16384d11d2f55e411d7a4802d32b
-SHA256: 68446df9e430e119c42b0a47633b5040cc2d4b049d83b5ef18957549190f81bb
