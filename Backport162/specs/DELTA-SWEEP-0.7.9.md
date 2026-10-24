@@ -12,25 +12,25 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 347 |
-| PORTED NOW | 14 |
-| EQUIVALENT | 91 |
-| IRRELEVANT | 251 |
+| PORTED already | 393 |
+| PORTED NOW | 25 |
+| EQUIVALENT | 116 |
+| IRRELEVANT | 252 |
 | EXCLUDED | 88 |
 | TO PORT | 7 |
-| OPEN | 18 |
+| OPEN | 19 |
 | CANNOT | 1 |
-| not yet triaged (this sweep is in progress) | 649 |
+| not yet triaged (this sweep is in progress) | 565 |
 | **total** | **1466** |
 
-Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PENDING 80, PORTED 33, PORTED NOW 7, TO PORT 1; F2: EQUIVALENT 3, EXCLUDED 3, IRRELEVANT 3, PENDING 74, PORTED 5; F3: EQUIVALENT 22, EXCLUDED 37, IRRELEVANT 5, PENDING 347, PORTED 246, PORTED NOW 3, TO PORT 6; F4: EQUIVALENT 19, EXCLUDED 6, OPEN 17, PENDING 4, PORTED 24, PORTED NOW 4; F5: EXCLUDED 1, PENDING 5, PORTED 2; F6: EXCLUDED 8, IRRELEVANT 2, PENDING 82, PORTED 10; F7: EXCLUDED 9, IRRELEVANT 6, PENDING 39, PORTED 18; F8: EQUIVALENT 25, EXCLUDED 6, IRRELEVANT 233, PENDING 18, PORTED 9
+Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PENDING 78, PORTED 35, PORTED NOW 7, TO PORT 1; F2: EQUIVALENT 3, EXCLUDED 3, IRRELEVANT 3, PENDING 74, PORTED 5; F3: EQUIVALENT 47, EXCLUDED 37, IRRELEVANT 6, OPEN 1, PENDING 271, PORTED 284, PORTED NOW 14, TO PORT 6; F4: EQUIVALENT 19, EXCLUDED 6, OPEN 17, PENDING 4, PORTED 24, PORTED NOW 4; F5: EXCLUDED 1, PENDING 5, PORTED 2; F6: EXCLUDED 8, IRRELEVANT 2, PENDING 82, PORTED 10; F7: EXCLUDED 9, IRRELEVANT 6, PENDING 35, PORTED 22; F8: EQUIVALENT 25, EXCLUDED 6, IRRELEVANT 233, PENDING 16, PORTED 11
 
 ## F1 Window scene / scene manager / main workspace / scene handles (165)
 
 | class | method | 16.0 | 16.2 | verdict |
 |---|---|---|---|---|
 | SBAbstractWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c600c4e8 | 0x1c74870c8 | TRIAGE PENDING |
-| SBAbstractWindowSceneDelegate | `-sceneDidDisconnect:` | 0x1c600cab8 | 0x1c748772c | PORTED already: hook in G4B.x:1473 |
+| SBAbstractWindowSceneDelegate | `-sceneDidDisconnect:` | 0x1c600cab8 | 0x1c748772c | PORTED already: hook in G4B.x:1554 |
 | SBApplication(Classic_Internal) | `-_calculateSupportedTypesLazilyIfNecessary` | 0x1c5ec6f58 | 0x1c7339fb0 | TRIAGE PENDING |
 | SBApplication(Classic_Internal) | `+_defaultLaunchingSizeForDisplayConfiguration:classicMode:` | 0x1c5ec8834 | 0x1c733bc90 | TRIAGE PENDING |
 | SBApplication(Classic_Internal) | `-_calculateSupportedTypesForSplashBoard` | 0x1c5ec8d2c | 0x1c733c13c | TRIAGE PENDING |
@@ -46,7 +46,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBApplicationSupportServiceDelegate | `-destroyScenesWithPersistentIdentifiers:animationType:destroySessions:forClient:completion:` | 0x1c61c0a7c | 0x1c764f3f4 | TRIAGE PENDING |
 | SBApplicationSupportServiceRequestContext | `+initializationContextForClient:` | 0x1c6345d28 | 0x1c77ea600 | TRIAGE PENDING |
 | SBApplicationSupportServiceRequestContext | `-_main_launchDisplayContext` | 0x1c6346958 | 0x1c77eb2d8 | TRIAGE PENDING |
-| SBDeviceApplicationSceneHandle | `-_modifyApplicationSceneSettings:fromRequestContext:entity:` | 0x1c5e2b9a8 | 0x1c729dfb4 | 82bc14e: Y1Workspace.x y1_scenestyle (userInterfaceStyle on every display); the 16.2 screenBoundsIgnoresSceneOrientation property needs the 16.2 UIKit client in every app (absent in 16.0 UIMutableApplicationSceneSettings): CANNOT here, the isChamoisLinked rename and the _isInCallBanner removal are equivalent [sha 82bc14e] |
+| SBDeviceApplicationSceneHandle | `-_modifyApplicationSceneSettings:fromRequestContext:entity:` | 0x1c5e2b9a8 | 0x1c729dfb4 | a557a56: Y1Workspace.x y1_scenestyle (userInterfaceStyle on every display); the 16.2 screenBoundsIgnoresSceneOrientation property needs the 16.2 UIKit client in every app (absent in 16.0 UIMutableApplicationSceneSettings): CANNOT here, the isChamoisLinked rename and the _isInCallBanner removal are equivalent [sha 82bc14e] |
 | SBDeviceApplicationSceneHandle | `-_mainSceneSupportedInterfaceOrientations` | 0x1c5e37cc0 | 0x1c72aa11c | PORTED already: hook in G3.x:244 |
 | SBDeviceApplicationSceneHandle | `-_didUpdateSettingsWithDiff:previousSettings:` | 0x1c5e3d8b8 | 0x1c72afca0 | PORTED already: hook in G3.x:295 |
 | SBDeviceApplicationSceneHandle | `-setKeyboardContextMaskStyle:` | 0x1c5e3df60 | 0x1c72b0354 | PORTED already: hook in G3.x:266 |
@@ -59,10 +59,10 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBDeviceApplicationSceneHandle | `-wantsDeviceOrientationEventsEnabled` | 0x1c6225328 | 0x1c76b5dac | PORTED already: hook in G3.x:260 |
 | SBDeviceApplicationSceneHandle | `-_interfaceOrientationMode` | 0x1c62253b4 | 0x1c76b5e24 | PORTED already: hook in G3.x:255 |
 | SBDeviceApplicationSceneHandle | `-_classicPhoneOnPadActivationOrientationForOrientation:` | 0x1c62262d8 | 0x1c76b6c78 | TRIAGE PENDING |
-| SBEmbeddedDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c63a0e20 | 0x1c784b1b8 | PORTED already: hook in Group4Focus.x:629 |
+| SBEmbeddedDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c63a0e20 | 0x1c784b1b8 | PORTED already: hook in Group4Focus.x:646 |
 | SBEmbeddedDisplayWindowSceneDelegate | `-.cxx_destruct` | 0x1c63a1588 | 0x1c784b974 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBExternalDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c5fed084 | 0x1c7467d5c | PORTED already: hook in Group4Focus.x:648 |
-| SBExternalDisplayWindowSceneDelegate | `-sceneDidDisconnect:` | 0x1c5fed4f8 | 0x1c746826c | PORTED already: hook in Group4Focus.x:653 |
+| SBExternalDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c5fed084 | 0x1c7467d5c | PORTED already: hook in Group4Focus.x:665 |
+| SBExternalDisplayWindowSceneDelegate | `-sceneDidDisconnect:` | 0x1c5fed4f8 | 0x1c746826c | PORTED already: hook in Group4Focus.x:670 |
 | SBLayoutState | `-interfaceOrientation` | 0x1c5e1f9a8 | 0x1c7291884 | TRIAGE PENDING |
 | SBLayoutState | `-interfaceOrientationForElementIdentifier:` | 0x1c61e1220 | 0x1c766f804 | TRIAGE PENDING |
 | SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:` | 0x1c6036db4 | 0x1c74b2314 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
@@ -80,11 +80,11 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBMainDisplayLayoutState | `-_updateSizingPoliciesForLayoutElements:` | 0x1c6289588 | 0x1c7721e2c | TRIAGE PENDING |
 | SBMainDisplayLayoutState | `-appLayout` | 0x1c62898e4 | 0x1c7722290 | TRIAGE PENDING |
 | SBMainDisplayLayoutState | `-floatingAppLayout` | 0x1c6289ccc | 0x1c7722688 | TRIAGE PENDING |
-| SBMainDisplayLayoutStateManager | `-_layoutStateForApplicationTransitionContext:` | 0x1c5e23430 | 0x1c72952ec | PORTED already: hook in G3C.x:446, G4B.x:1820 |
+| SBMainDisplayLayoutStateManager | `-_layoutStateForApplicationTransitionContext:` | 0x1c5e23430 | 0x1c72952ec | PORTED already: hook in G3C.x:446, G4B.x:1901 |
 | SBMainDisplayLayoutStateManager | `-defaultSceneIdentifierForBundleIdentifier:targetContentIdentifier:allowCanMatches:preferNewScene:visibleSceneIdentifiers:excludingSceneIdentifiers:sceneSessionRole:` | 0x1c625a188 | 0x1c76f09cc | TRIAGE PENDING |
 | SBMainDisplaySceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5e46a00 | 0x1c72b9050 | EQUIVALENT: 16.2 moved the app client-settings diff inspection to the SBSceneManager base (base inspector is nil; the extended manager's only inspector observes preferredPointerLockStatus = G4B.x lockedptr2 hook of the extended manager); the main manager keeps the 16.0 inspectors |
 | SBMainDisplaySceneManager | `-_updateLevelAndBackgroundSettingsForScene:transitionContext:` | 0x1c5e6dc1c | 0x1c72e097c | EQUIVALENT: only the hosted keyboard window update moved to the SBSceneManager callbacks (G3B.x g3b_kbwindow covers every display) |
-| SBMainDisplaySceneManager | `-_handleAction:forScene:` | 0x1c5e70a78 | 0x1c72e3838 | 82bc14e: 16.2 moved UIDestroySceneAction / resize-finished handling into the SBSceneManager base; Y1Workspace.x y1_extaction gives the extended display manager the destroy action (the resize-finished 0x30 branch already exists in its 16.0 override 0x1c63ae37c) [sha 82bc14e] |
+| SBMainDisplaySceneManager | `-_handleAction:forScene:` | 0x1c5e70a78 | 0x1c72e3838 | a557a56: 16.2 moved UIDestroySceneAction / resize-finished handling into the SBSceneManager base; Y1Workspace.x y1_extaction gives the extended display manager the destroy action (the resize-finished 0x30 branch already exists in its 16.0 override 0x1c63ae37c) [sha 82bc14e] |
 | SBMainDisplaySceneManager | `-dealloc` | 0x1c63d3d0c | 0x1c787fa2c | EQUIVALENT: removeAllObservers / foreground flag of a log line only |
 | SBMainDisplaySceneManager | `-_scene:interceptUpdateWithNewSettings:` | 0x1c63d488c | 0x1c78804ac | EQUIVALENT: removeAllObservers / foreground flag of a log line only |
 | SBMainDisplaySceneManager | `-.cxx_destruct` | 0x1c63d7ee8 | 0x1c7882e28 | EXCLUDED: ivar teardown only (.cxx_destruct) |
@@ -95,10 +95,10 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBMainWorkspace | `-init` | 0x1c5efd108 | 0x1c7371404 | EQUIVALENT: SBWorkspaceKeyboardFocusController initWithWorkspace:windowSceneManager: passes the window scene manager the 16.0 controller reads from SBApp (Group4Focus.x) |
 | SBMainWorkspace | `-inCallPresentationManager:createPresentationSessionWithSceneHandle:` | 0x1c5efeb60 | 0x1c7372e7c | PORTED already: 16.2 address cited in X6InCall.x |
 | SBMainWorkspace | `-_executeTransientOverlayTransitionRequest:` | 0x1c5f00d54 | 0x1c7375028 | PORTED already: 16.2 address cited in X2Overlay.x |
-| SBMainWorkspace | `-_selectTransactionForAppEntityRemoved:` | 0x1c5f0191c | 0x1c7375c68 | 82bc14e: Y1Workspace.x y1_appremoved (window scene of the dying scene's display) [sha 82bc14e] |
+| SBMainWorkspace | `-_selectTransactionForAppEntityRemoved:` | 0x1c5f0191c | 0x1c7375c68 | a557a56: Y1Workspace.x y1_appremoved (window scene of the dying scene's display) [sha 82bc14e] |
 | SBMainWorkspace | `-setPipCoordinator:` | 0x1c5f021c4 | 0x1c73765b8 | TRIAGE PENDING |
-| SBMainWorkspace | `-_destroyApplicationSceneEntity:` | 0x1c5f02cc4 | 0x1c737708c | 82bc14e: Y1Workspace.x y1_appremoved (+ new _cleanupForRemovedAppEntity:, which also replaces the 16.0 _applicationEntityWasRemovedFromAppSwitcher: body) [sha 82bc14e] |
-| SBMainWorkspace | `-_removeApplicationEntitiesFromWorkspace:error:` | 0x1c5f036fc | 0x1c7377ba0 | 82bc14e: Y1Workspace.x y1_appremoved (any-display layout lookup) [sha 82bc14e] |
+| SBMainWorkspace | `-_destroyApplicationSceneEntity:` | 0x1c5f02cc4 | 0x1c737708c | a557a56: Y1Workspace.x y1_appremoved (+ new _cleanupForRemovedAppEntity:, which also replaces the 16.0 _applicationEntityWasRemovedFromAppSwitcher: body) [sha 82bc14e] |
+| SBMainWorkspace | `-_removeApplicationEntitiesFromWorkspace:error:` | 0x1c5f036fc | 0x1c7377ba0 | a557a56: Y1Workspace.x y1_appremoved (any-display layout lookup) [sha 82bc14e] |
 | SBMainWorkspace | `-_targetWindowSceneForApplication:preferringDisplay:requireForeground:options:` | 0x1c5f04228 | 0x1c7378764 | EQUIVALENT: 16.2 adds a consistency filter (scene settings display == manager's display) that only differs while a scene is being taken by another display; LOW, not ported |
 | SBMainWorkspace | `-_handleOpenApplicationRequest:options:activationSettings:origin:withResult:` | 0x1c5f060d0 | 0x1c737a760 | EQUIVALENT: selector sequence identical; device capability gates (blraaz) became direct calls, register renumbering only |
 | SBMainWorkspace | `-isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:` | 0x1c5f0c1dc | 0x1c73808a4 | OPEN: NEEDS EDIT IN G3B.x: expose the per-window-scene hosted keyboard controller (BPKB_ControllerForWindowScene) as -[SBWindowScene medusaHostedKeyboardWindowController]; only matters for alerts on the extended display (LOW) |
@@ -116,7 +116,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSceneLayoutWorkspaceTransaction | `-_runningOnMainRootOrExtendedExternalDisplay` | 0x1c62a109c | 0x1c773aecc | TRIAGE PENDING |
 | SBSceneManager | `-_handleAction:forScene:` | 0x1c5e71060 | 0x1c72e3b58 | PORTED already: G4B.x hook (_UIPointerUnlockAction) + Y1Workspace.x y1_extaction (UIDestroySceneAction); snapshot / activation prewarm actions are in the 16.0 base already |
 | SBSceneManager | `-initWithReference:sceneIdentityProvider:presentationBinder:` | 0x1c5f7230c | 0x1c73e904c | TRIAGE PENDING |
-| SBSceneManager | `-takeScene:fromSceneManager:` | 0x1c5f72cf4 | 0x1c73e9a3c | 82bc14e: G4B.x hook + Y1Workspace.x y1_takescene (new handle's wantsEnhancedWindowingEnabled follows the new display) [sha 82bc14e] |
+| SBSceneManager | `-takeScene:fromSceneManager:` | 0x1c5f72cf4 | 0x1c73e9a3c | a557a56: G4B.x hook + Y1Workspace.x y1_takescene (new handle's wantsEnhancedWindowingEnabled follows the new display) [sha 82bc14e] |
 | SBSceneManager | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5f73af0 | 0x1c73ea6f8 | EXCLUDED: description / debug text only |
 | SBSceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5f74a9c | 0x1c73eb73c | EQUIVALENT: see SBMainDisplaySceneManager row: base inspector nil, extended manager inspector (pointer lock) ported in G4B.x |
 | SBSceneManager | `-scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5f761d4 | 0x1c73ed100 | EQUIVALENT: hosted keyboard window refresh per window scene = G3B.x g3b_kbwindow (fan-out controllers refreshed from the main and extended manager's _updateMedusaHostedKeyboardWindow) |
@@ -138,11 +138,11 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSingleSceneController | `-.cxx_destruct` | 0x1c645c950 | 0x1c790fea0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBStatusBarStateProvider | `-endCoalescentBlock` | 0x1c5e1f2cc | 0x1c72911c4 | TRIAGE PENDING |
 | SBSuspendedWorkspaceTransaction | `-_childTransactionDidComplete:` | 0x1c5ea0d90 | 0x1c7313a68 | TRIAGE PENDING |
-| SBSystemShellExternalDisplaySceneManager | `-_shouldAutoHostScene:` | 0x1c63ae320 | 0x1c7858710 | PORTED already: hook in Tweak.x:251 |
+| SBSystemShellExternalDisplaySceneManager | `-_shouldAutoHostScene:` | 0x1c63ae320 | 0x1c7858710 | PORTED already: hook in Tweak.x:292 |
 | SBSystemShellExternalDisplaySceneManager | `-.cxx_destruct` | 0x1c63aeb98 | 0x1c7859118 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBToAppsWorkspaceTransaction | `-initWithTransitionRequest:` | 0x1c5e21e5c | 0x1c7293d24 | EQUIVALENT: ancillary-request helper moved from an instance method to +[SBMainWorkspaceTransitionRequest ancillaryTransitionRequestsForTransitionRequest:], delegate passed to SBSceneLayoutWorkspaceTransaction init (setDelegate: before): same objects, no behaviour change |
 | SBToAppsWorkspaceTransaction | `-_willBegin` | 0x1c5e28ffc | 0x1c729b83c | CANNOT: privacy preflight gate (privacyPreflightController / requiresPreflightForApplication:) needs PrivacyDisclosureCore, absent in 16.0 (REVIEW-PLUMBING 'privacy preflight gate') |
-| SBToAppsWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e3e06c | 0x1c72b0460 | 82bc14e: Y1Workspace.x y1_takescene (the 16.2 block 0x1c784e3f8 sets wantsEnhancedWindowingEnabled on the taken handle; done in the takeScene: hook) [sha 82bc14e] |
+| SBToAppsWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e3e06c | 0x1c72b0460 | a557a56: Y1Workspace.x y1_takescene (the 16.2 block 0x1c784e3f8 sets wantsEnhancedWindowingEnabled on the taken handle; done in the takeScene: hook) [sha 82bc14e] |
 | SBToAppsWorkspaceTransaction | `-_completeCurrentTransition` | 0x1c5e4855c | 0x1c72ba764 | EQUIVALENT: 16.2 enumerates a copy of the completion blocks (mutation safety only) |
 | SBToAppsWorkspaceTransaction | `-_acquireResignActiveAssertion` | 0x1c5e7434c | 0x1c72e718c | PORTED already: 16.2 address cited in X7Keyboard.x |
 | SBUIController | `-activateApplication:fromIcon:location:activationSettings:actions:` | 0x1c5e72ef4 | 0x1c72e5df8 | TRIAGE PENDING |
@@ -155,17 +155,17 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBWindow | `-initWithWindowScene:rootViewController:layoutStrategy:role:debugName:` | 0x1c64acb50 | 0x1c79650bc | TRIAGE PENDING |
 | SBWindowSceneContext | `-sceneManager` | 0x1c6500ad4 | 0x1c79bdacc | TRIAGE PENDING |
 | SBWindowSceneContext | `-.cxx_destruct` | 0x1c6500dec | 0x1c79bde30 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBWindowSceneManager | `-activeDisplayWindowScene` | 0x1c6043bec | 0x1c74bf1c4 | PORTED already: hook in Group4Focus.x:576 |
+| SBWindowSceneManager | `-activeDisplayWindowScene` | 0x1c6043bec | 0x1c74bf1c4 | PORTED already: hook in Group4Focus.x:593 |
 | SBWindowSceneManager | `-.cxx_destruct` | 0x1c60442d4 | 0x1c74bfb4c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBWindowScenePIPManager | `-windowSceneDidConnect:` | 0x1c5eca974 | 0x1c733e170 | PORTED already: hook in G3B.x:580 |
 | SBWindowScenePIPManager | `-windowSceneDidDisconnect:` | 0x1c5ecab4c | 0x1c733e3c8 | PORTED already: hook in G3B.x:594 |
 | SBWindowScenePIPManager | `-.cxx_destruct` | 0x1c5ecc7c0 | 0x1c7340174 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBWindowSceneStatusBarManager | `-setAvoidanceFrame:reason:statusBar:animationSettings:` | 0x1c5ef798c | 0x1c736bd64 | EQUIVALENT: 4-argument convenience forwards options 0 to ...options: (group3-plumbing) |
 | SBWorkspaceApplicationSceneTransitionContext | `-frameForApplicationSceneEntity:` | 0x1c5e2b91c | 0x1c729dee0 | TRIAGE PENDING |
-| SBWorkspaceKeyboardFocusController | `-lockFocusToSpringBoardWindowScene:forReason:` | 0x1c6321c94 | 0x1c77c19f0 | PORTED already: hook in G4B.x:1937 |
-| SBWorkspaceKeyboardFocusController | `-userFocusRequestForScene:reason:completion:` | 0x1c6322844 | 0x1c77c29d8 | TRIAGE PENDING |
-| SBWorkspaceKeyboardFocusController | `-removeKeyboardFocusFromScene:` | 0x1c6322ec4 | 0x1c77c3074 | PORTED already: hook in G4B.x:1962 |
-| SBWorkspaceKeyboardFocusController | `-windowSceneDidDisconnect:` | 0x1c6323a98 | 0x1c77c3b14 | PORTED already: hook in Group4Focus.x:546 |
+| SBWorkspaceKeyboardFocusController | `-lockFocusToSpringBoardWindowScene:forReason:` | 0x1c6321c94 | 0x1c77c19f0 | PORTED already: hook in G4B.x:2150 |
+| SBWorkspaceKeyboardFocusController | `-userFocusRequestForScene:reason:completion:` | 0x1c6322844 | 0x1c77c29d8 | PORTED already: 16.2 address cited in X7Keyboard.x |
+| SBWorkspaceKeyboardFocusController | `-removeKeyboardFocusFromScene:` | 0x1c6322ec4 | 0x1c77c3074 | PORTED already: 16.2 address cited in X7Keyboard.x |
+| SBWorkspaceKeyboardFocusController | `-windowSceneDidDisconnect:` | 0x1c6323a98 | 0x1c77c3b14 | PORTED already: hook in Group4Focus.x:563 |
 | SBWorkspaceKeyboardFocusController | `-sceneManager:willRemoveExternalForegroundApplicationSceneHandle:forDestroyEvent:` | 0x1c6323e00 | 0x1c77c4444 | TRIAGE PENDING |
 | SBWorkspaceKeyboardFocusController | `-sceneManager:didRemoveExternalForegroundApplicationSceneHandle:` | 0x1c6323e94 | 0x1c77c44e0 | TRIAGE PENDING |
 | SBWorkspaceKeyboardFocusController | `-_filterFocusedSceneIdentityToken:focusedPID:resultBlock:` | 0x1c6323f3c | 0x1c77c4590 | PORTED already: 16.2 address cited in X7Keyboard.x |
@@ -174,7 +174,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SpringBoard | `-noteSceneLayoutDidUpdateOnDisplayWithIdentity:` | 0x1c5e4b7cc | 0x1c72bda18 | EQUIVALENT: still main display only (isMainDisplay gate kept); only the coordinator singleton became the window scene's switcher controller / presenter |
 | SpringBoard | `-startupInterfaceOrientation` | 0x1c5ed5ba0 | 0x1c734a2d4 | PORTED already: hook in G3.x:923 |
 | SpringBoard | `-application:configurationForConnectingSceneSession:options:` | 0x1c5ed6c24 | 0x1c734b1f8 | TRIAGE PENDING |
-| SpringBoard | `-applicationDidFinishLaunching:` | 0x1c5ed74d8 | 0x1c734ba64 | PORTED already: hook in G4B.x:957 |
+| SpringBoard | `-applicationDidFinishLaunching:` | 0x1c5ed74d8 | 0x1c734ba64 | PORTED already: hook in G4B.x:1040 |
 | SpringBoard | `-_completeStartupAfterMainSceneConnect:` | 0x1c5ed81c4 | 0x1c734c5ac | PORTED already: hook in EDE.x:195 |
 | SpringBoard | `-_initializeDeferredItems` | 0x1c5edc204 | 0x1c73503c4 | TRIAGE PENDING |
 | SpringBoard | `-toggleSearchFromBreadcrumbSource:withWillBeginHandler:completionHandler:` | 0x1c5ede078 | 0x1c7352218 | PORTED already: 16.2 address cited in X2Overlay.x |
@@ -182,7 +182,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SpringBoard | `-languageChanged` | 0x1c5edf1c0 | 0x1c7353370 | TRIAGE PENDING |
 | SpringBoard | `-buildMenuWithBuilder:` | 0x1c5ee2a40 | 0x1c7356c84 | PORTED already: hook in G3B.x:273 |
 | SpringBoard | `-remoteTransientOverlaySessionManager:shouldActivateOverlayWithContext:forSession:` | 0x1c5ee6488 | 0x1c735a4b4 | TRIAGE PENDING |
-| SpringBoard | `-remoteTransientOverlaySessionManager:performPresentationRequest:forSession:` | 0x1c5ee6ca0 | 0x1c735acb8 | TRIAGE PENDING |
+| SpringBoard | `-remoteTransientOverlaySessionManager:performPresentationRequest:forSession:` | 0x1c5ee6ca0 | 0x1c735acb8 | PORTED already: hook in G4B.x:2356 |
 | SpringBoard | `-_openURLCore:display:animating:activationSettings:origin:withResult:` | 0x1c5ee955c | 0x1c735d6c4 | TRIAGE PENDING |
 | SpringBoard | `-_legacy_noteInterfaceOrientationChanged:duration:updateMirroredDisplays:force:logMessage:` | 0x1c5eeb79c | 0x1c735fa08 | TRIAGE PENDING |
 | SpringBoard | `-_interfaceOrientationForRawOrientation:validOrientation:ignoringHomeScreenRotationStyle:` | 0x1c5eebfdc | 0x1c7360244 | TRIAGE PENDING |
@@ -201,7 +201,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 |---|---|---|---|---|
 | SBControlCenterController | `-_shouldShowGrabberOnFirstSwipe` | 0x1c5e530cc | 0x1c72c5518 | TRIAGE PENDING |
 | SBControlCenterController | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e532dc | 0x1c72c574c | TRIAGE PENDING |
-| SBControlCenterController | `-gestureRecognizerShouldBegin:` | 0x1c5e8d6ec | 0x1c7300268 | PORTED already: hook in Group4Focus.x:724 |
+| SBControlCenterController | `-gestureRecognizerShouldBegin:` | 0x1c5e8d6ec | 0x1c7300268 | PORTED already: hook in Group4Focus.x:742 |
 | SBControlCenterController | `-_willPresent` | 0x1c5e8e900 | 0x1c730158c | PORTED already: 16.2 address cited in X7Keyboard.x |
 | SBControlCenterController | `-init` | 0x1c61c6340 | 0x1c7655018 | TRIAGE PENDING |
 | SBControlCenterController | `-_updateWindowForScene:` | 0x1c61c8a28 | 0x1c76576f4 | TRIAGE PENDING |
@@ -294,12 +294,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 |---|---|---|---|---|
 | SBAppContainerViewController | `-configureWithWorkspaceEntity:forLayoutElement:layoutState:referenceFrame:` | 0x1c5e2f534 | 0x1c72a1c44 | TRIAGE PENDING |
 | SBAppLayout | `-appLayoutByModifyingHiddenState:` | 0x1c628ce40 | 0x1c7725bb8 | TRIAGE PENDING |
-| SBAppLayout | `-continuousExposeIdentifier` | 0x1c628d514 | 0x1c77265c4 | PORTED already: hook in G2.x:1728 |
+| SBAppLayout | `-continuousExposeIdentifier` | 0x1c628d514 | 0x1c77265c4 | PORTED already: hook in G2.x:1733 |
 | SBAppLayout | `-isInsetForHomeAffordance` | 0x1c628e03c | 0x1c77270e8 | TRIAGE PENDING |
 | SBAppLayout | `-preferredDisplayIdentity` | 0x1c628e1a0 | 0x1c77273a8 | TRIAGE PENDING |
-| SBAppLayoutOverlappingModelCacheKey | `-hash` | 0x1c62ee438 | 0x1c778a400 | PORTED already: hook in G2.x:1803 |
-| SBAppLayoutOverlappingModelCacheKey | `-isEqual:` | 0x1c62ee678 | 0x1c778a5e8 | PORTED already: hook in G2.x:1797 |
-| SBAppLayoutOverlappingModelCacheKey | `-copyWithZone:` | 0x1c62ee78c | 0x1c778a6ec | PORTED already: hook in G2.x:1807 |
+| SBAppLayoutOverlappingModelCacheKey | `-hash` | 0x1c62ee438 | 0x1c778a400 | PORTED already: hook in G2.x:1808 |
+| SBAppLayoutOverlappingModelCacheKey | `-isEqual:` | 0x1c62ee678 | 0x1c778a5e8 | PORTED already: hook in G2.x:1802 |
+| SBAppLayoutOverlappingModelCacheKey | `-copyWithZone:` | 0x1c62ee78c | 0x1c778a6ec | PORTED already: hook in G2.x:1812 |
 | SBAppLayoutOverlappingModelCacheKey | `-.cxx_destruct` | 0x1c62ee84c | 0x1c778ac40 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBAppResizeGrabberView | `-initWithCorner:` | 0x1c5faea68 | 0x1c7426e48 | TRIAGE PENDING |
 | SBAppSwitcherContinuousExposeSwitcherModifier | `-init` | 0x1c636a29c | 0x1c780f6bc | TRIAGE PENDING |
@@ -332,7 +332,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBAppSwitcherReusableSnapshotView | `-_contentOrientationForSnapshotCacheEntry:` | 0x1c646c7f0 | 0x1c7921eec | TRIAGE PENDING |
 | SBAppSwitcherSettings | `-chamoisSettings` | 0x1c6385014 | 0x1c782cf88 | TRIAGE PENDING |
 | SBAppSwitcherSnapshotImageCache | `-_loadSnapshotForRequest:withDisplayItem:inAppLayout:` | 0x1c5e45610 | 0x1c72b7a54 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-_representedApplicationSceneEntityForDisplayItem:` | 0x1c5e45fdc | 0x1c72b84f4 | PORTED already: hook in G1D.x:2561 |
+| SBAppSwitcherSnapshotImageCache | `-_representedApplicationSceneEntityForDisplayItem:` | 0x1c5e45fdc | 0x1c72b84f4 | PORTED already: hook in G1D.x:2562 |
 | SBAppSwitcherSnapshotImageCache | `-_cacheSnapshotForRequest:withDisplayItem:inAppLayout:` | 0x1c5e4637c | 0x1c72b898c | TRIAGE PENDING |
 | SBAppSwitcherSnapshotImageCache | `-_asynchronouslyLoadSnapshotFromRequest:` | 0x1c5e4f164 | 0x1c72c13e0 | TRIAGE PENDING |
 | SBAppSwitcherSnapshotImageCache | `-_snapshotImage:finishedLoadingForRequest:` | 0x1c5e4f994 | 0x1c72c1d64 | TRIAGE PENDING |
@@ -357,7 +357,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBChamoisOverlappingController | `-_snapPositionToNearestEdgesIfNecessary:draggingItem:` | 0x1c5f55404 | 0x1c73cb40c | PORTED already: 16.2 address cited in G2.x |
 | SBChamoisOverlappingModel | `-mutableCopyWithZone:` | 0x1c64bfd8c | 0x1c797a72c | PORTED already: hook in G2.x:569 |
 | SBChamoisOverlappingModel | `-.cxx_destruct` | 0x1c64bff38 | 0x1c797b050 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBContinuousExposeAppToAppModifier | `-didMoveToParentModifier:` | 0x1c610b99c | 0x1c759598c | PORTED already: 16.2 address cited in G1B.x, G1C.x |
+| SBContinuousExposeAppToAppModifier | `-didMoveToParentModifier:` | 0x1c610b99c | 0x1c759598c | PORTED already: 16.2 address cited in G1C.x, G1B.x |
 | SBContinuousExposeAppToAppModifier | `-asyncRenderingDisabled` | 0x1c610baa0 | 0x1c7595acc | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeAppToAppModifier | `-transitionWillBegin` | 0x1c610bac0 | 0x1c7595b40 | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeAppToAppModifier | `-animationAttributesForLayoutElement:` | 0x1c610bd0c | 0x1c7595bd8 | PORTED already: 16.2 address cited in G1C.x |
@@ -370,12 +370,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBContinuousExposeIdentifierSlideModifier | `-.cxx_destruct` | 0x1c63c6108 | 0x1c7871434 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBContinuousExposeIdentifiersChangedModifierEvent | `-copyWithZone:` | 0x1c625da3c | 0x1c76f4c18 | TRIAGE PENDING |
 | SBContinuousExposeIdentifiersChangedModifierEvent | `-.cxx_destruct` | 0x1c625dae4 | 0x1c76f4de8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBContinuousExposeRootSwitcherModifier | `-floorModifierForTransitionEvent:` | 0x1c6370db8 | 0x1c78180e8 | PORTED already: hook in G1C.x:5140 |
-| SBContinuousExposeRootSwitcherModifier | `-transitionModifierForMainTransitionEvent:` | 0x1c6371228 | 0x1c781859c | PORTED already: hook in G1B.x:2076, G1C.x:5379 |
-| SBContinuousExposeRootSwitcherModifier | `-gestureModifierForGestureEvent:` | 0x1c6371600 | 0x1c7818d78 | PORTED already: hook in G1C.x:5224 |
-| SBContinuousExposeRootSwitcherModifier | `-handleTransitionEvent:` | 0x1c6371a34 | 0x1c7819470 | PORTED already: hook in G1C.x:5294 |
-| SBContinuousExposeRootSwitcherModifier | `-handleContinuousExposeIdentifiersChangedEvent:` | 0x1c6371ad4 | 0x1c78195b8 | PORTED already: hook in G1C.x:5332 |
-| SBContinuousExposeRootSwitcherModifier | `-_effectiveEnvironmentMode` | 0x1c6372a88 | 0x1c7819cb8 | PORTED already: hook in G1B.x:2104 |
+| SBContinuousExposeRootSwitcherModifier | `-floorModifierForTransitionEvent:` | 0x1c6370db8 | 0x1c78180e8 | PORTED already: hook in G1C.x:5158 |
+| SBContinuousExposeRootSwitcherModifier | `-transitionModifierForMainTransitionEvent:` | 0x1c6371228 | 0x1c781859c | PORTED already: hook in G1B.x:2086, G1C.x:5397 |
+| SBContinuousExposeRootSwitcherModifier | `-gestureModifierForGestureEvent:` | 0x1c6371600 | 0x1c7818d78 | PORTED already: hook in G1C.x:5242 |
+| SBContinuousExposeRootSwitcherModifier | `-handleTransitionEvent:` | 0x1c6371a34 | 0x1c7819470 | PORTED already: hook in G1C.x:5312 |
+| SBContinuousExposeRootSwitcherModifier | `-handleContinuousExposeIdentifiersChangedEvent:` | 0x1c6371ad4 | 0x1c78195b8 | PORTED already: hook in G1C.x:5350 |
+| SBContinuousExposeRootSwitcherModifier | `-_effectiveEnvironmentMode` | 0x1c6372a88 | 0x1c7819cb8 | PORTED already: hook in G1B.x:2114 |
 | SBContinuousExposeRootSwitcherModifier | `-.cxx_destruct` | 0x1c6372b28 | 0x1c7819d98 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBContinuousExposeWindowDragDestinationSwitcherModifier | `-initWithSelectedDisplayItem:initialAppLayout:delegate:` | 0x1c6070530 | 0x1c74f2fe8 | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeWindowDragDestinationSwitcherModifier | `-handleGestureEvent:` | 0x1c6070880 | 0x1c74f3330 | PORTED already: 16.2 address cited in G1C.x |
@@ -383,7 +383,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBContinuousExposeWindowDragDestinationSwitcherModifier | `-_frameForSelectedDisplayItem` | 0x1c607118c | 0x1c74f3dd8 | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeWindowDragDestinationSwitcherModifier | `-_appLayoutByAddingItem:toAppLayout:size:center:` | 0x1c6071370 | 0x1c74f406c | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeWindowDragDestinationSwitcherModifier | `-.cxx_destruct` | 0x1c60718bc | 0x1c74f47fc | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBContinuousExposeWindowDragModifierEvent | `-copyWithZone:` | 0x1c63ccf1c | 0x1c7878bfc | PORTED already: hook in G1C.x:2997 |
+| SBContinuousExposeWindowDragModifierEvent | `-copyWithZone:` | 0x1c63ccf1c | 0x1c7878bfc | PORTED already: hook in G1C.x:3015 |
 | SBContinuousExposeWindowDragRootSwitcherModifier | `-gestureChildModifierForGestureEvent:activeTransitionModifier:` | 0x1c5fe6910 | 0x1c7461188 | TRIAGE PENDING |
 | SBContinuousExposeWindowDragRootSwitcherModifier | `-handleTransitionEvent:` | 0x1c5fe6abc | 0x1c7461458 | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeWindowDragSwitcherModifier | `-preferredCenterForSelectedItemInDestinationModifier:` | 0x1c6180d90 | 0x1c7609494 | PORTED already: 16.2 address cited in G1C.x |
@@ -396,8 +396,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBContinuousExposeWindowDragSwitcherModifier | `-animationAttributesForLayoutElement:` | 0x1c61820a0 | 0x1c760ae5c | TRIAGE PENDING |
 | SBContinuousExposeWindowDragSwitcherModifier | `-perspectiveAngleForAppLayout:` | 0x1c618248c | 0x1c760b1fc | TRIAGE PENDING |
 | SBContinuousExposeWindowDragSwitcherModifier | `-_appLayoutContainingDisplayItem:` | 0x1c6182694 | 0x1c760b404 | PORTED already: 16.2 address cited in G1C.x |
-| SBCrossfadeDosidoSwitcherModifier | `-frameForIndex:` | 0x1c638c57c | 0x1c783537c | PORTED already: hook in G1B.x:2664 |
-| SBCrossfadeDosidoSwitcherModifier | `-scaleForIndex:` | 0x1c638c5ec | 0x1c78353ec | PORTED already: hook in G1B.x:2669 |
+| SBCrossfadeDosidoSwitcherModifier | `-frameForIndex:` | 0x1c638c57c | 0x1c783537c | PORTED already: hook in G1B.x:2674 |
+| SBCrossfadeDosidoSwitcherModifier | `-scaleForIndex:` | 0x1c638c5ec | 0x1c78353ec | PORTED already: hook in G1B.x:2679 |
 | SBDeckFloatingSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6312e6c | 0x1c77b19a4 | TRIAGE PENDING |
 | SBDeckSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c642bc48 | 0x1c78dbad4 | TRIAGE PENDING |
 | SBDeckSwitcherViewController | `-performTransitionWithContext:animated:completion:` | 0x1c5ea2514 | 0x1c73151d8 | TRIAGE PENDING |
@@ -491,7 +491,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFluidSwitcherGestureManager | `-_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch:` | 0x1c6443414 | 0x1c78f56d0 | TRIAGE PENDING |
 | SBFluidSwitcherGestureManager | `-_shouldLiveResizeGesture:receiveTouch:` | 0x1c6443518 | 0x1c78f5920 | PORTED already: hook in G1D.x:1493 |
 | SBFluidSwitcherGestureManager | `-_shouldTapToBringItemContainerForward:receiveTouch:` | 0x1c6443604 | 0x1c78f5ac0 | PORTED already: hook in G1D.x:1538 |
-| SBFluidSwitcherGestureManager | `-gestureRecognizerShouldBegin:` | 0x1c6443b1c | 0x1c78f61dc | PORTED already: hook in Group4Focus.x:734 |
+| SBFluidSwitcherGestureManager | `-gestureRecognizerShouldBegin:` | 0x1c6443b1c | 0x1c78f61dc | PORTED already: hook in Group4Focus.x:752 |
 | SBFluidSwitcherGestureManager | `-_shouldBeginTapToBringItemContainerForwardGesture:` | 0x1c644493c | 0x1c78f7064 | PORTED already: hook in G1D.x:1560 |
 | SBFluidSwitcherGestureManager | `-_shouldAllowFloatingApplicationGesture:gestureType:failureReason:` | 0x1c64457e8 | 0x1c78f7ff0 | TRIAGE PENDING |
 | SBFluidSwitcherGestureManager | `-_shouldBeginSplitViewApplicationUnpinGesture:` | 0x1c6446a7c | 0x1c78f92b8 | PORTED already: hook in G1D.x:1877 |
@@ -509,33 +509,33 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFluidSwitcherGestureManager | `-grabberTongueWillDismiss:` | 0x1c644841c | 0x1c78fb0a4 | PORTED already: hook in G1D.x:1408 |
 | SBFluidSwitcherGestureManager | `-_grabberTongueForGestureRecognizer:` | 0x1c6448b38 | 0x1c78fb8c0 | PORTED already: hook in G1D.x:1348 |
 | SBFluidSwitcherGestureManager | `-.cxx_destruct` | 0x1c6449748 | 0x1c78fc5dc | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_beginWithGesture:` | 0x1c5e5a588 | 0x1c72ccd44 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-layoutStateForApplicationTransitionContext:` | 0x1c5e62cec | 0x1c72d51cc | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-previousLayoutStateForApplicationTransitionContext:` | 0x1c5e62d58 | 0x1c72d5260 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_runSceneLayoutTransactionForTransitionRequest:updateScenes:` | 0x1c5e651b0 | 0x1c72d771c | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_failRunningLayoutStateTransition` | 0x1c5e6532c | 0x1c72d7bc4 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e693b4 | 0x1c72dbcc0 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-transactionDidComplete:` | 0x1c5e6aa38 | 0x1c72dd5fc | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_didComplete` | 0x1c5e6e9d4 | 0x1c72e16e0 | TRIAGE PENDING |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_beginWithGesture:` | 0x1c5e5a588 | 0x1c72ccd44 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-layoutStateForApplicationTransitionContext:` | 0x1c5e62cec | 0x1c72d51cc | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-previousLayoutStateForApplicationTransitionContext:` | 0x1c5e62d58 | 0x1c72d5260 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_runSceneLayoutTransactionForTransitionRequest:updateScenes:` | 0x1c5e651b0 | 0x1c72d771c | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_failRunningLayoutStateTransition` | 0x1c5e6532c | 0x1c72d7bc4 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e693b4 | 0x1c72dbcc0 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-transactionDidComplete:` | 0x1c5e6aa38 | 0x1c72dd5fc | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_didComplete` | 0x1c5e6e9d4 | 0x1c72e16e0 | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherGestureWorkspaceTransaction | `-.cxx_destruct` | 0x1c5e6fdbc | 0x1c72e2ad8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-initWithTransitionRequest:fluidSwitcherViewController:delegate:` | 0x1c60339d8 | 0x1c74ae6f4 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_currentGestureEventForGesture:` | 0x1c6033be0 | 0x1c74aea30 | PORTED already: hook in G1C.x:3005 |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_willInterruptWithReason:` | 0x1c6034270 | 0x1c74af0d0 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_startSceneUpdateTransaction:forSceneIdentifier:` | 0x1c6034fe4 | 0x1c74b0128 | TRIAGE PENDING |
-| SBFluidSwitcherGestureWorkspaceTransaction | `-_acquireBackgroundingScenesDeactivationAssertionForTransitionRequest:` | 0x1c6035d64 | 0x1c74b1168 | TRIAGE PENDING |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-initWithTransitionRequest:fluidSwitcherViewController:delegate:` | 0x1c60339d8 | 0x1c74ae6f4 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_currentGestureEventForGesture:` | 0x1c6033be0 | 0x1c74aea30 | PORTED already: hook in G1C.x:3023 |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_willInterruptWithReason:` | 0x1c6034270 | 0x1c74af0d0 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_startSceneUpdateTransaction:forSceneIdentifier:` | 0x1c6034fe4 | 0x1c74b0128 | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-_acquireBackgroundingScenesDeactivationAssertionForTransitionRequest:` | 0x1c6035d64 | 0x1c74b1168 | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherItemContainer | `-_addPageView` | 0x1c5e5c848 | 0x1c72ced9c | TRIAGE PENDING |
 | SBFluidSwitcherItemContainer | `-prepareForReuse` | 0x1c5e704c8 | 0x1c72e3220 | TRIAGE PENDING |
 | SBFluidSwitcherItemContainer | `-initWithFrame:` | 0x1c615a38c | 0x1c75e0f64 | TRIAGE PENDING |
-| SBFluidSwitcherItemContainer | `-initWithCoder:` | 0x1c615a440 | 0x1c75e101c | TRIAGE PENDING |
-| SBFluidSwitcherItemContainer | `-setContentViewBlocksTouches:` | 0x1c615a6dc | 0x1c75e15c8 | PORTED already: hook in G4B.x:1513 |
-| SBFluidSwitcherItemContainer | `-setSelectable:` | 0x1c615d654 | 0x1c75e15f4 | PORTED already: hook in G4B.x:1516 |
-| SBFluidSwitcherItemContainer | `-didUpdateFocusInContext:withAnimationCoordinator:` | 0x1c615bf10 | 0x1c75e2f2c | TRIAGE PENDING |
+| SBFluidSwitcherItemContainer | `-initWithCoder:` | 0x1c615a440 | 0x1c75e101c | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherItemContainer | `-setContentViewBlocksTouches:` | 0x1c615a6dc | 0x1c75e15c8 | PORTED already: hook in G4B.x:1594 |
+| SBFluidSwitcherItemContainer | `-setSelectable:` | 0x1c615d654 | 0x1c75e15f4 | PORTED already: hook in G4B.x:1597 |
+| SBFluidSwitcherItemContainer | `-didUpdateFocusInContext:withAnimationCoordinator:` | 0x1c615bf10 | 0x1c75e2f2c | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherItemContainer | `-_returnKeyPressed:` | 0x1c615c03c | 0x1c75e305c | TRIAGE PENDING |
 | SBFluidSwitcherItemContainer | `-_handlePageViewTap:` | 0x1c615c3a4 | 0x1c75e33d4 | TRIAGE PENDING |
 | SBFluidSwitcherItemContainerFooterView | `-layoutSubviews` | 0x1c61010d8 | 0x1c75865c0 | TRIAGE PENDING |
-| SBFluidSwitcherItemContainerFooterView | `-_handleTapGestureRecognizer:` | 0x1c6102688 | 0x1c7587b90 | TRIAGE PENDING |
-| SBFluidSwitcherItemContainerFooterView | `-_makeSubtitleLabel` | 0x1c6102b0c | 0x1c7587ff4 | TRIAGE PENDING |
-| SBFluidSwitcherItemContainerLayer | `-setTransform:` | 0x1c615e2ac | 0x1c75e5304 | TRIAGE PENDING |
+| SBFluidSwitcherItemContainerFooterView | `-_handleTapGestureRecognizer:` | 0x1c6102688 | 0x1c7587b90 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherItemContainerFooterView | `-_makeSubtitleLabel` | 0x1c6102b0c | 0x1c7587ff4 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherItemContainerLayer | `-setTransform:` | 0x1c615e2ac | 0x1c75e5304 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherPanGestureRecognizer | `-touchesBegan:withEvent:` | 0x1c61b130c | 0x1c763f01c | EQUIVALENT: 16.2 also stores the initial touch location in touchesBegan (16.0 stores it on the first touchesMoved); the initial leaf app layout is G1D.x |
 | SBFluidSwitcherPanGestureRecognizer | `-reset` | 0x1c61b1600 | 0x1c763f334 | PORTED already: G1D.x (setInitialTouchLeafAppLayout:) |
 | SBFluidSwitcherPanGestureRecognizer | `-.cxx_destruct` | 0x1c61b1728 | 0x1c763f48c | EQUIVALENT: 16.2 also stores the initial touch location in touchesBegan (16.0 stores it on the first touchesMoved); the initial leaf app layout is G1D.x |
@@ -544,21 +544,21 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-layoutSubviews` | 0x1c61065c0 | 0x1c758c9c4 | TRIAGE PENDING |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-pointInside:withEvent:` | 0x1c61068b4 | 0x1c758cc98 | TRIAGE PENDING |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-hitTest:withEvent:` | 0x1c6106984 | 0x1c758cd6c | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_removeVisibleItemContainerForAppLayout:` | 0x1c5e70268 | 0x1c72e2f98 | PORTED already: hook in G1B.x:1759 |
+| SBFluidSwitcherViewController | `-_removeVisibleItemContainerForAppLayout:` | 0x1c5e70268 | 0x1c72e2f98 | PORTED already: hook in G1B.x:1769 |
 | SBFluidSwitcherViewController | `-dealloc` | 0x1c5fbcc50 | 0x1c7434be0 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-viewDidLoad` | 0x1c5fbcdec | 0x1c7434dbc | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-appLayoutContainsAnUnoccludedMaximizedDisplayItem:` | 0x1c5fbdb84 | 0x1c74360dc | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-chamoisLayoutAttributes` | 0x1c5fbea9c | 0x1c7437110 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-prefersStripHidden` | 0x1c5fbf280 | 0x1c743794c | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-prefersDockHidden` | 0x1c5fbf2f8 | 0x1c74379ac | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-appLayoutsToEnsureExistForMainTransitionEvent:` | 0x1c5fbf36c | 0x1c74379cc | PORTED already: hook in G2.x:1961 |
+| SBFluidSwitcherViewController | `-appLayoutsToEnsureExistForMainTransitionEvent:` | 0x1c5fbf36c | 0x1c74379cc | PORTED already: hook in G2.x:1966 |
 | SBFluidSwitcherViewController | `-appLayoutByBringingItemToFront:inAppLayout:` | 0x1c5fc0130 | 0x1c7438794 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-handleTapToBringItemContainerForward:` | 0x1c5fc0b10 | 0x1c7439690 | PORTED already: hook in G1D.x:1590 |
-| SBFluidSwitcherViewController | `-handleContinuousExposeHoverGesture:` | 0x1c5fc0c28 | 0x1c7439724 | PORTED already: hook in G2.x:1997 |
-| SBFluidSwitcherViewController | `-_leafAppLayoutInLiveContentOverlaysWithLayoutRole:` | 0x1c5fc1424 | 0x1c7439f84 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-handleContinuousExposeHoverGesture:` | 0x1c5fc0c28 | 0x1c7439724 | PORTED already: hook in G2.x:2002 |
+| SBFluidSwitcherViewController | `-_leafAppLayoutInLiveContentOverlaysWithLayoutRole:` | 0x1c5fc1424 | 0x1c7439f84 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-clickReceivedForHomeGrabberView:` | 0x1c5fc1864 | 0x1c743a460 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-canPerformKeyboardShortcutAction:forBundleIdentifier:` | 0x1c5fc1b10 | 0x1c743a70c | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in G3C.x |
+| SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in P1VC.m, G3C.x |
 | SBFluidSwitcherViewController | `-_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:` | 0x1c5fc29c8 | 0x1c743b200 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-invalidate` | 0x1c5fc335c | 0x1c743bc98 | PORTED already: hook in G1D.x:2289 |
 | SBFluidSwitcherViewController | `-_updateAutoHideForGrabberAffordancesInAppLayout:withResetDelay:unhideDelay:` | 0x1c5fc3b2c | 0x1c743c5f0 | PORTED already: 16.2 address cited in G2C.x |
@@ -570,24 +570,24 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFluidSwitcherViewController | `-_addVisibleItemContainerForAppLayout:reusingItemContainerIfExists:` | 0x1c5fcf9f8 | 0x1c7448894 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-_orderedViewsForLayoutElement:excludeSwitcherHostedShelves:` | 0x1c5fd6eb8 | 0x1c7450094 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-underlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd7e2c | 0x1c7451034 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-overlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd8118 | 0x1c7451324 | PORTED already: hook in G1B.x:826 |
-| SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-overlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd8118 | 0x1c7451324 | PORTED already: hook in G1B.x:827 |
+| SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-_applicationForDisplayItem:` | 0x1c5fd9638 | 0x1c74529cc | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-gestureHandlingModifierRequestsUpdate:` | 0x1c5fd9860 | 0x1c7452bdc | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_scrollToAppLayout:animated:alignment:completion:` | 0x1c5fd9c44 | 0x1c7452ff0 | PORTED already: hook in G1C.x:5052 |
-| SBFluidSwitcherViewController | `-_areContinuousExposeStripsUnoccluded` | 0x1c5fda820 | 0x1c7453b80 | PORTED already: hook in G2.x:1989 |
+| SBFluidSwitcherViewController | `-gestureHandlingModifierRequestsUpdate:` | 0x1c5fd9860 | 0x1c7452bdc | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherViewController | `-_scrollToAppLayout:animated:alignment:completion:` | 0x1c5fd9c44 | 0x1c7452ff0 | PORTED already: hook in G1C.x:5070 |
+| SBFluidSwitcherViewController | `-_areContinuousExposeStripsUnoccluded` | 0x1c5fda820 | 0x1c7453b80 | PORTED already: hook in G2.x:1994 |
 | SBFluidSwitcherViewController | `-_setupLiveContentOverlayForAppLayout:itemContainer:overlay:` | 0x1c5fdd720 | 0x1c7456a64 | PORTED already: 16.2 address cited in G2C.x |
-| SBFluidSwitcherViewController | `-_updateContinuousExposeIdentifiersTransitioningFromAppLayout:toAppLayout:animated:` | 0x1c5fde0d0 | 0x1c7457450 | PORTED already: hook in G1C.x:854, G2.x:1969 |
-| SBFluidSwitcherViewController | `-_updatePlusButtonPresence` | 0x1c5fde30c | 0x1c74575b8 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_updateHomeScreenPointerInteractions` | 0x1c5fdf11c | 0x1c74583f4 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_updateAsyncRenderingAndResizesHostedContext` | 0x1c5fdffb4 | 0x1c745929c | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_acquireKeyboardSuppressionAssertionForMode:` | 0x1c5fe088c | 0x1c7459e50 | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBFluidSwitcherViewController | `-_updateFloatingDockWindowLevelAssertion` | 0x1c5fe0c60 | 0x1c745a234 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-_updateContinuousExposeIdentifiersTransitioningFromAppLayout:toAppLayout:animated:` | 0x1c5fde0d0 | 0x1c7457450 | PORTED already: hook in G1C.x:872, G2.x:1974 |
+| SBFluidSwitcherViewController | `-_updatePlusButtonPresence` | 0x1c5fde30c | 0x1c74575b8 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherViewController | `-_updateHomeScreenPointerInteractions` | 0x1c5fdf11c | 0x1c74583f4 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherViewController | `-_updateAsyncRenderingAndResizesHostedContext` | 0x1c5fdffb4 | 0x1c745929c | PORTED already: 16.2 address cited in P1Drag.m |
+| SBFluidSwitcherViewController | `-_acquireKeyboardSuppressionAssertionForMode:` | 0x1c5fe088c | 0x1c7459e50 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherViewController | `-_updateFloatingDockWindowLevelAssertion` | 0x1c5fe0c60 | 0x1c745a234 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-_dispatchEventAndHandleAction:` | 0x1c5fe17e4 | 0x1c745ae4c | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-_updateForegroundAppLayoutsList` | 0x1c5fe1c90 | 0x1c745b368 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_performEventResponse:` | 0x1c5fe2024 | 0x1c745b6f0 | PORTED already: hook in G1B.x:797, G1B.x:1107 |
+| SBFluidSwitcherViewController | `-_performEventResponse:` | 0x1c5fe2024 | 0x1c745b6f0 | PORTED already: hook in G1B.x:798, G1B.x:1108 |
 | SBFluidSwitcherViewController | `-_performModifierUpdateLayoutResponse:` | 0x1c5fe30b8 | 0x1c745c7dc | PORTED already: hook in G1D.x:897 |
-| SBFluidSwitcherViewController | `-_performModifierIconViewVisibilityUpdateResponse:` | 0x1c5fe35dc | 0x1c745cd90 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-_performModifierIconViewVisibilityUpdateResponse:` | 0x1c5fe35dc | 0x1c745cd90 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-_performRequestSystemApertureElementSuppressionResponse:` | 0x1c5fe4df0 | 0x1c745e4f4 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-_performRelinquishSystemApertureElementSuppressionResponse:` | 0x1c5fe4fec | 0x1c745e788 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-_performSystemApertureBounceResponse:` | 0x1c5fe5114 | 0x1c745e8e8 | PORTED already: 16.2 address cited in G2B.m |
@@ -630,7 +630,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFullScreenContinuousExposeSwitcherModifier | `-handleTapOutsideToDismissEvent:` | 0x1c6140048 | 0x1c75c4bc0 | PORTED already: 16.2 address cited in G1C.x |
 | SBFullScreenContinuousExposeSwitcherModifier | `-_anyItemExceedsWidthThresholdToHideStrip` | 0x1c61414bc | 0x1c75c5244 | PORTED already: 16.2 address cited in G1C.x |
 | SBFullScreenContinuousExposeSwitcherModifier | `-.cxx_destruct` | 0x1c6141e04 | 0x1c75c55f4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBFullScreenFluidSwitcherRootSwitcherModifier | `-transitionModifierForMainTransitionEvent:` | 0x1c61a1440 | 0x1c762c998 | PORTED already: hook in G1B.x:2371 |
+| SBFullScreenFluidSwitcherRootSwitcherModifier | `-transitionModifierForMainTransitionEvent:` | 0x1c61a1440 | 0x1c762c998 | PORTED already: hook in G1B.x:2381 |
 | SBFullScreenSwitcherLiveContentOverlayCoordinator | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c604e570 | 0x1c74ca574 | TRIAGE PENDING |
 | SBFullScreenSwitcherLiveContentOverlayCoordinator | `-layoutStateTransitionCoordinator:transitionWillEndWithTransitionContext:` | 0x1c604ef44 | 0x1c74cafd0 | TRIAGE PENDING |
 | SBFullScreenSwitcherLiveContentOverlayCoordinator | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c604f1a8 | 0x1c74cb284 | TRIAGE PENDING |
@@ -652,7 +652,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFullScreenSwitcherSceneLiveContentOverlay | `-sceneHandle:didCreateScene:` | 0x1c60534a8 | 0x1c74d00f4 | TRIAGE PENDING |
 | SBFullScreenSwitcherSceneLiveContentOverlay | `-setTouchBehavior:` | 0x1c6053638 | 0x1c74d02cc | TRIAGE PENDING |
 | SBFullScreenToHomeIconZoomSwitcherModifier | `-initWithTransitionID:appLayout:direction:` | 0x1c61278d0 | 0x1c75b1dd0 | TRIAGE PENDING |
-| SBFullScreenToHomeIconZoomSwitcherModifier | `-shouldAsyncRenderUntilDelay:` | 0x1c6127b18 | 0x1c75b2034 | PORTED already: hook in G1B.x:2202 |
+| SBFullScreenToHomeIconZoomSwitcherModifier | `-shouldAsyncRenderUntilDelay:` | 0x1c6127b18 | 0x1c75b2034 | PORTED already: hook in G1B.x:2212 |
 | SBFullScreenToHomeIconZoomSwitcherModifier | `-wantsDockBehaviorAssertion` | 0x1c6128f18 | 0x1c75b3988 | PORTED already: 16.2 address cited in G1B.x |
 | SBFullScreenToHomePIPSwitcherModifier | `-transitionWillBegin` | 0x1c633b640 | 0x1c77def90 | PORTED already: 16.2 address cited in G1C.x |
 | SBFullScreenToHomePIPSwitcherModifier | `-frameForIndex:` | 0x1c633b7e0 | 0x1c77df1ac | TRIAGE PENDING |
@@ -662,8 +662,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBFullScreenToHomePIPSwitcherModifier | `-rotationAngleForIndex:` | 0x1c633b9d4 | 0x1c77df684 | TRIAGE PENDING |
 | SBFullScreenToHomePIPSwitcherModifier | `-cornerRadiiForIndex:` | 0x1c633bbe4 | 0x1c77dfc44 | TRIAGE PENDING |
 | SBFullScreenToHomePIPSwitcherModifier | `-opacityForLayoutRole:inAppLayout:atIndex:` | 0x1c633bc7c | 0x1c77dfcdc | TRIAGE PENDING |
-| SBFullScreenToHomeSlideOverSwitcherModifier | `-scaleForIndex:` | 0x1c638de94 | 0x1c7836d34 | PORTED already: hook in G1B.x:2225 |
-| SBFullScreenToHomeSlideOverSwitcherModifier | `-visibleAppLayouts` | 0x1c638de9c | 0x1c783713c | PORTED already: hook in G1B.x:2230 |
+| SBFullScreenToHomeSlideOverSwitcherModifier | `-scaleForIndex:` | 0x1c638de94 | 0x1c7836d34 | PORTED already: hook in G1B.x:2235 |
+| SBFullScreenToHomeSlideOverSwitcherModifier | `-visibleAppLayouts` | 0x1c638de9c | 0x1c783713c | PORTED already: hook in G1B.x:2240 |
 | SBFullScreenToHomeSystemApertureSwitcherModifier | `-transitionWillBegin` | 0x1c6075a7c | 0x1c74f8a08 | IRRELEVANT: zoom out of the Dynamic Island (iPhone only) |
 | SBFullScreenToHomeSystemApertureSwitcherModifier | `-_blurItemContainerParameters` | 0x1c60774fc | 0x1c74fa48c | IRRELEVANT: zoom out of the Dynamic Island (iPhone only) |
 | SBGestureRootSwitcherModifier | `-handleEvent:` | 0x1c60565c0 | 0x1c74d3724 | TRIAGE PENDING |
@@ -679,7 +679,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBHomeGestureToHomeSwitcherModifier | `-frameForIndex:` | 0x1c5f44db8 | 0x1c73b941c | TRIAGE PENDING |
 | SBHomeGestureToHomeSwitcherModifier | `-scaleForIndex:` | 0x1c5f44df8 | 0x1c73b947c | TRIAGE PENDING |
 | SBHomeGestureToSwitcherSwitcherModifier | `-transitionWillBegin` | 0x1c6498dd8 | 0x1c794f6fc | PORTED already: hook in G1D.x:2386 |
-| SBHomeGestureToSwitcherSwitcherModifier | `-_appLayoutToScrollToDuringTransition` | 0x1c6499a54 | 0x1c795038c | TRIAGE PENDING |
+| SBHomeGestureToSwitcherSwitcherModifier | `-_appLayoutToScrollToDuringTransition` | 0x1c6499a54 | 0x1c795038c | PORTED already: 16.2 address cited in P1SW.m |
 | SBInlineAppExposeContinuousExposeSwitcherModifier | `-handleTransitionEvent:` | 0x1c61f81fc | 0x1c76868e0 | PORTED already: 16.2 address cited in G1C.x |
 | SBInlineAppExposeContinuousExposeSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c61f82bc | 0x1c7686a58 | PORTED already: 16.2 address cited in G1C.x |
 | SBInlineAppExposeContinuousExposeSwitcherModifier | `-handleHighlightEvent:` | 0x1c61f8528 | 0x1c7687024 | PORTED already: 16.2 address cited in G1B.x |
@@ -694,71 +694,71 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBInteractiveScreenshotCommitWorkspaceTransaction | `-_updateState` | 0x1c624ee80 | 0x1c76e4418 | TRIAGE PENDING |
 | SBItemResizeGestureSwitcherModifier | `-handleGestureEvent:` | 0x1c622bcd8 | 0x1c76be31c | PORTED already: hook in G3B.x:1656 |
 | SBItemResizeGestureSwitcherModifier | `-_responseForGestureUpdateAtGestureEnd:` | 0x1c622bf98 | 0x1c76be610 | PORTED already: hook in G3B.x:1663 |
-| SBItemResizeGestureSwitcherModifier | `-_responseForSceneSizeUpdateToSize:center:sceneUpdatesOnly:` | 0x1c622c5dc | 0x1c76bed98 | PORTED already: hook in G1C.x:5471, G3B.x:1670 |
+| SBItemResizeGestureSwitcherModifier | `-_responseForSceneSizeUpdateToSize:center:sceneUpdatesOnly:` | 0x1c622c5dc | 0x1c76bed98 | PORTED already: hook in G1C.x:5489, G3B.x:1670 |
 | SBItemResizeGestureSwitcherModifier | `-_anyItemExceedsWidthThresholdToHideStrip` | 0x1c622d588 | 0x1c76bfd40 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_init` | 0x1c6235168 | 0x1c76c7c20 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_init` | 0x1c6235168 | 0x1c76c7c20 | EQUIVALENT: ivar bookkeeping only: 16.2 adds _draggingAppLayouts (ported as an associated object, G1D.x kDragging) and moves the Stage Manager first-use education observer from the view controller to the coordinator (16.0 SBFluidSwitcherViewController already owns _chamoisWindowingUIEverEnabledObserver); the hidden UIWindow that forced windowSceneDidConnect: is gone because the scene manager connects scenes itself |
 | SBMainSwitcherControllerCoordinator | `-dealloc` | 0x1c6235544 | 0x1c76c8124 | PORTED already: hook in G3B.x:1260 |
 | SBMainSwitcherControllerCoordinator | `-windowSceneDidConnect:` | 0x1c6235828 | 0x1c76c8410 | PORTED already: hook in G1D.x:431 |
-| SBMainSwitcherControllerCoordinator | `-windowSceneDidDisconnect:` | 0x1c62359ec | 0x1c76c85e0 | PORTED already: hook in G4B.x:1699 |
-| SBMainSwitcherControllerCoordinator | `-_loadContentViewControllerIfNecessaryForAllWindowScenes` | 0x1c6235bf8 | 0x1c76c8c50 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_loadContentViewControllerIfNecessaryForWindowScene:` | 0x1c6235cbc | 0x1c76c8d14 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c62362ec | 0x1c76c9354 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-windowSceneDidDisconnect:` | 0x1c62359ec | 0x1c76c85e0 | PORTED already: hook in G4B.x:1780 |
+| SBMainSwitcherControllerCoordinator | `-_loadContentViewControllerIfNecessaryForAllWindowScenes` | 0x1c6235bf8 | 0x1c76c8c50 | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
+| SBMainSwitcherControllerCoordinator | `-_loadContentViewControllerIfNecessaryForWindowScene:` | 0x1c6235cbc | 0x1c76c8d14 | EQUIVALENT: 16.2 passes the switcher controller instead of the window scene to the live content overlay coordinator initialiser; the 16.0 initialiser takes the window scene and reaches the same controller through it |
+| SBMainSwitcherControllerCoordinator | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c62362ec | 0x1c76c9354 | EQUIVALENT: 16.2 reads the request through the application transition context and also stores previousLayoutState on the per-scene layout state provider; the only readers of that field are 16.2 code (16.0 readers use the transition context, ported in P1Drag.m P1_PrevLayoutStateFor) and the ivar offsets moved (+0x58 -> +0x78); the main-display singleton lookups printed in the diff are per-scene in both builds |
 | SBMainSwitcherControllerCoordinator | `-_focusNewlyAddedApplicationIfNeededTransitioningFromLayoutState:toLayoutState:windowScene:` | 0x1c623797c | 0x1c76cac38 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c6237d6c | 0x1c76cb178 | PORTED already: hook in G1B.x:1552, G1D.x:704 |
-| SBMainSwitcherControllerCoordinator | `-eventSource:userTouchedApplication:` | 0x1c6238a08 | 0x1c76cbf28 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-isAnySwitcherVisible` | 0x1c6239f20 | 0x1c76cd428 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-hasVisibleElements` | 0x1c623a23c | 0x1c76cd744 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-performKeyboardShortcutAction:forBundleIdentifier:windowScene:` | 0x1c623a458 | 0x1c76cd978 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_handleFocusedIconSwitcherShortcutAction:bundleIdentifier:windowScene:` | 0x1c623a620 | 0x1c76cdb38 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c6237d6c | 0x1c76cb178 | PORTED already: hook in G1B.x:1562, G1D.x:704 |
+| SBMainSwitcherControllerCoordinator | `-eventSource:userTouchedApplication:` | 0x1c6238a08 | 0x1c76cbf28 | EQUIVALENT: 16.2 reads the active display's controller explicitly; the 16.0 coordinator forwarders (layoutState, _currentLayoutState) forward to _activeDisplaySwitcherController, the same object |
+| SBMainSwitcherControllerCoordinator | `-isAnySwitcherVisible` | 0x1c6239f20 | 0x1c76cd428 | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
+| SBMainSwitcherControllerCoordinator | `-hasVisibleElements` | 0x1c623a23c | 0x1c76cd744 | EQUIVALENT: 16.2 reads the active display's controller explicitly; the 16.0 coordinator forwarders (layoutState, _currentLayoutState) forward to _activeDisplaySwitcherController, the same object |
+| SBMainSwitcherControllerCoordinator | `-performKeyboardShortcutAction:forBundleIdentifier:windowScene:` | 0x1c623a458 | 0x1c76cd978 | PORTED already: the action numbering and the handler are the view controller's performKeyboardShortcutAction: (M3, P1VC.m); the coordinator only range-checks and forwards to the scene's controller (16.0 0x16 upper bound, 16.2 0x14) |
+| SBMainSwitcherControllerCoordinator | `-_handleFocusedIconSwitcherShortcutAction:bundleIdentifier:windowScene:` | 0x1c623a620 | 0x1c76cdb38 | a557a56: Y3StatusBar.x y3_scenectl (the controller of the passed window scene answers the layout state / floating layout queries instead of the active display's) |
 | SBMainSwitcherControllerCoordinator | `-failMultitaskingGesturesForReason:` | 0x1c623adb8 | 0x1c76ce304 | PORTED already: hook in G1D.x:579 |
-| SBMainSwitcherControllerCoordinator | `-_activateNeighboringAppLayoutRequiringActiveAppLayout:appLayoutEnvironment:inForwardDirection:windowScene:eventLabel:` | 0x1c623af6c | 0x1c76ce4f4 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-isInAppStatusBarHiddenForWindowScene:` | 0x1c623b5fc | 0x1c76ceb90 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-statusBarAvoidanceFrameForLayoutRole:windowScene:` | 0x1c623b66c | 0x1c76cebfc | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-statusBarAvoidanceFrameForLayoutRole:layoutState:windowScene:` | 0x1c623b6fc | 0x1c76ceca8 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-statusBarEdgeInsetsForWindowScene:` | 0x1c623b864 | 0x1c76cee4c | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-leadingStatusBarStyleRequestForWindowScene:` | 0x1c623bc38 | 0x1c76cf240 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-trailingStatusBarStyleRequestForWindowScene:` | 0x1c623bce4 | 0x1c76cf2cc | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-statusBarOverlayDataForWindowScene:` | 0x1c623bd90 | 0x1c76cf358 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-statusBarActionsByPartIdentifierForWindowScene:` | 0x1c623be70 | 0x1c76cf444 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-removeAppLayoutTransientOverlayViewController:windowScene:` | 0x1c623ce58 | 0x1c76d0440 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_activateNeighboringAppLayoutRequiringActiveAppLayout:appLayoutEnvironment:inForwardDirection:windowScene:eventLabel:` | 0x1c623af6c | 0x1c76ce4f4 | a557a56: Y3StatusBar.x y3_scenectl (the controller of the passed window scene answers the layout state / floating layout queries instead of the active display's) |
+| SBMainSwitcherControllerCoordinator | `-isInAppStatusBarHiddenForWindowScene:` | 0x1c623b5fc | 0x1c76ceb90 | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-statusBarAvoidanceFrameForLayoutRole:windowScene:` | 0x1c623b66c | 0x1c76cebfc | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-statusBarAvoidanceFrameForLayoutRole:layoutState:windowScene:` | 0x1c623b6fc | 0x1c76ceca8 | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-statusBarEdgeInsetsForWindowScene:` | 0x1c623b864 | 0x1c76cee4c | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-leadingStatusBarStyleRequestForWindowScene:` | 0x1c623bc38 | 0x1c76cf240 | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-trailingStatusBarStyleRequestForWindowScene:` | 0x1c623bce4 | 0x1c76cf2cc | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-statusBarOverlayDataForWindowScene:` | 0x1c623bd90 | 0x1c76cf358 | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-statusBarActionsByPartIdentifierForWindowScene:` | 0x1c623be70 | 0x1c76cf444 | a557a56: Y3StatusBar.x y3_scenectl (per window scene state instead of the active display) + y3_avoidorient (Stage Manager uses the layout state's orientation for the avoidance frame) |
+| SBMainSwitcherControllerCoordinator | `-removeAppLayoutTransientOverlayViewController:windowScene:` | 0x1c623ce58 | 0x1c76d0440 | EQUIVALENT: 16.2 only renames the helper it calls (removeAcquiredTransientOverlayViewController: -> _removeAcquiredTransientOverlayViewController:), both are implemented in 16.0 with the same body |
 | SBMainSwitcherControllerCoordinator | `-_configureRequest:forSwitcherTransitionRequest:withEventLabel:` | 0x1c623e164 | 0x1c76d174c | PORTED already: hook in G1D.x:446 |
-| SBMainSwitcherControllerCoordinator | `-_entityForDisplayItem:sceneHandleProvider:displayIdentity:` | 0x1c623f6c4 | 0x1c76d2eac | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_entityForDisplayItem:sceneHandleProvider:displayIdentity:` | 0x1c623f6c4 | 0x1c76d2eac | EQUIVALENT: _appForDisplayItem: became [SBApplicationController applicationForDisplayItem:] (same lookup); rest is block / register renumbering |
 | SBMainSwitcherControllerCoordinator | `-switcherContentController:deviceApplicationSceneHandleForDisplayItem:` | 0x1c623fa88 | 0x1c76d3288 | PORTED already: hook in G1D.x:600 |
-| SBMainSwitcherControllerCoordinator | `-settings:changedValueForKey:` | 0x1c623fc30 | 0x1c76d32fc | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-transitionEventForLayoutState:identifier:phase:animated:` | 0x1c624052c | 0x1c76d3bf8 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-transitionEventForContext:identifier:phase:animated:` | 0x1c624073c | 0x1c76d3e1c | PORTED already: hook in G1B.x:1158, G1D.x:686 |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:shouldMorphToPIPForTransitionContext:` | 0x1c6241694 | 0x1c76d4e94 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:shouldMorphFromPIPForTransitionContext:` | 0x1c6241874 | 0x1c76d50d4 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_shouldZoomFromSystemApertureForTransitionContext:` | 0x1c62418bc | 0x1c76d5174 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:supportsKillingOfAppLayout:` | 0x1c6241dcc | 0x1c76d568c | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:displayItemSupportsCenterRole:` | 0x1c6241f34 | 0x1c76d581c | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:supportsTitleItemsForAppLayout:` | 0x1c6241f80 | 0x1c76d589c | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:performTransitionWithRequest:gestureInitiated:` | 0x1c6242114 | 0x1c76d5a58 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-settings:changedValueForKey:` | 0x1c623fc30 | 0x1c76d32fc | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
+| SBMainSwitcherControllerCoordinator | `-transitionEventForLayoutState:identifier:phase:animated:` | 0x1c624052c | 0x1c76d3bf8 | PORTED already: PiP morph layout role: G1B.x / G1C.x (morphingPIPLayoutRole on the transition event) and G1D.x (_shouldMorphTo/FromPIPForTransitionContext:outForLayoutRole:) |
+| SBMainSwitcherControllerCoordinator | `-transitionEventForContext:identifier:phase:animated:` | 0x1c624073c | 0x1c76d3e1c | PORTED already: hook in G1B.x:1159, G1D.x:686 |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:shouldMorphToPIPForTransitionContext:` | 0x1c6241694 | 0x1c76d4e94 | PORTED already: PiP morph layout role: G1B.x / G1C.x (morphingPIPLayoutRole on the transition event) and G1D.x (_shouldMorphTo/FromPIPForTransitionContext:outForLayoutRole:) |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:shouldMorphFromPIPForTransitionContext:` | 0x1c6241874 | 0x1c76d50d4 | PORTED already: PiP morph layout role: G1B.x / G1C.x (morphingPIPLayoutRole on the transition event) and G1D.x (_shouldMorphTo/FromPIPForTransitionContext:outForLayoutRole:) |
+| SBMainSwitcherControllerCoordinator | `-_shouldZoomFromSystemApertureForTransitionContext:` | 0x1c62418bc | 0x1c76d5174 | IRRELEVANT: Dynamic Island zoom (iPhone only) |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:supportsKillingOfAppLayout:` | 0x1c6241dcc | 0x1c76d568c | EQUIVALENT: 16.2 asks the controller that owns the item / content view controller; the 16.0 coordinator's scene handle lookup already resolves the owner display's handle (G1D.x scene handle owner lookup, switch g1d_scenehandle) and _medusaKeyboardSceneHandle only changed from the helper to the same active scene's sceneManager |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:displayItemSupportsCenterRole:` | 0x1c6241f34 | 0x1c76d581c | EQUIVALENT: 16.2 asks the controller that owns the item / content view controller; the 16.0 coordinator's scene handle lookup already resolves the owner display's handle (G1D.x scene handle owner lookup, switch g1d_scenehandle) and _medusaKeyboardSceneHandle only changed from the helper to the same active scene's sceneManager |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:supportsTitleItemsForAppLayout:` | 0x1c6241f80 | 0x1c76d589c | EQUIVALENT: 16.2 asks the controller that owns the item / content view controller; the 16.0 coordinator's scene handle lookup already resolves the owner display's handle (G1D.x scene handle owner lookup, switch g1d_scenehandle) and _medusaKeyboardSceneHandle only changed from the helper to the same active scene's sceneManager |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:performTransitionWithRequest:gestureInitiated:` | 0x1c6242114 | 0x1c76d5a58 | PORTED already: the manager of the asking view controller receives handleTransitionRequestForGestureUpdate: / Complete:; P1Drag.m P1_HandleUpdate / P1_HandleComplete replace the 16.0 manager methods |
 | SBMainSwitcherControllerCoordinator | `-switcherContentController:requestNewWindowForBundleIdentifier:` | 0x1c624239c | 0x1c76d5ce0 | PORTED already: hook in G1D.x:546 |
-| SBMainSwitcherControllerCoordinator | `-_setContainerStatusBarHidden:animationDuration:usingAssertion:reason:windowScene:` | 0x1c6242754 | 0x1c76d6164 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-switcherContentController:reopenHiddenAppLayoutsWithBundleIdentifier:` | 0x1c6242ffc | 0x1c76d6a18 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_setContainerStatusBarHidden:animationDuration:usingAssertion:reason:windowScene:` | 0x1c6242754 | 0x1c76d6164 | a557a56: Y3StatusBar.x y3_containersb (level 6 settings assertion with UIStatusBarStyleAnimationParameters, _shouldTakeStatusBarAssertionForSwitcherController:) |
+| SBMainSwitcherControllerCoordinator | `-switcherContentController:reopenHiddenAppLayoutsWithBundleIdentifier:` | 0x1c6242ffc | 0x1c76d6a18 | EQUIVALENT: 16.2 only adds a weak self capture to the completion block |
 | SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didBeginGesture:` | 0x1c6243d44 | 0x1c76d79e4 | PORTED already: hook in G1D.x:610 |
 | SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didUpdateGesture:` | 0x1c6243dc4 | 0x1c76d7ba8 | PORTED already: hook in G1D.x:629 |
 | SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didEndGesture:` | 0x1c6243e44 | 0x1c76d7d18 | PORTED already: hook in G1D.x:642 |
-| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didBeginDraggingWindowWithSceneIdentifier:` | 0x1c6243ec4 | 0x1c76d7edc | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didPlatterizeWindowDragWithSceneIdentifier:` | 0x1c6243fa8 | 0x1c76d8038 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:willEndDraggingWindowWithSceneIdentifier:` | 0x1c6243ff8 | 0x1c76d811c | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:clickReceivedForHomeGrabberView:` | 0x1c62440cc | 0x1c76d8268 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:tapReceivedForGrabberTongueAtEdge:` | 0x1c624414c | 0x1c76d8330 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_shouldPrioritizeSortOrderForAppLayout:` | 0x1c6245678 | 0x1c76d98a0 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_medusaKeyboardSceneHandle` | 0x1c6245a14 | 0x1c76d9c50 | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_updateBestAppSuggestion` | 0x1c6245e54 | 0x1c76da394 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didBeginDraggingWindowWithSceneIdentifier:` | 0x1c6243ec4 | 0x1c76d7edc | PORTED already: 16.2 additionally tells every switcher controller (the controller side of the delegate method); G1D.x adds the three controller methods (G1D_SC_Noop3) and the coordinator dragging set |
+| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:didPlatterizeWindowDragWithSceneIdentifier:` | 0x1c6243fa8 | 0x1c76d8038 | PORTED already: 16.2 additionally tells every switcher controller (the controller side of the delegate method); G1D.x adds the three controller methods (G1D_SC_Noop3) and the coordinator dragging set |
+| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:willEndDraggingWindowWithSceneIdentifier:` | 0x1c6243ff8 | 0x1c76d811c | PORTED already: 16.2 additionally tells every switcher controller (the controller side of the delegate method); G1D.x adds the three controller methods (G1D_SC_Noop3) and the coordinator dragging set |
+| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:clickReceivedForHomeGrabberView:` | 0x1c62440cc | 0x1c76d8268 | EQUIVALENT: 16.2 enumerates all controllers and each controller forwards to its content view controller only when the manager is its own (isEqual: gestureManager, 0x1c7607290 / 0x1c7607330); 16.0 _switcherControllerForGestureManager: finds that one controller directly |
+| SBMainSwitcherControllerCoordinator | `-fluidSwitcherGestureManager:tapReceivedForGrabberTongueAtEdge:` | 0x1c624414c | 0x1c76d8330 | EQUIVALENT: 16.2 enumerates all controllers and each controller forwards to its content view controller only when the manager is its own (isEqual: gestureManager, 0x1c7607290 / 0x1c7607330); 16.0 _switcherControllerForGestureManager: finds that one controller directly |
+| SBMainSwitcherControllerCoordinator | `-_shouldPrioritizeSortOrderForAppLayout:` | 0x1c6245678 | 0x1c76d98a0 | EQUIVALENT: 16.2 asks the controller that owns the item / content view controller; the 16.0 coordinator's scene handle lookup already resolves the owner display's handle (G1D.x scene handle owner lookup, switch g1d_scenehandle) and _medusaKeyboardSceneHandle only changed from the helper to the same active scene's sceneManager |
+| SBMainSwitcherControllerCoordinator | `-_medusaKeyboardSceneHandle` | 0x1c6245a14 | 0x1c76d9c50 | EQUIVALENT: 16.2 asks the controller that owns the item / content view controller; the 16.0 coordinator's scene handle lookup already resolves the owner display's handle (G1D.x scene handle owner lookup, switch g1d_scenehandle) and _medusaKeyboardSceneHandle only changed from the helper to the same active scene's sceneManager |
+| SBMainSwitcherControllerCoordinator | `-_updateBestAppSuggestion` | 0x1c6245e54 | 0x1c76da394 | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
 | SBMainSwitcherControllerCoordinator | `-_buildAppLayoutCache` | 0x1c6245ff0 | 0x1c76da530 | PORTED already: hook in G1D.x:187 |
-| SBMainSwitcherControllerCoordinator | `-_notifySwitcherControllersAppLayoutsDidChange` | 0x1c6246b80 | 0x1c76dba40 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_notifySwitcherControllersAppLayoutsDidChange` | 0x1c6246b80 | 0x1c76dba40 | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
 | SBMainSwitcherControllerCoordinator | `-_rebuildAppListCache` | 0x1c6246bd0 | 0x1c76dba90 | PORTED already: hook in G1D.x:175 |
-| SBMainSwitcherControllerCoordinator | `-_cancelPIPForDisplayItem:` | 0x1c62492a8 | 0x1c76de3ec | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_persistenceIdentifiersForBundleIdentifier:onlyIncludeLaunchableIdentifiers:` | 0x1c624963c | 0x1c76de7ac | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_performSceneDestructionForModelRemovalResults:` | 0x1c624a104 | 0x1c76df2a0 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_cancelPIPForDisplayItem:` | 0x1c62492a8 | 0x1c76de3ec | EQUIVALENT: 16.2 asks the controller that owns the item / content view controller; the 16.0 coordinator's scene handle lookup already resolves the owner display's handle (G1D.x scene handle owner lookup, switch g1d_scenehandle) and _medusaKeyboardSceneHandle only changed from the helper to the same active scene's sceneManager |
+| SBMainSwitcherControllerCoordinator | `-_persistenceIdentifiersForBundleIdentifier:onlyIncludeLaunchableIdentifiers:` | 0x1c624963c | 0x1c76de7ac | EQUIVALENT: _appForDisplayItem: became [SBApplicationController applicationForDisplayItem:] (same lookup); rest is block / register renumbering |
+| SBMainSwitcherControllerCoordinator | `-_performSceneDestructionForModelRemovalResults:` | 0x1c624a104 | 0x1c76df2a0 | EQUIVALENT: _appForDisplayItem: became [SBApplicationController applicationForDisplayItem:] (same lookup); rest is block / register renumbering |
 | SBMainSwitcherControllerCoordinator | `-_switcherModelRemovalResultsForRequest:forReason:` | 0x1c624b4b0 | 0x1c76e0660 | PORTED already: hook in G1D.x:505 |
-| SBMainSwitcherControllerCoordinator | `-keyboardFocusController:externalSceneDidAcquireFocus:` | 0x1c624c078 | 0x1c76e123c | TRIAGE PENDING |
-| SBMainSwitcherControllerCoordinator | `-_evaluateAsynchronousRenderingEnablement` | 0x1c624ce08 | 0x1c76e1fcc | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-keyboardFocusController:externalSceneDidAcquireFocus:` | 0x1c624c078 | 0x1c76e123c | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
+| SBMainSwitcherControllerCoordinator | `-_evaluateAsynchronousRenderingEnablement` | 0x1c624ce08 | 0x1c76e1fcc | OPEN: 16.2 removed the method (async rendering of the container moved to the live content overlay coordinator, REVIEW-CORE M6/M7); M7 is in P1Drag.m, M6 is the remaining half, owner: core agent |
 | SBMainSwitcherControllerCoordinator | `-appLayoutsForSwitcherController:` | 0x1c624d488 | 0x1c76e2354 | PORTED already: hook in G1D.x:141 |
-| SBMainSwitcherControllerCoordinator | `-_enumerateSwitcherControllersWithBlock:` | 0x1c624df90 | 0x1c76e3714 | TRIAGE PENDING |
+| SBMainSwitcherControllerCoordinator | `-_enumerateSwitcherControllersWithBlock:` | 0x1c624df90 | 0x1c76e3714 | EQUIVALENT: rename only: _enumerateSwitcherControllersWithBlock: became enumerateSwitcherControllersWithBlock: (same loop over _switcherControllersByWindowScene, the 16.0 selector is still implemented) |
 | SBMainSwitcherControllerCoordinator | `-.cxx_destruct` | 0x1c624e1f0 | 0x1c76e3740 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBMedusaAppsTestRecipe | `-_toggle` | 0x1c611d940 | 0x1c75a7ce8 | IRRELEVANT: internal test recipes |
 | SBMedusaBannerViewController | `-_bannerView` | 0x1c637cd80 | 0x1c782418c | PORTED already: hook in G3B.x:146 |
@@ -846,12 +846,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBReduceMotionHomeGestureSwitcherModifier | `-homeScreenBackdropBlurType` | 0x1c63bedc4 | 0x1c78694d8 | PORTED already: 16.2 address cited in G1C.x |
 | SBRevealContinuousExposeStripOverflowGestureModifier | `-frameForIndex:` | 0x1c5f1ce60 | 0x1c7391508 | TRIAGE PENDING |
 | SBRevealContinuousExposeStripOverflowGestureModifier | `-_finalScaleForFullScreenAppLayout` | 0x1c5f1ef5c | 0x1c73934d0 | TRIAGE PENDING |
-| SBRevealContinuousExposeStripOverflowRootSwitcherModifier | `-transitionChildModifierForMainTransitionEvent:activeGestureModifier:` | 0x1c640e6e0 | 0x1c78bbf18 | PORTED already: hook in G1C.x:1415 |
+| SBRevealContinuousExposeStripOverflowRootSwitcherModifier | `-transitionChildModifierForMainTransitionEvent:activeGestureModifier:` | 0x1c640e6e0 | 0x1c78bbf18 | PORTED already: hook in G1C.x:1433 |
 | SBRevealContinuousExposeStripsGestureModifier | `-handleGestureEvent:` | 0x1c63706d4 | 0x1c781783c | PORTED already: 16.2 address cited in G1C.x |
 | SBRoutingSwitcherModifier | `-stackDescriptionWithPrefix:` | 0x1c609d2f0 | 0x1c752045c | EXCLUDED: description / debug text only |
-| SBRoutingSwitcherModifier | `-appLayouts` | 0x1c609d9b8 | 0x1c7520b44 | PORTED already: hook in G1B.x:431 |
-| SBRoutingSwitcherModifier | `-containerViewBounds` | 0x1c609dbc4 | 0x1c7520d64 | PORTED already: hook in G1B.x:441 |
-| SBRoutingSwitcherModifier | `-switcherViewBounds` | 0x1c609dc40 | 0x1c7520df8 | PORTED already: hook in G1B.x:447 |
+| SBRoutingSwitcherModifier | `-appLayouts` | 0x1c609d9b8 | 0x1c7520b44 | PORTED already: hook in G1B.x:432 |
+| SBRoutingSwitcherModifier | `-containerViewBounds` | 0x1c609dbc4 | 0x1c7520d64 | PORTED already: hook in G1B.x:442 |
+| SBRoutingSwitcherModifier | `-switcherViewBounds` | 0x1c609dc40 | 0x1c7520df8 | PORTED already: hook in G1B.x:448 |
 | SBShelfCarouselSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6434200 | 0x1c78e4460 | TRIAGE PENDING |
 | SBShelfExpansionSwitcherModifier | `-scaleForIndex:` | 0x1c605bdec | 0x1c74db034 | TRIAGE PENDING |
 | SBShelfLiveContentOverlayCoordinator | `-_addOverlaysIfNeededForTransitionContext:` | 0x1c64cf838 | 0x1c798ac94 | TRIAGE PENDING |
@@ -887,20 +887,20 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSwitcherController | `-referenceFrameForForInterfaceOrientation:floatingConfiguration:` | 0x1c617c64c | 0x1c760409c | TRIAGE PENDING |
 | SBSwitcherController | `-referenceFrameForForInterfaceOrientation:centerConfiguration:` | 0x1c617c6f4 | 0x1c76041b4 | TRIAGE PENDING |
 | SBSwitcherController | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c617c79c | 0x1c76042cc | TRIAGE PENDING |
-| SBSwitcherController | `-_currentLayoutState` | 0x1c617dab8 | 0x1c7605754 | TRIAGE PENDING |
+| SBSwitcherController | `-_currentLayoutState` | 0x1c617dab8 | 0x1c7605754 | PORTED already: 16.2 address cited in P1Drag.m |
 | SBSwitcherController | `-_presentMedusaEducationBanner` | 0x1c617ddac | 0x1c7605aa0 | TRIAGE PENDING |
 | SBSwitcherController | `-_invalidateMedusaEducationBannerTimer` | 0x1c617e0dc | 0x1c7605fd4 | TRIAGE PENDING |
-| SBSwitcherController | `-_ancillaryTransitionRequestForTransitionRequest:` | 0x1c617e6e0 | 0x1c76066fc | TRIAGE PENDING |
+| SBSwitcherController | `-_ancillaryTransitionRequestForTransitionRequest:` | 0x1c617e6e0 | 0x1c76066fc | PORTED already: 16.2 address cited in P1Drag.m |
 | SBSwitcherController | `-sceneEntityFrameForWorkspaceEntity:inLayoutState:` | 0x1c617ef24 | 0x1c76073e4 | TRIAGE PENDING |
 | SBSwitcherLayoutCalculationsCache | `-frameForKey:validityToken:fallback:` | 0x1c630132c | 0x1c779ec58 | TRIAGE PENDING |
 | SBSwitcherLayoutCalculationsCache | `-scaleForKey:validityToken:fallback:` | 0x1c630146c | 0x1c779ed98 | TRIAGE PENDING |
 | SBSwitcherLayoutCalculationsCache | `-.cxx_destruct` | 0x1c63016ac | 0x1c779efe4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSwitcherLayoutCalculationsCacheValidityToken | `-isEqual:` | 0x1c63018d4 | 0x1c779f210 | PORTED already: 16.2 address cited in G2.x |
-| SBSwitcherModifier | `-_handleEvent:` | 0x1c63e8a98 | 0x1c7895274 | PORTED already: hook in G1B.x:96, G1C.x:5009 |
+| SBSwitcherModifier | `-_handleEvent:` | 0x1c63e8a98 | 0x1c7895274 | PORTED already: hook in G1B.x:96, G1C.x:5027 |
 | SBSwitcherShelfViewController | `-initWithSwitcherController:shelf:delegate:` | 0x1c64caf2c | 0x1c798631c | TRIAGE PENDING |
 | SBSwitcherShelfViewController | `-dealloc` | 0x1c64cb1b0 | 0x1c79865a8 | TRIAGE PENDING |
-| SBSwitcherShelfViewController | `-viewWillAppear:` | 0x1c64cb658 | 0x1c7986a60 | TRIAGE PENDING |
-| SBSwitcherShelfViewController | `-viewWillDisappear:` | 0x1c64cb730 | 0x1c7986b58 | TRIAGE PENDING |
+| SBSwitcherShelfViewController | `-viewWillAppear:` | 0x1c64cb658 | 0x1c7986a60 | PORTED already: 16.2 address cited in Y2Gestures.x |
+| SBSwitcherShelfViewController | `-viewWillDisappear:` | 0x1c64cb730 | 0x1c7986b58 | PORTED already: 16.2 address cited in Y2Gestures.x |
 | SBSwitcherSnapshotImageView | `-layoutSubviews` | 0x1c5e33de8 | 0x1c72a6254 | TRIAGE PENDING |
 | SBSwitcherSnapshotImageView | `-setImage:` | 0x1c5e50750 | 0x1c72c2b48 | TRIAGE PENDING |
 | SBSwitcherSystemApertureSettings | `-setDefaultValues` | 0x1c6147278 | 0x1c75cab6c | IRRELEVANT: Dynamic Island debug settings |
@@ -911,15 +911,15 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSwitcherTransitionRequest | `-.cxx_destruct` | 0x1c5f962d4 | 0x1c740dee4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBTapAppLayoutSwitcherModifierEvent | `-copyWithZone:` | 0x1c6014910 | 0x1c748f1e0 | TRIAGE PENDING |
 | SBTapAppLayoutSwitcherModifierEvent | `-descriptionBuilderWithMultilinePrefix:` | 0x1c6014990 | 0x1c748f280 | EXCLUDED: description / debug text only |
-| SBTopAffordanceViewController | `-initWithDeviceApplicationSceneHandle:` | 0x1c64570ec | 0x1c790bbc4 | 82bc14e: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) |
+| SBTopAffordanceViewController | `-initWithDeviceApplicationSceneHandle:` | 0x1c64570ec | 0x1c790bbc4 | a557a56: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) [sha a557a56] |
 | SBTopAffordanceViewController | `-viewDidLoad` | 0x1c6457330 | 0x1c790bdb0 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
 | SBTopAffordanceViewController | `-isExpanded` | 0x1c64575e8 | 0x1c790c078 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
 | SBTopAffordanceViewController | `-dismissAnimated:` | 0x1c6457810 | 0x1c790c0b0 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
 | SBTopAffordanceViewController | `-updateContextMenuWithLayoutRole:spaceConfiguration:floatingConfiguration:interfaceOrientation:isZoomed:` | 0x1c6459bd0 | 0x1c790cac4 | PORTED already: hook in G3.x:622 |
 | SBTopAffordanceViewController | `-_setSystemPointerInteractionEnabled:` | 0x1c645b028 | 0x1c790df38 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
 | SBTopAffordanceViewController | `-setHidden:forReason:animated:` | 0x1c645b1e4 | 0x1c790e0e4 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
-| SBTopAffordanceViewController | `-topAffordanceDotsViewWillPresentMenu:` | 0x1c645b1f4 | 0x1c790e164 | 82bc14e: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) |
-| SBTopAffordanceViewController | `-topAffordanceDotsViewWillDismissMenu:` | 0x1c645b294 | 0x1c790e20c | 82bc14e: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) |
+| SBTopAffordanceViewController | `-topAffordanceDotsViewWillPresentMenu:` | 0x1c645b1f4 | 0x1c790e164 | a557a56: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) [sha a557a56] |
+| SBTopAffordanceViewController | `-topAffordanceDotsViewWillDismissMenu:` | 0x1c645b294 | 0x1c790e20c | a557a56: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) [sha a557a56] |
 | SBTopAffordanceViewController | `-setAdditionalTopInset:` | 0x1c64578a0 | 0x1c790e410 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
 | SBTopAffordanceViewController | `-.cxx_destruct` | 0x1c645b500 | 0x1c790e420 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBTraitsEmbeddedDisplayPipelineManager | `-setupDefaultPipelineForArbiter:` | 0x1c612a7f0 | 0x1c75b52bc | PORTED already: hook in G3.x:943 |
@@ -938,7 +938,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBTraitsSceneParticipantDelegate | `-_resetToInitialState` | 0x1c62da3b4 | 0x1c77750bc | TRIAGE PENDING |
 | SBTraitsSceneParticipantDelegate | `-didChangeSettingsForParticipant:context:` | 0x1c62da8f4 | 0x1c77752c8 | TRIAGE PENDING |
 | SBTraitsSceneParticipantDelegate | `-.cxx_destruct` | 0x1c62dad14 | 0x1c77757a0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBTransitionSwitcherModifierEvent | `-copyWithZone:` | 0x1c5fb9638 | 0x1c7431d04 | PORTED already: hook in G1B.x:1144 |
+| SBTransitionSwitcherModifierEvent | `-copyWithZone:` | 0x1c5fb9638 | 0x1c7431d04 | PORTED already: hook in G1B.x:1145 |
 | SBTransitionSwitcherModifierEvent | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5fb99f8 | 0x1c74320f4 | EXCLUDED: description / debug text only |
 | SBUISwitcherAnimationController | `-_updatePPTsForAnimationEnd` | 0x1c5e6ee44 | 0x1c72e1b60 | TRIAGE PENDING |
 | SBViewMorphAnimator | `-_updateParameters` | 0x1c61f2ca8 | 0x1c76812dc | TRIAGE PENDING |
@@ -946,12 +946,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBViewMorphAnimator | `-_checkAnimationsDependencies:` | 0x1c61f4fbc | 0x1c7683580 | PORTED already: hook in G1D.x:2148 |
 | SBWindowCommitSwitcherModifier | `-transitionWillBegin` | 0x1c626aadc | 0x1c770222c | TRIAGE PENDING |
 | SBWindowDeclineSwitcherModifier | `-transitionWillBegin` | 0x1c606b4d8 | 0x1c74ed85c | TRIAGE PENDING |
-| SBWindowDeleteSwitcherModifier | `-transitionWillBegin` | 0x1c6435954 | 0x1c78e6c8c | PORTED already: hook in G1B.x:1679 |
-| SBWindowDeleteSwitcherModifier | `-scaleForIndex:` | 0x1c6436218 | 0x1c78e7bf8 | PORTED already: hook in G1B.x:1712 |
+| SBWindowDeleteSwitcherModifier | `-transitionWillBegin` | 0x1c6435954 | 0x1c78e6c8c | PORTED already: hook in G1B.x:1689 |
+| SBWindowDeleteSwitcherModifier | `-scaleForIndex:` | 0x1c6436218 | 0x1c78e7bf8 | PORTED already: hook in G1B.x:1722 |
 | SBWindowDragGestureWorkspaceTransaction | `-_beginWithGesture:` | 0x1c5eca434 | 0x1c733da30 | PORTED already: hook in G1D.x:1889 |
 | SBWindowDragTransitionSwitcherModifier | `-shouldUseAnchorPointToPinLayoutRolesToSpace:` | 0x1c64b4e74 | 0x1c796e3b4 | TRIAGE PENDING |
 | _SBDisplayItemFixedAspectGrid | `-_buildFixedGridWithScreenScale:` | 0x1c6469854 | 0x1c791ed14 | PORTED already: hook in G3B.x:1710 |
-| _SBDisplayItemFlexibleGrid | `-_buildGridWithScreenScale:` | 0x1c6468f0c | 0x1c791e5d4 | PORTED already: hook in G2.x:1715 |
+| _SBDisplayItemFlexibleGrid | `-_buildGridWithScreenScale:` | 0x1c6468f0c | 0x1c791e5d4 | PORTED already: hook in G2.x:1720 |
 | _SBDisplayItemFlexibleGrid | `-_gridWidthsForSafeWidth:minimumWidth:` | 0x1c64691b4 | 0x1c791e630 | TRIAGE PENDING |
 | _SBFullScreenAppFloorSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6148ef4 | 0x1c75cc850 | TRIAGE PENDING |
 | _SBFullScreenAppFloorSwitcherModifier | `-isItemResizingAllowedForLayoutRole:inAppLayout:` | 0x1c6149450 | 0x1c75cce18 | TRIAGE PENDING |
@@ -965,7 +965,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 |---|---|---|---|---|
 | SBAffordancePresenceController | `-dealloc` | 0x1c5ebce7c | 0x1c732fcb8 | PORTED already: G2C.x G2C_PresenceDealloc (+ Y2Gestures.x for the top affordance's own controller) |
 | SBAffordancePresenceController | `-.cxx_destruct` | 0x1c5ebdba4 | 0x1c73309ec | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBExternalDisplaySystemGestureManager | `-_shouldEnableSystemGestureWithType:` | 0x1c6365c28 | 0x1c780bf58 | PORTED already: hook in G1D.x:1427, Tweak.x:335 |
+| SBExternalDisplaySystemGestureManager | `-_shouldEnableSystemGestureWithType:` | 0x1c6365c28 | 0x1c780bf58 | PORTED already: hook in G1D.x:1427, Tweak.x:381 |
 | SBGrabberTongue | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e52778 | 0x1c72c4ba4 | TRIAGE PENDING |
 | SBGrabberTongue | `-gestureRecognizerShouldBegin:` | 0x1c5e564a4 | 0x1c72c890c | PORTED already: 16.2 address cited in G2D.x |
 | SBGrabberTongue | `-_handlePullGesture:` | 0x1c5e57bf8 | 0x1c72ca25c | TRIAGE PENDING |
@@ -991,20 +991,20 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBInteractiveScreenshotGestureManager | `-gestureRecognizerShouldBegin:` | 0x1c62f621c | 0x1c77934fc | TRIAGE PENDING |
 | SBKeyboardHomeAffordanceController | `-_getHomeGrabberContainingView:isAlwaysPortrait:` | 0x1c640ebdc | 0x1c78bc418 | OPEN: NEEDS EDIT IN G3B.x: 16.2 asks [[sourceWindow windowScene] medusaHostedKeyboardWindowController] (home grabber of the hosted keyboard on the extended display); needs -[SBWindowScene medusaHostedKeyboardWindowController] exported from G3B.x (BPKB_ControllerForWindowScene) |
 | SBKeyboardHomeAffordanceController | `-_updateHomeAffordance` | 0x1c640ed54 | 0x1c78bc648 | OPEN: NEEDS EDIT IN G3B.x: 16.2 asks [[sourceWindow windowScene] medusaHostedKeyboardWindowController] (home grabber of the hosted keyboard on the extended display); needs -[SBWindowScene medusaHostedKeyboardWindowController] exported from G3B.x (BPKB_ControllerForWindowScene) |
-| SBLockedPointerManager | `-clientWithSceneIdentifier:prefersPointerLockStatus:` | 0x1c6227784 | 0x1c76b8d74 | PORTED already: hook in G4B.x:1328 |
-| SBLockedPointerManager | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c62278a4 | 0x1c76b93c4 | PORTED already: hook in G4B.x:1347 |
-| SBLockedPointerManager | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c62278fc | 0x1c76b9528 | PORTED already: hook in G4B.x:1351 |
-| SBLockedPointerManager | `-sceneManager:didAddExternalForegroundApplicationSceneHandle:` | 0x1c6227954 | 0x1c76b968c | PORTED already: hook in G4B.x:1355 |
-| SBLockedPointerManager | `-sceneManager:didRemoveExternalForegroundApplicationSceneHandle:` | 0x1c6227960 | 0x1c76b9794 | PORTED already: hook in G4B.x:1359 |
-| SBLockedPointerManager | `-sceneHandle:didUpdateSettingsWithDiff:previousSettings:` | 0x1c622796c | 0x1c76b989c | PORTED already: hook in G4B.x:1363 |
-| SBLockedPointerManager | `-_shouldAllowPointerLockedForScene:` | 0x1c6227d44 | 0x1c76b9e5c | PORTED already: hook in G4B.x:1409 |
-| SBLockedPointerManager | `-_queue_updateLockForLayoutState:` | 0x1c6227fb4 | 0x1c76ba124 | PORTED already: hook in G4B.x:1369 |
-| SBLockedPointerManager | `-_queue_lockPointerForSceneIdentifier:` | 0x1c6228214 | 0x1c76ba3dc | PORTED already: hook in G4B.x:1386 |
+| SBLockedPointerManager | `-clientWithSceneIdentifier:prefersPointerLockStatus:` | 0x1c6227784 | 0x1c76b8d74 | PORTED already: hook in G4B.x:1409 |
+| SBLockedPointerManager | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c62278a4 | 0x1c76b93c4 | PORTED already: hook in G4B.x:1428 |
+| SBLockedPointerManager | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c62278fc | 0x1c76b9528 | PORTED already: hook in G4B.x:1432 |
+| SBLockedPointerManager | `-sceneManager:didAddExternalForegroundApplicationSceneHandle:` | 0x1c6227954 | 0x1c76b968c | PORTED already: hook in G4B.x:1436 |
+| SBLockedPointerManager | `-sceneManager:didRemoveExternalForegroundApplicationSceneHandle:` | 0x1c6227960 | 0x1c76b9794 | PORTED already: hook in G4B.x:1440 |
+| SBLockedPointerManager | `-sceneHandle:didUpdateSettingsWithDiff:previousSettings:` | 0x1c622796c | 0x1c76b989c | PORTED already: hook in G4B.x:1444 |
+| SBLockedPointerManager | `-_shouldAllowPointerLockedForScene:` | 0x1c6227d44 | 0x1c76b9e5c | PORTED already: hook in G4B.x:1490 |
+| SBLockedPointerManager | `-_queue_updateLockForLayoutState:` | 0x1c6227fb4 | 0x1c76ba124 | PORTED already: hook in G4B.x:1450 |
+| SBLockedPointerManager | `-_queue_lockPointerForSceneIdentifier:` | 0x1c6228214 | 0x1c76ba3dc | PORTED already: hook in G4B.x:1467 |
 | SBLockedPointerManager | `-_queue_unlockPointer` | 0x1c6228318 | 0x1c76ba590 | TRIAGE PENDING |
 | SBLockedPointerManager | `-.cxx_destruct` | 0x1c6228524 | 0x1c76ba824 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBMainDisplaySystemGestureManager | `-_shouldEnableSystemGestureWithType:` | 0x1c5e76c00 | 0x1c72e9590 | PORTED already: hook in G1D.x:1416 |
 | SBMainDisplaySystemGestureManager | `-_evaluateEnablement` | 0x1c62c1be0 | 0x1c775cbf8 | EQUIVALENT: same selector sequence; ivar offsets only |
-| SBMainDisplaySystemGestureManager | `-shouldSystemGestureReceiveTouchWithLocation:ignoringUCB:` | 0x1c62c1e34 | 0x1c775ce54 | PORTED already: hook in G1D.x:2516 |
+| SBMainDisplaySystemGestureManager | `-shouldSystemGestureReceiveTouchWithLocation:ignoringUCB:` | 0x1c62c1e34 | 0x1c775ce54 | PORTED already: hook in G1D.x:2517 |
 | SBMousePointerManager | `-requestPointerActivationForScene:` | 0x1c607e954 | 0x1c7501e8c | PORTED already: POINTER-CROSS-0.7.4 (pointer scenes per display, verified on device); the 16.2 scene display configuration accessor (_sbDisplayConfiguration) equals the 16.0 sb_displayIdentityForSceneManagers + FBDisplayManager lookup |
 | SBMousePointerManager | `-pointerClientController:sceneDidActivate:` | 0x1c607eed4 | 0x1c75023d8 | PORTED already: POINTER-CROSS-0.7.4 (pointer scenes per display, verified on device); the 16.2 scene display configuration accessor (_sbDisplayConfiguration) equals the 16.0 sb_displayIdentityForSceneManagers + FBDisplayManager lookup |
 | SBMousePointerManager | `-pointerClientController:sceneWillDeactivate:` | 0x1c607ef74 | 0x1c7502478 | PORTED already: POINTER-CROSS-0.7.4 (pointer scenes per display, verified on device); the 16.2 scene display configuration accessor (_sbDisplayConfiguration) equals the 16.0 sb_displayIdentityForSceneManagers + FBDisplayManager lookup |
@@ -1030,12 +1030,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSystemPointerInteractionManager | `-pointerInteraction:window:regionForRequest:defaultRegion:` | 0x1c5f71c98 | 0x1c73e8a00 | EQUIVALENT: 16.2 passes the UIPointerRegionRequest to the delegate (shouldBeginPointerInteractionRequest:atLocation:forView:) and drops the defensive copy of the registered views; 16.0 delegates implement the old API; per-display routing is G2G.x / PTR.x |
 | SBSystemPointerInteractionManager | `-.cxx_destruct` | 0x1c5f72200 | 0x1c73e8f28 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBTransientUIInteractionManager | `-viewForSystemGestureRecognizer:` | 0x1c60743c4 | 0x1c74f7328 | PORTED already: G2C.x g2c_scenemgr (per window scene manager bound to that scene's gesture manager) |
-| SBTransientUIInteractionManager | `-registerParticipantForTapToDismiss:` | 0x1c60743cc | 0x1c74f736c | 82bc14e: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) |
-| SBTransientUIInteractionManager | `-unregisterParticipantForTapToDismiss:` | 0x1c60744a8 | 0x1c74f7440 | 82bc14e: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) |
+| SBTransientUIInteractionManager | `-registerParticipantForTapToDismiss:` | 0x1c60743cc | 0x1c74f736c | a557a56: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) [sha a557a56] |
+| SBTransientUIInteractionManager | `-unregisterParticipantForTapToDismiss:` | 0x1c60744a8 | 0x1c74f7440 | a557a56: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) [sha a557a56] |
 | SBTransientUIInteractionManager | `-registerParticipantForTapToUnhide:` | 0x1c6074548 | 0x1c74f74d8 | PORTED already: G2C.x g2c_scenemgr (per window scene manager bound to that scene's gesture manager) |
 | SBTransientUIInteractionManager | `-unregisterParticipantForTapToUnhide:` | 0x1c6074700 | 0x1c74f7678 | PORTED already: G2C.x g2c_scenemgr (per window scene manager bound to that scene's gesture manager) |
-| SBTransientUIInteractionManager | `-registerParticipantForIndirectPanToDismiss:` | 0x1c60747c8 | 0x1c74f7724 | 82bc14e: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) |
-| SBTransientUIInteractionManager | `-unregisterParticipantForIndirectPanToDismiss:` | 0x1c60748c0 | 0x1c74f7814 | 82bc14e: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) |
+| SBTransientUIInteractionManager | `-registerParticipantForIndirectPanToDismiss:` | 0x1c60747c8 | 0x1c74f7724 | a557a56: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) [sha a557a56] |
+| SBTransientUIInteractionManager | `-unregisterParticipantForIndirectPanToDismiss:` | 0x1c60748c0 | 0x1c74f7814 | a557a56: Y2Gestures.x y2_tuiscene (+mainDisplayManager answers the gesture manager of the manager's own window) [sha a557a56] |
 | SBTransientUIInteractionManager | `-.cxx_destruct` | 0x1c60749f4 | 0x1c74f7978 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 
 ## F5 Keyboard / hardware keyboard / focus (8)
@@ -1165,37 +1165,37 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBDisplayAppInteractionEventSource | `-_notifyTransition:beginning:` | 0x1c63bb4b0 | 0x1c7865ba4 | TRIAGE PENDING |
 | SBDisplayAssertionCoordinator | `-rootDisplayDidConnect:` | 0x1c633ae40 | 0x1c77de664 | TRIAGE PENDING |
 | SBDisplayAssertionCoordinator | `-rootDisplayDidDisconnect:` | 0x1c633af88 | 0x1c77de838 | TRIAGE PENDING |
-| SBDisplayAssertionPreferences | `-copyWithZone:` | 0x1c649c7d0 | 0x1c79535e0 | PORTED already: hook in G4B.x:379 |
-| SBDisplayAssertionPreferences | `-isEqual:` | 0x1c649c830 | 0x1c795364c | PORTED already: hook in G4B.x:385 |
-| SBDisplayAssertionPreferences | `-hash` | 0x1c649c8f0 | 0x1c795371c | PORTED already: hook in G4B.x:391 |
+| SBDisplayAssertionPreferences | `-copyWithZone:` | 0x1c649c7d0 | 0x1c79535e0 | PORTED already: hook in G4B.x:415 |
+| SBDisplayAssertionPreferences | `-isEqual:` | 0x1c649c830 | 0x1c795364c | PORTED already: hook in G4B.x:421 |
+| SBDisplayAssertionPreferences | `-hash` | 0x1c649c8f0 | 0x1c795371c | PORTED already: hook in G4B.x:427 |
 | SBDisplayAssertionPreferences | `-description` | 0x1c649c984 | 0x1c79537c4 | EXCLUDED: description / debug text only |
 | SBDisplayManager | `-initWithDisplayManager:sceneManagerCoordinator:assertionCoordinator:powerLogReporter:` | 0x1c64d3e80 | 0x1c798f60c | TRIAGE PENDING |
 | SBDisplayManager | `-displayMonitor:didConnectIdentity:withConfiguration:` | 0x1c64d47a4 | 0x1c798ff88 | TRIAGE PENDING |
-| SBDisplayManager | `-displayMonitor:willDisconnectIdentity:` | 0x1c64d509c | 0x1c7990b4c | PORTED already: hook in G4B.x:490 |
+| SBDisplayManager | `-displayMonitor:willDisconnectIdentity:` | 0x1c64d509c | 0x1c7990b4c | PORTED already: hook in G4B.x:526 |
 | SBDisplayManager | `-.cxx_destruct` | 0x1c64d62dc | 0x1c79926a4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBDisplayPortalManager | `-_createPortalForSourceView:sourceWindowScene:targetWindowScene:traitsRole:` | 0x1c61c2bd8 | 0x1c765172c | TRIAGE PENDING |
 | SBDisplayPowerLogEntry | `+forDisplay:mode:zoom:` | 0x1c63ca96c | 0x1c787663c | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
 | SBDisplayPowerLogReporter | `-reportPowerLogEntry:` | 0x1c63175f0 | 0x1c77b6a40 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
 | SBExternalDisplayCoverSheetController | `-initWithWindowScene:` | 0x1c62f2a98 | 0x1c778fb6c | TRIAGE PENDING |
-| SBExternalDisplayCoverSheetController | `-dealloc` | 0x1c62f2ee0 | 0x1c7790028 | PORTED already: hook in Tweak.x:368 |
-| SBExternalDisplayCoverSheetController | `-backlightController:willAnimateBacklightToFactor:source:` | 0x1c62f333c | 0x1c77905f8 | TRIAGE PENDING |
-| SBExternalDisplayCoverSheetController | `-_embeddedLockStateDidChange:` | 0x1c62f3408 | 0x1c7790784 | TRIAGE PENDING |
-| SBExternalDisplayCoverSheetController | `-_updateExternalDisplayCoverSheetExistence` | 0x1c62f34d4 | 0x1c77908f8 | TRIAGE PENDING |
-| SBExternalDisplayCoverSheetController | `-_setScreenOn:` | 0x1c62f367c | 0x1c7790b4c | PORTED already: hook in Tweak.x:380 |
+| SBExternalDisplayCoverSheetController | `-dealloc` | 0x1c62f2ee0 | 0x1c7790028 | PORTED already: hook in Tweak.x:458 |
+| SBExternalDisplayCoverSheetController | `-backlightController:willAnimateBacklightToFactor:source:` | 0x1c62f333c | 0x1c77905f8 | PORTED already: hook in Tweak.x:500 |
+| SBExternalDisplayCoverSheetController | `-_embeddedLockStateDidChange:` | 0x1c62f3408 | 0x1c7790784 | PORTED already: hook in Tweak.x:486 |
+| SBExternalDisplayCoverSheetController | `-_updateExternalDisplayCoverSheetExistence` | 0x1c62f34d4 | 0x1c77908f8 | PORTED already: hook in Tweak.x:492 |
+| SBExternalDisplayCoverSheetController | `-_setScreenOn:` | 0x1c62f367c | 0x1c7790b4c | PORTED already: hook in Tweak.x:470 |
 | SBExternalDisplayCoverSheetController | `-.cxx_destruct` | 0x1c62f40e8 | 0x1c77913d0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBExternalDisplayCoverSheetViewController | `-.cxx_destruct` | 0x1c62f29d0 | 0x1c778fab8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBExternalDisplayEducationObserver | `-dealloc` | 0x1c6331ebc | 0x1c77d2a70 | PORTED already: hook in G4B.x:950 |
+| SBExternalDisplayEducationObserver | `-dealloc` | 0x1c6331ebc | 0x1c77d2a70 | PORTED already: hook in G4B.x:1033 |
 | SBExternalDisplayRuntimeAvailabilitySettings | `+_moduleWithSectionTitle:` | 0x1c5fabc44 | 0x1c7423fd8 | TRIAGE PENDING |
 | SBExternalDisplayService | `-initWithDisplayManager:` | 0x1c63321d0 | 0x1c77d52a4 | TRIAGE PENDING |
 | SBExternalDisplayService | `-setDisplayMirroringEnabled:forDisplay:` | 0x1c6332afc | 0x1c77d5db4 | PORTED already: 16.2 address cited in Group4Connect.m |
 | SBExternalDisplayService | `-listener:didReceiveConnection:withContext:` | 0x1c6333130 | 0x1c77d63f4 | TRIAGE PENDING |
 | SBExternalDisplayService | `-_supportedScalesForDisplay:error:` | 0x1c6333af0 | 0x1c77d6d98 | TRIAGE PENDING |
-| SBExternalDisplaySettings | `-setDefaultValues` | 0x1c5fab324 | 0x1c74235f4 | PORTED already: hook in G4B.x:2010 |
+| SBExternalDisplaySettings | `-setDefaultValues` | 0x1c5fab324 | 0x1c74235f4 | PORTED already: hook in G4B.x:2216 |
 | SBExternalDisplaySettings | `+settingsControllerModule` | 0x1c5fab3cc | 0x1c74236a8 | TRIAGE PENDING |
 | SBMainDisplayInterfaceOrientationAggregator | `-_layoutOrientation` | 0x1c6038134 | 0x1c74b3694 | TRIAGE PENDING |
 | SBMainScreenActiveInterfaceOrientationWindow | `-initWithWindowScene:role:debugName:` | 0x1c63633b8 | 0x1c7808d8c | TRIAGE PENDING |
 | SBMirroredDisplayController | `-_ensureCADisplayModeForMirroring` | 0x1c5feb224 | 0x1c7465e30 | TRIAGE PENDING |
-| SBMirroredDisplayController | `-_updateDisplayAssertion` | 0x1c5feb828 | 0x1c74664a0 | PORTED already: hook in G4B.x:413 |
+| SBMirroredDisplayController | `-_updateDisplayAssertion` | 0x1c5feb828 | 0x1c74664a0 | PORTED already: hook in G4B.x:449 |
 | SBNonInteractiveDisplayControllerPolicy | `-connectToDisplayController:displayConfiguration:` | 0x1c643688c | 0x1c78e832c | TRIAGE PENDING |
 | SBNonInteractiveDisplayControllerPolicy | `-displayController:updatePresentationWithSceneManager:displayConfiguration:completion:` | 0x1c6437860 | 0x1c78e92ec | TRIAGE PENDING |
 | SBNonInteractiveDisplayControllerPolicy | `-_fetchOrCreateSceneForApplication:monitoredDisplayScene:fromSceneManager:displayConfiguration:deactivationReasons:` | 0x1c6438374 | 0x1c78e9e38 | TRIAGE PENDING |
@@ -1206,12 +1206,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSceneHostingDisplayController | `-displayIdentityDidDisconnect:` | 0x1c5f47a64 | 0x1c73bc47c | TRIAGE PENDING |
 | SBSceneHostingDisplayController | `-_ensureCADisplayUpToDate:completion:` | 0x1c5f48424 | 0x1c73bce50 | PORTED already: 16.2 address cited in X3Mode.x |
 | SBSceneHostingDisplayController | `-_updatePolicyForPresentation:` | 0x1c5f48b44 | 0x1c73bd620 | TRIAGE PENDING |
-| SBSceneHostingDisplayController | `-_createDisplayAssertionPreferences` | 0x1c5f4a328 | 0x1c73bed8c | PORTED already: hook in G4B.x:430 |
+| SBSceneHostingDisplayController | `-_createDisplayAssertionPreferences` | 0x1c5f4a328 | 0x1c73bed8c | PORTED already: hook in G4B.x:466 |
 | SBSceneHostingDisplayController | `-.cxx_destruct` | 0x1c5f4af84 | 0x1c73bf8dc | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSceneHostingDisplayControllerProvider | `-displayManager:didConnectIdentity:withConfiguration:` | 0x1c5ed1ea0 | 0x1c7345f0c | TRIAGE PENDING |
 | SBSceneHostingDisplayControllerProvider | `-displayManager:didDisconnectIdentity:` | 0x1c5ed1f90 | 0x1c7345fe0 | PORTED already: 16.2 address cited in Group4Connect.m |
 | SBSceneHostingDisplayControllerProvider | `-displayControllerInfoForConnectingDisplay:configuration:` | 0x1c5ed2044 | 0x1c73460b4 | TRIAGE PENDING |
-| SBSceneHostingDisplayControllerProvider | `-transformDisplayConfiguration:` | 0x1c5ed2218 | 0x1c7346334 | TRIAGE PENDING |
+| SBSceneHostingDisplayControllerProvider | `-transformDisplayConfiguration:` | 0x1c5ed2218 | 0x1c7346334 | PORTED already: 16.2 address cited in X3Mode.x |
 | SBScreenSleepCoordinator | `-transitionToVisualState:fromVisualState:animated:completion:` | 0x1c6400e74 | 0x1c78adce8 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
 | SBScreenWakeAnimationController | `-_startWakeAnimationsForWaking:animationSettings:` | 0x1c5eade3c | 0x1c7320b90 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
 | SBScreenWakeAnimationController | `-prepareToWakeForSource:timeAlpha:statusBarAlpha:target:dateView:completion:` | 0x1c6251f2c | 0x1c76e756c | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
@@ -1219,9 +1219,9 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBSystemShellEmbeddedDisplayController | `-_updateDisplayAssertionPreferences` | 0x1c6122c54 | 0x1c75ad068 | TRIAGE PENDING |
 | SBSystemShellEmbeddedDisplayController | `-.cxx_destruct` | 0x1c6122dac | 0x1c75ad2a0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemShellExtendedDisplayControllerPolicy | `-dealloc` | 0x1c6338628 | 0x1c77db9d4 | TRIAGE PENDING |
-| SBSystemShellExtendedDisplayControllerPolicy | `-connectToDisplayController:displayConfiguration:` | 0x1c63386b4 | 0x1c77dba48 | PORTED already: hook in G4B.x:969 |
+| SBSystemShellExtendedDisplayControllerPolicy | `-connectToDisplayController:displayConfiguration:` | 0x1c63386b4 | 0x1c77dba48 | PORTED already: hook in G4B.x:1052 |
 | SBSystemShellExtendedDisplayControllerPolicy | `-displayController:didBeginTransaction:sceneManager:displayConfiguration:deactivationReasons:` | 0x1c6339104 | 0x1c77dc984 | TRIAGE PENDING |
-| SBSystemShellExtendedDisplayControllerPolicy | `-displayController:updatePresentationWithSceneManager:displayConfiguration:completion:` | 0x1c6339470 | 0x1c77dcbe0 | PORTED already: hook in G4B.x:1066 |
+| SBSystemShellExtendedDisplayControllerPolicy | `-displayController:updatePresentationWithSceneManager:displayConfiguration:completion:` | 0x1c6339470 | 0x1c77dcbe0 | PORTED already: hook in G4B.x:1149 |
 | SBSystemShellExtendedDisplayControllerPolicy | `-descriptionBuilderWithMultilinePrefix:` | 0x1c6339c60 | 0x1c77dd340 | EXCLUDED: description / debug text only |
 | SBSystemShellExtendedDisplayControllerPolicy | `-settings:changedValueForKey:` | 0x1c633a1bc | 0x1c77ddad8 | TRIAGE PENDING |
 | SBSystemShellExtendedDisplayControllerPolicy | `-.cxx_destruct` | 0x1c633aa1c | 0x1c77de0e0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
@@ -1233,7 +1233,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | _SBDisplayAssertionStack | `-invalidateAssertionForDerivedDisplayDisconnect:` | 0x1c605525c | 0x1c74d2228 | TRIAGE PENDING |
 | _SBDisplayAssertionStack | `-_assertion:updatedPreferences:` | 0x1c605536c | 0x1c74d2340 | TRIAGE PENDING |
 | _SBDisplayAssertionStack | `-_assertionDidInvalidate:` | 0x1c6055560 | 0x1c74d25a8 | TRIAGE PENDING |
-| _SBDisplayAssertionStack | `-_evalAndApplyOldPreferences:newPreferences:` | 0x1c6055690 | 0x1c74d2744 | PORTED already: hook in G4B.x:1128 |
+| _SBDisplayAssertionStack | `-_evalAndApplyOldPreferences:newPreferences:` | 0x1c6055690 | 0x1c74d2744 | PORTED already: hook in G4B.x:1211 |
 
 ## F8 Everything else (iPhone / aperture / lock screen / Siri / misc) (291)
 
@@ -1301,14 +1301,14 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBCoverSheetSlidingViewController | `-.cxx_destruct` | 0x1c60c7d30 | 0x1c754c4d0 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetSpotlightViewController | `-updatePresentationProgress:withOffset:presentationState:` | 0x1c63b58cc | 0x1c785ffa8 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetSystemGesturesDelegate | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e52e18 | 0x1c72c5274 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
-| SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier | `-handleContinuousExposeIdentifiersChangedEvent:` | 0x1c6104180 | 0x1c758977c | PORTED already: hook in G1C.x:914 |
-| SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier | `-_completeIfNeededIgnoringHover:` | 0x1c610455c | 0x1c7589b7c | PORTED already: hook in G1C.x:961 |
+| SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier | `-handleContinuousExposeIdentifiersChangedEvent:` | 0x1c6104180 | 0x1c758977c | PORTED already: hook in G1C.x:932 |
+| SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier | `-_completeIfNeededIgnoringHover:` | 0x1c610455c | 0x1c7589b7c | PORTED already: hook in G1C.x:979 |
 | SBDashBoardCameraPageViewController | `-_addOrRemoveGestureForCurrentSettings` | 0x1c5eb9260 | 0x1c732c038 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBDashBoardEmergencyDialerController | `-isMakingEmergencyCall` | 0x1c60d8ba8 | 0x1c755d520 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBDashBoardHostedAppViewController | `-setHostedAppReferenceSize:withInterfaceOrientation:` | 0x1c630770c | 0x1c77a5448 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBDashBoardSetupView | `-_createDisplayLink` | 0x1c644f484 | 0x1c790342c | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
-| SBDefaultImplementationsSwitcherModifier | `-frameForLayoutRole:inAppLayout:withBounds:` | 0x1c63df34c | 0x1c788a480 | TRIAGE PENDING |
-| SBDefaultImplementationsSwitcherModifier | `-scaleForLayoutRole:inAppLayout:` | 0x1c63df6b8 | 0x1c788a930 | TRIAGE PENDING |
+| SBDefaultImplementationsSwitcherModifier | `-frameForLayoutRole:inAppLayout:withBounds:` | 0x1c63df34c | 0x1c788a480 | PORTED already: 16.2 address cited in P1SW.m |
+| SBDefaultImplementationsSwitcherModifier | `-scaleForLayoutRole:inAppLayout:` | 0x1c63df6b8 | 0x1c788a930 | PORTED already: 16.2 address cited in P1SW.m |
 | SBDeveloperBuildExpirationTrigger | `-_coverSheetDidDismiss:` | 0x1c62e5c20 | 0x1c7781398 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
 | SBDeviceApplicationSceneView(ClassicSupport) | `-noteApplicationClassicPhoneSceneOrientationPreferenceChangingForUserAction:` | 0x1c62a4ca0 | 0x1c773ecdc | TRIAGE PENDING |
 | SBDeviceApplicationSceneView(ClassicSupport) | `-_createClassicWrapperViewIfNecessaryForHostView:` | 0x1c62a4da0 | 0x1c773ed90 | TRIAGE PENDING |
@@ -1521,9 +1521,9 @@ Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PEND
 | SBUIStartupToUserSetupAppZoomInAnimationController | `-_prepareAnimation` | 0x1c5f6d59c | 0x1c73e3e1c | IRRELEVANT: boot / user switch login UI |
 | SBVolumeControl | `-_isHUDDisplayableWithReason:` | 0x1c5f62a94 | 0x1c73d8990 | IRRELEVANT: volume HUD backlight gating (iPhone always-on) |
 | SBWindowSceneStatusBarAssertionManager(FrontmostStatusBarVisibility) | `-isFrontmostStatusBarPartHidden:` | 0x1c63f8584 | 0x1c78a5064 | PORTED already: 16.2 address cited in G3B.x |
-| SBiPadOSPlatformSwitcherModifier | `-handleTransitionEvent:` | 0x1c611cd74 | 0x1c75a6fac | PORTED already: hook in G1B.x:1875 |
-| SBiPadOSPlatformSwitcherModifier | `-handleUpdateWindowingModeEvent:` | 0x1c611d0bc | 0x1c75a73c4 | PORTED already: hook in G1B.x:1893 |
-| _SBHomeScreenFloorSwitcherModifier | `-handleTransitionEvent:` | 0x1c60890fc | 0x1c750c194 | PORTED already: hook in G1B.x:2594 |
+| SBiPadOSPlatformSwitcherModifier | `-handleTransitionEvent:` | 0x1c611cd74 | 0x1c75a6fac | PORTED already: hook in G1B.x:1885 |
+| SBiPadOSPlatformSwitcherModifier | `-handleUpdateWindowingModeEvent:` | 0x1c611d0bc | 0x1c75a73c4 | PORTED already: hook in G1B.x:1903 |
+| _SBHomeScreenFloorSwitcherModifier | `-handleTransitionEvent:` | 0x1c60890fc | 0x1c750c194 | PORTED already: hook in G1B.x:2604 |
 | _SBProximityTouchHandlingView | `-hitTest:withEvent:` | 0x1c607f634 | 0x1c780a170 | IRRELEVANT: proximity sensor / notch (iPhone only) |
 | _SBProximityTouchHandlingViewController | `-loadView` | 0x1c607f998 | 0x1c780a514 | IRRELEVANT: proximity sensor / notch (iPhone only) |
 | _SBSystemApertureGainMapView | `-initWithFrame:` | 0x1c5f69c34 | 0x1c73e06c4 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |

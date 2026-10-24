@@ -239,6 +239,9 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y1_extaction | (Y1Workspace.x) `UIDestroySceneAction` of an app window on the extended display is handled (16.2 handles it in the `SBSceneManager` base class, 16.0 only in the main display's manager): an app can close its own window on the monitor | `y1_extaction` |
 | y1_takescene | (Y1Workspace.x) after `takeScene:fromSceneManager:` the new scene handle's `wantsEnhancedWindowingEnabled` follows the NEW display's Stage Manager state | `y1_takescene` |
 | y2_tuiscene | (Y2Gestures.x) transient UI gestures per window scene: the tap / indirect-pan "dismiss" recognizers of the window menu (top affordance) and the shelf register with the manager of THEIR window scene (16.0: always the main display's gesture manager, so a tap on the monitor never dismissed them); the top affordance's tap-to-unhide controller follows its scene | `y2_tuiscene` |
+| y3_scenectl | (Y3StatusBar.x) the coordinator queries that take a window scene (status bar insets / style requests / overlay data / actions / in-app hidden / avoidance frame, focused icon shortcut action, neighbouring app layout) use the layout of THAT scene's switcher controller (16.0: the active display's, so the status bar of the monitor was built from the other display's layout) |
+| y3_avoidorient | (Y3StatusBar.x) Stage Manager: the status bar avoidance frame asks the layout state's own interface orientation (16.2) |
+| y3_containersb | (Y3StatusBar.x) container status bar hide like 16.2: level 6 settings assertion held only in app / switcher mode, alpha change with UIStatusBarStyleAnimationParameters instead of a UIView animation |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
