@@ -1,12 +1,4 @@
 {
- "0.7.5+178.764be4c": {
-  "date": "2026-10-17T19:13:22Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+178.764be4c_iphoneos-arm64.deb",
-  "run": 178,
-  "sha": "764be4c558cbc53f51333cbaeb0612cba53eaa89",
-  "subject": "G2I: add-window flow diagnostics (g2i_addwindiag), spec ADDWINDOW-GLI\u2026",
-  "version": "0.7.5+178.764be4c"
- },
  "0.7.5+179.5d96621": {
   "date": "2026-10-17T19:14:04Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+179.5d96621_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "32d525e94e03674c7e518d29460314b74158550f",
   "subject": "Item 5 (G6 A1 remote alert targets): decision with call chain; 16.2 Siri exception of performPresentationRequest:forSession: ported over the 16.0 body (switch siriexception, decision logged)",
   "version": "0.7.9+249.32d525e"
+ },
+ "0.7.9+251.3d6977c": {
+  "date": "2026-10-24T23:22:18Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+251.3d6977c_iphoneos-arm64.deb",
+  "run": 251,
+  "sha": "3d6977c9d47c8b0c867463b172c27998e79b11d6",
+  "subject": "Item 3 (M4, M6, M8): P1SW.m ports the 16.2 home gesture scroll target, the default role scale / frame of SBDefaultImplementationsSwitcherModifier (with the fully occluded peeking centre the review missed) and the empty async rendering evaluation; switches p1_sw p1_homescroll p1_defroles p1_asynceval",
+  "version": "0.7.9+251.3d6977c"
  }
 }
