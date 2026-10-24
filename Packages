@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 229, commit 7197fbc: clonemirror: the reply was read from the wrong buffer (explains 'reply id 0 instead of 6004840'): read it from the receive buffer, truthful >>> / <<< lines, bounded look-up retry, daemon logs the reply it sent
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+229.7197fbc
+Installed-Size: 3632
+Filename: debs/com.infernowolf19.backport162_0.7.9+229.7197fbc_iphoneos-arm64.deb
+Size: 1152134
+MD5sum: 6d94fd409b99018c8e87b63ff711a3d4
+SHA1: 9508b4305fb56c761e5936a7402ee1c859fdb804
+SHA256: 6a9823371e07f69cfc424b19128e43522513ed3bfc4b1f3edca8ffb9571f83ce
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 228, commit 004fd24: DELTA-SWEEP-0.7.9: all 1466 logic-changed SpringBoard methods listed with addresses; first verdicts (ported / irrelevant / excluded), triage in progress
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1235,23 +1257,3 @@ Size: 891922
 MD5sum: ad4a543669d9816f0e41e896b200ff76
 SHA1: d8843a8085a6d0b3062d13a0f78a8dc6b757130f
 SHA256: edaf59c68e8797d0616333787a2d000d209c1ad3ea4549604b593c6032cea32a
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Needs ExtendedDisplayEnabler for the external display features. Reboot userspace after installing (backboardd).
- .
- Build 162, commit cb281e3: OPEN-ISSUES: close glitch is stock behaviour (user confirmed)
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd
-Replaces: com.infernowolf19.backport162bbd
-Architecture: iphoneos-arm64
-Version: 0.7.4+162.cb281e3
-Installed-Size: 2520
-Filename: debs/com.infernowolf19.backport162_0.7.4+162.cb281e3_iphoneos-arm64.deb
-Size: 891904
-MD5sum: 6a4d776555d17a0056b9cc18be524937
-SHA1: 270fe45dee9044f3c06bcdd746ad5bc08f588b59
-SHA256: 33808744bace60c3c90befc203086067337219058bbf9f43b24ea5ff50a8f03f

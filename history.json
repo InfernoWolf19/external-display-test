@@ -1,12 +1,4 @@
 {
- "0.7.4+162.cb281e3": {
-  "date": "2026-10-17T08:24:38Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+162.cb281e3_iphoneos-arm64.deb",
-  "run": 162,
-  "sha": "cb281e365f75f6eb7d2d5b861f789abba0cbb15e",
-  "subject": "OPEN-ISSUES: close glitch is stock behaviour (user confirmed)",
-  "version": "0.7.4+162.cb281e3"
- },
  "0.7.4+163.df2870a": {
   "date": "2026-10-17T08:26:08Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+163.df2870a_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "004fd24e6b77652ed0ccc8c66dbed42f46e1504b",
   "subject": "DELTA-SWEEP-0.7.9: all 1466 logic-changed SpringBoard methods listed with addresses; first verdicts (ported / irrelevant / excluded), triage in progress",
   "version": "0.7.9+228.004fd24"
+ },
+ "0.7.9+229.7197fbc": {
+  "date": "2026-10-24T08:00:41Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+229.7197fbc_iphoneos-arm64.deb",
+  "run": 229,
+  "sha": "7197fbce7be3e17d83a9379121d0e4f5ee5d2a5a",
+  "subject": "clonemirror: the reply was read from the wrong buffer (explains 'reply id 0 instead of 6004840'): read it from the receive buffer, truthful >>> / <<< lines, bounded look-up retry, daemon logs the reply it sent",
+  "version": "0.7.9+229.7197fbc"
  }
 }
