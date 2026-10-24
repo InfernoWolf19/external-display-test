@@ -1,12 +1,4 @@
 {
- "0.7.5+173.c28de50": {
-  "date": "2026-10-17T14:07:32Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+173.c28de50_iphoneos-arm64.deb",
-  "run": 173,
-  "sha": "c28de50df4b2fa649579495f924ce805b042bf65",
-  "subject": "G2F: wire in the symmetric pivot for the home swipe close (switch g2f\u2026",
-  "version": "0.7.5+173.c28de50"
- },
  "0.7.5+174.5c3af21": {
   "date": "2026-10-17T18:23:58Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+174.5c3af21_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "ae4adf475a4aba654b9ca14d82c74a43121042a3",
   "subject": "G1B: routing162 guard log built lazily (suppression test first on scalars, no NSString per query), FINDINGS-DRAG-LOOP P1",
   "version": "0.7.9+239.ae4adf4"
+ },
+ "0.7.9+240.780b69a": {
+  "date": "2026-10-24T18:15:09Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+240.780b69a_iphoneos-arm64.deb",
+  "run": 240,
+  "sha": "780b69ab995aca575dc4d96ef11b68eea3d9be24",
+  "subject": "P3: BP_Log keeps its fd open (rotation / replacement test once a second, one write per line), BP_OnName / BP_OptInName / BP_On lock-free with a pointer-keyed slot cache, switch table overflow is logged once",
+  "version": "0.7.9+240.780b69a"
  }
 }
