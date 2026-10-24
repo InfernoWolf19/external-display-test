@@ -1,12 +1,4 @@
 {
- "0.7.5+175.24816c1": {
-  "date": "2026-10-17T18:29:51Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+175.24816c1_iphoneos-arm64.deb",
-  "run": 175,
-  "sha": "24816c147cc4bf9a17bd1f96cc35c6682159ed9b",
-  "subject": "G2F: crop the closing card to the icon box together with the icon ove\u2026",
-  "version": "0.7.5+175.24816c1"
- },
  "0.7.5+176.8cadfda": {
   "date": "2026-10-17T18:31:40Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+176.8cadfda_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "aeac0c2dd89d56fb848dec55321dcb2277d12da3",
   "subject": "Fix CI: P5 probe read the window bounds through a selector the file does not declare; message it with an explicit CGRect return cast",
   "version": "0.7.9+247.aeac0c2"
+ },
+ "0.7.9+248.7e3599c": {
+  "date": "2026-10-24T23:16:22Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+248.7e3599c_iphoneos-arm64.deb",
+  "run": 248,
+  "sha": "7e3599cec68ccf72af194c1e5b372667eac16966",
+  "subject": "Item 2: P1VC.m ports the remaining SBFluidSwitcherViewController / item container / footer / layer methods of REVIEW-CORE 2.1 (keyboard shortcut actions, keyboard suppression, plus button, dock level assertion, overlay frame, focus, footer tap, layer transform); switches p1_vc*",
+  "version": "0.7.9+248.7e3599c"
  }
 }
