@@ -48,6 +48,11 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <os/lock.h>
+#import <mach-o/dyld.h>
+#import <dlfcn.h>
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#endif
 #import "BP.h"
 #import "BPX.h"
 
@@ -142,7 +147,7 @@ static __thread X7Scope gX7Resign, gX7Suppress;      // armed by the caller wrap
 static __thread void *gX7KbIdentity;                  // identity of the reason 8 assertion that -_setKeyboardSuppressed:...displayIdentity: is about to create (unretained, alive in that frame)
 static __thread int gX7KbIdentityArmed;
 
-enum { R_TOAPPS = 1, R_COVER, R_CC, R_NBD, R_FLUID, R_CMDTAB, R_ASSIST, R_MODALLIB, S_TRANSACTION, S_LOCK, S_NOTES };
+enum { R_TOAPPS = 1, R_COVER, R_CC, R_NBD, R_FLUID, R_CMDTAB, R_ASSIST, R_MODALLIB, S_TRANSACTION, S_LOCK, S_NOTES, S_ACTIVE };
 
 static id X7_Identity(int kind, id obj, id arg, id eager) {
     switch (kind) {
@@ -152,6 +157,7 @@ static id X7_Identity(int kind, id obj, id arg, id eager) {
         case R_NBD:     return BPX_Obj0(arg, "_fbsDisplayIdentity");
         case R_FLUID:   return BPX_Obj0(BPX_Obj0(obj, "_sbWindowScene"), "_fbsDisplayIdentity");
         case R_CMDTAB:  return eager;
+        case S_ACTIVE:  return eager;                  // SBUniversalControlServer block: identity of the active display scene, read at the top of the block
         case R_ASSIST:  return BPX_Obj0(BPX_Obj0(BPX_Obj0(obj, "assistantWindow"), "windowScene"), "_fbsDisplayIdentity");
         case R_MODALLIB:return BPX_Obj0(BPX_Obj0(obj, "sceneManager"), "displayIdentity");
         case S_LOCK: {
@@ -335,6 +341,140 @@ static void X7_SvcDisconnect(id svc, SEL _cmd, id connection) {
     os_unfair_lock_unlock(lk);
 }
 
+// ---------------------------------------------------------------------------------------------- 4: SBUniversalControlServer block, OverlayUI focus request, _filterFocusedSceneIdentityToken: consumer
+//
+// 4a. SBUniversalControlServer -_lock_reevaluateKeyboardFocusDisablement (16.0 0x1c62d24d8 / 16.2 0x1c776d508) only dispatches a block to the main queue
+// (invoke 16.0 0x1c62d2588 / 16.2 0x1c776d5b8, a plain C function taking the block; the block captures the server (+0x20) and the disabled flag (+0x28)).  In the block, when
+// the flag is set: lockFocusToSpringBoardWindowScene:[active display scene] forReason:"SBUniversalControlServer" (same in both), and the keyboard suppression:
+// 16.0 acquireKeyboardSuppressionAssertionWithReason:predicate:nil (every display), 16.2 0x1c776d698 acquireKeyboardSuppressionAssertionWithReason:predicate:nil
+// displayIdentity:[activeScene _fbsDisplayIdentity] (the active scene read at the top of the block).  The block is not hookable by selector: the invoke function is hooked BY ADDRESS
+// (MSHookFunction; the 6 prologue words and the adrp / add pair that builds the block's invoke pointer inside the method are compared with the running image, otherwise "not
+// installing" is logged) and arms the same one-shot scope as the other callers (kind S_ACTIVE), which turns the plain acquire inside the block into the display scoped one.
+//
+// 4b. _lock_overlayUIRequestingFocus (new BOOL ivar 0x28 under the controller's lock, 16.2): set by -userFocusRequestForScene:reason:completion: (0x1c77c2c14) when the requested
+// scene is one of the OverlayUI scene controller's scenes (the 16.0 body already stores such a scene as the high priority scene), cleared by -removeKeyboardFocusFromScene: (0x1c77c317c)
+// when the removed scene's client job label equals the OverlayUI controller's job label.  Stored here as an associated object.
+//
+// 4c. -_filterFocusedSceneIdentityToken:focusedPID:resultBlock: (16.0 0x1c6323f3c / 16.2 0x1c77c4590).  Both builds take the "arbiter advice" route when pid >= 1, a token exists,
+// and either the token is not the SpringBoard layout token or the policy's advice policy is 2 (and not the "SpringBoard override" route: advice policy 0 and the token is not the
+// high priority scene's token).  16.0 then answers the token ("arbiter advice").  16.2 first asks: is [token stringRepresentation] in externalSceneIdentities (0x1c77c4a7c: "arbiter advice
+// (known external scene)", the same answer as 16.0); otherwise it looks up the process of the pid (RBSProcessHandle handleForIdentifier:[RBSProcessIdentifier identifierWithPid:] ->
+// consistentJobLabel) and, when that label equals [[[SBApp systemUIScenesCoordinator] overlayUISceneController] jobLabel] AND the OverlayUI is not requesting focus, answers
+// resultBlock(nil, nil, "ignoring non-focused OverlayUI request", NO) and returns nil (0x1c77c4b78..0x1c77c4c0c); else "arbiter advice (normal path)" = the 16.0 answer.
+// Port: a hook of the ordinary method decides the 16.2 outcome first and only calls the 16.0 body when the outcome is the 16.0 answer.
+
+static char kX7OverlayFocus;
+static BOOL X7_OverlayRequesting(id kfc) { return [objc_getAssociatedObject(kfc, &kX7OverlayFocus) boolValue]; }
+static void X7_SetOverlayRequesting(id kfc, BOOL v) { objc_setAssociatedObject(kfc, &kX7OverlayFocus, v ? @YES : @NO, OBJC_ASSOCIATION_RETAIN); }
+
+static id X7_OverlayController(void) { return BPX_Obj0(BPX_Obj0(BPX_App(), "systemUIScenesCoordinator"), "overlayUISceneController"); }
+
+static IMP gX7OrigUserFocus, gX7OrigRemoveFocus, gX7OrigFilter;
+static void X7_UserFocus(id self, SEL _cmd, id scene, id reason, id completion) {
+    if (BP_OnName("kbextscenes") && scene) {
+        id oc = X7_OverlayController();
+        SEL en = sel_registerName("enumerateScenesWithBlock:");
+        if ([oc respondsToSelector:en]) {
+            __block BOOL found = NO;
+            void (^blk)(id, BOOL *) = ^(id s, BOOL *stop) { if ([s isEqual:scene]) { found = YES; if (stop) *stop = YES; } };
+            ((void (*)(id, SEL, id))objc_msgSend)(oc, en, blk);
+            if (found) { X7_SetOverlayRequesting(self, YES); BPX_LOG(@"[x7] OverlayUI requests keyboard focus (scene %@)", scene); }
+        }
+    }
+    ((void (*)(id, SEL, id, id, id))gX7OrigUserFocus)(self, _cmd, scene, reason, completion);
+}
+static void X7_RemoveFocus(id self, SEL _cmd, id scene) {
+    if (BP_OnName("kbextscenes") && scene && X7_OverlayRequesting(self)) {
+        id label = BPX_Obj0(BPX_Obj0(BPX_Obj0(scene, "clientHandle"), "processHandle"), "consistentJobLabel");
+        id ouiLabel = BPX_Obj0(X7_OverlayController(), "jobLabel");
+        if (label && ouiLabel && [label isEqualToString:ouiLabel]) { X7_SetOverlayRequesting(self, NO); BPX_LOG(@"[x7] OverlayUI no longer requests keyboard focus"); }
+    }
+    ((void (*)(id, SEL, id))gX7OrigRemoveFocus)(self, _cmd, scene);
+}
+
+static id X7_Filter(id self, SEL _cmd, id token, int pid, id resultBlock) {
+    typedef id (*Orig)(id, SEL, id, int, id);
+    Orig orig = (Orig)gX7OrigFilter;
+    if (!BP_OnName("kbextscenes") || !token || pid < 1) return orig(self, _cmd, token, pid, resultBlock);
+    Ivar lockIv = class_getInstanceVariable(object_getClass(self), "_lock");
+    if (!lockIv || ivar_getOffset(lockIv) != 8) return orig(self, _cmd, token, pid, resultBlock);
+    os_unfair_lock_t lk = (os_unfair_lock_t)((char *)(__bridge void *)self + 8);
+    os_unfair_lock_lock(lk);
+    id policy = [BPX_IvarObj(self, "_lock_effectivePolicy") copy];
+    id sbToken = [BPX_IvarObj(self, "_lock_springBoardLayoutSceneIdentityToken") copy];
+    os_unfair_lock_unlock(lk);
+    long long advice = BPX_LL0(policy, "advicePolicy");
+    BOOL isHighPriority = [BPX_Obj0(BPX_IvarObj(self, "_highPrioritySceneToFocusInNextPolicyUpdate"), "identityToken") isEqual:token];
+    if (advice == 0 && !isHighPriority) return orig(self, _cmd, token, pid, resultBlock);           // "SpringBoard override" route: unchanged
+    BOOL adviceRoute = ![token isEqual:sbToken] || advice == 2;
+    if (!adviceRoute) return orig(self, _cmd, token, pid, resultBlock);                               // "arbiter requested SB": unchanged
+    id ext = objc_getAssociatedObject(self, &kX7ExtIdsKey);
+    id str = BPX_Obj0(token, "stringRepresentation");
+    if (str && [ext isKindOfClass:[NSSet class]] && [ext containsObject:str]) {
+        BPX_LOG(@"[x7] arbiter advice (known external scene) %@", str);
+        return orig(self, _cmd, token, pid, resultBlock);                                              // 16.2 answers the same token as 16.0 here
+    }
+    Class pi = NSClassFromString(@"RBSProcessIdentifier"), ph = NSClassFromString(@"RBSProcessHandle");
+    id ident = pi ? ((id (*)(id, SEL, int))objc_msgSend)((id)pi, sel_registerName("identifierWithPid:"), pid) : nil;
+    SEL hs = sel_registerName("handleForIdentifier:error:");
+    id handle = (ident && [(id)ph respondsToSelector:hs]) ? ((id (*)(id, SEL, id, id))objc_msgSend)((id)ph, hs, ident, nil) : nil;
+    id label = BPX_Obj0(handle, "consistentJobLabel");
+    id ouiLabel = BPX_Obj0(X7_OverlayController(), "jobLabel");
+    if (label && ouiLabel && [label isEqualToString:ouiLabel] && !X7_OverlayRequesting(self)) {
+        BP_Log(@"[x7] ignoring non-focused OverlayUI request (pid %d, token %@)", pid, token);
+        if (resultBlock) ((void (^)(id, id, id, BOOL))resultBlock)(nil, nil, @"ignoring non-focused OverlayUI request", NO);
+        return nil;
+    }
+    return orig(self, _cmd, token, pid, resultBlock);                                                  // "arbiter advice (normal path)"
+}
+
+// 4a: the hook by address
+typedef void (*X7MSHookFn)(void *symbol, void *replace, void **result);
+static void (*gX7OrigUcsBlock)(void *);
+static void X7_UcsBlock(void *blk) {
+    if (blk && X7_SUPPRESS_ON() && *((const uint8_t *)blk + 0x28)) {          // the disabled flag captured by the block (+0x28)
+        id eager = BPX_Obj0(BPX_Obj0(BPX_WindowSceneManager(), "activeDisplayWindowScene"), "_fbsDisplayIdentity");
+        X7_ARM(gX7Suppress, S_ACTIVE, nil, nil);
+        if (gX7Suppress.kind) gX7Suppress.eager = (__bridge void *)eager;
+        gX7OrigUcsBlock(blk);
+        X7_DISARM(gX7Suppress);
+        return;
+    }
+    gX7OrigUcsBlock(blk);
+}
+static void X7_InstallUcsBlock(void) {
+    static const uintptr_t kInvoke = 0x1c62d2588, kMake = 0x1c62d2550;        // 16.0 block invoke; adrp x16 / add x16 pair in -_lock_reevaluateKeyboardFocusDisablement that builds its pointer
+    static const uint32_t kPro[6] = { 0xd503237f, 0xa9bd57f6, 0xa9014ff4, 0xa9027bfd, 0x910083fd, 0xaa0003f3 };
+    static const uint32_t kPair[2] = { 0x90000010, 0x91162210 };
+    X7MSHookFn hookFn = (X7MSHookFn)dlsym(RTLD_DEFAULT, "MSHookFunction");
+    if (!hookFn) { BP_Log(@"[x7] UCS block: MSHookFunction not available, not installing"); return; }
+    intptr_t slide = 0; BOOL found = NO;
+    for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
+    }
+    if (!found) { BP_Log(@"[x7] UCS block: SpringBoard.framework image not found, not installing"); return; }
+    if (!class_getInstanceMethod(NSClassFromString(@"SBUniversalControlServer"), sel_registerName("_lock_reevaluateKeyboardFocusDisablement"))) { BP_Log(@"[x7] UCS block: -_lock_reevaluateKeyboardFocusDisablement missing, not installing"); return; }
+    uintptr_t entry = kInvoke + (uintptr_t)slide;
+    if (memcmp((const void *)entry, kPro, sizeof kPro) != 0 || memcmp((const void *)(kMake + (uintptr_t)slide), kPair, sizeof kPair) != 0) {
+        BP_Log(@"[x7] UCS block: prologue / block pointer words differ at %p, not installing (the server keeps suppressing every display)", (void *)entry);
+        return;
+    }
+#if __has_feature(ptrauth_calls)
+    void *target = ptrauth_strip((void *)entry, ptrauth_key_function_pointer), *repl = ptrauth_strip((void *)X7_UcsBlock, ptrauth_key_function_pointer);
+#else
+    void *target = (void *)entry, *repl = (void *)X7_UcsBlock;
+#endif
+    void *orig = NULL;
+    hookFn(target, repl, &orig);
+    if (!orig) { BP_Log(@"[x7] UCS block: MSHookFunction returned no trampoline, not installing"); return; }
+#if __has_feature(ptrauth_calls)
+    orig = ptrauth_sign_unauthenticated(ptrauth_strip(orig, ptrauth_key_function_pointer), ptrauth_key_function_pointer, 0);
+#endif
+    gX7OrigUcsBlock = (void (*)(void *))orig;
+    BP_Log(@"[x7] UCS block hooked at %p (16.0 0x%lx): keyboard suppression of SBUniversalControlServer is scoped to the active display", (void *)entry, (unsigned long)kInvoke);
+}
+
 // ---------------------------------------------------------------------------------------------- setup
 
 void X7_Setup(void) {
@@ -378,6 +518,8 @@ void X7_Setup(void) {
         }
     }
 
+    if (BP_OnName("kbsuppress")) X7_InstallUcsBlock();
+
     Class kfc = NSClassFromString(@"SBWorkspaceKeyboardFocusController");
     Class svc = NSClassFromString(@"SBKeyboardFocusService");
     if (kfc && svc) {
@@ -387,6 +529,10 @@ void X7_Setup(void) {
         class_addMethod(svc, sel_registerName("_lock_updateExternalSceneIdentities"), (IMP)X7_SvcLockUpdate, "v16@0:8");
         gX7OrigSvcDisconnect = BPX_Replace(svc, "_handleDisconnectForServiceConnection:", (IMP)X7_SvcDisconnect);
         BP_Log(@"[x7] external scene identities API installed");
+        gX7OrigUserFocus = BPX_Replace(kfc, "userFocusRequestForScene:reason:completion:", (IMP)X7_UserFocus);
+        gX7OrigRemoveFocus = BPX_Replace(kfc, "removeKeyboardFocusFromScene:", (IMP)X7_RemoveFocus);
+        gX7OrigFilter = BPX_Replace(kfc, "_filterFocusedSceneIdentityToken:focusedPID:resultBlock:", (IMP)X7_Filter);
+        BP_Log(@"[x7] OverlayUI focus request tracking %s, _filterFocusedSceneIdentityToken: consumer %s", (gX7OrigUserFocus && gX7OrigRemoveFocus) ? "installed" : "NOT installed (selector missing)", gX7OrigFilter ? "installed" : "NOT installed (selector missing)");
     } else {
         BP_Log(@"[x7] SBKeyboardFocusService / SBWorkspaceKeyboardFocusController missing, external scene identities not installed");
     }
