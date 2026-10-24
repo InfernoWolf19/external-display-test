@@ -1,12 +1,4 @@
 {
- "0.7.5+179.5d96621": {
-  "date": "2026-10-17T19:14:04Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+179.5d96621_iphoneos-arm64.deb",
-  "run": 179,
-  "sha": "5d9662108d4ba7ecf273c0b758cbde9063535fc4",
-  "subject": "Log: rotate Backport162.log at 3 MiB instead of 256 KiB (with debug o\u2026",
-  "version": "0.7.5+179.5d96621"
- },
  "0.7.5+180.b2b596c": {
   "date": "2026-10-17T19:30:50Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+180.b2b596c_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "32d525e94e03674c7e518d29460314b74158550f",
   "subject": "Item 5 (G6 A1 remote alert targets): decision with call chain; 16.2 Siri exception of performPresentationRequest:forSession: ported over the 16.0 body (switch siriexception, decision logged)",
   "version": "0.7.9+249.32d525e"
+ },
+ "0.7.9+250.b1fc8da": {
+  "date": "2026-10-24T23:23:22Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+250.b1fc8da_iphoneos-arm64.deb",
+  "run": 250,
+  "sha": "b1fc8da0683a833aeb782b6fd0f60fc5c551f100",
+  "subject": "Y3StatusBar: coordinator status bar queries use the controller of their own window scene, avoidance frame orientation (Stage Manager), container status bar hide like 16.2 (switches y3_scenectl, y3_avoidorient, y3_containersb); DELTA-SWEEP coordinator verdicts",
+  "version": "0.7.9+250.b1fc8da"
  },
  "0.7.9+251.3d6977c": {
   "date": "2026-10-24T23:22:18Z",
