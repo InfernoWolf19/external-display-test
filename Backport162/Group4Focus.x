@@ -352,7 +352,7 @@ static id BP_KeyboardFocusController(void) {
             id v = [t respondsToSelector:@selector(view)] ? [t view] : nil;
             id w = [v respondsToSelector:@selector(window)] ? [v window] : ([t respondsToSelector:@selector(window)] ? [t window] : nil);
             CGPoint loc = [t respondsToSelector:@selector(locationInView:)] ? [t locationInView:v] : CGPointZero;
-            CGRect wb = [w respondsToSelector:@selector(bounds)] ? [w bounds] : CGRectZero;
+            CGRect wb = [w respondsToSelector:NSSelectorFromString(@"bounds")] ? ((CGRect (*)(id, SEL))objc_msgSend)(w, NSSelectorFromString(@"bounds")) : CGRectZero;
             unsigned int cid = [w respondsToSelector:@selector(_contextId)] ? ((unsigned int (*)(id, SEL))objc_msgSend)(w, @selector(_contextId)) : 0;
             BP_Log(@"coordinator: flip probe %lu/12: ws %p touchDownWS %p (press scene %s) location in view (%.1f, %.1f) window %p bounds (%.0f, %.0f, %.0f x %.0f) %s contextID %u phase %lld",
                    (unsigned long)_flipProbeCount, ws, _touchDownWS, (_touchDownWS == ws) ? "= event scene" : "!= event scene", loc.x, loc.y, w, wb.origin.x, wb.origin.y, wb.size.width, wb.size.height,
