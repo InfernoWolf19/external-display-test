@@ -12,14 +12,18 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 347 |
-| EQUIVALENT | 25 |
+| PORTED already | 346 |
+| PORTED NOW | 7 |
+| EQUIVALENT | 47 |
 | IRRELEVANT | 251 |
 | EXCLUDED | 94 |
-| not yet triaged (this sweep is in progress) | 749 |
+| TO PORT | 1 |
+| OPEN | 1 |
+| CANNOT | 1 |
+| not yet triaged (this sweep is in progress) | 718 |
 | **total** | **1466** |
 
-Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 3, IRRELEVANT 3, PENDING 77, PORTED 5; F3: EXCLUDED 41, IRRELEVANT 5, PENDING 375, PORTED 245; F4: EXCLUDED 8, PENDING 42, PORTED 24; F5: EXCLUDED 1, PENDING 5, PORTED 2; F6: EXCLUDED 8, IRRELEVANT 2, PENDING 82, PORTED 10; F7: EXCLUDED 9, IRRELEVANT 6, PENDING 39, PORTED 18; F8: EQUIVALENT 25, EXCLUDED 6, IRRELEVANT 233, PENDING 18, PORTED 9
+Per family: F1: CANNOT 1, EQUIVALENT 22, EXCLUDED 18, IRRELEVANT 2, OPEN 1, PENDING 80, PORTED 33, PORTED NOW 7, TO PORT 1; F2: EXCLUDED 3, IRRELEVANT 3, PENDING 77, PORTED 5; F3: EXCLUDED 41, IRRELEVANT 5, PENDING 375, PORTED 245; F4: EXCLUDED 8, PENDING 42, PORTED 24; F5: EXCLUDED 1, PENDING 5, PORTED 2; F6: EXCLUDED 8, IRRELEVANT 2, PENDING 82, PORTED 10; F7: EXCLUDED 9, IRRELEVANT 6, PENDING 39, PORTED 18; F8: EQUIVALENT 25, EXCLUDED 6, IRRELEVANT 233, PENDING 18, PORTED 9
 
 ## F1 Window scene / scene manager / main workspace / scene handles (165)
 
@@ -32,7 +36,7 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBApplication(Classic_Internal) | `-_calculateSupportedTypesForSplashBoard` | 0x1c5ec8d2c | 0x1c733c13c | TRIAGE PENDING |
 | SBApplication(Classic_Internal) | `-_classicModeFromSupportedTypes` | 0x1c5ec8f44 | 0x1c733c334 | TRIAGE PENDING |
 | SBApplication(Classic_Private) | `+_niceScreenTypeForClassicType:matchingAValidDisplayZoomModeOnScreenType:` | 0x1c5ec6918 | 0x1c7339a44 | TRIAGE PENDING |
-| SBApplicationSceneHandle | `-_createApplicationSceneSettingsFromContext:entity:` | 0x1c5e2b338 | 0x1c729d898 | TRIAGE PENDING |
+| SBApplicationSceneHandle | `-_createApplicationSceneSettingsFromContext:entity:` | 0x1c5e2b338 | 0x1c729d898 | TO PORT: M5 orientation family (REVIEW-CORE M5): interfaceOrientationForLayoutElement:unknownAllowed: |
 | SBApplicationSceneUpdateTransaction | `-initWithApplicationSceneEntity:transitionRequest:` | 0x1c5e2ae9c | 0x1c729d788 | PORTED already: hook in G3B.x:369 |
 | SBApplicationSceneUpdateTransaction | `-_didComplete` | 0x1c5e48cfc | 0x1c72baf2c | TRIAGE PENDING |
 | SBApplicationSceneUpdateTransaction | `-.cxx_destruct` | 0x1c5e4ecb4 | 0x1c72c0ef8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
@@ -42,7 +46,7 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBApplicationSupportServiceDelegate | `-destroyScenesWithPersistentIdentifiers:animationType:destroySessions:forClient:completion:` | 0x1c61c0a7c | 0x1c764f3f4 | TRIAGE PENDING |
 | SBApplicationSupportServiceRequestContext | `+initializationContextForClient:` | 0x1c6345d28 | 0x1c77ea600 | TRIAGE PENDING |
 | SBApplicationSupportServiceRequestContext | `-_main_launchDisplayContext` | 0x1c6346958 | 0x1c77eb2d8 | TRIAGE PENDING |
-| SBDeviceApplicationSceneHandle | `-_modifyApplicationSceneSettings:fromRequestContext:entity:` | 0x1c5e2b9a8 | 0x1c729dfb4 | TRIAGE PENDING |
+| SBDeviceApplicationSceneHandle | `-_modifyApplicationSceneSettings:fromRequestContext:entity:` | 0x1c5e2b9a8 | 0x1c729dfb4 | PORTED NOW: Y1Workspace.x y1_scenestyle (userInterfaceStyle on every display); the 16.2 screenBoundsIgnoresSceneOrientation property needs the 16.2 UIKit client in every app (absent in 16.0 UIMutableApplicationSceneSettings): CANNOT here, the isChamoisLinked rename and the _isInCallBanner removal are equivalent |
 | SBDeviceApplicationSceneHandle | `-_mainSceneSupportedInterfaceOrientations` | 0x1c5e37cc0 | 0x1c72aa11c | PORTED already: hook in G3.x:244 |
 | SBDeviceApplicationSceneHandle | `-_didUpdateSettingsWithDiff:previousSettings:` | 0x1c5e3d8b8 | 0x1c72afca0 | PORTED already: hook in G3.x:295 |
 | SBDeviceApplicationSceneHandle | `-setKeyboardContextMaskStyle:` | 0x1c5e3df60 | 0x1c72b0354 | PORTED already: hook in G3.x:266 |
@@ -61,13 +65,13 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBExternalDisplayWindowSceneDelegate | `-sceneDidDisconnect:` | 0x1c5fed4f8 | 0x1c746826c | PORTED already: hook in Group4Focus.x:653 |
 | SBLayoutState | `-interfaceOrientation` | 0x1c5e1f9a8 | 0x1c7291884 | TRIAGE PENDING |
 | SBLayoutState | `-interfaceOrientationForElementIdentifier:` | 0x1c61e1220 | 0x1c766f804 | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:` | 0x1c6036db4 | 0x1c74b2314 | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:` | 0x1c6036dfc | 0x1c74b235c | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:excludingIdentifiers:` | 0x1c6036e40 | 0x1c74b23a0 | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:` | 0x1c6036e88 | 0x1c74b23e8 | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:allowCanMatches:preferNewScene:visibleIdentifiers:` | 0x1c6036ed0 | 0x1c74b2430 | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:` | 0x1c6036f6c | 0x1c74b24cc | TRIAGE PENDING |
-| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:sceneSessionRole:` | 0x1c6036fac | 0x1c74b250c | TRIAGE PENDING |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:` | 0x1c6036db4 | 0x1c74b2314 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:` | 0x1c6036dfc | 0x1c74b235c | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:excludingIdentifiers:` | 0x1c6036e40 | 0x1c74b23a0 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:` | 0x1c6036e88 | 0x1c74b23e8 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:allowCanMatches:preferNewScene:visibleIdentifiers:` | 0x1c6036ed0 | 0x1c74b2430 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:` | 0x1c6036f6c | 0x1c74b24cc | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:sceneSessionRole:` | 0x1c6036fac | 0x1c74b250c | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
 | SBMainDisplayLayoutState | `-isEqual:` | 0x1c5e2e28c | 0x1c72a0934 | TRIAGE PENDING |
 | SBMainDisplayLayoutState | `-_initWithLayoutElements:interfaceOrientation:interfaceOrientationByLayoutElement:` | 0x1c62889b8 | 0x1c772119c | TRIAGE PENDING |
 | SBMainDisplayLayoutState | `-_initWithLayoutState:` | 0x1c6288a2c | 0x1c7721214 | TRIAGE PENDING |
@@ -78,27 +82,27 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBMainDisplayLayoutState | `-floatingAppLayout` | 0x1c6289ccc | 0x1c7722688 | TRIAGE PENDING |
 | SBMainDisplayLayoutStateManager | `-_layoutStateForApplicationTransitionContext:` | 0x1c5e23430 | 0x1c72952ec | PORTED already: hook in G3C.x:446, G4B.x:1820 |
 | SBMainDisplayLayoutStateManager | `-defaultSceneIdentifierForBundleIdentifier:targetContentIdentifier:allowCanMatches:preferNewScene:visibleSceneIdentifiers:excludingSceneIdentifiers:sceneSessionRole:` | 0x1c625a188 | 0x1c76f09cc | TRIAGE PENDING |
-| SBMainDisplaySceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5e46a00 | 0x1c72b9050 | TRIAGE PENDING |
-| SBMainDisplaySceneManager | `-_updateLevelAndBackgroundSettingsForScene:transitionContext:` | 0x1c5e6dc1c | 0x1c72e097c | TRIAGE PENDING |
-| SBMainDisplaySceneManager | `-_handleAction:forScene:` | 0x1c5e70a78 | 0x1c72e3838 | TRIAGE PENDING |
-| SBMainDisplaySceneManager | `-dealloc` | 0x1c63d3d0c | 0x1c787fa2c | TRIAGE PENDING |
-| SBMainDisplaySceneManager | `-_scene:interceptUpdateWithNewSettings:` | 0x1c63d488c | 0x1c78804ac | TRIAGE PENDING |
+| SBMainDisplaySceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5e46a00 | 0x1c72b9050 | EQUIVALENT: 16.2 moved the app client-settings diff inspection to the SBSceneManager base (base inspector is nil; the extended manager's only inspector observes preferredPointerLockStatus = G4B.x lockedptr2 hook of the extended manager); the main manager keeps the 16.0 inspectors |
+| SBMainDisplaySceneManager | `-_updateLevelAndBackgroundSettingsForScene:transitionContext:` | 0x1c5e6dc1c | 0x1c72e097c | EQUIVALENT: only the hosted keyboard window update moved to the SBSceneManager callbacks (G3B.x g3b_kbwindow covers every display) |
+| SBMainDisplaySceneManager | `-_handleAction:forScene:` | 0x1c5e70a78 | 0x1c72e3838 | PORTED NOW: 16.2 moved UIDestroySceneAction / resize-finished handling into the SBSceneManager base; Y1Workspace.x y1_extaction gives the extended display manager the destroy action (the resize-finished 0x30 branch already exists in its 16.0 override 0x1c63ae37c) |
+| SBMainDisplaySceneManager | `-dealloc` | 0x1c63d3d0c | 0x1c787fa2c | EQUIVALENT: removeAllObservers / foreground flag of a log line only |
+| SBMainDisplaySceneManager | `-_scene:interceptUpdateWithNewSettings:` | 0x1c63d488c | 0x1c78804ac | EQUIVALENT: removeAllObservers / foreground flag of a log line only |
 | SBMainDisplaySceneManager | `-.cxx_destruct` | 0x1c63d7ee8 | 0x1c7882e28 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBMainStatusBarStateProvider | `-_shouldPostForVisitedItem:withUpdates:toAggregatorData:lastPost:` | 0x1c5e1efbc | 0x1c7290fa0 | TRIAGE PENDING |
 | SBMainStatusBarStateProvider | `-_composePostDataFromAggregatorData:` | 0x1c5e1f6d4 | 0x1c72915c8 | TRIAGE PENDING |
 | SBMainWorkspace | `-_executeTransitionRequest:options:validator:` | 0x1c5e1ffe4 | 0x1c7291e98 | TRIAGE PENDING |
 | SBMainWorkspace | `-transactionDidComplete:` | 0x1c5e4e4dc | 0x1c72c071c | TRIAGE PENDING |
-| SBMainWorkspace | `-init` | 0x1c5efd108 | 0x1c7371404 | TRIAGE PENDING |
+| SBMainWorkspace | `-init` | 0x1c5efd108 | 0x1c7371404 | EQUIVALENT: SBWorkspaceKeyboardFocusController initWithWorkspace:windowSceneManager: passes the window scene manager the 16.0 controller reads from SBApp (Group4Focus.x) |
 | SBMainWorkspace | `-inCallPresentationManager:createPresentationSessionWithSceneHandle:` | 0x1c5efeb60 | 0x1c7372e7c | PORTED already: 16.2 address cited in X6InCall.x |
 | SBMainWorkspace | `-_executeTransientOverlayTransitionRequest:` | 0x1c5f00d54 | 0x1c7375028 | PORTED already: 16.2 address cited in X2Overlay.x |
-| SBMainWorkspace | `-_selectTransactionForAppEntityRemoved:` | 0x1c5f0191c | 0x1c7375c68 | TRIAGE PENDING |
+| SBMainWorkspace | `-_selectTransactionForAppEntityRemoved:` | 0x1c5f0191c | 0x1c7375c68 | PORTED NOW: Y1Workspace.x y1_appremoved (window scene of the dying scene's display) |
 | SBMainWorkspace | `-setPipCoordinator:` | 0x1c5f021c4 | 0x1c73765b8 | TRIAGE PENDING |
-| SBMainWorkspace | `-_destroyApplicationSceneEntity:` | 0x1c5f02cc4 | 0x1c737708c | TRIAGE PENDING |
-| SBMainWorkspace | `-_removeApplicationEntitiesFromWorkspace:error:` | 0x1c5f036fc | 0x1c7377ba0 | TRIAGE PENDING |
-| SBMainWorkspace | `-_targetWindowSceneForApplication:preferringDisplay:requireForeground:options:` | 0x1c5f04228 | 0x1c7378764 | TRIAGE PENDING |
-| SBMainWorkspace | `-_handleOpenApplicationRequest:options:activationSettings:origin:withResult:` | 0x1c5f060d0 | 0x1c737a760 | TRIAGE PENDING |
-| SBMainWorkspace | `-isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:` | 0x1c5f0c1dc | 0x1c73808a4 | TRIAGE PENDING |
-| SBMainWorkspace | `-transientOverlayScenePresenter:didDismissViewController:wasTopmostPresentation:` | 0x1c5f0cad0 | 0x1c73811ac | TRIAGE PENDING |
+| SBMainWorkspace | `-_destroyApplicationSceneEntity:` | 0x1c5f02cc4 | 0x1c737708c | PORTED NOW: Y1Workspace.x y1_appremoved (+ new _cleanupForRemovedAppEntity:, which also replaces the 16.0 _applicationEntityWasRemovedFromAppSwitcher: body) |
+| SBMainWorkspace | `-_removeApplicationEntitiesFromWorkspace:error:` | 0x1c5f036fc | 0x1c7377ba0 | PORTED NOW: Y1Workspace.x y1_appremoved (any-display layout lookup) |
+| SBMainWorkspace | `-_targetWindowSceneForApplication:preferringDisplay:requireForeground:options:` | 0x1c5f04228 | 0x1c7378764 | EQUIVALENT: 16.2 adds a consistency filter (scene settings display == manager's display) that only differs while a scene is being taken by another display; LOW, not ported |
+| SBMainWorkspace | `-_handleOpenApplicationRequest:options:activationSettings:origin:withResult:` | 0x1c5f060d0 | 0x1c737a760 | EQUIVALENT: selector sequence identical; device capability gates (blraaz) became direct calls, register renumbering only |
+| SBMainWorkspace | `-isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:` | 0x1c5f0c1dc | 0x1c73808a4 | OPEN: NEEDS EDIT IN G3B.x: expose the per-window-scene hosted keyboard controller (BPKB_ControllerForWindowScene) as -[SBWindowScene medusaHostedKeyboardWindowController]; only matters for alerts on the extended display (LOW) |
+| SBMainWorkspace | `-transientOverlayScenePresenter:didDismissViewController:wasTopmostPresentation:` | 0x1c5f0cad0 | 0x1c73811ac | EQUIVALENT: main display presenter: identical (switcherController of the window scene = the coordinator's active controller); extended display presenter only resets the idle timer / clock after a dismissal, LOW, not ported |
 | SBMainWorkspaceLayoutStateContingencyPlan | `-transitionContextForLayoutContext:failedEntities:` | 0x1c6450ce8 | 0x1c7904c94 | TRIAGE PENDING |
 | SBMainWorkspaceTransitionRequest | `-copyMainWorkspaceTransitionRequest` | 0x1c63e6878 | 0x1c7892f40 | TRIAGE PENDING |
 | SBRecentAppLayouts | `-_setRecents:notifyForChangeDescription:` | 0x1c64eb650 | 0x1c79a8370 | EXCLUDED: description / debug text only |
@@ -110,13 +114,13 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBSceneLayoutWorkspaceTransaction | `-_captureAppsForTransition` | 0x1c5e27b6c | 0x1c729a3c4 | TRIAGE PENDING |
 | SBSceneLayoutWorkspaceTransaction | `-_updateScenesForTransitionCompletion` | 0x1c5e49218 | 0x1c72bb488 | TRIAGE PENDING |
 | SBSceneLayoutWorkspaceTransaction | `-_runningOnMainRootOrExtendedExternalDisplay` | 0x1c62a109c | 0x1c773aecc | TRIAGE PENDING |
-| SBSceneManager | `-_handleAction:forScene:` | 0x1c5e71060 | 0x1c72e3b58 | PORTED already: hook in G4B.x:1456 |
+| SBSceneManager | `-_handleAction:forScene:` | 0x1c5e71060 | 0x1c72e3b58 | PORTED already: G4B.x hook (_UIPointerUnlockAction) + Y1Workspace.x y1_extaction (UIDestroySceneAction); snapshot / activation prewarm actions are in the 16.0 base already |
 | SBSceneManager | `-initWithReference:sceneIdentityProvider:presentationBinder:` | 0x1c5f7230c | 0x1c73e904c | TRIAGE PENDING |
-| SBSceneManager | `-takeScene:fromSceneManager:` | 0x1c5f72cf4 | 0x1c73e9a3c | PORTED already: hook in G4B.x:1794 |
+| SBSceneManager | `-takeScene:fromSceneManager:` | 0x1c5f72cf4 | 0x1c73e9a3c | PORTED NOW: G4B.x hook + Y1Workspace.x y1_takescene (new handle's wantsEnhancedWindowingEnabled follows the new display) |
 | SBSceneManager | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5f73af0 | 0x1c73ea6f8 | EXCLUDED: description / debug text only |
-| SBSceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5f74a9c | 0x1c73eb73c | TRIAGE PENDING |
-| SBSceneManager | `-scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5f761d4 | 0x1c73ed100 | TRIAGE PENDING |
-| SBSceneManager | `-scene:didCompleteUpdateWithContext:error:` | 0x1c5f76bdc | 0x1c73edb40 | TRIAGE PENDING |
+| SBSceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5f74a9c | 0x1c73eb73c | EQUIVALENT: see SBMainDisplaySceneManager row: base inspector nil, extended manager inspector (pointer lock) ported in G4B.x |
+| SBSceneManager | `-scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5f761d4 | 0x1c73ed100 | EQUIVALENT: hosted keyboard window refresh per window scene = G3B.x g3b_kbwindow (fan-out controllers refreshed from the main and extended manager's _updateMedusaHostedKeyboardWindow) |
+| SBSceneManager | `-scene:didCompleteUpdateWithContext:error:` | 0x1c5f76bdc | 0x1c73edb40 | EQUIVALENT: hosted keyboard window refresh per window scene = G3B.x g3b_kbwindow (fan-out controllers refreshed from the main and extended manager's _updateMedusaHostedKeyboardWindow) |
 | SBSceneManager | `-.cxx_destruct` | 0x1c5f76d08 | 0x1c73edd1c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSceneManagerCoordinator | `-workspace:didReceiveSceneRequestWithOptions:completion:` | 0x1c630f438 | 0x1c77ad8dc | TRIAGE PENDING |
 | SBSceneSettingsUpdater | `-setDisplayConfiguration:` | 0x1c605a75c | 0x1c74d93c8 | TRIAGE PENDING |
@@ -136,10 +140,10 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBSuspendedWorkspaceTransaction | `-_childTransactionDidComplete:` | 0x1c5ea0d90 | 0x1c7313a68 | TRIAGE PENDING |
 | SBSystemShellExternalDisplaySceneManager | `-_shouldAutoHostScene:` | 0x1c63ae320 | 0x1c7858710 | PORTED already: hook in Tweak.x:251 |
 | SBSystemShellExternalDisplaySceneManager | `-.cxx_destruct` | 0x1c63aeb98 | 0x1c7859118 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBToAppsWorkspaceTransaction | `-initWithTransitionRequest:` | 0x1c5e21e5c | 0x1c7293d24 | TRIAGE PENDING |
-| SBToAppsWorkspaceTransaction | `-_willBegin` | 0x1c5e28ffc | 0x1c729b83c | TRIAGE PENDING |
-| SBToAppsWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e3e06c | 0x1c72b0460 | TRIAGE PENDING |
-| SBToAppsWorkspaceTransaction | `-_completeCurrentTransition` | 0x1c5e4855c | 0x1c72ba764 | TRIAGE PENDING |
+| SBToAppsWorkspaceTransaction | `-initWithTransitionRequest:` | 0x1c5e21e5c | 0x1c7293d24 | EQUIVALENT: ancillary-request helper moved from an instance method to +[SBMainWorkspaceTransitionRequest ancillaryTransitionRequestsForTransitionRequest:], delegate passed to SBSceneLayoutWorkspaceTransaction init (setDelegate: before): same objects, no behaviour change |
+| SBToAppsWorkspaceTransaction | `-_willBegin` | 0x1c5e28ffc | 0x1c729b83c | CANNOT: privacy preflight gate (privacyPreflightController / requiresPreflightForApplication:) needs PrivacyDisclosureCore, absent in 16.0 (REVIEW-PLUMBING 'privacy preflight gate') |
+| SBToAppsWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e3e06c | 0x1c72b0460 | PORTED NOW: Y1Workspace.x y1_takescene (the 16.2 block 0x1c784e3f8 sets wantsEnhancedWindowingEnabled on the taken handle; done in the takeScene: hook) |
+| SBToAppsWorkspaceTransaction | `-_completeCurrentTransition` | 0x1c5e4855c | 0x1c72ba764 | EQUIVALENT: 16.2 enumerates a copy of the completion blocks (mutation safety only) |
 | SBToAppsWorkspaceTransaction | `-_acquireResignActiveAssertion` | 0x1c5e7434c | 0x1c72e718c | PORTED already: 16.2 address cited in X7Keyboard.x |
 | SBUIController | `-activateApplication:fromIcon:location:activationSettings:actions:` | 0x1c5e72ef4 | 0x1c72e5df8 | TRIAGE PENDING |
 | SBUIController | `-handleHomeButtonDoublePressDown` | 0x1c5e9ca80 | 0x1c730f780 | TRIAGE PENDING |
@@ -156,7 +160,7 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBWindowScenePIPManager | `-windowSceneDidConnect:` | 0x1c5eca974 | 0x1c733e170 | PORTED already: hook in G3B.x:580 |
 | SBWindowScenePIPManager | `-windowSceneDidDisconnect:` | 0x1c5ecab4c | 0x1c733e3c8 | PORTED already: hook in G3B.x:594 |
 | SBWindowScenePIPManager | `-.cxx_destruct` | 0x1c5ecc7c0 | 0x1c7340174 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBWindowSceneStatusBarManager | `-setAvoidanceFrame:reason:statusBar:animationSettings:` | 0x1c5ef798c | 0x1c736bd64 | TRIAGE PENDING |
+| SBWindowSceneStatusBarManager | `-setAvoidanceFrame:reason:statusBar:animationSettings:` | 0x1c5ef798c | 0x1c736bd64 | EQUIVALENT: 4-argument convenience forwards options 0 to ...options: (group3-plumbing) |
 | SBWorkspaceApplicationSceneTransitionContext | `-frameForApplicationSceneEntity:` | 0x1c5e2b91c | 0x1c729dee0 | TRIAGE PENDING |
 | SBWorkspaceKeyboardFocusController | `-lockFocusToSpringBoardWindowScene:forReason:` | 0x1c6321c94 | 0x1c77c19f0 | PORTED already: hook in G4B.x:1937 |
 | SBWorkspaceKeyboardFocusController | `-userFocusRequestForScene:reason:completion:` | 0x1c6322844 | 0x1c77c29d8 | TRIAGE PENDING |
@@ -167,7 +171,7 @@ Per family: F1: EXCLUDED 18, IRRELEVANT 2, PENDING 111, PORTED 34; F2: EXCLUDED 
 | SBWorkspaceKeyboardFocusController | `-_filterFocusedSceneIdentityToken:focusedPID:resultBlock:` | 0x1c6323f3c | 0x1c77c4590 | PORTED already: 16.2 address cited in X7Keyboard.x |
 | SBWorkspaceKeyboardFocusController | `-.cxx_destruct` | 0x1c63285ac | 0x1c77c9334 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBWorkspaceTransitionRequest | `-applicationTransitionContext:frameForApplicationSceneEntity:` | 0x1c5f42650 | 0x1c73b6c6c | TRIAGE PENDING |
-| SpringBoard | `-noteSceneLayoutDidUpdateOnDisplayWithIdentity:` | 0x1c5e4b7cc | 0x1c72bda18 | TRIAGE PENDING |
+| SpringBoard | `-noteSceneLayoutDidUpdateOnDisplayWithIdentity:` | 0x1c5e4b7cc | 0x1c72bda18 | EQUIVALENT: still main display only (isMainDisplay gate kept); only the coordinator singleton became the window scene's switcher controller / presenter |
 | SpringBoard | `-startupInterfaceOrientation` | 0x1c5ed5ba0 | 0x1c734a2d4 | PORTED already: hook in G3.x:923 |
 | SpringBoard | `-application:configurationForConnectingSceneSession:options:` | 0x1c5ed6c24 | 0x1c734b1f8 | TRIAGE PENDING |
 | SpringBoard | `-applicationDidFinishLaunching:` | 0x1c5ed74d8 | 0x1c734ba64 | PORTED already: hook in G4B.x:957 |

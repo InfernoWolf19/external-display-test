@@ -207,6 +207,18 @@ Still unverified without a device: whether backboardd 16.0 blanks an external di
 Everything except the opt-in list in Tweak.x is on. To bisect a misbehaviour, disable one feature at a time with an empty file
 `/var/jb/tmp/Backport162.off.<name>` (names in the table above) and respring; `Backport162.off` disables the whole tweak.
 
+### Delta sweep ports (Y files, specs/DELTA-SWEEP-0.7.9.md)
+
+Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBoard methods found missing; each is on by default, kill file `Backport162.off.<switch>`. Log prefix `[yN]` with `Backport162.debug`.
+
+| feature | what it ports | switch |
+|---|---|---|
+| y1_appremoved | (Y1Workspace.x) an app entity that is removed (app killed, card removed, scene destroyed) is looked up in the layout state of every display (16.0: main display only): `_removeApplicationEntitiesFromWorkspace:error:` keeps scenes that any display lays out, new `_cleanupForRemovedAppEntity:` (also called by 16.2 `_destroyApplicationSceneEntity:` and the 16.0 `_applicationEntityWasRemovedFromAppSwitcher:`), and `_selectTransactionForAppEntityRemoved:` runs the app-exited transaction on the window scene of the dying scene's display | `y1_appremoved` |
+| y1_scenestyle | (Y1Workspace.x) `_modifyApplicationSceneSettings:...`: the scene's user interface style (app's supported style or the arbiter's current one) is set for every display, 16.0 only for the main display: apps on the extended display follow dark mode | `y1_scenestyle` |
+| y1_extaction | (Y1Workspace.x) `UIDestroySceneAction` of an app window on the extended display is handled (16.2 handles it in the `SBSceneManager` base class, 16.0 only in the main display's manager): an app can close its own window on the monitor | `y1_extaction` |
+| y1_takescene | (Y1Workspace.x) after `takeScene:fromSceneManager:` the new scene handle's `wantsEnhancedWindowingEnabled` follows the NEW display's Stage Manager state | `y1_takescene` |
+<!-- Y-ROWS-END -->
+
 ## Crash recorder
 The tweak writes its own crash report to `/var/jb/tmp/Backport162.crash` (signal, fault address, registers, backtrace as `image+offset`;
 uncaught Objective-C exceptions with reason). Use it when ReportCrash produces no `.ips`.
