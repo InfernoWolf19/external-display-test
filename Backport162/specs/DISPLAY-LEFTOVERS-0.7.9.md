@@ -47,8 +47,8 @@ Switch `focuslock` (default on; the hooks test it per call, the install happens 
 
 1. Create `<jbroot>/tmp/Backport162.debug`, respring, connect the monitor in extended mode.
 2. Put a text app in front on the monitor, type something on the hardware keyboard. Leave the pointer on the monitor.
-3. Move the pointer to the iPad and open Spotlight on the iPad (pull-down). Spotlight's lock is on the iPad, the iPad is now the active display: typing goes into Spotlight (lock counted). Close Spotlight.
-4. Open Spotlight on the iPad by touch while the pointer rests on the monitor... the touch moves the active display to the iPad, so the same result. The interesting case is the reverse: with the pointer on the iPad and the focused app on the monitor, a lock held for the MONITOR (a notification banner long-look or the Control Centre of the monitor) must not take the keyboard from an app that is focused on the iPad.
+3. Case A (the lock counts): move the pointer to the iPad and open Spotlight on the iPad (pull down on the home screen). Spotlight's keyboard lock belongs to the iPad, which is now the active display, so typing on the hardware keyboard goes into Spotlight. Close Spotlight.
+4. Case B (the lock must not count): put the pointer on the iPad, with a text app focused on the monitor. Then raise something that locks the keyboard to the monitor (a long-look notification banner or Control Centre on the monitor, with the pointer still on the iPad). The lock is held for a display that is neither the active one nor the one of the focused app, so it must not take the keyboard away: typing must keep going into the focused app, and the log shows `focuslock: deferring lock <reason> (scene ... is neither the app-focus display scene ... nor the active scene ...)`.
 5. In `Backport162.log` look for the three install lines at the start and `focuslock: deferring lock ...` / `lock window scene for the deferring rules` while you do the above.
 
 ### Unproven
