@@ -1,12 +1,4 @@
 {
- "0.7.5+184.7df60c8": {
-  "date": "2026-10-17T23:23:51Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+184.7df60c8_iphoneos-arm64.deb",
-  "run": 184,
-  "sha": "7df60c8fe8ceddda3c23fe3f1c9b578edff2e004",
-  "subject": "G2H: revert the mask inflation (it delayed the close crop by half the\u2026",
-  "version": "0.7.5+184.7df60c8"
- },
  "0.7.5+185.2e446cc": {
   "date": "2026-10-17T23:30:14Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+185.2e446cc_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "678d17d584296e3630e58a1cf0b9d94635c31a88",
   "subject": "Docs: REVIEW-PLUMBING rows and GAPS pointer updated for the display leftovers (items 1 to 8)",
   "version": "0.7.9+255.678d17d"
+ },
+ "0.7.9+256.3a899d0": {
+  "date": "2026-10-24T23:33:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+256.3a899d0_iphoneos-arm64.deb",
+  "run": 256,
+  "sha": "3a899d0beabf184e082cadf59b802f256000b62d",
+  "subject": "Docs: focuslock test recipe steps 3 and 4 rewritten as two plain cases",
+  "version": "0.7.9+256.3a899d0"
  }
 }

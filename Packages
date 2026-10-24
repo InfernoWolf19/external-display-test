@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 256, commit 3a899d0: Docs: focuslock test recipe steps 3 and 4 rewritten as two plain cases
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+256.3a899d0
+Installed-Size: 4052
+Filename: debs/com.infernowolf19.backport162_0.7.9+256.3a899d0_iphoneos-arm64.deb
+Size: 1326296
+MD5sum: 19e526c82a7435396f36d45ecba9b87f
+SHA1: 11e60a4c3232792e3dad734991299c62e5f6b315
+SHA256: c6316b796de02795112fec5bfba9a587836dfaf713daee413c479567b11f1d36
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 255, commit 678d17d: Docs: REVIEW-PLUMBING rows and GAPS pointer updated for the display leftovers (items 1 to 8)
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1262,24 +1284,3 @@ Size: 976930
 MD5sum: 397f93c74d8d95232170f73817fc027b
 SHA1: 05665238710f232914bf7b1e5394ee73eac06990
 SHA256: 836ade54971319f257e048ccff3bccf1c3a015d7ff1397f126a44b4d53d4a2c8
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice). Reboot userspace after installing (backboardd).
- .
- Build 184, commit 7df60c8: G2H: revert the mask inflation (it delayed the close crop by half the…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.5+184.7df60c8
-Installed-Size: 2720
-Filename: debs/com.infernowolf19.backport162_0.7.5+184.7df60c8_iphoneos-arm64.deb
-Size: 974380
-MD5sum: 980a7f7d40efe622b054e2925b9b1231
-SHA1: e2a0f68d27c8f03dbeb293c48bf1e4e2ced364b9
-SHA256: 0ef7c622711c30d372f74608d96a8ad26afef225d5eeddf66830e352d235fc05
