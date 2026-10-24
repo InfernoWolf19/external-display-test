@@ -1,12 +1,4 @@
 {
- "0.7.4+164.49bc330": {
-  "date": "2026-10-17T08:37:20Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+164.49bc330_iphoneos-arm64.deb",
-  "run": 164,
-  "sha": "49bc3304783a8e3a0716cfc9a318fa4036e8883a",
-  "subject": "G2D: the home swipe cancels the app's touch (g2d_homecancel): SBGrabb\u2026",
-  "version": "0.7.4+164.49bc330"
- },
  "0.7.4+165.bd691a9": {
   "date": "2026-10-17T09:10:27Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+165.bd691a9_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "09f6a308f7f9a93015451d891a458f95c973ddcf",
   "subject": "X3Mode: BPSceneHostingDisplayPreferences + displayPreferencesForDisplayController: on both policies, the 16.2 controller transform (criteria mode, per-axis clamp, keepOtherModes, mirrored displays), setCloningSupported: and the non-interactive policy factory (switches modetransform, cloningsupported)",
   "version": "0.7.9+230.09f6a30"
+ },
+ "0.7.9+231.82bc14e": {
+  "date": "2026-10-24T08:06:59Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+231.82bc14e_iphoneos-arm64.deb",
+  "run": 231,
+  "sha": "82bc14e081a2cb77aa448a42322ea1de4ac601ed",
+  "subject": "Y1Workspace: any-display app entity removal (kill / card removal / scene destroy), app-exited transaction on the dying scene's display, scene user interface style and UIDestroySceneAction on the extended display, wantsEnhancedWindowingEnabled after a scene moves (switches y1_appremoved y1_scenestyle y1_extaction y1_takescene); DELTA-SWEEP family F1 verdicts",
+  "version": "0.7.9+231.82bc14e"
  }
 }
