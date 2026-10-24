@@ -1,12 +1,4 @@
 {
- "0.7.4+161.84444b3": {
-  "date": "2026-10-17T08:22:17Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+161.84444b3_iphoneos-arm64.deb",
-  "run": 161,
-  "sha": "84444b35ff71f92115993d6ebae6775bf692823d",
-  "subject": "BBD/PTR: ctor marker files (Backport162BBD.ctor / Backport162PTR.ctor\u2026",
-  "version": "0.7.4+161.84444b3"
- },
  "0.7.4+162.cb281e3": {
   "date": "2026-10-17T08:24:38Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+162.cb281e3_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4dbfe232cc523c09fdf4ef3509b7ccf77ee3c156",
   "subject": "X7Keyboard: SBUniversalControlServer block (hook by address, display scoped suppression), OverlayUI requesting-focus tracking and the 16.2 _filterFocusedSceneIdentityToken: consumer",
   "version": "0.7.9+227.4dbfe23"
+ },
+ "0.7.9+228.004fd24": {
+  "date": "2026-10-24T07:53:21Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+228.004fd24_iphoneos-arm64.deb",
+  "run": 228,
+  "sha": "004fd24e6b77652ed0ccc8c66dbed42f46e1504b",
+  "subject": "DELTA-SWEEP-0.7.9: all 1466 logic-changed SpringBoard methods listed with addresses; first verdicts (ported / irrelevant / excluded), triage in progress",
+  "version": "0.7.9+228.004fd24"
  }
 }
