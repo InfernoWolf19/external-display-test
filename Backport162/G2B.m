@@ -741,18 +741,27 @@ static CGRect BP2B_FrameSkipAutoLayout(id calc, long long role, id layout, CGRec
 static IMP gOrigAutoLayout;
 
 // The full 162 algorithm.  Returns nil to make the caller fall back to the original 16.0 implementation.
+// One line per distinct failing check (the auto layout runs ~100 times a second during a window drag; FINDINGS-DRAG-LOOP P2): names WHICH prerequisite is missing, once.
+static id BP2B_AutoFail(NSString *why) {
+    static NSMutableSet *seen;
+    @synchronized ([BP2BRegion class]) {
+        if (!seen) seen = [NSMutableSet set];
+        if (![seen containsObject:why]) { [seen addObject:why]; BP_Log(@"[g2b] auto layout prerequisite missing (logged once): %@", why); }
+    }
+    return nil;
+}
 static id BP2B_AutoLayout(id calc, id layout, long long orient, id attrs, double dockH, double scale, id dragging, id before, CGRect bounds, BOOL ps, BOOL pd) {
-    if (!calc || !layout || !attrs || bounds.size.width <= 0 || bounds.size.height <= 0) return nil;
+    if (!calc || !layout || !attrs || bounds.size.width <= 0 || bounds.size.height <= 0) return BP2B_AutoFail(@"argument missing or empty bounds (calc/layout/attrs/bounds)");
     // the attributesByModifying{AttributedSize,AttributedUserSizeBeforeOverlapping,NormalizedCenter,UnoccludedPeekingCenter}: selectors sent below
     // exist only when BP2B_SetupAttributes succeeded (gBP2B_Init16 is NULL when it bailed out): then the 16.0 implementation runs
-    if (!gBP2B_Init16 || !gBP2B_AttrClass) return nil;
+    if (!gBP2B_Init16 || !gBP2B_AttrClass) return BP2B_AutoFail(@"attribute shims not installed (gBP2B_Init16 / gBP2B_AttrClass missing: BP2B_SetupAttributes bailed out)");
     id controller = BP2B_PortedController(calc);
     Class keyClass = NSClassFromString(@"SBAppLayoutOverlappingModelCacheKey");
     Class modelClass = NSClassFromString(@"SBChamoisOverlappingModel");
     id grid = BP2B_Obj(calc, sel_registerName("_chamoisLayoutGridCache"));
-    if (!controller || !keyClass || !modelClass || !grid) return nil;
+    if (!controller || !keyClass || !modelClass || !grid) return BP2B_AutoFail(@"ported controller / SBAppLayoutOverlappingModelCacheKey / SBChamoisOverlappingModel / _chamoisLayoutGridCache missing");
     SEL keySel = sel_registerName("cacheKeyForSnapshotOfAppLayout:containerBounds:containerOrientation:floatingDockHeight:hideStrips:hideDock:draggingItem:");
-    if (!class_getClassMethod(keyClass, keySel)) return nil;                       // group 2 cache key shim missing
+    if (!class_getClassMethod(keyClass, keySel)) return BP2B_AutoFail(@"+cacheKeyForSnapshotOfAppLayout:containerBounds:... missing on SBAppLayoutOverlappingModelCacheKey (group 2 cache key shim)");                       // group 2 cache key shim missing
     typedef id (*KeyFn)(Class, SEL, id, CGRect, long long, double, BOOL, BOOL, id);
     #define BP2B_KEY(l) ((KeyFn)objc_msgSend)(keyClass, keySel, (l), bounds, orient, dockH, ps, pd, dragging)
 
@@ -768,14 +777,14 @@ static id BP2B_AutoLayout(id calc, id layout, long long orient, id attrs, double
     Class infoClass = NSClassFromString(@"SBDisplayItemGridLayoutRestrictionInfo");
     SEL infoSel = sel_registerName("layoutRestrictionInfoWithLayoutRestrictions:restrictedSize:");
     SEL gridSel = sel_registerName("nearestGridSizeForProposedSize:inBounds:contentOrientation:layoutRestrictionInfo:screenScale:chamoisLayoutAttributes:");
-    if (!infoClass || !class_getClassMethod(infoClass, infoSel) || ![grid respondsToSelector:gridSel]) return nil;
+    if (!infoClass || !class_getClassMethod(infoClass, infoSel) || ![grid respondsToSelector:gridSel]) return BP2B_AutoFail(@"grid restriction info class / nearestGridSizeForProposedSize:... missing");
     id info = ((id (*)(Class, SEL, unsigned long long, CGSize))objc_msgSend)(infoClass, infoSel, 0, CGSizeMake(-1.0, -1.0));
     CGSize gridMax = ((CGSize (*)(id, SEL, CGSize, CGRect, long long, id, double, id))objc_msgSend)(grid, gridSel, CGSizeMake(maxW, bounds.size.height), bounds, orient, info, scale, attrs);
 
     SEL allItemsS = sel_registerName("allItems"), roleS = sel_registerName("layoutRoleForItem:"), attrsS = sel_registerName("layoutAttributesForItem:");
     SEL modS = sel_registerName("appLayoutByModifyingLayoutAttributes:forItem:");
     SEL userS = sel_registerName("userSizeBeforeOverlappingInBounds:defaultSize:screenEdgePadding:");
-    if (![layout respondsToSelector:modS] || ![layout respondsToSelector:attrsS] || ![layout respondsToSelector:roleS]) return nil;
+    if (![layout respondsToSelector:modS] || ![layout respondsToSelector:attrsS] || ![layout respondsToSelector:roleS]) return BP2B_AutoFail(@"SBAppLayout lacks appLayoutByModifyingLayoutAttributes:forItem: / layoutAttributesForItem: / layoutRoleForItem:");
     NSArray *all = BP2B_Obj(layout, allItemsS);
     id cur = layout;
 
@@ -827,7 +836,7 @@ static id BP2B_AutoLayout(id calc, id layout, long long orient, id attrs, double
     // (4) z-ordered valid items -> preferred model
     NSMutableArray *valid = [NSMutableArray array];
     SEL enumS = sel_registerName("enumerate:");
-    if (![layout2 respondsToSelector:enumS]) return nil;
+    if (![layout2 respondsToSelector:enumS]) return BP2B_AutoFail(@"SBAppLayout lacks enumerate:");
     ((void (*)(id, SEL, void (^)(long long, id, BOOL *)))objc_msgSend)(layout2, enumS, ^(long long role, id item, BOOL *stop) {
         if (BP2B_RoleValidForSplitView(role) && item) [valid addObject:item];
     });
@@ -850,13 +859,13 @@ static id BP2B_AutoLayout(id calc, id layout, long long orient, id attrs, double
     } else if ([model respondsToSelector:init6]) {
         model = ((id (*)(id, SEL, id, id, id, id, CGRect, CGRect))objc_msgSend)(model, init6, valid, centers, sizes, @{}, bounds, CGRectZero);
     } else {
-        return nil;
+        return BP2B_AutoFail(@"(line 853) preferred model step returned nil");
     }
-    if (!model) return nil;
+    if (!model) return BP2B_AutoFail(@"overlapping model could not be built");
 
     // (5) the ported controller
     SEL ctl = sel_registerName("modelByPerformingAutoLayoutForModel:chamoisLayoutAttributes:draggingItem:modelBeforeDragging:floatingDockHeight:bounds:screenScale:prefersStripHidden:prefersDockHidden:");
-    if (![controller respondsToSelector:ctl]) return nil;
+    if (![controller respondsToSelector:ctl]) return BP2B_AutoFail(@"ported controller lacks the model selector");
     id result = ((id (*)(id, SEL, id, id, id, id, double, CGRect, double, BOOL, BOOL))objc_msgSend)(controller, ctl, model, attrs, dragging, before, dockH, bounds, scale, ps, pd);
     if (!result) result = model;                                                   // the controller refuses (e.g. no region SPI) -> keep the preferred model
 
@@ -1036,7 +1045,12 @@ static void BP2B_SetupCalculator(void) {
     gOrigAutoLayout = BP2B_Replace(c, "_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:",
         imp_implementationWithBlock(^id(id me, id layout, long long orient, id attrs, double dockH, double scale, id dragging, id before, CGRect bounds, BOOL ps, BOOL pd) {
             id r = BP2B_AutoLayout(me, layout, orient, attrs, dockH, scale, dragging, before, bounds, ps, pd);
-            if (!r && BP_LogEnabled()) BP_Log(@"[g2b] auto layout: a prerequisite is missing, layout returned unchanged");
+            if (!r && BP_LogEnabled()) {        // throttled: first line, then one per 2 s with the count (FINDINGS-DRAG-LOOP P2); the reason is logged once by BP2B_AutoFail
+                static double lastT; static unsigned skipped;
+                double now = CFAbsoluteTimeGetCurrent();
+                if (now - lastT >= 2.0) { BP_Log(@"[g2b] auto layout: a prerequisite is missing, layout returned unchanged (%u calls since the last line)", skipped); lastT = now; skipped = 0; }
+                else skipped++;
+            }
             return r ?: layout;
         }));
     // 162 0x1c75a3614 -_frameForLayoutRole:... : full port of the Stage Manager branch; centre / floating / classic side branches are byte-for-byte the 16.0 body.

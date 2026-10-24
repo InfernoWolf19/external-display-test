@@ -1563,7 +1563,7 @@ static BPG2DefBox *BP_G2_DSCompute(id settings, id a16, CGRect b, double dockH, 
 }
 
 static NSMutableDictionary *gBPG2DSCache;
-static NSString *gBPG2DSLastLog;
+static NSMutableDictionary *gBPG2DSLastLog;     // signature per display (key: container bounds + embedded flag): one global string made both displays re-log every pass
 
 // Hook body: compute (cached per input set), write the 16.2 values into the 16.0 attributes, log once per change.
 static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, long long orient, double dockH, double sb, BOOL rfs, BOOL ps, BOOL pd, BOOL emb) {
@@ -1610,7 +1610,12 @@ static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, l
     if (BP_LogEnabled()) {
         NSString *sig = [NSString stringWithFormat:@"%@|%@|%d|%d%d%d%d|%.2f|%.2f", NSStringFromCGRect(b), NSStringFromCGSize(r->def), sane, rfs, ps, pd, emb, dockH, sb];
         BOOL changed;
-        @synchronized ([BPG2DefBox class]) { changed = ![gBPG2DSLastLog isEqualToString:sig]; if (changed) gBPG2DSLastLog = sig; }
+        NSString *dkey = [NSString stringWithFormat:@"%@|%d", NSStringFromCGRect(b), (int)emb];
+        @synchronized ([BPG2DefBox class]) {
+            if (!gBPG2DSLastLog) gBPG2DSLastLog = [NSMutableDictionary dictionary];
+            changed = ![gBPG2DSLastLog[dkey] isEqualToString:sig];
+            if (changed) gBPG2DSLastLog[dkey] = sig;
+        }
         if (changed) {
             BP_Log(@"[defsize] bounds %@ native %@ orient %lld dock %.1f statusBar %.1f rfs %d stripHidden %d dockHidden %d embedded %d (orient/native are cache key only in 16.2)",
                    NSStringFromCGRect(b), NSStringFromCGRect(nb), orient, dockH, sb, rfs, ps, pd, emb);
