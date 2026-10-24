@@ -1,12 +1,4 @@
 {
- "0.7.5+172.2db2308": {
-  "date": "2026-10-17T14:06:39Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+172.2db2308_iphoneos-arm64.deb",
-  "run": 172,
-  "sha": "2db23082ff5fa843adb7e221170aa063281ec58b",
-  "subject": "G2F.x: work in progress, symmetric pivot for the home swipe close (no\u2026",
-  "version": "0.7.5+172.2db2308"
- },
  "0.7.5+173.c28de50": {
   "date": "2026-10-17T14:07:32Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+173.c28de50_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "6b2770bf1f1c59f183c12403ec38ddbad91eafd6",
   "subject": "FINDINGS-DRAG-LOOP-0.7.9: no runaway loop (input-driven load), crash = stock SBSceneHandle assertion, dropped window lands in no layout, patch proposals P0-P7",
   "version": "0.7.9+238.6b2770b"
+ },
+ "0.7.9+239.ae4adf4": {
+  "date": "2026-10-24T18:14:55Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+239.ae4adf4_iphoneos-arm64.deb",
+  "run": 239,
+  "sha": "ae4adf475a4aba654b9ca14d82c74a43121042a3",
+  "subject": "G1B: routing162 guard log built lazily (suppression test first on scalars, no NSString per query), FINDINGS-DRAG-LOOP P1",
+  "version": "0.7.9+239.ae4adf4"
  }
 }

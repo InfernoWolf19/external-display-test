@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 239, commit ae4adf4: G1B: routing162 guard log built lazily (suppression test first on scalars, no NSString per query), FINDINGS-DRAG-LOOP P1
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+239.ae4adf4
+Installed-Size: 3892
+Filename: debs/com.infernowolf19.backport162_0.7.9+239.ae4adf4_iphoneos-arm64.deb
+Size: 1246948
+MD5sum: 2fcc1df0917c85a2cbfd2db32ad83a26
+SHA1: 75d624dc7845bafb02a7f99e8bb04f5367f0c218
+SHA256: 0b7bd44702cd51a7dfdb34ed69b5da6d80eca74a5ea16be3fa0a9e113f0f10c7
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 238, commit 6b2770b: FINDINGS-DRAG-LOOP-0.7.9: no runaway loop (input-driven load), crash = stock SBSceneHandle assertion, dropped window lands in no layout, patch proposals P0-P7
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1251,24 +1273,3 @@ Size: 915880
 MD5sum: 7dba78bd911c9b8a349a63df86a5c4d2
 SHA1: a64f189de7ad7da6b9656fefb2ebb6ee451ecfc9
 SHA256: fefc4c812a8289d991e9a362c4b6e141d883b3cbae9d244d7e32c90a4081a95e
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd and pointeruid parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice). Reboot userspace after installing (backboardd).
- .
- Build 172, commit 2db2308: G2F.x: work in progress, symmetric pivot for the home swipe close (no…
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.5+172.2db2308
-Installed-Size: 2604
-Filename: debs/com.infernowolf19.backport162_0.7.5+172.2db2308_iphoneos-arm64.deb
-Size: 913544
-MD5sum: 418b9a7301ea0dbd10137d39aaac4808
-SHA1: dec94fc7402f3fde27fdd8e58bb865e8f7db8917
-SHA256: 74cacf98c51f996f89ecec8fa8791540cf3b5b459c48361e6277b36a5164e811
