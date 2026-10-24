@@ -134,3 +134,32 @@ Master switch `p1_sw` (nothing of this section is installed without it). Log: `p
 * Unproven: that 16.0's VC code needs nothing the 16.0 coordinator body used to set (the 16.2 VC reads the response flags only).
 
 Switches: `p1_sw` (all), `p1_homescroll`, `p1_defroles`, `p1_asynceval`.
+
+## 3b. M5 orientation family (P1SW.m)  - Tier A ported (switch `p1_orient`), Tier B not ported (reasons below)
+
+What the 16.2 disassembly shows for the five methods the review named, plus the callers it did not name:
+
+| method | 16.2 | ported |
+|---|---|---|
+| `SBLayoutState -interfaceOrientationForLayoutElement:unknownAllowed:` / `-_interfaceOrientationForElementIdentifier:unknownAllowed:` (new) | 0x1c766f7ac / 0x1c766f80c; `-interfaceOrientationForElementIdentifier:` is the `NO` case (0x1c766f804). Element unknown or mapped to 0 -> `unknownAllowed ? 0 : [[self class] _defaultInterfaceOrientation]` | added (class_addMethod). The assertion for "known element not in the orientation map" (both releases) is not raised: answers 0, one `p1sw: orient:` log line |
+| `SBApplicationSceneHandle -_createApplicationSceneSettingsFromContext:entity:` (the DELTA-SWEEP row marked "TO PORT: M5") | 0x1c729d898 vs 0x1c5e2b338: identical except that the element lookup of the context's layout state is `interfaceOrientationForLayoutElement:unknownAllowed:YES` (an element missing from that layout state answers 0, so the context / scene orientation is used; 16.0 answered the default orientation, which differs when a scene is created for a display whose layout state does not contain it yet, i.e. on a cross-display move). 16.2 also raises two assertions for a zero-size frame ("frame (%@) isn't valid", "Application scene settings frame should never be 0!") | wrapper around the 16.0 body: during the call the layout state of the context answers the lookup of this scene's element (once) with the `unknownAllowed:YES` answer. The two zero-frame assertions are crash paths and are **not ported** (16.0 behaviour kept) |
+| `SBSwitcherController -coordinateSpaceForLayoutElement:layoutState:` | 0x1c7603a88: with Stage Manager the orientation is `[layoutState interfaceOrientation]` instead of the per-element one | ported (full body) |
+| `SBSwitcherController -sceneEntityFrameForWorkspaceEntity:inLayoutState:` | 0x1c76073e4 vs 0x1c617ef24: same chamois orientation rule (`[layoutState interfaceOrientation]` replaces `-interfaceOrientationForSceneHandle:`); an error log for a zero-size result | wrapper: during the call `-interfaceOrientationForSceneHandle:` answers the layout state orientation once (the only use of that query in the body). The log is not ported |
+| `SBSwitcherController -_updateAppTransitionContext:withOrientationActuationContext:` | 0x1c76026a4: forwards to the 4 argument form with `accountForSceneState = !isChamoisWindowingUIEnabled` (16.0: always YES) and the primary delegate ivar | ported (calls the 16.0 3 argument form, which reads the same ivar) |
+
+Switch `p1_orient` (one kill file for all of Tier A). Log: one `p1sw: orient installed ...` line.
+Test: move an app window from one display to the other and watch the log for `p1sw: orient` lines; with the main display, rotating the device with a Stage Manager window of an orientation-locked app open
+(the window frame is computed from the layout state orientation instead of the app's own).
+Unproven: every effect.
+
+**Tier B, NOT ported: `SBSwitcherController -switcherOrientation:elementsOrientations:forTransitionRequest:previousLayoutState:layoutState:` (16.2 0x1c7600950) and its helper family.**
+16.2 reorganised the whole switcher traits flow around a NEW class `SBSwitcherTraitsAssistant` (1769 instructions in 26 methods, `-createTraitsParticipantsForLayoutElements:outParticipantsByElementIdentifier:outDelegatesByParticipant:outPrimaryDelegate:`,
+`-updateAllParticipants:withPrimaryDelegate:nonPrimaryPolicy:primaryPolicy:ownPolicy:`, "guiding" portrait-only / landscape-only participants for scenes that request an orientation, a policy specifier that is added and removed on demand),
+the switcher controller got `_noteLayoutStateEvaluationBegan`, `_noteLayoutStateEvaluationEndedWithParticipantsByElementIdentifiers:...`, `_areLayoutStateElements:matchedWithAssociatedParticipants:`,
+`_orientationsForLayoutStateElements:withAssociatedParticipants:`, `_elementsOrientationsForParticipantsByElementIdentifier:`, `actuateOrientationForTraitsDelegate:withContext:reasons:`, new ivars (assistant, evaluation counter,
+`_needsOrientationReevaluation` instead of `_waitingFollowupTransition`, a second banner timer, a different order of the first 0x80 bytes), and the decision logic of `switcherOrientation:` changed in three places (the
+`_canDetermineActiveOrientation` rule, a chamois rule "system gesture or from switcher into an app -> switcher policy 5 and re-evaluate", and the non-primary overlay policy = phone-app-on-pad ? 3 : primary policy).
+Reasons it is left out: (1) the 16.0 SBSwitcherController ivar layout cannot change (subclasses follow it), so the new state would have to live in associated objects while every 16.0 method that still reads the old ivars keeps running next to it;
+(2) the policy numbers feed `updateAllParticipants:` / the 16.0 `_updateParticipantsAndPoliciesWithSwitcherPolicy:...`, whose enum semantics were not shown to be the same, so porting only the decisions would mix two meanings;
+(3) a mistake here breaks the traits arbiter of the MAIN display (device rotation, orientation lock) on the device the tweak runs on, and nothing of it is exercised by the external display path; (4) it cannot be verified without a device.
+What the traits assistant gives in 16.2 (guiding participants for orientation-locked Stage Manager windows) is therefore absent. If a rotation problem with Stage Manager windows is seen, this is the first suspect.

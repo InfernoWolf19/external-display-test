@@ -163,6 +163,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | p1_homescroll | 16.2 `SBHomeGestureToSwitcherSwitcherModifier -_appLayoutToScrollToDuringTransition` (from the home screen with Stage Manager the scroll target is the first window of the first pile; the mode-3 index 0 tweak is skipped) | `p1_homescroll` |
 | p1_defroles | 16.2 `SBDefaultImplementationsSwitcherModifier` role scale (model based: occluded / partially occluded windows) and role frame (peeking centre, partially occluded overlap shift) with Stage Manager on; risky for close / zoom, own switch | `p1_defroles` |
 | p1_asynceval | 16.2 `SBMainSwitcherControllerCoordinator -_evaluateAsynchronousRenderingEnablement` is empty (async rendering only through the per-display VC flags); can change transition timing | `p1_asynceval` |
+| p1_orient | M5 orientation family of REVIEW-CORE that works on the 16.0 traits code: `SBLayoutState` `...unknownAllowed:`, `coordinateSpaceForLayoutElement:layoutState:` and `sceneEntityFrameForWorkspaceEntity:inLayoutState:` use the layout state orientation with Stage Manager, `_updateAppTransitionContext:withOrientationActuationContext:`, scene settings orientation of `SBApplicationSceneHandle` (the 16.2 SBSwitcherTraitsAssistant rework is not ported, see the spec) | `p1_orient` |
 
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 

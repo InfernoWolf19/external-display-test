@@ -4,6 +4,8 @@
 //   p1_homescroll  SBHomeGestureToSwitcherSwitcherModifier -_appLayoutToScrollToDuringTransition  (M8)
 //   p1_defroles    SBDefaultImplementationsSwitcherModifier -scaleForLayoutRole:inAppLayout: / -frameForLayoutRole:inAppLayout:withBounds:  (M4)
 //   p1_asynceval   SBMainSwitcherControllerCoordinator -_evaluateAsynchronousRenderingEnablement is a no-op like 16.2  (M6)
+//   p1_orient      the orientation family of M5 that does not need the 16.2 traits assistant (see the section below): SBLayoutState ...unknownAllowed:, SBSwitcherController coordinateSpaceForLayoutElement:layoutState: /
+//                  sceneEntityFrameForWorkspaceEntity:inLayoutState: / _updateAppTransitionContext:withOrientationActuationContext:, SBApplicationSceneHandle _createApplicationSceneSettingsFromContext:entity:
 // Logs: grep "p1sw:" in Backport162.log.
 
 #import "G1BKit.h"
@@ -46,6 +48,7 @@ static IMP PS_Replace(const char *cls, const char *sel, IMP imp) {
 }
 
 static IMP sScroll, sDefScale, sDefFrame, sAsyncEval;
+static IMP sCoordSpace, sSceneFrame, sUpdateCtx2, sSceneHandleForOrient, sLSOrientForElement, sCreateSettings;
 
 // ---------------------------------------------------------------------------------------------- M8 _appLayoutToScrollToDuringTransition (16.2 0x1c795038c, 16.0 0x1c6499a54)
 // Deltas 16.0 -> 16.2 (everything else, including the arithmetic, is identical): the first thing 16.2 reads is -isChamoisWindowingUIEnabled.
@@ -215,12 +218,121 @@ static void PS_AsyncEval(id self, SEL _cmd) {
     if (!logged) { logged = YES; BP_Log(@"p1sw: _evaluateAsynchronousRenderingEnablement skipped (16.2 body is empty; kill file Backport162.off.p1_asynceval restores the 16.0 body)"); }
 }
 
+// ---------------------------------------------------------------------------------------------- M5 orientation family (the part that does not need the 16.2 SBSwitcherTraitsAssistant)
+// 16.2 SBLayoutState (0x1c766f7ac, 0x1c766f80c): -interfaceOrientationForLayoutElement:unknownAllowed: and -_interfaceOrientationForElementIdentifier:unknownAllowed: are new; the old
+// -interfaceOrientationForElementIdentifier: is the `unknownAllowed:NO` case (0x1c766f804). Body: element unknown or its mapped orientation 0 -> unknownAllowed ? 0 : [[self class] _defaultInterfaceOrientation];
+// a known element that is not in the orientation map is an assertion in both releases ("Layout state element is known but its orientation is not mapped.", not raised here: answers 0 and logs once).
+static IMP sLSOrientForId;
+static long long PS_LSOrient(id self, SEL _cmd, id ident, BOOL unknownAllowed) {
+    id elem = PS_S1(self, "elementWithIdentifier:", ident);
+    id map = PS_Ivar(self, "_interfaceOrientationByLayoutElementIdentifier");
+    long long o = 0;
+    if (elem && map) {
+        id num = [map objectForKey:ident];
+        if (!num) { static BOOL once; if (!once) { once = YES; BP_Log(@"p1sw: orient: layout state element %@ is known but its orientation is not mapped (16.0 / 16.2 raise an assertion here)", ident); } }
+        else o = [num respondsToSelector:@selector(integerValue)] ? (long long)[num integerValue] : 0;
+    }
+    if (o == 0 && !unknownAllowed) o = ((long long (*)(id, SEL))objc_msgSend)((id)object_getClass(self), sel_registerName("_defaultInterfaceOrientation"));
+    return o;
+}
+static long long PS_LSOrientForId(id self, SEL _cmd, id ident, BOOL unknownAllowed) { return PS_LSOrient(self, _cmd, ident, unknownAllowed); }
+static long long PS_LSOrientForElem(id self, SEL _cmd, id element, BOOL unknownAllowed) {
+    return PS_LSOrient(self, _cmd, PS_S0(element, "uniqueIdentifier"), unknownAllowed);
+}
+
+// SBApplicationSceneHandle -_createApplicationSceneSettingsFromContext:entity: (16.2 0x1c729d898, 16.0 0x1c5e2b338). The only orientation delta of the body is that the element lookup of the context's layout state
+// is -interfaceOrientationForLayoutElement:unknownAllowed:YES (an element that is not in the layout state answers 0 -> the context / scene orientation is used, 16.0 answered the default orientation).
+// (16.2 also raises an assertion for a frame of zero size / "frame (%@) isn't valid", not ported: a crash path, the 16.0 behaviour without it is kept.)
+// 16.0 body kept; during the call the layout state of the context answers that one lookup (same layout state, the scene's element identifier) with the unknownAllowed:YES answer.
+static __thread __unsafe_unretained id tOrientState;
+static __thread __unsafe_unretained id tOrientId;
+static id PS_CreateSettings(id self, SEL _cmd, id context, id entity) {
+    if (!BP_OnName("p1_orient")) return ((id (*)(id, SEL, id, id))sCreateSettings)(self, _cmd, context, entity);
+    id prevState = tOrientState, prevId = tOrientId;
+    tOrientState = PS_S0(context, "layoutState");
+    tOrientId = PS_S0(self, "sceneIdentifier");
+    id r = ((id (*)(id, SEL, id, id))sCreateSettings)(self, _cmd, context, entity);
+    tOrientState = prevState; tOrientId = prevId;
+    return r;
+}
+static long long PS_LSForElement(id self, SEL _cmd, id element) {
+    if (tOrientState && self == tOrientState && tOrientId && [PS_S0(element, "uniqueIdentifier") isEqual:tOrientId]) {
+        tOrientState = nil;                                                              // consumed: only the lookup of this scene's element
+        return PS_LSOrient(self, _cmd, PS_S0(element, "uniqueIdentifier"), YES);
+    }
+    return ((long long (*)(id, SEL, id))sLSOrientForElement)(self, _cmd, element);
+}
+
+// SBSwitcherController -coordinateSpaceForLayoutElement:layoutState: (16.2 0x1c7603a88, 16.0 0x1c617c1c4): with Stage Manager the orientation of the layout state ([layoutState interfaceOrientation]) replaces the per-element one.
+static id PS_CoordSpace(id self, SEL _cmd, id element, id state) {
+    if (!BP_OnName("p1_orient")) return ((id (*)(id, SEL, id, id))sCoordSpace)(self, _cmd, element, state);
+    id window = PS_S0(self, "switcherWindow");
+    id appLayout = PS_S0(state, "appLayout");
+    SEL so = sel_registerName("interfaceOrientationForLayoutElement:");
+    long long o = [state respondsToSelector:so] ? ((long long (*)(id, SEL, id))objc_msgSend)(state, so, element) : 0;
+    if (PS_B0(self, "isChamoisWindowingUIEnabled")) o = PS_L0(state, "interfaceOrientation");
+    long long role = PS_L0(element, "layoutRole");
+    BOOL inset = PS_B0(appLayout, "isInsetForHomeAffordance");
+    SEL rf = sel_registerName("referenceFrameForForInterfaceOrientation:layoutRole:appLayout:isInsetForHomeAffordance:");
+    if (![self respondsToSelector:rf]) return ((id (*)(id, SEL, id, id))sCoordSpace)(self, _cmd, element, state);
+    CGRect frame = ((CGRect (*)(id, SEL, long long, long long, id, BOOL))objc_msgSend)(self, rf, o, role, appLayout, inset);
+    Class cs = NSClassFromString(@"SBSceneLayoutCoordinateSpace");
+    SEL s1 = sel_registerName("coordinateSpaceForFrame:withinCoordinateSpace:"), s2 = sel_registerName("coordinateSpaceForInterfaceOrientation:withReferenceCoordinateSpace:inOrientation:");
+    if (!cs || ![(id)cs respondsToSelector:s1] || ![(id)cs respondsToSelector:s2]) return ((id (*)(id, SEL, id, id))sCoordSpace)(self, _cmd, element, state);
+    id space = ((id (*)(id, SEL, CGRect, id))objc_msgSend)((id)cs, s1, frame, window);
+    return ((id (*)(id, SEL, long long, id, long long))objc_msgSend)((id)cs, s2, o, space, PS_L0(window, "interfaceOrientation"));
+}
+
+// SBSwitcherController -sceneEntityFrameForWorkspaceEntity:inLayoutState: (16.2 0x1c76073e4, 16.0 0x1c617ef24): with Stage Manager the scene's orientation for the reference frame is [layoutState interfaceOrientation]
+// instead of -interfaceOrientationForSceneHandle: (the only use of that query in the body). (16.2 also logs an error when the result has a zero size; not ported, log only.)
+static __thread __unsafe_unretained id tFrameSelf;
+static __thread long long tFrameOrient;
+static CGRect PS_SceneFrame(id self, SEL _cmd, id entity, id state) {
+    typedef CGRect (*Orig)(id, SEL, id, id);
+    if (!BP_OnName("p1_orient") || !PS_B0(self, "isChamoisWindowingUIEnabled")) return ((Orig)sSceneFrame)(self, _cmd, entity, state);
+    id prevSelf = tFrameSelf; long long prevO = tFrameOrient;
+    tFrameSelf = self; tFrameOrient = PS_L0(state, "interfaceOrientation");
+    CGRect r = ((Orig)sSceneFrame)(self, _cmd, entity, state);
+    tFrameSelf = prevSelf; tFrameOrient = prevO;
+    return r;
+}
+static long long PS_SceneHandleOrient(id self, SEL _cmd, id handle) {
+    if (tFrameSelf && tFrameSelf == self) { tFrameSelf = nil; return tFrameOrient; }       // consumed: first use inside sceneEntityFrameForWorkspaceEntity:inLayoutState:
+    return ((long long (*)(id, SEL, id))sSceneHandleForOrient)(self, _cmd, handle);
+}
+
+// SBSwitcherController -_updateAppTransitionContext:withOrientationActuationContext: (16.2 0x1c76026a4, 16.0 0x1c617af88 = the 3 argument form with accountForSceneState:YES): 16.2 passes
+// accountForSceneState = !isChamoisWindowingUIEnabled and its primary delegate argument (the 16.0 3 argument form reads the same ivar itself).
+static void PS_UpdateCtx2(id self, SEL _cmd, id context, id actuation) {
+    SEL three = sel_registerName("_updateAppTransitionContext:withOrientationActuationContext:accountForSceneState:");
+    if (!BP_OnName("p1_orient") || ![self respondsToSelector:three]) { ((void (*)(id, SEL, id, id))sUpdateCtx2)(self, _cmd, context, actuation); return; }
+    ((void (*)(id, SEL, id, id, BOOL))objc_msgSend)(self, three, context, actuation, !PS_B0(self, "isChamoisWindowingUIEnabled"));
+}
+
+static void PS_OrientSetup(void) {
+    Class ls = NSClassFromString(@"SBLayoutState");
+    if (ls) {
+        if (!class_getInstanceMethod(ls, sel_registerName("interfaceOrientationForLayoutElement:unknownAllowed:")))
+            class_addMethod(ls, sel_registerName("interfaceOrientationForLayoutElement:unknownAllowed:"), (IMP)PS_LSOrientForElem, "q28@0:8@16B24");
+        if (!class_getInstanceMethod(ls, sel_registerName("_interfaceOrientationForElementIdentifier:unknownAllowed:")))
+            class_addMethod(ls, sel_registerName("_interfaceOrientationForElementIdentifier:unknownAllowed:"), (IMP)PS_LSOrientForId, "q28@0:8@16B24");
+    }
+    sLSOrientForElement = PS_Replace("SBLayoutState", "interfaceOrientationForLayoutElement:", (IMP)PS_LSForElement);
+    sCreateSettings = PS_Replace("SBApplicationSceneHandle", "_createApplicationSceneSettingsFromContext:entity:", (IMP)PS_CreateSettings);
+    sCoordSpace = PS_Replace("SBSwitcherController", "coordinateSpaceForLayoutElement:layoutState:", (IMP)PS_CoordSpace);
+    sSceneFrame = PS_Replace("SBSwitcherController", "sceneEntityFrameForWorkspaceEntity:inLayoutState:", (IMP)PS_SceneFrame);
+    sSceneHandleForOrient = PS_Replace("SBSwitcherController", "interfaceOrientationForSceneHandle:", (IMP)PS_SceneHandleOrient);
+    sUpdateCtx2 = PS_Replace("SBSwitcherController", "_updateAppTransitionContext:withOrientationActuationContext:", (IMP)PS_UpdateCtx2);
+    BP_Log(@"p1sw: orient installed layoutstate=%d settings=%d coordspace=%d sceneframe=%d handleorient=%d updatectx=%d", sLSOrientForElement != NULL, sCreateSettings != NULL, sCoordSpace != NULL, sSceneFrame != NULL, sSceneHandleForOrient != NULL, sUpdateCtx2 != NULL);
+}
+
 void P1SW_Setup(void) {
     if (!BP_OnName("p1_sw")) return;
     sScroll = PS_Replace("SBHomeGestureToSwitcherSwitcherModifier", "_appLayoutToScrollToDuringTransition", (IMP)PS_ScrollTo);
     sDefScale = PS_Replace("SBDefaultImplementationsSwitcherModifier", "scaleForLayoutRole:inAppLayout:", (IMP)PS_DefScale);
     sDefFrame = PS_Replace("SBDefaultImplementationsSwitcherModifier", "frameForLayoutRole:inAppLayout:withBounds:", (IMP)PS_DefFrame);
     sAsyncEval = PS_Replace("SBMainSwitcherControllerCoordinator", "_evaluateAsynchronousRenderingEnablement", (IMP)PS_AsyncEval);
+    PS_OrientSetup();
     BP_Log(@"p1sw: installed scroll=%d defscale=%d defframe=%d asynceval=%d", sScroll != NULL, sDefScale != NULL, sDefFrame != NULL, sAsyncEval != NULL);
 }
 
