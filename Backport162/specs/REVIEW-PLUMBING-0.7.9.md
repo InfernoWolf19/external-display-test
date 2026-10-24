@@ -29,31 +29,31 @@ Status: PORTED = 16.2 logic reproduced from the disassembly; DEVIATION = deliber
 | Extended provider registration (beta-5 behaviour, 20A8372 lacks it) | PORTED (merged EDE) | EDE.x | verified on device |
 | autoext / saved mirror-extended choice, mirrorsvc fix | PORTED + DEVIATION (saved choice from EDE) | Group4Connect.m | verified on device (EDE merged) |
 | `connectToDisplayController:` policy (0x1c77dba48): 4 s window, user pref, notifications | PORTED | Group4Connect.m hk_policyConnect | teardown is hooked at `DidDisconnect` (16.2: `WillDisconnect`), tiny ordering difference |
-| `SBSceneHostingDisplayController transformDisplayConfiguration:withBuilder:` (0x1c73bb2b8, 70->278) | PARTIAL | Tweak.x `scale` | only the per-axis logical-scale clamp; criteria-based mode choice shared with `_ensureCADisplayUpToDate:` (0x1c73bce50) and retention of the other modes (`keepOtherModes`) NOT ported; no symptom known |
+| `SBSceneHostingDisplayController transformDisplayConfiguration:withBuilder:` (0x1c73bb2b8, 70->278) | PORTED (0.7.9: `modetransform`, `cloningsupported`, criteria, `keepOtherModes`, SBSceneHostingDisplayPreferences class) | X3Mode.x + Tweak.x `scale` | specs/DISPLAY-LEFTOVERS-0.7.9.md section 3; device-unproven |
 | `_ensureCADisplayUpToDate:completion:`, `displayIdentityDidUpdate:`, `_updatePolicyForPresentation:` (0x1c73bd620, gate `shouldUpdatePresentation` dropped in 16.2) | NOT (refactor + hardening) | - | `discguard` guards the two entry points (PARTIAL) |
-| `_displayDisconnectedSignal`, `WillDisconnect` phase (0x1c73bc47c) | PARTIAL | Group4Connect.m discguard (now default on) | race only |
+| `_displayDisconnectedSignal`, `WillDisconnect` phase (0x1c73bc47c) | PORTED (0.7.9: the three signal blocks are guarded by address; the `WillDisconnect` policy phase is only a callback name, the guard flag is set before the 16.0 body runs) | Group4Connect.m discguard | DISPLAY-LEFTOVERS section 11; device-unproven |
 | `_createDisplayAssertionPreferences` asks the policy | PORTED (equivalent) | G4B.x | the 16.0 `_connectionCompleted` gate stays (16.2 dropped it) |
 | provider map cleanup on disconnect (0x1c7345fe0) | PORTED | Group4Connect.m provmap | |
 | `SBDisplayManager displayMonitor:didConnectIdentity:` 346->88 / per-display record refactor | NOT (refactor) | - | no behaviour; 16.2 per-display power log/arrangement/idle-sleep setters are done by the 16.0 aggregate |
 | window scene delegate `sceneDidDisconnect:` (0x1c746826c) | PORTED | Group4Focus.x | |
 | `SBWindowScene invalidating/invalidated`, kfc `suppressKeyboardFocusEvaluation` | PORTED | Group4Focus.x | the suppression only advisory unless `directhook` installs (prologue verified) |
-| kfc `windowSceneDidDisconnect:` (0x1c77c3b14) | PARTIAL (objc_direct callees replaced by visible equivalents) | Group4Focus.x | |
+| kfc `windowSceneDidDisconnect:` (0x1c77c3b14) | COMPLETE (same sequence through the 16.0 public methods, see DISPLAY-LEFTOVERS section 11) | Group4Focus.x |  |
 | `SBMultiDisplayUserInteractionCoordinator` + 3 sniffers | PORTED as a stand-in class | Group4Focus.x | not the 16.2 class name on purpose |
 | `activeDisplayWindowScene` (0x1c74bf1c4), methodology setting | PORTED; settings UI row `settingsControllerModule` (0x1c74236a8, 221->252) NOT (PTSettings internal UI) | Group4Focus.x / G4B.x | methodology not persisted; default 1 |
 | window migration on unplug (0x1c76c85e0) | PORTED (owner switcher lookup, builder 0x11, validator) | G4B.x | verified on device (lookup); end state in the strip = 16.2 |
 | migrate_stage | DEVIATION (documented, see 5) | G4B.x | device-unverified |
 | per-display clone mirroring (client + backboardd) | PORTED | G4B.x + BBD.x | reply path see 2; device-unverified |
 | education session / pill / observer rework | PORTED, UNSURE (SpringBoardEducation.app type 1) | G4B.x | observer is created in `applicationDidFinishLaunching:`; a display plugged in BEFORE that point would miss the connect note (LOW) |
-| `presubset`, `deferact` (100 ms), `focuslock` | PORTED / PORTED / PARTIAL (the two objc_direct methods of 750 / 1070 insns cannot be replaced; wrapper over the public lock API) | G4B.x | |
-| `SBNonInteractiveDisplayControllerPolicy updatePresentation...` (0x1c78e92ec, 105->192) | NOT | - | mirrored (non-interactive) displays only |
-| nilock (SBNonInteractiveDisplaySceneManager suspended-under-lock, 15 methods) | PARTIAL (reacts only to a cover sheet of another external display) | Group4Connect.m | |
+| `presubset`, `deferact` (100 ms), `focuslock` | PORTED / PORTED / PORTED BY ADDRESS (0.7.9: MSHookFunction on the two objc_direct functions, prologue and caller words verified) | G4B.x | DISPLAY-LEFTOVERS section 1; device-unproven |
+| `SBNonInteractiveDisplayControllerPolicy updatePresentation...` (0x1c78e92ec, 105->192) | EQUAL by construction (16.0 gate `shouldUpdatePresentation...` does the comparison 16.2 folded into the update) | - | DISPLAY-LEFTOVERS section 11 |
+| nilock (SBNonInteractiveDisplaySceneManager suspended-under-lock, 15 methods) | COMPLETE (15 of 15 methods; the only notification poster is the external cover sheet in both builds) | Group4Connect.m | DISPLAY-LEFTOVERS section 11 |
 | cover sheet: BKS blanking instead of a black window, wake-on-click (0x1c7790b4c, 0x1c7790fa4) | PORTED | Tweak.x `blank` / `nowindow` | |
-| cover sheet: `_setScreenOn:YES` before the window is hidden in `_updateExternalDisplayCoverSheetExistence` (0x1c77909e8), presentation-manager observer `coverSheetPresentationManagerDidChangeDismissedSinceKeyBagLock:` (0x1c7790898), `_isInvalidated` + dealloc assert, main-queue assert | NOT | - | LOW: the backlight handler already sets the screen on; only a display left blanked if the lock state clears without a backlight event |
+| cover sheet: `_setScreenOn:YES` before the window is hidden in `_updateExternalDisplayCoverSheetExistence` (0x1c77909e8), presentation-manager observer `coverSheetPresentationManagerDidChangeDismissedSinceKeyBagLock:` (0x1c7790898), `_isInvalidated` + dealloc assert, main-queue assert | PORTED (0.7.9) | Tweak.x `blank` | DISPLAY-LEFTOVERS section 8 |
 | `SBExternalDisplayWindowSceneDelegate _configureForConnectingWindowScene:` additions (0x1c7467d5c): `SBSystemPointerInteractionManager initWithMultiDisplayUserInteractionCoordinator:` + `SBSystemPointerInteractionDelegate initWithDisplayIdentity:` | NOT (16.0 has no class; hover regions handled by G2G/PTR deviations instead) | - | pointer-interaction callbacks per display (16.2 `shouldBeginPointerInteractionRequest:atLocation:forView:`) not ported |
-| same method: per-scene `SBTransientUIInteractionManager initWithSystemGestureManager:` (0x1c7467e9c) | PARTIAL: only the auto-hide users via G2C.x; tap-to-dismiss / indirect-pan registrations of transient UI still use the main display's manager | G2C.x | Eff: transient overlays (Control Centre, notification centre) on the extended display are not dismissed by a tap outside |
+| same method: per-scene `SBTransientUIInteractionManager initWithSystemGestureManager:` (0x1c7467e9c) | PORTED by Y2Gestures.x `y2_tuiscene` (other agent) | G2C.x / Y2Gestures.x | not duplicated |
 | same method: per-scene `SBRecordingIndicatorManager` (0x1c7467ec0..ed8; 16.0 has `initWithSensorActivityDataProvider:windowScene:` and creates it for the main display only: `_startRecordingIndicatorForMainDisplayWindowScene:` 0x1c5edc0e8) | NOT | - | Eff: no camera / microphone indicator dot on the extended display. Proposed patch: hook `SBExternalDisplayWindowSceneDelegate _configureForConnectingWindowScene:...` after `%orig`, `[[SBRecordingIndicatorManager alloc] initWithSensorActivityDataProvider:[SpringBoard sensorActivityDataProvider] windowScene:scene]` and keep it in an associated object of the delegate (invalidate on disconnect). Not done: untested, new visible UI |
 | Settings pane `DBSMultitasking...`, `SBExternalDisplayService` small deltas (0.97) | NOT (identical sequences) | - | |
-| 16.2 disconnect extras (PiP controller `_windowSceneDidDisconnect:`, VC `invalidate`, transient overlay manager, assertion coordinator `rootDisplayDidDisconnect:`, `takeScene` observer callout, compat map key) | NOT | - | LOW (list in DISCONNECT-MIGRATE-0.7.4.md 5.3) |
+| 16.2 disconnect extras (PiP controller `_windowSceneDidDisconnect:`, VC `invalidate`, transient overlay manager, assertion coordinator `rootDisplayDidDisconnect:`, `takeScene` observer callout, compat map key) | PORTED / EQUAL (0.7.9: transient overlay manager and switcher view controller `invalidate` ported as `discextras`; PiP controller, assertion coordinator `rootDisplayDidDisconnect:` equal; `takeScene` callout and compat map key are in-call only, see DISCONNECT-MIGRATE 5.3) | G4B.x `discextras` | DISPLAY-LEFTOVERS section 11 |
 
 ### 3.2 Scene / window plumbing
 | item | status | where | note |
@@ -118,8 +118,8 @@ MED
 * M5 migrate_stage duplicate recents / focus (5), device only.
 
 LOW
-* L1 `transformDisplayConfiguration` mode criteria / other-modes retention not ported (3.1).
-* L2 Cover sheet 16.2 extras (3.1), 16.2 disconnect extras (3.1).
+* L1 (closed in 0.7.9) `transformDisplayConfiguration` mode criteria / other-modes retention: X3Mode.x, DISPLAY-LEFTOVERS section 3.
+* L2 (closed in 0.7.9) Cover sheet 16.2 extras (DISPLAY-LEFTOVERS section 8), 16.2 disconnect extras (section 11).
 * L3 PTR.x writes every `BPPTR_Log` to NSLog even without `Backport162.debug` (a handful of lines per display attach); the standing rule says logging is opt-in. Switch to `if (!BPPTR_DebugOn()) return;` before `NSLog` if the system log should stay silent.
 * L4 Stale texts: comments in G3B.x (`ITEM 6 ... OPT-IN`), G3.x (`BP_G3_OptIn`), `control` Version 0.7.5 and the Tweak.x "0.7.5 loaded" line against 0.7.9 packaging.
 * L5 `G4B` education observer created only after `applicationDidFinishLaunching:`; `hasShownAllExtendedDisplayEducations` is forced to YES while `edu` is on (any other 16.0 reader sees "all shown").
