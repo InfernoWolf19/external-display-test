@@ -1,12 +1,4 @@
 {
- "0.7.4+165.bd691a9": {
-  "date": "2026-10-17T09:10:27Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+165.bd691a9_iphoneos-arm64.deb",
-  "run": 165,
-  "sha": "bd691a97d0da032226a3e4b4a47384bd6346f895",
-  "subject": "G1C: Root shouldScaleContentToFillBounds / shouldUseNonuniformSnapsho\u2026",
-  "version": "0.7.4+165.bd691a9"
- },
  "0.7.4+166.337c7b6": {
   "date": "2026-10-17T09:21:47Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+166.337c7b6_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "82bc14e081a2cb77aa448a42322ea1de4ac601ed",
   "subject": "Y1Workspace: any-display app entity removal (kill / card removal / scene destroy), app-exited transaction on the dying scene's display, scene user interface style and UIDestroySceneAction on the extended display, wantsEnhancedWindowingEnabled after a scene moves (switches y1_appremoved y1_scenestyle y1_extaction y1_takescene); DELTA-SWEEP family F1 verdicts",
   "version": "0.7.9+231.82bc14e"
+ },
+ "0.7.9+232.a02046e": {
+  "date": "2026-10-24T08:11:58Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+232.a02046e_iphoneos-arm64.deb",
+  "run": 232,
+  "sha": "a02046e062ca334e562fa8e69b224582ce30901c",
+  "subject": "edu: the native education alert is chosen automatically when the installed SpringBoardEducation.app has no external display content controller (switch eduauto), 16.2 app strings embedded in 41 languages, live hardware recommendation",
+  "version": "0.7.9+232.a02046e"
  }
 }
