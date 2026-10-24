@@ -1,12 +1,4 @@
 {
- "0.7.4+163.df2870a": {
-  "date": "2026-10-17T08:26:08Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.4+163.df2870a_iphoneos-arm64.deb",
-  "run": 163,
-  "sha": "df2870a777372e4fadc7305689d6b1bf974f6d26",
-  "subject": "OPEN-ISSUES: resize corner and PiP expand confirmed working, close gl\u2026",
-  "version": "0.7.4+163.df2870a"
- },
  "0.7.4+164.49bc330": {
   "date": "2026-10-17T08:37:20Z",
   "file": "debs/com.infernowolf19.backport162_0.7.4+164.49bc330_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "7197fbce7be3e17d83a9379121d0e4f5ee5d2a5a",
   "subject": "clonemirror: the reply was read from the wrong buffer (explains 'reply id 0 instead of 6004840'): read it from the receive buffer, truthful >>> / <<< lines, bounded look-up retry, daemon logs the reply it sent",
   "version": "0.7.9+229.7197fbc"
+ },
+ "0.7.9+230.09f6a30": {
+  "date": "2026-10-24T08:04:10Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+230.09f6a30_iphoneos-arm64.deb",
+  "run": 230,
+  "sha": "09f6a308f7f9a93015451d891a458f95c973ddcf",
+  "subject": "X3Mode: BPSceneHostingDisplayPreferences + displayPreferencesForDisplayController: on both policies, the 16.2 controller transform (criteria mode, per-axis clamp, keepOtherModes, mirrored displays), setCloningSupported: and the non-interactive policy factory (switches modetransform, cloningsupported)",
+  "version": "0.7.9+230.09f6a30"
  }
 }
