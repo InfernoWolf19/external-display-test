@@ -1522,6 +1522,15 @@ static id G1B_AW_Layout(id coord, id ctx, BOOL *notInList) {
     if (BP_LogEnabled()) BP_Log(@"addwin: transition end src=%lld error=%d modes %lld->%lld peek %lld->%lld N %@ in _appLayouts=%d",
            G1B_SendLL0(req, @selector(source)), failed, G1B_SendLL0(from, sMode), G1B_SendLL0(to, sMode), G1B_SendLL0(from, sPeek), G1B_SendLL0(to, sPeek),
            layout, !*notInList);
+    if (BP_LogEnabled() && G1B_SendLL0(req, @selector(source)) == 11) {       // FINDINGS-DRAG-LOOP P7: where do the two extra instant gesture transitions per drop come from? first three occurrences, once per process
+        static int shown;
+        if (shown < 3) {
+            shown++;
+            NSArray *syms = [NSThread callStackSymbols];
+            NSUInteger n = syms.count < 14 ? syms.count : 14;
+            BP_Log(@"addwin: transition end src=11 call stack #%d (%@ -> %@):\n%@", shown, from, to, [[syms subarrayWithRange:NSMakeRange(0, n)] componentsJoinedByString:@"\n"]);
+        }
+    }
     return layout;
 }
 
