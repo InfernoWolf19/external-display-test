@@ -1,12 +1,4 @@
 {
- "0.7.5+170.8b1fe90": {
-  "date": "2026-10-17T13:43:33Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+170.8b1fe90_iphoneos-arm64.deb",
-  "run": 170,
-  "sha": "8b1fe905083645fc28acedc20cc808669db67eef",
-  "subject": "BBD/PTR: find the main executable by file type instead of image 0 (ev\u2026",
-  "version": "0.7.5+170.8b1fe90"
- },
  "0.7.5+171.f42f2a1": {
   "date": "2026-10-17T13:49:45Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+171.f42f2a1_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "a557a567db16976386e931ba7b26b5c3987df299",
   "subject": "Y2Gestures: transient UI recognizers (window menu dismiss, shelf, tap to unhide) register with the gesture manager of their own window scene (switch y2_tuiscene); DELTA-SWEEP F4 verdicts",
   "version": "0.7.9+236.a557a56"
+ },
+ "0.7.9+237.90e7140": {
+  "date": "2026-10-24T18:11:51Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+237.90e7140_iphoneos-arm64.deb",
+  "run": 237,
+  "sha": "90e7140e81b3e6a61254f0461f17e36d62846fef",
+  "subject": "blank: external cover sheet like 16.2 (screen on first when the cover sheet goes away, presentation manager dismissal observer, invalidate), a debug line at every step of lock / backlight / blanking; lock chain and blank semantics written up",
+  "version": "0.7.9+237.90e7140"
  }
 }
