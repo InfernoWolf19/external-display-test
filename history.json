@@ -1,12 +1,4 @@
 {
- "0.7.5+169.8824678": {
-  "date": "2026-10-17T13:25:36Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+169.8824678_iphoneos-arm64.deb",
-  "run": 169,
-  "sha": "882467871c4eb7e9fbe502de2f68036a2a00a24a",
-  "subject": "Backport162 0.7.5: merge ExtendedDisplayEnabler 0.2.2 into the package",
-  "version": "0.7.5+169.8824678"
- },
  "0.7.5+170.8b1fe90": {
   "date": "2026-10-17T13:43:33Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+170.8b1fe90_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "19f760d1302406732e12c11dadb7496913acd002",
   "subject": "G4B: G4B_LPMInv reads the invalidated flag lock-free (no main-thread dispatch_sync onto SBLockedPointerManager's queue, FINDINGS-SLOWTOUCH S2)",
   "version": "0.7.9+235.19f760d"
+ },
+ "0.7.9+236.a557a56": {
+  "date": "2026-10-24T18:07:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+236.a557a56_iphoneos-arm64.deb",
+  "run": 236,
+  "sha": "a557a567db16976386e931ba7b26b5c3987df299",
+  "subject": "Y2Gestures: transient UI recognizers (window menu dismiss, shelf, tap to unhide) register with the gesture manager of their own window scene (switch y2_tuiscene); DELTA-SWEEP F4 verdicts",
+  "version": "0.7.9+236.a557a56"
  }
 }
