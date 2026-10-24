@@ -153,6 +153,11 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | p1_modupdate | modifier requested gesture updates go through the 16.2 `handleFluidSwitcherGestureManager:didUpdateGesture:` entry (cross-display window drag event conversion) | `p1_modupdate` |
 | p1_asyncdrag | 16.2 `_updateAsyncRenderingAndResizesHostedContext`: no async rendering for a window that is being dragged, resizes hosted content with Stage Manager | `p1_asyncdrag` |
 | g1c_endguard | when the shared gesture transaction ends, a gesture root that still holds its 'Gesture' child (its display got no transition, e.g. the other display of a drag inside one display) finishes and removes it instead of waiting for the next drag (logged `GUARD(end)`; the begin-time GUARD stays) | `g1c_endguard` |
+| p1_vc | umbrella of P1VC.m (view controller / item container / footer / layer leftovers of REVIEW-CORE section 2.1) | `p1_vc` |
+| p1_vckeys | 16.2 `performKeyboardShortcutAction:` (action table, App Expose of the focused app with the bundleIDShowingAppExpose toggle, next / previous window actions) | `p1_vckeys` |
+| p1_kbsuppress | 16.2 `_acquireKeyboardSuppressionAssertionForMode:` (hosted keyboard state of the view controller's own window scene, 3 argument manager method) | `p1_kbsuppress` |
+| p1_vcmisc | 16.2 `_updatePlusButtonPresence`, `_leafAppLayoutInLiveContentOverlaysWithLayoutRole:`, `_updateFloatingDockWindowLevelAssertion`, `_updateHomeScreenPointerInteractions`, `overlayAccessoryViewFrameForIconOverlayView:fullPresented:`, `_performModifierIconViewVisibilityUpdateResponse:` | `p1_vcmisc` |
+| p1_container | 16.2 item container (`initWithCoder:`, `didUpdateFocusInContext:`), footer view (`_handleTapGestureRecognizer:`, `_makeSubtitleLabel`) and layer (`setTransform:` skips an equal transform) | `p1_container` |
 
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 
