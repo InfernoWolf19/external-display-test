@@ -12,17 +12,16 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 451 |
+| PORTED already | 452 |
 | PORTED NOW | 88 |
 | EQUIVALENT | 316 |
 | IRRELEVANT | 308 |
 | EXCLUDED | 117 |
 | OPEN | 27 |
 | CANNOT | 1 |
-| not yet triaged (this sweep is in progress) | 1 |
 | **total** | **1466** |
 
-Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 26, OPEN 1, PORTED 40, PORTED NOW 14; F2: EQUIVALENT 33, EXCLUDED 3, IRRELEVANT 25, NOT PORTED 9, OPEN 3, PENDING 1, PORTED 4, PORTED NOW 10; F3: EQUIVALENT 125, EXCLUDED 41, IRRELEVANT 17, NOT PORTED 100, OPEN 7, PORTED 327, PORTED NOW 49; F4: EQUIVALENT 19, EXCLUDED 8, NOT PORTED 2, OPEN 16, PORTED 24, PORTED NOW 5; F5: EXCLUDED 1, NOT PORTED 2, PORTED 3, PORTED NOW 2; F6: EQUIVALENT 35, EXCLUDED 8, IRRELEVANT 29, NOT PORTED 12, PORTED 11, PORTED NOW 7; F7: EQUIVALENT 19, EXCLUDED 9, IRRELEVANT 10, PORTED 33, PORTED NOW 1; F8: EQUIVALENT 32, EXCLUDED 29, IRRELEVANT 215, NOT PORTED 6, PORTED 9
+Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 26, OPEN 1, PORTED 40, PORTED NOW 14; F2: EQUIVALENT 33, EXCLUDED 3, IRRELEVANT 25, NOT PORTED 9, OPEN 3, PORTED 5, PORTED NOW 10; F3: EQUIVALENT 125, EXCLUDED 41, IRRELEVANT 17, NOT PORTED 100, OPEN 7, PORTED 327, PORTED NOW 49; F4: EQUIVALENT 19, EXCLUDED 8, NOT PORTED 2, OPEN 16, PORTED 24, PORTED NOW 5; F5: EXCLUDED 1, NOT PORTED 2, PORTED 3, PORTED NOW 2; F6: EQUIVALENT 35, EXCLUDED 8, IRRELEVANT 29, NOT PORTED 12, PORTED 11, PORTED NOW 7; F7: EQUIVALENT 19, EXCLUDED 9, IRRELEVANT 10, PORTED 33, PORTED NOW 1; F8: EQUIVALENT 32, EXCLUDED 29, IRRELEVANT 215, NOT PORTED 6, PORTED 9
 
 ## F1 Window scene / scene manager / main workspace / scene handles (165)
 
@@ -229,7 +228,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBHomeHardwareButtonActions | `-performSinglePressUpActionsWithSourceType:` | 0x1c6144ea8 | 0x1c75c8670 | NOT PORTED: no home button on the M2 iPad Pro; 16.2 hands the active window scene to the home button handler (AssistiveTouch home only) |
 | SBHomeScreenBackdropView | `-_updateBackdropViewIfNeededInvalidatingSnapshot:` | 0x1c5ea20e8 | 0x1c7314d90 | IRRELEVANT: home screen blur snapshot / opaque layer only |
 | SBHomeScreenBackdropView | `-homeScreenBlurredContentSnapshotImage` | 0x1c62977dc | 0x1c7731058 | IRRELEVANT: home screen blur snapshot / opaque layer only |
-| SBHomeScreenContinuousExposeSwitcherModifier | `-init` | 0x1c634e174 | 0x1c77f3898 | TRIAGE PENDING |
+| SBHomeScreenContinuousExposeSwitcherModifier | `-init` | 0x1c634e174 | 0x1c77f3898 | PORTED already: G1C.x item 1i (16.2 form: SBHomeScreenSwitcherModifier child plus SBStripContinuousExposeSwitcherModifier instead of the grid layout modifier) |
 | SBHomeScreenViewController | `-_acquireFloatingDockBehaviorAssertionIfNecessaryForFloatingDockController:` | 0x1c637a27c | 0x1c7821698 | EQUIVALENT: 16.2 reads the dock controller's windowScene property instead of its view controller's window scene: the same scene |
 | SBHomeScreenWindow | `-initWithWindowScene:rootViewController:layoutStrategy:role:debugName:` | 0x1c63e935c | 0x1c7895b98 | EQUIVALENT: 16.0 already takes the bounds of [windowScene screen] when it responds (it does); 16.2 drops the mainScreen fallback |
 | SBIconController | `-_effectiveOrientation` | 0x1c5e65b1c | 0x1c72d83dc | EQUIVALENT: edge fallback only (view not loaded / no window orientation: 16.2 derives the orientation from allowedInterfaceOrientations); main display home screen |
@@ -356,7 +355,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBChamoisOverlappingController | `-_snapPositionToNearestEdgesIfNecessary:draggingItem:` | 0x1c5f55404 | 0x1c73cb40c | PORTED already: 16.2 address cited in G2.x |
 | SBChamoisOverlappingModel | `-mutableCopyWithZone:` | 0x1c64bfd8c | 0x1c797a72c | PORTED already: hook in G2.x:569 |
 | SBChamoisOverlappingModel | `-.cxx_destruct` | 0x1c64bff38 | 0x1c797b050 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBContinuousExposeAppToAppModifier | `-didMoveToParentModifier:` | 0x1c610b99c | 0x1c759598c | PORTED already: 16.2 address cited in G1C.x, G1B.x |
+| SBContinuousExposeAppToAppModifier | `-didMoveToParentModifier:` | 0x1c610b99c | 0x1c759598c | PORTED already: 16.2 address cited in G1B.x, G1C.x |
 | SBContinuousExposeAppToAppModifier | `-asyncRenderingDisabled` | 0x1c610baa0 | 0x1c7595acc | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeAppToAppModifier | `-transitionWillBegin` | 0x1c610bac0 | 0x1c7595b40 | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeAppToAppModifier | `-animationAttributesForLayoutElement:` | 0x1c610bd0c | 0x1c7595bd8 | PORTED already: 16.2 address cited in G1C.x |
@@ -1530,3 +1529,42 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | _SBSystemApertureMagiciansCurtainView | `-sizeThatFits:` | 0x1c5f6a208 | 0x1c73e0d04 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | _SBSystemApertureMagiciansCurtainView | `-layoutSubviews` | 0x1c5f6a214 | 0x1c73e0d54 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 
+
+## Ports of this sweep (source file, switches, commit)
+
+| file | switches (all default ON, kill file `Backport162.off.<switch>`) | commit |
+|---|---|---|
+| Y1Workspace.x | y1_appremoved, y1_scenestyle, y1_extaction, y1_takescene | 82bc14e |
+| Y2Gestures.x | y2_tuiscene | a557a56 |
+| Y3StatusBar.x | y3_scenectl, y3_avoidorient, y3_containersb | b1fc8da |
+| Y4Home.x | y4_alertscene, y4_widgetfocus | f7e180d |
+| Y5Apps.x | y5_sbpool, y5_classicsize | eb694cd |
+| Y6Portal.x | y6_portal, y6_alwayslive | 7dd10ca |
+| Y7Requests.x | y7_inspolicy | afc0109 |
+| Y8Layout.x / Y9Misc.x | y8_extorient, y8_insethome, y8_spotlight, y8_stateeq, y9_ccscene, y9_overlayfocus | 4e79217 |
+| Y10Pip.x | y10_portallevel, y10_autopip, y10_morphframe, y10_stashscene | 0e17444 (+ f47012c: no auto PiP candidate for gesture requests) |
+| Y11Modifiers.x | y11_removal, y11_tapreq | 80a95ef (+ f47012c: Deck tap requests) |
+| Y12Dock.x | y12_dockmode, y12_dockwin | dcef91c |
+| Y13Fluid.x | y13_bringfront, y13_reuse, y13_failgestures | f47012c |
+| Y14Open.x | y14_openurl | f47012c |
+| Y15InCall.x | y15_incallreq, y15_bannerscene, y15_bannerorient | f47012c |
+| Y16Contingency.x | y16_stagefail, y16_cmdtab, y16_shotcorner, y16_snaporient | 940d7db |
+| Y16Contingency.x | y16_platter | 9c94156 |
+| Y16Contingency.x | y16_overlaykb, y16_overlaydismiss | 971056b |
+
+## Cross references and edits in other files
+
+* No file of another agent needs an edit any more. The 16.2 accessor `-[SBWindowScene medusaHostedKeyboardWindowController]` (needed by `SBMainWorkspace isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:`) was exported by G3B.x in d586333 and is used by Y16 (`y16_overlaykb`).
+* `SBApplicationSceneHandle _createApplicationSceneSettingsFromContext:entity:` (M5 orientation family) is ported by P1SW.m (`p1_orient`, 92a22e8), not by a Y file.
+* `SBRecentAppLayouts`, `SBDisplayItemLayoutAttributes` (plist), `SBKeyboardSuppressionManager`, `SBWorkspaceKeyboardFocusController`: ported by G2B.m, X7Keyboard.x, Group4Focus.x (rows say so).
+* Y6 supplies the portaled overlay creator that Y10's portal level wrapper wraps; Y7 backs the `setEntityInsertionPolicy:` requests used by G1C.x.
+
+## Floor modifier review (crash 'A floor modifier is required')
+
+No hook of Y10, Y11, Y12 or Y16 creates a switcher modifier, selects or removes a floor modifier, or changes the modifier stack of a transition.  The hooks that could plausibly influence a cross display drop request were re-read adversarially:
+* Y10 `y10_autopip` (`+[SBAutoPIPWorkspaceTransaction shouldAutoPIPEnteringBackgroundForRequest:...]`): it only changes the boolean answer and the previous entity seen through `previousApplicationSceneEntityForLayoutRole:` while that one method runs; it is now skipped for requests with source 11 (gesture transactions), so a window dragged to another display is never treated as leaving into PiP.
+* Y11 `y11_removal` changes the values of the removal transition modifier queries (frames, alpha, visible app layouts) of the entity removal transitions only; it does not create or remove modifiers.
+* Y11 `y11_tapreq` replaces `+requestForActivatingAppLayout:` with `requestForTapAppLayoutEvent:` only while a tap handler of shelf, peek or deck modifiers runs.
+* Y12 / Y3_PushActive scopes wrap synchronous calls that read the dock state; no root modifier is created inside them.
+* Y16 `y16_stagefail` returns a transition context (entities and removal contexts), the workspace, not the switcher modifier stack, builds the modifiers from it.
+Absence of a path can not be proven statically; the core agent's fix in 9fb6153 (`_updateFloorModifierWithTransitionEvent:` keeps the current floor) is the place that closes the nil floor case.
