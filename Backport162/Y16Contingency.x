@@ -1,5 +1,5 @@
 // Y16Contingency.x : delta sweep family F4 (specs/DELTA-SWEEP-0.7.9.md): the fallback transition of a failed / exited application entity keeps the other Stage Manager windows.
-// Setup: constructor.  Log prefix "[y16]".  Switches y16_stagefail, y16_cmdtab, y16_shotcorner, y16_snaporient.
+// Setup: constructor.  Log prefix "[y16]".  Switches y16_stagefail, y16_cmdtab, y16_shotcorner, y16_snaporient, y16_platter.
 //
 //  -[SBMainWorkspaceLayoutStateContingencyPlan transitionContextForLayoutContext:failedEntities:]  16.2 0x1c7904c94 (16.0 0x1c6450ce8) is asked for the transition that replaces entities that failed (launch
 //  failure, crash) or exited (Y1Workspace.x Y1_Select asks it for an exited window).  With the layout state NOT in the switcher mode (unlockedEnvironmentMode != 2, i.e. apps / Stage Manager) 16.0 sends
@@ -26,6 +26,11 @@
 //                  view's orientation.  16.2, when the view was created for a windowing-UI switcher (init: [[containerVC _sbWindowScene] switcherController].isChamoisWindowingUIEnabled, ivar
 //                  _isChamoisWindowingEnabled), looks at the item's layout attribute contentOrientation (the window's own orientation under Stage Manager): when it is neither the view's orientation
 //                  nor the snapshot's, the snapshot's (flipped-if-opposite) orientation is kept.  Ported with the flag read from the container view controller at call time.
+//
+//  y16_platter     -[SBDragAndDropWorkspaceTransaction _platterSizeForDropAction:proposedDropLayoutState:setDown:] 16.2 0x1c770aea8 (16.0 0x1c6272d10): with the windowing UI the drag platter of a drop action
+//                  1..5 has the size of the item in the PROPOSED layout ([[[self windowScene] switcherController] frameForItemWithRole:1 inMainAppLayout:[state appLayout] interfaceOrientation:...]
+//                  size); 16.0 sized actions 1, 4 and 5 from a generic full screen layout and gave 0 for 2 and 3.  Scaled by -_platterScale unless set down, like both builds.
+//                  Ported as a wrapper that answers for the windowing UI and actions 1..5 when the proposed layout gives a non empty frame, the 16.0 body otherwise.
 // Needs a device: make an app crash (or kill its process from a debugger) while two or more windows are on the stage of the iPad or of the monitor: only that window disappears, the others stay.
 
 #import <Foundation/Foundation.h>
@@ -37,7 +42,9 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
-static IMP gY16Orig, gY16CtInit, gY16CtDealloc, gY16Shot, gY16Snap;
+typedef struct { double x, y, w, h; } Y16Rect;      // CGRect (HFA, d0..d3)
+typedef struct { double w, h; } Y16Size;        // CGSize (HFA, d0..d1)
+static IMP gY16Orig, gY16CtInit, gY16CtDealloc, gY16Shot, gY16Snap, gY16Platter;
 
 static BOOL Y16_Windowed(id ident) {
     if (!ident) return NO;
@@ -143,6 +150,28 @@ static long long Y16_SnapOrient(id self, SEL _cmd, id entry) {
     return (co != view && co != snap) ? r : view;
 }
 
+// -[SBDragAndDropWorkspaceTransaction _platterSizeForDropAction:proposedDropLayoutState:setDown:]
+static Y16Size Y16_Platter(id self, SEL _cmd, long long action, id state, BOOL setDown) {
+    Y16Size fallback = {0, 0};
+    if (BP_OnName("y16_platter") && state && action >= 1 && action <= 5) {
+        id ctl = BPX_Obj0(BPX_Obj0(self, "windowScene"), "switcherController");
+        id layout = BPX_Obj0(state, "appLayout");
+        if (layout && BPX_Bool0(ctl, "isChamoisWindowingUIEnabled") && BPY_Responds(ctl, "frameForItemWithRole:inMainAppLayout:interfaceOrientation:")) {
+            Y16Rect f = BPY_SEND(Y16Rect, (long long, id, long long), ctl, "frameForItemWithRole:inMainAppLayout:interfaceOrientation:", 1LL, layout, BPX_LL0(state, "interfaceOrientation"));
+            if (f.w > 0 && f.h > 0) {
+                Y16Size r = {f.w, f.h};
+                if (!setDown) {
+                    double sc = BPY_Responds(self, "_platterScale") ? BPY_SEND(double, (), self, "_platterScale") : 1.0;
+                    r.w *= sc; r.h *= sc;
+                }
+                BPY_LOG(@"[y16] drag platter for action %lld: %.0f x %.0f (item size in the proposed layout)", action, r.w, r.h);
+                return r;
+            }
+        }
+    }
+    return gY16Platter ? ((Y16Size (*)(id, SEL, long long, id, BOOL))gY16Platter)(self, _cmd, action, state, setDown) : fallback;
+}
+
 __attribute__((constructor)) static void Y16_Setup(void) {
     if (!BPY_BuildOK()) return;
     @autoreleasepool {
@@ -159,7 +188,9 @@ __attribute__((constructor)) static void Y16_Setup(void) {
         if (sg && class_getInstanceMethod(sg, sel_registerName("gestureRecognizerShouldBegin:"))) gY16Shot = BPX_Replace(sg, "gestureRecognizerShouldBegin:", (IMP)Y16_Shot);
         Class sv = NSClassFromString(@"SBAppSwitcherReusableSnapshotView");
         if (sv && class_getInstanceMethod(sv, sel_registerName("_contentOrientationForSnapshotCacheEntry:"))) gY16Snap = BPX_Replace(sv, "_contentOrientationForSnapshotCacheEntry:", (IMP)Y16_SnapOrient);
-        BP_Log(@"[y16] contingency plan hook %s (switches y16_stagefail, y16_cmdtab, y16_shotcorner, y16_snaporient)", gY16Orig ? "installed" : "NOT installed");
+        Class dd = NSClassFromString(@"SBDragAndDropWorkspaceTransaction");
+        if (dd && class_getInstanceMethod(dd, sel_registerName("_platterSizeForDropAction:proposedDropLayoutState:setDown:"))) gY16Platter = BPX_Replace(dd, "_platterSizeForDropAction:proposedDropLayoutState:setDown:", (IMP)Y16_Platter);
+        BP_Log(@"[y16] contingency plan hook %s (switches y16_stagefail, y16_cmdtab, y16_shotcorner, y16_snaporient, y16_platter)", gY16Orig ? "installed" : "NOT installed");
     }
 }
 #pragma clang diagnostic pop

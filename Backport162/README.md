@@ -285,6 +285,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y16_stagefail | (Y16Contingency.x) a Stage Manager window that crashes or exits no longer sends the whole stage home: the other windows stay |
 | y16_cmdtab | (Y16Contingency.x) the Command-Tab overlay is dismissed when its display is unplugged |
 | y16_shotcorner | (Y16Contingency.x) a finger swipe from a bottom corner does not start the corner gesture while Stage Manager is on (the corner is the resize handle) |
+| y16_snaporient | (Y16Contingency.x) switcher snapshot orientation of mixed orientation apps follows the window content orientation |
+| y16_platter | (Y16Contingency.x) the drag platter of a dragged item has the size of the window it will become under Stage Manager |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
