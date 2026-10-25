@@ -1,12 +1,4 @@
 {
- "0.7.5+190.3e333eb": {
-  "date": "2026-10-17T23:56:43Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+190.3e333eb_iphoneos-arm64.deb",
-  "run": 190,
-  "sha": "3e333eb7ecc72ffd840cf8d24a37f122d6cb1766",
-  "subject": "PTR: ptr_edge cut check must not capture its out parameter in the wal\u2026",
-  "version": "0.7.5+190.3e333eb"
- },
  "0.7.5+191.e196b34": {
   "date": "2026-10-18T00:04:06Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+191.e196b34_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "7dd10ca8af563c68cb6329fc03109415e35a2ef4",
   "subject": "Y6Portal: cross display window drag shows a live portal copy on the display under the pointer (portaled overlay creator, newPortaledLiveContentOverlayView, liveContentOverlayForAppLayout:, type 4 removal), always-live overlay size per display (switches y6_portal, y6_alwayslive)",
   "version": "0.7.9+259.7dd10ca"
+ },
+ "0.7.9+260.afc0109": {
+  "date": "2026-10-25T15:11:22Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+260.afc0109_iphoneos-arm64.deb",
+  "run": 260,
+  "sha": "afc0109b0b612092f1e36419cfa84656b9ca78c9",
+  "subject": "Y7Requests: entity insertion policy of switcher transition requests (Shift + click adds the window to the stage), request copies keep it and the activating display item (switch y7_inspolicy); DELTA-SWEEP workspace / transaction verdicts",
+  "version": "0.7.9+260.afc0109"
  },
  "0.7.9+261.475993c": {
   "date": "2026-10-25T15:10:57Z",
