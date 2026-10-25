@@ -1,12 +1,4 @@
 {
- "0.7.9+207.fc6e206": {
-  "date": "2026-10-20T19:19:00Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+207.fc6e206_iphoneos-arm64.deb",
-  "run": 207,
-  "sha": "fc6e2060e9a6644cb0e2eec28b92ffdb66a1b646",
-  "subject": "G1C: overlappingModelForAppLayout: asks for the model of the CONTAINING layout like 16.2 0x1c7652fc4 (g1c_modelmap)",
-  "version": "0.7.9+207.fc6e206"
- },
  "0.7.9+208.0b2d6e2": {
   "date": "2026-10-20T19:25:47Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+208.0b2d6e2_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "8728cf0662ea00f9f07ccb811d5484dcf37354f9",
   "subject": "DELTA-SWEEP: counts table lists NOT PORTED, last pending rows",
   "version": "0.7.9+276.8728cf0"
+ },
+ "0.7.9+277.c4f1093": {
+  "date": "2026-10-25T22:01:04Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+277.c4f1093_iphoneos-arm64.deb",
+  "run": 277,
+  "sha": "c4f10937db6104cc9450a0e2fa4befea5f78671c",
+  "subject": "P1VC: decisive per container line at the end of a layout transition (p1_ctrend); docs for the blank window analysis",
+  "version": "0.7.9+277.c4f1093"
  }
 }
