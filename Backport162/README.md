@@ -258,6 +258,12 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y6_portal | (Y6Portal.x) cross display window drag: the display under the pointer shows a live copy (CA portal, overlay type 4) of the window being dragged from the other display (16.2); without it the window appears only at the drop |
 | y6_alwayslive | (Y6Portal.x) always-live live content overlays are sized with their own display's screen bounds (16.0: the main screen) |
 | y7_inspolicy | (Y7Requests.x) Shift + click on a Stage Manager strip window: the transition request carries the entity insertion policy (16.2), so the window is added next to the current one; request copies keep it and the activating display item |
+| y8_extorient | (Y8Layout.x) an external display's layout state without its own orientation answers portrait instead of the iPad's rotation (16.2 isDisplayExternal / _defaultInterfaceOrientation) |
+| y8_insethome | (Y8Layout.x) Stage Manager: app layouts are not inset for the home affordance (16.2), new -[SBAppLayout _preferredWindowScene] |
+| y8_spotlight | (Y8Layout.x) opening an app from Spotlight with Stage Manager: the window's own frame, other stage windows stay visible |
+| y8_stateeq | (Y8Layout.x) layout states of different displays are not equal even with the same elements |
+| y9_ccscene | (Y9Misc.x) Control Center presentation rules read the layout of the iPad's own switcher controller, not the active display's |
+| y9_overlayfocus | (Y9Misc.x) transient overlay windows take keyboard focus while presented (16.2 focus stealing assertion "activeTransientOverlay") |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder

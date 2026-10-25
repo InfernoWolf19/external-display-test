@@ -43,6 +43,10 @@ static __thread void *tY3Layout;        // unretained: the layout state whose in
 static IMP gY3OrigActive, gY3OrigRoleOrient;
 static IMP gY3OrigInApp, gY3OrigAvoid1, gY3OrigAvoid2, gY3OrigInsets, gY3OrigLead, gY3OrigTrail, gY3OrigOverlay, gY3OrigActions, gY3OrigShortcut, gY3OrigNeighbor, gY3OrigContainer;
 
+// shared with Y9Misc.x: run a call with the coordinator's active display controller answering `ctl` (nil = unchanged); the previous value is returned for Y3_PopActive
+void *Y3_PushActive(id ctl) { void *p = tY3Active; if (ctl) tY3Active = (__bridge void *)ctl; return p; }
+void Y3_PopActive(void *prev) { tY3Active = prev; }
+
 // -[SBMainSwitcherControllerCoordinator _activeDisplaySwitcherController]
 static id Y3_Active(id self, SEL _cmd) {
     void *p = tY3Active;

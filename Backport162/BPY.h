@@ -32,3 +32,7 @@ static inline NSArray *BPY_ConnectedScenes(void) {
 }
 // window scene of a display identity (nil when not connected)
 static inline id BPY_SceneForIdentity(id identity) { return BPX_Obj1(BPX_WindowSceneManager(), "windowSceneForDisplayIdentity:", identity); }
+
+// Y3StatusBar.x exports (also used by Y9Misc.x): override of the coordinator's active display controller around a call
+void *Y3_PushActive(id ctl);
+void Y3_PopActive(void *prev);

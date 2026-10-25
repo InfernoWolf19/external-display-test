@@ -12,18 +12,18 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 401 |
-| PORTED NOW | 40 |
-| EQUIVALENT | 164 |
+| PORTED already | 396 |
+| PORTED NOW | 50 |
+| EQUIVALENT | 186 |
 | IRRELEVANT | 278 |
-| EXCLUDED | 87 |
-| TO PORT | 17 |
-| OPEN | 20 |
+| EXCLUDED | 117 |
+| TO PORT | 16 |
+| OPEN | 21 |
 | CANNOT | 1 |
-| not yet triaged (this sweep is in progress) | 451 |
+| not yet triaged (this sweep is in progress) | 334 |
 | **total** | **1466** |
 
-Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PENDING 62, PORTED 36, PORTED NOW 8, TO PORT 5; F2: EQUIVALENT 27, EXCLUDED 2, IRRELEVANT 23, PENDING 25, PORTED 5, PORTED NOW 4, TO PORT 2; F3: EQUIVALENT 63, EXCLUDED 37, IRRELEVANT 8, NOT PORTED 7, OPEN 1, PENDING 228, PORTED 289, PORTED NOW 23, TO PORT 10; F4: EQUIVALENT 19, EXCLUDED 6, OPEN 17, PENDING 4, PORTED 24, PORTED NOW 4; F5: EXCLUDED 1, PENDING 5, PORTED 2; F6: EQUIVALENT 3, EXCLUDED 8, IRRELEVANT 2, PENDING 77, PORTED 11, PORTED NOW 1; F7: EXCLUDED 9, IRRELEVANT 6, PENDING 34, PORTED 23; F8: EQUIVALENT 25, EXCLUDED 6, IRRELEVANT 233, PENDING 16, PORTED 11
+Per family: F1: CANNOT 1, EQUIVALENT 40, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 10, OPEN 2, PENDING 38, PORTED 36, PORTED NOW 10, TO PORT 4; F2: EQUIVALENT 27, EXCLUDED 3, IRRELEVANT 24, OPEN 2, PENDING 18, PORTED 5, PORTED NOW 7, TO PORT 2; F3: EQUIVALENT 63, EXCLUDED 41, IRRELEVANT 8, NOT PORTED 40, OPEN 1, PENDING 191, PORTED 286, PORTED NOW 26, TO PORT 10; F4: EQUIVALENT 18, EXCLUDED 8, OPEN 16, PENDING 4, PORTED 24, PORTED NOW 4; F5: EXCLUDED 1, PENDING 5, PORTED 2; F6: EQUIVALENT 15, EXCLUDED 8, IRRELEVANT 22, NOT PORTED 12, PENDING 31, PORTED 11, PORTED NOW 3; F7: EXCLUDED 9, IRRELEVANT 6, PENDING 34, PORTED 23; F8: EQUIVALENT 23, EXCLUDED 29, IRRELEVANT 212, NOT PORTED 5, PENDING 13, PORTED 9
 
 ## F1 Window scene / scene manager / main workspace / scene handles (165)
 
@@ -63,7 +63,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBEmbeddedDisplayWindowSceneDelegate | `-.cxx_destruct` | 0x1c63a1588 | 0x1c784b974 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBExternalDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c5fed084 | 0x1c7467d5c | PORTED already: hook in Group4Focus.x:665 |
 | SBExternalDisplayWindowSceneDelegate | `-sceneDidDisconnect:` | 0x1c5fed4f8 | 0x1c746826c | PORTED already: hook in Group4Focus.x:670 |
-| SBLayoutState | `-interfaceOrientation` | 0x1c5e1f9a8 | 0x1c7291884 | TRIAGE PENDING |
+| SBLayoutState | `-interfaceOrientation` | 0x1c5e1f9a8 | 0x1c7291884 | 7dd10ca: Y8Layout.x y8_extorient (external display states default to portrait) together with P1SW.m unknownAllowed variants |
 | SBLayoutState | `-interfaceOrientationForElementIdentifier:` | 0x1c61e1220 | 0x1c766f804 | PORTED already: 16.2 address cited in P1SW.m |
 | SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:` | 0x1c6036db4 | 0x1c74b2314 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
 | SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:` | 0x1c6036dfc | 0x1c74b235c | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
@@ -72,14 +72,14 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:allowCanMatches:preferNewScene:visibleIdentifiers:` | 0x1c6036ed0 | 0x1c74b2430 | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
 | SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:` | 0x1c6036f6c | 0x1c74b24cc | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
 | SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:sceneSessionRole:` | 0x1c6036fac | 0x1c74b250c | EQUIVALENT: selector rename preferedDisplay: -> preferredDisplay: only (same call, 16.0 spelling in the 16.0 helper) |
-| SBMainDisplayLayoutState | `-isEqual:` | 0x1c5e2e28c | 0x1c72a0934 | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-_initWithLayoutElements:interfaceOrientation:interfaceOrientationByLayoutElement:` | 0x1c62889b8 | 0x1c772119c | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-_initWithLayoutState:` | 0x1c6288a2c | 0x1c7721214 | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-hash` | 0x1c6289258 | 0x1c7721ad0 | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-setInterfaceOrientationByLayoutElementIdentifier:` | 0x1c62894e0 | 0x1c7721d88 | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-_updateSizingPoliciesForLayoutElements:` | 0x1c6289588 | 0x1c7721e2c | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-appLayout` | 0x1c62898e4 | 0x1c7722290 | TRIAGE PENDING |
-| SBMainDisplayLayoutState | `-floatingAppLayout` | 0x1c6289ccc | 0x1c7722688 | TRIAGE PENDING |
+| SBMainDisplayLayoutState | `-isEqual:` | 0x1c5e2e28c | 0x1c72a0934 | 7dd10ca: Y8Layout.x y8_stateeq (display ordinal takes part in equality) |
+| SBMainDisplayLayoutState | `-_initWithLayoutElements:interfaceOrientation:interfaceOrientationByLayoutElement:` | 0x1c62889b8 | 0x1c772119c | EQUIVALENT: 16.2 caches appLayout / floatingAppLayout (invalidateAppLayout / invalidateFloatingAppLayout calls, copies isDisplayExternal); 16.0 computes both on demand, so nothing to invalidate; displayItemFromLayoutElement: became +[SBDisplayItem displayItemForLayoutElement:] (same item); isDisplayExternal itself is Y8Layout.x y8_extorient |
+| SBMainDisplayLayoutState | `-_initWithLayoutState:` | 0x1c6288a2c | 0x1c7721214 | EQUIVALENT: 16.2 caches appLayout / floatingAppLayout (invalidateAppLayout / invalidateFloatingAppLayout calls, copies isDisplayExternal); 16.0 computes both on demand, so nothing to invalidate; displayItemFromLayoutElement: became +[SBDisplayItem displayItemForLayoutElement:] (same item); isDisplayExternal itself is Y8Layout.x y8_extorient |
+| SBMainDisplayLayoutState | `-hash` | 0x1c6289258 | 0x1c7721ad0 | EQUIVALENT: 16.2 mixes the display ordinal into the hash; equal states still hash equal with the 16.0 hash (only collision rate differs) |
+| SBMainDisplayLayoutState | `-setInterfaceOrientationByLayoutElementIdentifier:` | 0x1c62894e0 | 0x1c7721d88 | EQUIVALENT: 16.2 caches appLayout / floatingAppLayout (invalidateAppLayout / invalidateFloatingAppLayout calls, copies isDisplayExternal); 16.0 computes both on demand, so nothing to invalidate; displayItemFromLayoutElement: became +[SBDisplayItem displayItemForLayoutElement:] (same item); isDisplayExternal itself is Y8Layout.x y8_extorient |
+| SBMainDisplayLayoutState | `-_updateSizingPoliciesForLayoutElements:` | 0x1c6289588 | 0x1c7721e2c | EQUIVALENT: 16.2 caches appLayout / floatingAppLayout (invalidateAppLayout / invalidateFloatingAppLayout calls, copies isDisplayExternal); 16.0 computes both on demand, so nothing to invalidate; displayItemFromLayoutElement: became +[SBDisplayItem displayItemForLayoutElement:] (same item); isDisplayExternal itself is Y8Layout.x y8_extorient |
+| SBMainDisplayLayoutState | `-appLayout` | 0x1c62898e4 | 0x1c7722290 | EQUIVALENT: 16.2 caches appLayout / floatingAppLayout (invalidateAppLayout / invalidateFloatingAppLayout calls, copies isDisplayExternal); 16.0 computes both on demand, so nothing to invalidate; displayItemFromLayoutElement: became +[SBDisplayItem displayItemForLayoutElement:] (same item); isDisplayExternal itself is Y8Layout.x y8_extorient |
+| SBMainDisplayLayoutState | `-floatingAppLayout` | 0x1c6289ccc | 0x1c7722688 | EQUIVALENT: 16.2 caches appLayout / floatingAppLayout (invalidateAppLayout / invalidateFloatingAppLayout calls, copies isDisplayExternal); 16.0 computes both on demand, so nothing to invalidate; displayItemFromLayoutElement: became +[SBDisplayItem displayItemForLayoutElement:] (same item); isDisplayExternal itself is Y8Layout.x y8_extorient |
 | SBMainDisplayLayoutStateManager | `-_layoutStateForApplicationTransitionContext:` | 0x1c5e23430 | 0x1c72952ec | PORTED already: hook in G3C.x:446, G4B.x:1903 |
 | SBMainDisplayLayoutStateManager | `-defaultSceneIdentifierForBundleIdentifier:targetContentIdentifier:allowCanMatches:preferNewScene:visibleSceneIdentifiers:excludingSceneIdentifiers:sceneSessionRole:` | 0x1c625a188 | 0x1c76f09cc | TRIAGE PENDING |
 | SBMainDisplaySceneManager | `-_scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c5e46a00 | 0x1c72b9050 | EQUIVALENT: 16.2 moved the app client-settings diff inspection to the SBSceneManager base (base inspector is nil; the extended manager's only inspector observes preferredPointerLockStatus = G4B.x lockedptr2 hook of the extended manager); the main manager keeps the 16.0 inspectors |
@@ -112,7 +112,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSceneLayoutStateProvider | `-.cxx_destruct` | 0x1c615f7a4 | 0x1c75e6cb0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSceneLayoutWhitePointAdaptationController | `-_whitePointAdaptivityStylesForLayoutState` | 0x1c612efd0 | 0x1c75b9b58 | TRIAGE PENDING |
 | SBSceneLayoutWorkspaceTransaction | `-_captureAppsForTransition` | 0x1c5e27b6c | 0x1c729a3c4 | EQUIVALENT: 16.2 only replaces the inlined SBEnableX feature check (blraaz) by an out of line call and renumbers helpers |
-| SBSceneLayoutWorkspaceTransaction | `-_updateScenesForTransitionCompletion` | 0x1c5e49218 | 0x1c72bb488 | TO PORT: 16.2 asks the window scene's medusaHostedKeyboardWindowController for updateMedusaHostedKeyboardWindow (16.0: the scene manager's _updateMedusaHostedKeyboardWindow); needs the G3B per scene controller lookup |
+| SBSceneLayoutWorkspaceTransaction | `-_updateScenesForTransitionCompletion` | 0x1c5e49218 | 0x1c72bb488 | EQUIVALENT: 16.2 asks [windowScene medusaHostedKeyboardWindowController] updateMedusaHostedKeyboardWindow; 16.0 sends _updateMedusaHostedKeyboardWindow to the transaction scene manager, which is the window scene manager (SBMainDisplaySceneManager and SBSystemShellExternalDisplaySceneManager both implement it, 0x1c63d6fcc / 0x1c63aeb94) |
 | SBSceneLayoutWorkspaceTransaction | `-_runningOnMainRootOrExtendedExternalDisplay` | 0x1c62a109c | 0x1c773aecc | EQUIVALENT: 16.2 only replaces the inlined SBEnableX feature check (blraaz) by an out of line call and renumbers helpers |
 | SBSceneManager | `-_handleAction:forScene:` | 0x1c5e71060 | 0x1c72e3b58 | PORTED already: G4B.x hook (_UIPointerUnlockAction) + Y1Workspace.x y1_extaction (UIDestroySceneAction); snapshot / activation prewarm actions are in the 16.0 base already |
 | SBSceneManager | `-initWithReference:sceneIdentityProvider:presentationBinder:` | 0x1c5f7230c | 0x1c73e904c | TRIAGE PENDING |
@@ -125,16 +125,16 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSceneManagerCoordinator | `-workspace:didReceiveSceneRequestWithOptions:completion:` | 0x1c630f438 | 0x1c77ad8dc | TRIAGE PENDING |
 | SBSceneSettingsUpdater | `-setDisplayConfiguration:` | 0x1c605a75c | 0x1c74d93c8 | EQUIVALENT: 16.2 adds the updateGeometry: variant (the 16.0 form always updates geometry, _updatesGeometry defaults to the same) |
 | SBSceneSettingsUpdater | `+safeUpdateScene:withDisplayConfiguration:` | 0x1c605a154 | 0x1c74d98ec | EQUIVALENT: 16.2 adds the updateGeometry: variant (the 16.0 form always updates geometry, _updatesGeometry defaults to the same) |
-| SBSceneViewController | `-initWithSceneHandle:` | 0x1c5e7479c | 0x1c72e7614 | TRIAGE PENDING |
-| SBSceneViewController | `-viewDidLoad` | 0x1c5e74f34 | 0x1c72e7db8 | TRIAGE PENDING |
-| SBSingleSceneController | `-initWithTargetDisplayConfiguration:sceneWorkspaceController:sceneRequestOptions:clientIdentity:traitsRole:level:` | 0x1c645b9d4 | 0x1c790e804 | TRIAGE PENDING |
-| SBSingleSceneController | `-invalidate` | 0x1c645be2c | 0x1c790ec58 | TRIAGE PENDING |
-| SBSingleSceneController | `-setShouldActivateUponClientConnection:` | 0x1c645bf44 | 0x1c790edfc | TRIAGE PENDING |
-| SBSingleSceneController | `-setShouldBeKeptActiveWhileForeground:` | 0x1c645bf58 | 0x1c790ef64 | TRIAGE PENDING |
-| SBSingleSceneController | `-sceneContentStateDidChange:` | 0x1c645bf84 | 0x1c790f170 | TRIAGE PENDING |
-| SBSingleSceneController | `-sceneDidInvalidate:` | 0x1c645c0b0 | 0x1c790f318 | TRIAGE PENDING |
-| SBSingleSceneController | `-_setVisible:` | 0x1c645c150 | 0x1c790f448 | TRIAGE PENDING |
-| SBSingleSceneController | `-_evaluateSceneActivationState` | 0x1c645c60c | 0x1c790fb30 | TRIAGE PENDING |
+| SBSceneViewController | `-initWithSceneHandle:` | 0x1c5e7479c | 0x1c72e7614 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBSceneViewController | `-viewDidLoad` | 0x1c5e74f34 | 0x1c72e7db8 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBSingleSceneController | `-initWithTargetDisplayConfiguration:sceneWorkspaceController:sceneRequestOptions:clientIdentity:traitsRole:level:` | 0x1c645b9d4 | 0x1c790e804 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-invalidate` | 0x1c645be2c | 0x1c790ec58 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-setShouldActivateUponClientConnection:` | 0x1c645bf44 | 0x1c790edfc | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-setShouldBeKeptActiveWhileForeground:` | 0x1c645bf58 | 0x1c790ef64 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-sceneContentStateDidChange:` | 0x1c645bf84 | 0x1c790f170 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-sceneDidInvalidate:` | 0x1c645c0b0 | 0x1c790f318 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-_setVisible:` | 0x1c645c150 | 0x1c790f448 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSingleSceneController | `-_evaluateSceneActivationState` | 0x1c645c60c | 0x1c790fb30 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
 | SBSingleSceneController | `-.cxx_destruct` | 0x1c645c950 | 0x1c790fea0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBStatusBarStateProvider | `-endCoalescentBlock` | 0x1c5e1f2cc | 0x1c72911c4 | IRRELEVANT: status bar post data: lock screen / on-AC battery condition for the lock screen and item enum shift (iPhone status bar items) |
 | SBSuspendedWorkspaceTransaction | `-_childTransactionDidComplete:` | 0x1c5ea0d90 | 0x1c7313a68 | TRIAGE PENDING |
@@ -145,11 +145,11 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBToAppsWorkspaceTransaction | `-transaction:performTransitionWithCompletion:` | 0x1c5e3e06c | 0x1c72b0460 | 7dd10ca: Y1Workspace.x y1_takescene (the 16.2 block 0x1c784e3f8 sets wantsEnhancedWindowingEnabled on the taken handle; done in the takeScene: hook) [sha 82bc14e] |
 | SBToAppsWorkspaceTransaction | `-_completeCurrentTransition` | 0x1c5e4855c | 0x1c72ba764 | EQUIVALENT: 16.2 enumerates a copy of the completion blocks (mutation safety only) |
 | SBToAppsWorkspaceTransaction | `-_acquireResignActiveAssertion` | 0x1c5e7434c | 0x1c72e718c | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBUIController | `-activateApplication:fromIcon:location:activationSettings:actions:` | 0x1c5e72ef4 | 0x1c72e5df8 | TRIAGE PENDING |
-| SBUIController | `-handleHomeButtonDoublePressDown` | 0x1c5e9ca80 | 0x1c730f780 | TRIAGE PENDING |
-| SBUIController | `-init` | 0x1c5ef0cf4 | 0x1c7364ddc | TRIAGE PENDING |
-| SBUIController | `-getRotationContentSettings:forWindow:` | 0x1c5ef1d5c | 0x1c7365dd0 | TRIAGE PENDING |
-| SBUIController | `-storeAttachedAccessory:` | 0x1c5ef54a8 | 0x1c73695f0 | TRIAGE PENDING |
+| SBUIController | `-activateApplication:fromIcon:location:activationSettings:actions:` | 0x1c5e72ef4 | 0x1c72e5df8 | EQUIVALENT: icon launches come from the iPad Home Screen and Dock: the entity is made for the display identity of the activation setting (iPad) instead of initWithApplicationForMainDisplay:, the same display |
+| SBUIController | `-handleHomeButtonDoublePressDown` | 0x1c5e9ca80 | 0x1c730f780 | EQUIVALENT: _shim_activeSwitcherController is the active display's controller, what the 16.0 coordinator forwarder answers; init / accessory / nil check bookkeeping |
+| SBUIController | `-init` | 0x1c5ef0cf4 | 0x1c7364ddc | EQUIVALENT: _shim_activeSwitcherController is the active display's controller, what the 16.0 coordinator forwarder answers; init / accessory / nil check bookkeeping |
+| SBUIController | `-getRotationContentSettings:forWindow:` | 0x1c5ef1d5c | 0x1c7365dd0 | EQUIVALENT: _shim_activeSwitcherController is the active display's controller, what the 16.0 coordinator forwarder answers; init / accessory / nil check bookkeeping |
+| SBUIController | `-storeAttachedAccessory:` | 0x1c5ef54a8 | 0x1c73695f0 | EQUIVALENT: _shim_activeSwitcherController is the active display's controller, what the 16.0 coordinator forwarder answers; init / accessory / nil check bookkeeping |
 | SBUIController | `-.cxx_destruct` | 0x1c5ef6ce8 | 0x1c736b0b4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBUserAgent | `-foregroundApplicationDisplayID` | 0x1c5ea5eec | 0x1c7318be8 | TRIAGE PENDING |
 | SBWindow | `-initWithWindowScene:rootViewController:layoutStrategy:role:debugName:` | 0x1c64acb50 | 0x1c79650bc | TRIAGE PENDING |
@@ -199,15 +199,15 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 
 | class | method | 16.0 | 16.2 | verdict |
 |---|---|---|---|---|
-| SBControlCenterController | `-_shouldShowGrabberOnFirstSwipe` | 0x1c5e530cc | 0x1c72c5518 | TRIAGE PENDING |
-| SBControlCenterController | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e532dc | 0x1c72c574c | TRIAGE PENDING |
+| SBControlCenterController | `-_shouldShowGrabberOnFirstSwipe` | 0x1c5e530cc | 0x1c72c5518 | 7dd10ca: Y9Misc.x y9_ccscene (Control Center decides from the layout of its own window scene's switcher controller) |
+| SBControlCenterController | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e532dc | 0x1c72c574c | OPEN: 16.2 builds the indirect status bar pull recognizer without a system gesture manager argument and registers failure requirements with the scene's gesture manager: tied to SBIndirectPanGestureRecognizer (regression guard item, see F4) |
 | SBControlCenterController | `-gestureRecognizerShouldBegin:` | 0x1c5e8d6ec | 0x1c7300268 | PORTED already: hook in Group4Focus.x:742 |
 | SBControlCenterController | `-_willPresent` | 0x1c5e8e900 | 0x1c730158c | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBControlCenterController | `-init` | 0x1c61c6340 | 0x1c7655018 | TRIAGE PENDING |
-| SBControlCenterController | `-_updateWindowForScene:` | 0x1c61c8a28 | 0x1c76576f4 | TRIAGE PENDING |
-| SBControlCenterController | `-_setupGestureRecognizersForUpdatedWindowScene` | 0x1c61c8bfc | 0x1c76578d8 | TRIAGE PENDING |
-| SBControlCenterController | `-canBePresented` | 0x1c61c8f3c | 0x1c7657c38 | TRIAGE PENDING |
-| SBControlCenterController | `-_isStatusBarHiddenIgnoringControlCenter` | 0x1c61c9e80 | 0x1c7658b9c | TRIAGE PENDING |
+| SBControlCenterController | `-init` | 0x1c61c6340 | 0x1c7655018 | IRRELEVANT: test recipe registration / module visibility flag and a debug name of the grabber tongue |
+| SBControlCenterController | `-_updateWindowForScene:` | 0x1c61c8a28 | 0x1c76576f4 | IRRELEVANT: test recipe registration / module visibility flag and a debug name of the grabber tongue |
+| SBControlCenterController | `-_setupGestureRecognizersForUpdatedWindowScene` | 0x1c61c8bfc | 0x1c76578d8 | OPEN: 16.2 builds the indirect status bar pull recognizer without a system gesture manager argument and registers failure requirements with the scene's gesture manager: tied to SBIndirectPanGestureRecognizer (regression guard item, see F4) |
+| SBControlCenterController | `-canBePresented` | 0x1c61c8f3c | 0x1c7657c38 | 7dd10ca: Y9Misc.x y9_ccscene (Control Center decides from the layout of its own window scene's switcher controller) |
+| SBControlCenterController | `-_isStatusBarHiddenIgnoringControlCenter` | 0x1c61c9e80 | 0x1c7658b9c | 7dd10ca: Y9Misc.x y9_ccscene (Control Center decides from the layout of its own window scene's switcher controller) |
 | SBFloatingDockController | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e52bcc | 0x1c72c5038 | TRIAGE PENDING |
 | SBFloatingDockController | `-_initWithWindowScene:iconController:applicationController:recentsController:recentsDataStore:layoutStateTransitionCoordinator:appSuggestionManager:analyticsClient:` | 0x1c6253e60 | 0x1c76e9528 | TRIAGE PENDING |
 | SBFloatingDockController | `-_deriveActiveAssertion:dockProgress:` | 0x1c6254e44 | 0x1c76ea47c | PORTED already: 16.2 address cited in G1D.x |
@@ -283,7 +283,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBStatusBarStateAggregator | `-_invalidateSystemApertureChargingElementAssertionForReason:` | 0x1c6483390 | 0x1c7939638 | IRRELEVANT: main display status bar data model: new Stewie (satellite SOS) item, Live Activity / aperture charging element, battery and signal items (iPhone hardware); item enum 0x2c -> 0x2d; ivar offsets |
 | SBStatusBarStateAggregator | `-activityDidChangeForSensorActivityDataProvider:` | 0x1c6483ec8 | 0x1c793a174 | EQUIVALENT: main display status bar data: singleton lookups became injected / shim lookups of the same objects (recording indicator manager of the main window scene = G5 manager, +sharedInstanceIfExists, active display controller) |
 | SBStatusBarStateAggregator | `-_updateActiveAudioRecordingStatusBarStyleOverrideAssertionsForActiveSensorActivityAttributions:` | 0x1c6484110 | 0x1c793a3bc | EQUIVALENT: main display status bar data: singleton lookups became injected / shim lookups of the same objects (recording indicator manager of the main window scene = G5 manager, +sharedInstanceIfExists, active display controller) |
-| SBStatusBarStateAggregator | `-.cxx_destruct` | 0x1c64843e8 | 0x1c793a6c4 | IRRELEVANT: main display status bar data model: new Stewie (satellite SOS) item, Live Activity / aperture charging element, battery and signal items (iPhone hardware); item enum 0x2c -> 0x2d; ivar offsets |
+| SBStatusBarStateAggregator | `-.cxx_destruct` | 0x1c64843e8 | 0x1c793a6c4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBStatusBarTapManager | `-_foregroundApplicationDestinationsForApplications:` | 0x1c63f0490 | 0x1c789cd14 | IRRELEVANT: adds the apps that own an active System Aperture element (Dynamic Island, iPhone only) |
 | SBTouchRegionManager | `-layoutMonitor:didUpdateDisplayLayout:withContext:` | 0x1c5e3b948 | 0x1c72adc2c | EQUIVALENT: queue ivar replaced by a global queue constant |
 | _SBAppContainerStatusBarStateProxy | `-_fallbackInterfaceOrientation` | 0x1c62de730 | 0x1c77791b0 | EQUIVALENT: rename only (contentInterfaceOrientation -> contentOrientation on the same property) |
@@ -295,8 +295,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBAppContainerViewController | `-configureWithWorkspaceEntity:forLayoutElement:layoutState:referenceFrame:` | 0x1c5e2f534 | 0x1c72a1c44 | TRIAGE PENDING |
 | SBAppLayout | `-appLayoutByModifyingHiddenState:` | 0x1c628ce40 | 0x1c7725bb8 | TRIAGE PENDING |
 | SBAppLayout | `-continuousExposeIdentifier` | 0x1c628d514 | 0x1c77265c4 | PORTED already: hook in G2.x:1733 |
-| SBAppLayout | `-isInsetForHomeAffordance` | 0x1c628e03c | 0x1c77270e8 | TRIAGE PENDING |
-| SBAppLayout | `-preferredDisplayIdentity` | 0x1c628e1a0 | 0x1c77273a8 | TRIAGE PENDING |
+| SBAppLayout | `-isInsetForHomeAffordance` | 0x1c628e03c | 0x1c77270e8 | 7dd10ca: Y8Layout.x y8_insethome (no home affordance inset under Stage Manager, new _preferredWindowScene) |
+| SBAppLayout | `-preferredDisplayIdentity` | 0x1c628e1a0 | 0x1c77273a8 | EQUIVALENT: 16.2 only moves the scene search into the new helper _preferredWindowScene (same selection: ordinal 1 = external scene), added by Y8Layout.x |
 | SBAppLayoutOverlappingModelCacheKey | `-hash` | 0x1c62ee438 | 0x1c778a400 | PORTED already: hook in G2.x:1808 |
 | SBAppLayoutOverlappingModelCacheKey | `-isEqual:` | 0x1c62ee678 | 0x1c778a5e8 | PORTED already: hook in G2.x:1802 |
 | SBAppLayoutOverlappingModelCacheKey | `-copyWithZone:` | 0x1c62ee78c | 0x1c778a6ec | PORTED already: hook in G2.x:1812 |
@@ -342,12 +342,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBAppSwitcherSnapshotImageCache | `-fullSizeCachableAppLayouts` | 0x1c6303150 | 0x1c77a0bc0 | TRIAGE PENDING |
 | SBAppSwitcherSnapshotImageCache | `-reloadSnapshotsForInterfaceStyleChange:` | 0x1c6303860 | 0x1c77a12d4 | TRIAGE PENDING |
 | SBAppSwitcherSnapshotImageCache | `-_createDownscaledVariantForRequest:snapshot:displayItem:sceneHandle:application:` | 0x1c6303e78 | 0x1c77a1a00 | TRIAGE PENDING |
-| SBAppViewController | `-viewWillTransitionToSize:withTransitionCoordinator:` | 0x1c5ea7fa4 | 0x1c731acf4 | TRIAGE PENDING |
-| SBAppViewController | `-_createSceneViewController` | 0x1c5eb715c | 0x1c7329f40 | TRIAGE PENDING |
-| SBAppViewController | `-_deactivateHostedApp` | 0x1c5eb7440 | 0x1c732a234 | TRIAGE PENDING |
-| SBAppViewController | `-_activateApp` | 0x1c5eb81d4 | 0x1c732afb8 | TRIAGE PENDING |
-| SBAppViewController | `-_transformHostedAppViewForRotationToOrientation:` | 0x1c5eb8494 | 0x1c732b264 | TRIAGE PENDING |
-| SBAppViewController | `-_createSceneUpdateTransactionForApplicationSceneEntity:deliveringActions:` | 0x1c5eb8824 | 0x1c732b5f8 | TRIAGE PENDING |
+| SBAppViewController | `-viewWillTransitionToSize:withTransitionCoordinator:` | 0x1c5ea7fa4 | 0x1c731acf4 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBAppViewController | `-_createSceneViewController` | 0x1c5eb715c | 0x1c7329f40 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBAppViewController | `-_deactivateHostedApp` | 0x1c5eb7440 | 0x1c732a234 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBAppViewController | `-_activateApp` | 0x1c5eb81d4 | 0x1c732afb8 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBAppViewController | `-_transformHostedAppViewForRotationToOrientation:` | 0x1c5eb8494 | 0x1c732b264 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBAppViewController | `-_createSceneUpdateTransactionForApplicationSceneEntity:deliveringActions:` | 0x1c5eb8824 | 0x1c732b5f8 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBArcSwipeSwitcherModifier | `-transitionWillBegin` | 0x1c648955c | 0x1c793f864 | TRIAGE PENDING |
 | SBArcSwipeSwitcherModifier | `-.cxx_destruct` | 0x1c6489c68 | 0x1c79400c8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBAutoPIPWorkspaceTransaction | `+shouldAutoPIPEnteringBackgroundForRequest:foundEntity:tetheringMode:transitionStyle:reason:` | 0x1c622d8a0 | 0x1c76bfe88 | TRIAGE PENDING |
@@ -405,23 +405,23 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBDeckSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c6328aec | 0x1c77c99cc | TRIAGE PENDING |
 | SBDeckSwitcherViewController | `-.cxx_destruct` | 0x1c6328ee4 | 0x1c77c9f14 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBDeviceApplicationSceneClassicAccessoryView | `-_rotateApplicationScene:` | 0x1c60e9b10 | 0x1c756e464 | TRIAGE PENDING |
-| SBDeviceApplicationSceneClassicWrapperView | `+shouldUseWrapperViewForSceneHandle:` | 0x1c642041c | 0x1c78cfbac | TRIAGE PENDING |
-| SBDeviceApplicationSceneClassicWrapperView | `-initWithSceneHandle:` | 0x1c64204b8 | 0x1c78cfc5c | TRIAGE PENDING |
-| SBDeviceApplicationSceneClassicWrapperView | `-layoutSubviews` | 0x1c64207e0 | 0x1c78d0208 | TRIAGE PENDING |
+| SBDeviceApplicationSceneClassicWrapperView | `+shouldUseWrapperViewForSceneHandle:` | 0x1c642041c | 0x1c78cfbac | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneClassicWrapperView | `-initWithSceneHandle:` | 0x1c64204b8 | 0x1c78cfc5c | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneClassicWrapperView | `-layoutSubviews` | 0x1c64207e0 | 0x1c78d0208 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBDeviceApplicationSceneClassicWrapperView | `-.cxx_destruct` | 0x1c64210ec | 0x1c78d0e30 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBDeviceApplicationSceneOverlayViewProvider | `-.cxx_destruct` | 0x1c5e688ac | 0x1c72db1ac | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBDeviceApplicationSceneOverlayViewProvider | `-overlayViewController` | 0x1c649a6d4 | 0x1c7950fc0 | TRIAGE PENDING |
-| SBDeviceApplicationSceneOverlayViewProvider | `-bestHomeAffordanceOrientationForOrientation:` | 0x1c649a724 | 0x1c7951020 | TRIAGE PENDING |
-| SBDeviceApplicationSceneOverlayViewProvider | `-_activateIfPossible` | 0x1c649a894 | 0x1c79511d8 | TRIAGE PENDING |
-| SBDeviceApplicationSceneOverlayViewProvider | `-_deactivateIfPossible` | 0x1c649a97c | 0x1c7951310 | TRIAGE PENDING |
-| SBDeviceApplicationSceneView | `-layoutSubviews` | 0x1c5e3c390 | 0x1c72ae66c | TRIAGE PENDING |
-| SBDeviceApplicationSceneView | `-dealloc` | 0x1c5e6a514 | 0x1c72dd094 | TRIAGE PENDING |
+| SBDeviceApplicationSceneOverlayViewProvider | `-overlayViewController` | 0x1c649a6d4 | 0x1c7950fc0 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneOverlayViewProvider | `-bestHomeAffordanceOrientationForOrientation:` | 0x1c649a724 | 0x1c7951020 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneOverlayViewProvider | `-_activateIfPossible` | 0x1c649a894 | 0x1c79511d8 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneOverlayViewProvider | `-_deactivateIfPossible` | 0x1c649a97c | 0x1c7951310 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView | `-layoutSubviews` | 0x1c5e3c390 | 0x1c72ae66c | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView | `-dealloc` | 0x1c5e6a514 | 0x1c72dd094 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBDeviceApplicationSceneView | `-.cxx_destruct` | 0x1c5e6a588 | 0x1c72dd138 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBDeviceApplicationSceneView | `-_tearDownHostCounterRotationViewIfNecessary` | 0x1c5e763e4 | 0x1c72e8cf4 | TRIAGE PENDING |
-| SBDeviceApplicationSceneView | `-addOverlayView:withPriority:` | 0x1c62a2e4c | 0x1c773cd30 | TRIAGE PENDING |
-| SBDeviceApplicationSceneView | `-_createHostCounterRotationViewIfNecessary` | 0x1c62a35b4 | 0x1c773d4c4 | TRIAGE PENDING |
-| SBDeviceApplicationSceneView | `-_updateReferenceSize:andOrientation:` | 0x1c62a4210 | 0x1c773e23c | TRIAGE PENDING |
-| SBDeviceApplicationSceneView | `-_maybeStartTrackingRotationForOverlayFromOrientation:toOrientation:` | 0x1c62a42a8 | 0x1c773e2ec | TRIAGE PENDING |
+| SBDeviceApplicationSceneView | `-_tearDownHostCounterRotationViewIfNecessary` | 0x1c5e763e4 | 0x1c72e8cf4 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView | `-addOverlayView:withPriority:` | 0x1c62a2e4c | 0x1c773cd30 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView | `-_createHostCounterRotationViewIfNecessary` | 0x1c62a35b4 | 0x1c773d4c4 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView | `-_updateReferenceSize:andOrientation:` | 0x1c62a4210 | 0x1c773e23c | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView | `-_maybeStartTrackingRotationForOverlayFromOrientation:toOrientation:` | 0x1c62a42a8 | 0x1c773e2ec | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBDeviceApplicationSceneViewController | `-.cxx_destruct` | 0x1c5e6a2e4 | 0x1c72dce54 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBDeviceApplicationSceneViewController | `-_createSceneOverlayViewProvidersIfNecessary` | 0x1c6130e88 | 0x1c75bbb70 | IRRELEVANT: secure display (lock screen) rendersWhileLocked and display mode notifications to the overlay providers; same providers are created in 16.0 |
 | SBDeviceApplicationSceneViewController | `-_createStatusBar` | 0x1c61312a0 | 0x1c75bc038 | 7dd10ca: Y5Apps.x y5_sbpool (the status bar goes back into the reuse pool it came from when the window moved to the other display) [sha eb694cd] |
@@ -429,8 +429,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBDeviceApplicationSceneViewController | `-_removeStatusBar` | 0x1c613214c | 0x1c75bcefc | 7dd10ca: Y5Apps.x y5_sbpool (the status bar goes back into the reuse pool it came from when the window moved to the other display) [sha eb694cd] |
 | SBDeviceApplicationSceneViewController | `-_configureForSecureDisplay:` | 0x1c6132918 | 0x1c75bd6b4 | IRRELEVANT: secure display (lock screen) rendersWhileLocked and display mode notifications to the overlay providers; same providers are created in 16.0 |
 | SBDeviceApplicationSceneViewPlaceholderContentViewProvider | `-sceneView:requestsPlaceholderContentViewWithContext:` | 0x1c5e3780c | 0x1c72a9bf8 | TRIAGE PENDING |
-| SBDismissOverlaysAnimationController | `-initWithTransitionContextProvider:options:` | 0x1c5ea7524 | 0x1c731a220 | TRIAGE PENDING |
-| SBDismissOverlaysAnimationController | `-_startAnimation` | 0x1c5ea7634 | 0x1c731a36c | TRIAGE PENDING |
+| SBDismissOverlaysAnimationController | `-initWithTransitionContextProvider:options:` | 0x1c5ea7524 | 0x1c731a220 | EQUIVALENT: display identity now read from the stored transition context instead of an ivar (same identity) |
+| SBDismissOverlaysAnimationController | `-_startAnimation` | 0x1c5ea7634 | 0x1c731a36c | EQUIVALENT: display identity now read from the stored transition context instead of an ivar (same identity) |
 | SBDisplayItem | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5e4668c | 0x1c72b8cf8 | EXCLUDED: description / debug text only |
 | SBDisplayItem | `-succinctDescriptionBuilder` | 0x1c5e46750 | 0x1c72b8cfc | EXCLUDED: description / debug text only |
 | SBDisplayItemLayoutAttributes | `-init` | 0x1c614b6e8 | 0x1c75cf3c4 | TRIAGE PENDING |
@@ -538,7 +538,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBFluidSwitcherItemContainerLayer | `-setTransform:` | 0x1c615e2ac | 0x1c75e5304 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherPanGestureRecognizer | `-touchesBegan:withEvent:` | 0x1c61b130c | 0x1c763f01c | EQUIVALENT: 16.2 also stores the initial touch location in touchesBegan (16.0 stores it on the first touchesMoved); the initial leaf app layout is G1D.x |
 | SBFluidSwitcherPanGestureRecognizer | `-reset` | 0x1c61b1600 | 0x1c763f334 | PORTED already: G1D.x (setInitialTouchLeafAppLayout:) |
-| SBFluidSwitcherPanGestureRecognizer | `-.cxx_destruct` | 0x1c61b1728 | 0x1c763f48c | EQUIVALENT: 16.2 also stores the initial touch location in touchesBegan (16.0 stores it on the first touchesMoved); the initial leaf app layout is G1D.x |
+| SBFluidSwitcherPanGestureRecognizer | `-.cxx_destruct` | 0x1c61b1728 | 0x1c763f48c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBFluidSwitcherRootSwitcherModifier | `-handleGestureEvent:` | 0x1c61e7a88 | 0x1c7676094 | TRIAGE PENDING |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-prepareForReuse` | 0x1c6106378 | 0x1c758c730 | TRIAGE PENDING |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-layoutSubviews` | 0x1c61065c0 | 0x1c758c9c4 | TRIAGE PENDING |
@@ -571,7 +571,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBFluidSwitcherViewController | `-_orderedViewsForLayoutElement:excludeSwitcherHostedShelves:` | 0x1c5fd6eb8 | 0x1c7450094 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-underlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd7e2c | 0x1c7451034 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-overlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd8118 | 0x1c7451324 | PORTED already: hook in G1B.x:827 |
-| SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-_applicationForDisplayItem:` | 0x1c5fd9638 | 0x1c74529cc | TRIAGE PENDING |
 | SBFluidSwitcherViewController | `-gestureHandlingModifierRequestsUpdate:` | 0x1c5fd9860 | 0x1c7452bdc | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherViewController | `-_scrollToAppLayout:animated:alignment:completion:` | 0x1c5fd9c44 | 0x1c7452ff0 | PORTED already: hook in G1C.x:5126 |
@@ -795,7 +795,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBPIPEnvironmentDependentOverrideAssertion | `-.cxx_destruct` | 0x1c6331ce0 | 0x1c77d27dc | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBPIPInteractionController | `-initWithInteractionTargetView:preferredContentSize:interactionSettings:dataSource:delegate:` | 0x1c619400c | 0x1c761d900 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
 | SBPIPInteractionController | `-dealloc` | 0x1c619450c | 0x1c761ddfc | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
-| SBPIPInteractionController | `-description` | 0x1c619494c | 0x1c761e230 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
+| SBPIPInteractionController | `-description` | 0x1c619494c | 0x1c761e230 | EXCLUDED: description / debug text only |
 | SBPIPInteractionController | `-_setupForInitialFrame` | 0x1c619505c | 0x1c761e940 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
 | SBPIPInteractionController | `-_setupGestureRecognizers` | 0x1c61950f0 | 0x1c761e9d8 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
 | SBPIPInteractionController | `-_removeGestureRecognizers` | 0x1c6195484 | 0x1c761ed70 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
@@ -812,7 +812,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBPIPInteractionController | `-handlePinchGesture:` | 0x1c6198b04 | 0x1c76223b8 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
 | SBPIPInteractionController | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c6199f0c | 0x1c76237c0 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
 | SBPIPInteractionController | `-positionHyperregion` | 0x1c619ac64 | 0x1c7624504 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
-| SBPIPInteractionController | `-.cxx_destruct` | 0x1c619b8b8 | 0x1c7625168 | EQUIVALENT: 16.2 asks the data source for the gesture manager of the PiP (systemGestureManagerForInteractionControllerResizing:) instead of mainDisplayManager; the video PiP data source (SBPIPPegasusContainerAdapter 0x1c78e1d80 / 16.0 0x1c6431c18) answers nil / NO in both builds and only Quick Note's PiP (SBSystemNotesInteractionManager, embedded display) uses system gestures for resizing; the other rows are ivar offset shifts |
+| SBPIPInteractionController | `-.cxx_destruct` | 0x1c619b8b8 | 0x1c7625168 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBPIPMorphAnimatorController | `-willRemoveTargeMatchMoveAnimationAtFrame:withinSourceFrame:` | 0x1c6413054 | 0x1c78c09c0 | PORTED already: hook in G1D.x:2122 |
 | SBPIPMorphAnimatorController | `-scenePersistenceIdentifier` | 0x1c6412bf4 | 0x1c78c0b04 | TRIAGE PENDING |
 | SBPIPMorphAnimatorController | `-.cxx_destruct` | 0x1c64131d0 | 0x1c78c0bf0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
@@ -857,8 +857,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBShelfLiveContentOverlayCoordinator | `-_addOverlaysIfNeededForTransitionContext:` | 0x1c64cf838 | 0x1c798ac94 | TRIAGE PENDING |
 | SBSlideOverPeekSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6159544 | 0x1c75dda00 | TRIAGE PENDING |
 | SBSplitDisplayItemSwitcherModifier | `-frameForLayoutRole:inAppLayout:withBounds:` | 0x1c60b9374 | 0x1c753da84 | TRIAGE PENDING |
-| SBSpotlightCrossblurToFullscreenSwitcherModifier | `-frameForIndex:` | 0x1c5ed32d8 | 0x1c734746c | TRIAGE PENDING |
-| SBSpotlightCrossblurToFullscreenSwitcherModifier | `-visibleAppLayouts` | 0x1c5ed33f8 | 0x1c7347aac | TRIAGE PENDING |
+| SBSpotlightCrossblurToFullscreenSwitcherModifier | `-frameForIndex:` | 0x1c5ed32d8 | 0x1c734746c | 7dd10ca: Y8Layout.x y8_spotlight (Stage Manager: the opened window's own frame, other windows of the stage stay visible) |
+| SBSpotlightCrossblurToFullscreenSwitcherModifier | `-visibleAppLayouts` | 0x1c5ed33f8 | 0x1c7347aac | 7dd10ca: Y8Layout.x y8_spotlight (Stage Manager: the opened window's own frame, other windows of the stage stay visible) |
 | SBSwitcherChamoisLayoutAttributes | `-isEqual:` | 0x1c6414a48 | 0x1c78c3384 | PORTED already: hook in G2.x:1376 |
 | SBSwitcherChamoisLayoutAttributes | `-copyWithZone:` | 0x1c6414d68 | 0x1c78c39e0 | PORTED already: hook in G2.x:1368 |
 | SBSwitcherChamoisSettings | `-layoutAttributesForContainerBounds:nativeContainerReferencePixelBounds:interfaceOrientation:floatingDockHeight:statusBarHeight:requiresFullScreen:prefersStripHidden:prefersDockHidden:isEmbeddedDisplay:` | 0x1c6413524 | 0x1c78c0f50 | PORTED already: 16.2 address cited in G2.x |
@@ -924,19 +924,19 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBTopAffordanceViewController | `-.cxx_destruct` | 0x1c645b500 | 0x1c790e420 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBTraitsEmbeddedDisplayPipelineManager | `-setupDefaultPipelineForArbiter:` | 0x1c612a7f0 | 0x1c75b52bc | PORTED already: hook in G3.x:943 |
 | SBTraitsEmbeddedDisplayPipelineManager | `-_orientationInputsForDeviceOrientation:` | 0x1c612b678 | 0x1c75b6198 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-initWithScene:` | 0x1c62d7d64 | 0x1c7772f48 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-initWithSceneHandle:` | 0x1c62d7e58 | 0x1c7772fc4 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-invalidate` | 0x1c62d7f48 | 0x1c7773038 | PORTED already: hook in G3.x:365 |
-| SBTraitsSceneParticipantDelegate | `-_supportedOrientations` | 0x1c62d85c0 | 0x1c77736b8 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-_sanitizedMask:forApplication:` | 0x1c62d89b0 | 0x1c7773a88 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-actuateOrientationSettingsWithContext:` | 0x1c62d8bc4 | 0x1c7773c68 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-updateOrientationSceneSettingsForParticipant:` | 0x1c62d8f24 | 0x1c7773fc4 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-needsActuationForUpdateReasons:` | 0x1c62d933c | 0x1c77743e4 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-sceneContentStateDidChange:` | 0x1c62d980c | 0x1c77748a0 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c62d9a54 | 0x1c7774a98 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-_evaluateOrientationTransitionContext:` | 0x1c62da450 | 0x1c7774d78 | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-_resetToInitialState` | 0x1c62da3b4 | 0x1c77750bc | TRIAGE PENDING |
-| SBTraitsSceneParticipantDelegate | `-didChangeSettingsForParticipant:context:` | 0x1c62da8f4 | 0x1c77752c8 | TRIAGE PENDING |
+| SBTraitsSceneParticipantDelegate | `-initWithScene:` | 0x1c62d7d64 | 0x1c7772f48 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-initWithSceneHandle:` | 0x1c62d7e58 | 0x1c7772fc4 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-invalidate` | 0x1c62d7f48 | 0x1c7773038 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-_supportedOrientations` | 0x1c62d85c0 | 0x1c77736b8 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-_sanitizedMask:forApplication:` | 0x1c62d89b0 | 0x1c7773a88 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-actuateOrientationSettingsWithContext:` | 0x1c62d8bc4 | 0x1c7773c68 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-updateOrientationSceneSettingsForParticipant:` | 0x1c62d8f24 | 0x1c7773fc4 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-needsActuationForUpdateReasons:` | 0x1c62d933c | 0x1c77743e4 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-sceneContentStateDidChange:` | 0x1c62d980c | 0x1c77748a0 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext:` | 0x1c62d9a54 | 0x1c7774a98 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-_evaluateOrientationTransitionContext:` | 0x1c62da450 | 0x1c7774d78 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-_resetToInitialState` | 0x1c62da3b4 | 0x1c77750bc | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
+| SBTraitsSceneParticipantDelegate | `-didChangeSettingsForParticipant:context:` | 0x1c62da8f4 | 0x1c77752c8 | NOT PORTED: 16.2 removed the alter ego (pre modern rotation) path and moved orientation action handling to SBOrientationRequestActionAssistant: part of the traits participant / content-container orientation re-architecture documented as Tier B in CORE-LEFTOVERS 3b (needs the SBSwitcherTraitsAssistant world, 16.0 delegate keeps its own consistent alter ego; ivars shift by 8) |
 | SBTraitsSceneParticipantDelegate | `-.cxx_destruct` | 0x1c62dad14 | 0x1c77757a0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBTransitionSwitcherModifierEvent | `-copyWithZone:` | 0x1c5fb9638 | 0x1c7431d04 | PORTED already: hook in G1B.x:1145 |
 | SBTransitionSwitcherModifierEvent | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5fb99f8 | 0x1c74320f4 | EXCLUDED: description / debug text only |
@@ -957,7 +957,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | _SBFullScreenAppFloorSwitcherModifier | `-isItemResizingAllowedForLayoutRole:inAppLayout:` | 0x1c6149450 | 0x1c75cce18 | TRIAGE PENDING |
 | _SBPIPEndStashTabSuppressionGestureManager | `-_addSystemRecognizers` | 0x1c635d6c0 | 0x1c7340510 | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
 | _SBPIPEndStashTabSuppressionGestureManager | `-_removeGestureRecognizers` | 0x1c635d908 | 0x1c7340728 | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
-| _SBPIPEndStashTabSuppressionGestureManager | `-.cxx_destruct` | 0x1c635da68 | 0x1c734085c | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
+| _SBPIPEndStashTabSuppressionGestureManager | `-.cxx_destruct` | 0x1c635da68 | 0x1c734085c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 
 ## F4 System gestures / pointer / indirect pan (74)
 
@@ -986,7 +986,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBIndirectPanGestureRecognizer | `-_pointerModelLocation` | 0x1c639a364 | 0x1c78440c4 | OPEN: not ported on purpose (regression guard: pointer crossing / indirect edge gestures are verified on the device): 16.2 adds an idle watchdog and logging, makes the tracked touch / hover event weak, simplifies _shouldReceiveEvent: to the event type 0xb and scales the pointer translation with the container's screen; needs a device A/B |
 | SBIndirectPanGestureRecognizer | `-currentHoverEvent` | 0x1c639ad14 | 0x1c7844fd4 | OPEN: not ported on purpose (regression guard: pointer crossing / indirect edge gestures are verified on the device): 16.2 adds an idle watchdog and logging, makes the tracked touch / hover event weak, simplifies _shouldReceiveEvent: to the event type 0xb and scales the pointer translation with the container's screen; needs a device A/B |
 | SBIndirectPanGestureRecognizer | `-currentTouch` | 0x1c639ad38 | 0x1c784501c | OPEN: not ported on purpose (regression guard: pointer crossing / indirect edge gestures are verified on the device): 16.2 adds an idle watchdog and logging, makes the tracked touch / hover event weak, simplifies _shouldReceiveEvent: to the event type 0xb and scales the pointer translation with the container's screen; needs a device A/B |
-| SBIndirectPanGestureRecognizer | `-.cxx_destruct` | 0x1c639af38 | 0x1c7845264 | OPEN: not ported on purpose (regression guard: pointer crossing / indirect edge gestures are verified on the device): 16.2 adds an idle watchdog and logging, makes the tracked touch / hover event weak, simplifies _shouldReceiveEvent: to the event type 0xb and scales the pointer translation with the container's screen; needs a device A/B |
+| SBIndirectPanGestureRecognizer | `-.cxx_destruct` | 0x1c639af38 | 0x1c7845264 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBInteractiveScreenshotGestureManager | `-_updateFailureRequirements` | 0x1c62f56f0 | 0x1c77929c8 | EQUIVALENT: gesture manager passed through a register (ivar), same call |
 | SBInteractiveScreenshotGestureManager | `-gestureRecognizerShouldBegin:` | 0x1c62f621c | 0x1c77934fc | TRIAGE PENDING |
 | SBKeyboardHomeAffordanceController | `-_getHomeGrabberContainingView:isAlwaysPortrait:` | 0x1c640ebdc | 0x1c78bc418 | OPEN: NEEDS EDIT IN G3B.x: 16.2 asks [[sourceWindow windowScene] medusaHostedKeyboardWindowController] (home grabber of the hosted keyboard on the extended display); needs -[SBWindowScene medusaHostedKeyboardWindowController] exported from G3B.x (BPKB_ControllerForWindowScene) |
@@ -1026,7 +1026,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSystemNotesManager | `-_createContentViewControllerForPresentationContext:error:` | 0x1c6086fd4 | 0x1c7509f80 | EQUIVALENT: Quick Note exists on the embedded display only (SBSystemNotesManager is created with the main display scene manager, 16.0 0x1c5f021c4 / 16.2 0x1c73765b8); the 16.2 rows move its gestures to the manager's own gesture manager and drop the per scene transient UI manager argument |
 | SBSystemNotesManager | `-_addContentViewControllerToPIPHierarchy:contentViewLayoutSettings:` | 0x1c6087368 | 0x1c750a3a4 | EQUIVALENT: Quick Note exists on the embedded display only (SBSystemNotesManager is created with the main display scene manager, 16.0 0x1c5f021c4 / 16.2 0x1c73765b8); the 16.2 rows move its gestures to the manager's own gesture manager and drop the per scene transient UI manager argument |
 | SBSystemNotesManager | `-interactionManager:requestsStartSuppressingKeyboardForReason:` | 0x1c60884ec | 0x1c750b528 | EQUIVALENT: Quick Note exists on the embedded display only (SBSystemNotesManager is created with the main display scene manager, 16.0 0x1c5f021c4 / 16.2 0x1c73765b8); the 16.2 rows move its gestures to the manager's own gesture manager and drop the per scene transient UI manager argument |
-| SBSystemNotesManager | `-.cxx_destruct` | 0x1c608859c | 0x1c750b640 | EQUIVALENT: Quick Note exists on the embedded display only (SBSystemNotesManager is created with the main display scene manager, 16.0 0x1c5f021c4 / 16.2 0x1c73765b8); the 16.2 rows move its gestures to the manager's own gesture manager and drop the per scene transient UI manager argument |
+| SBSystemNotesManager | `-.cxx_destruct` | 0x1c608859c | 0x1c750b640 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemPointerInteractionManager | `-pointerInteraction:window:regionForRequest:defaultRegion:` | 0x1c5f71c98 | 0x1c73e8a00 | EQUIVALENT: 16.2 passes the UIPointerRegionRequest to the delegate (shouldBeginPointerInteractionRequest:atLocation:forView:) and drops the defensive copy of the registered views; 16.0 delegates implement the old API; per-display routing is G2G.x / PTR.x |
 | SBSystemPointerInteractionManager | `-.cxx_destruct` | 0x1c5f72200 | 0x1c73e8f28 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBTransientUIInteractionManager | `-viewForSystemGestureRecognizer:` | 0x1c60743c4 | 0x1c74f7328 | PORTED already: G2C.x g2c_scenemgr (per window scene manager bound to that scene's gesture manager) |
@@ -1060,9 +1060,9 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBAlertLayoutPresentationVerifier | `-initWithScreen:` | 0x1c63419f4 | 0x1c77e5aa8 | TRIAGE PENDING |
 | SBAlertLayoutPresentationVerifier | `-dealloc` | 0x1c6341cc4 | 0x1c77e5e20 | TRIAGE PENDING |
 | SBAssistiveTouchUISceneController | `+_setupInfo` | 0x1c5ec16fc | 0x1c7334694 | PORTED already: hook in G3B.x:433 |
-| SBBannerManager | `-bannerSourceListener:sceneSpecificationForBannerSceneWithIdentifier:forProcess:userInfo:` | 0x1c64180e4 | 0x1c78c6efc | TRIAGE PENDING |
-| SBBannerManager | `+_defaultAuthorizedBundleIDs` | 0x1c6419244 | 0x1c78c80cc | TRIAGE PENDING |
-| SBBannerManager | `-_updateGesturePriorityForGestureRecognizerInWindowScene:` | 0x1c641a000 | 0x1c78c8e94 | TRIAGE PENDING |
+| SBBannerManager | `-bannerSourceListener:sceneSpecificationForBannerSceneWithIdentifier:forProcess:userInfo:` | 0x1c64180e4 | 0x1c78c6efc | IRRELEVANT: banner pan gesture is created per window scene on demand and extra authorized bundle id (banners present on the iPad, FEATURES T1) |
+| SBBannerManager | `+_defaultAuthorizedBundleIDs` | 0x1c6419244 | 0x1c78c80cc | IRRELEVANT: banner pan gesture is created per window scene on demand and extra authorized bundle id (banners present on the iPad, FEATURES T1) |
+| SBBannerManager | `-_updateGesturePriorityForGestureRecognizerInWindowScene:` | 0x1c641a000 | 0x1c78c8e94 | IRRELEVANT: banner pan gesture is created per window scene on demand and extra authorized bundle id (banners present on the iPad, FEATURES T1) |
 | SBDeviceApplicationRemoteTransientOverlayViewProvider | `-initWithSceneHandle:delegate:` | 0x1c6403db8 | 0x1c78b0d94 | EQUIVALENT: 16.2 reads [[presentationTarget targetPredicate] process] and shouldDismissInSwitcher from SBS classes that 16.0 clients cannot send (GAPS-IMPLEMENTED G6 A1: the 16.0 target decodes the process directly, kept); the provider registration with the SpringBoard singleton is replaced by per scene predicate matching in 16.2 (A1) |
 | SBDeviceApplicationRemoteTransientOverlayViewProvider | `-presentRemoteTransientOverlayViewController:presentationRequest:` | 0x1c6403f48 | 0x1c78b0f10 | EQUIVALENT: 16.2 reads [[presentationTarget targetPredicate] process] and shouldDismissInSwitcher from SBS classes that 16.0 clients cannot send (GAPS-IMPLEMENTED G6 A1: the 16.0 target decodes the process directly, kept); the provider registration with the SpringBoard singleton is replaced by per scene predicate matching in 16.2 (A1) |
 | SBDeviceApplicationRemoteTransientOverlayViewProvider | `-_handleAppSwitcherWillPresent:` | 0x1c6404b7c | 0x1c78b1b88 | EQUIVALENT: 16.2 reads [[presentationTarget targetPredicate] process] and shouldDismissInSwitcher from SBS classes that 16.0 clients cannot send (GAPS-IMPLEMENTED G6 A1: the 16.0 target decodes the process directly, kept); the provider registration with the SpringBoard singleton is replaced by per scene predicate matching in 16.2 (A1) |
@@ -1094,68 +1094,68 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBLiveTranscriptionUISceneController | `+_setupInfo` | 0x1c6424960 | 0x1c78d4718 | TRIAGE PENDING |
 | SBModalLibraryController | `-_evaluateKeyboardWindowLevelAssertion` | 0x1c635a714 | 0x1c780061c | TRIAGE PENDING |
 | SBModalLibraryController | `-_evaluateResignActiveAssertion` | 0x1c635a878 | 0x1c78007c4 | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBNotificationBannerDestination | `-_notificationViewControllerForRequest:` | 0x1c5e93ac4 | 0x1c7306764 | TRIAGE PENDING |
+| SBNotificationBannerDestination | `-_notificationViewControllerForRequest:` | 0x1c5e93ac4 | 0x1c7306764 | IRRELEVANT: banner view controller class and screen of the look view (banners present on the iPad: FEATURES T1 prefersEmbeddedDisplayPresentation) |
 | SBNotificationBannerDestination | `-longLookWillPresentForNotificationViewController:` | 0x1c5e95db0 | 0x1c7308a4c | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBNotificationBannerDestination | `-presentedBannerScreenFrame` | 0x1c61fbd80 | 0x1c768aa1c | TRIAGE PENDING |
+| SBNotificationBannerDestination | `-presentedBannerScreenFrame` | 0x1c61fbd80 | 0x1c768aa1c | IRRELEVANT: banner view controller class and screen of the look view (banners present on the iPad: FEATURES T1 prefersEmbeddedDisplayPresentation) |
 | SBNotificationCarPlayDestination | `-presentableDidDisappearAsBanner:withReason:` | 0x1c63d9448 | 0x1c7884370 | IRRELEVANT: CarPlay |
 | SBNotificationCarPlayDestination | `-didSelectBannerOfPresentableViewController:` | 0x1c63d9638 | 0x1c7884580 | IRRELEVANT: CarPlay |
-| SBOverlayUISceneController | `+_setupInfo` | 0x1c649a2a8 | 0x1c7950c6c | TRIAGE PENDING |
-| SBOverlayUISceneController | `-windowSceneDidConnect:` | 0x1c649a38c | 0x1c7950d50 | TRIAGE PENDING |
+| SBOverlayUISceneController | `+_setupInfo` | 0x1c649a2a8 | 0x1c7950c6c | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBOverlayUISceneController | `-windowSceneDidConnect:` | 0x1c649a38c | 0x1c7950d50 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
 | SBRecordingIndicatorManager | `-_createRecordingIndicatorForStatusBarLocation` | 0x1c5fe6fe0 | 0x1c7461b54 | TRIAGE PENDING |
 | SBRecordingIndicatorViewController | `-_screenTypeForcesFastFadeAnimations` | 0x1c62d3774 | 0x1c776e7f4 | PORTED already: 16.2 address cited in X5Recording.x |
 | SBRecordingIndicatorViewController | `-calculateInitialIndicatorPositionAndSize` | 0x1c62d3bcc | 0x1c776ed0c | TRIAGE PENDING |
 | SBRecordingIndicatorViewController | `-updateIndicatorVisibility:` | 0x1c62d47a0 | 0x1c776f8dc | TRIAGE PENDING |
 | SBRecordingIndicatorViewController | `-updateIndicatorVisibilityWithFastFadeAnimation:` | 0x1c62d4fe4 | 0x1c777017c | TRIAGE PENDING |
 | SBRecordingIndicatorViewController | `-_updateIndicatorForBacklightLuminance:previousBacklightLuminance:` | 0x1c62d5d34 | 0x1c7770f20 | TRIAGE PENDING |
-| SBSearchPresenter | `-presentSearchAnimated:` | 0x1c6078164 | 0x1c74fb524 | TRIAGE PENDING |
-| SBSearchPresenter | `-dismissSearchAnimated:` | 0x1c6078374 | 0x1c74fb7ec | TRIAGE PENDING |
-| SBSearchPresenter | `-scrollViewDidScroll:` | 0x1c60786c0 | 0x1c74fbbec | TRIAGE PENDING |
-| SBSpotlightMultiplexingViewController | `-viewDidAppear:` | 0x1c62aab00 | 0x1c7744f64 | TRIAGE PENDING |
-| SBSpotlightMultiplexingViewController | `-didBecomeActiveDelegate` | 0x1c62aae6c | 0x1c7745330 | TRIAGE PENDING |
-| SBSpotlightMultiplexingViewController | `-didResignActiveDelegate:` | 0x1c62ab1e8 | 0x1c774570c | TRIAGE PENDING |
-| SBSpotlightMultiplexingViewController | `-sceneManager:didCreateScene:` | 0x1c62ab344 | 0x1c77458c8 | TRIAGE PENDING |
-| SBSpotlightMultiplexingViewController | `-sceneManager:didDestroyScene:` | 0x1c62ab3d0 | 0x1c77459a0 | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-viewDidLoad` | 0x1c641cb54 | 0x1c78cba54 | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-updatePresentationProgress:withOffset:presentationState:` | 0x1c641cf08 | 0x1c78cbe58 | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-spotlightMultiplexingViewController:externalKeyboardViewContainsKeyboardDidChange:` | 0x1c641e29c | 0x1c78cd81c | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-_setUpSearchAnimationSettings` | 0x1c641ee60 | 0x1c78ce778 | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-_setUpSearchAffordance` | 0x1c641f09c | 0x1c78ce980 | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-_setUpHomeAffordance` | 0x1c641f1f0 | 0x1c78ceacc | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-_setUpHostedContentMetrics` | 0x1c641f3b4 | 0x1c78cec9c | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-_beginRequiringSearchBarPortalViewForReason:` | 0x1c641f688 | 0x1c78ced88 | TRIAGE PENDING |
-| SBSpotlightPresentableViewController | `-_endRequiringSearchBarPortalViewForReason:` | 0x1c641fa34 | 0x1c78cf170 | TRIAGE PENDING |
+| SBSearchPresenter | `-presentSearchAnimated:` | 0x1c6078164 | 0x1c74fb524 | IRRELEVANT: home screen search presentation state bookkeeping (animated flag, interaction completions) |
+| SBSearchPresenter | `-dismissSearchAnimated:` | 0x1c6078374 | 0x1c74fb7ec | IRRELEVANT: home screen search presentation state bookkeeping (animated flag, interaction completions) |
+| SBSearchPresenter | `-scrollViewDidScroll:` | 0x1c60786c0 | 0x1c74fbbec | IRRELEVANT: home screen search presentation state bookkeeping (animated flag, interaction completions) |
+| SBSpotlightMultiplexingViewController | `-viewDidAppear:` | 0x1c62aab00 | 0x1c7744f64 | EQUIVALENT: Spotlight presents on the iPad only (FEATURES T1): the 16.2 change replaces mainDisplaySceneManager / the main hosted keyboard controller by the view controller's own window scene, which is the embedded scene |
+| SBSpotlightMultiplexingViewController | `-didBecomeActiveDelegate` | 0x1c62aae6c | 0x1c7745330 | EQUIVALENT: Spotlight presents on the iPad only (FEATURES T1): the 16.2 change replaces mainDisplaySceneManager / the main hosted keyboard controller by the view controller's own window scene, which is the embedded scene |
+| SBSpotlightMultiplexingViewController | `-didResignActiveDelegate:` | 0x1c62ab1e8 | 0x1c774570c | EQUIVALENT: Spotlight presents on the iPad only (FEATURES T1): the 16.2 change replaces mainDisplaySceneManager / the main hosted keyboard controller by the view controller's own window scene, which is the embedded scene |
+| SBSpotlightMultiplexingViewController | `-sceneManager:didCreateScene:` | 0x1c62ab344 | 0x1c77458c8 | EQUIVALENT: Spotlight presents on the iPad only (FEATURES T1): the 16.2 change replaces mainDisplaySceneManager / the main hosted keyboard controller by the view controller's own window scene, which is the embedded scene |
+| SBSpotlightMultiplexingViewController | `-sceneManager:didDestroyScene:` | 0x1c62ab3d0 | 0x1c77459a0 | EQUIVALENT: Spotlight presents on the iPad only (FEATURES T1): the 16.2 change replaces mainDisplaySceneManager / the main hosted keyboard controller by the view controller's own window scene, which is the embedded scene |
+| SBSpotlightPresentableViewController | `-viewDidLoad` | 0x1c641cb54 | 0x1c78cba54 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-updatePresentationProgress:withOffset:presentationState:` | 0x1c641cf08 | 0x1c78cbe58 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-spotlightMultiplexingViewController:externalKeyboardViewContainsKeyboardDidChange:` | 0x1c641e29c | 0x1c78cd81c | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-_setUpSearchAnimationSettings` | 0x1c641ee60 | 0x1c78ce778 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-_setUpSearchAffordance` | 0x1c641f09c | 0x1c78ce980 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-_setUpHomeAffordance` | 0x1c641f1f0 | 0x1c78ceacc | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-_setUpHostedContentMetrics` | 0x1c641f3b4 | 0x1c78cec9c | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-_beginRequiringSearchBarPortalViewForReason:` | 0x1c641f688 | 0x1c78ced88 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBSpotlightPresentableViewController | `-_endRequiringSearchBarPortalViewForReason:` | 0x1c641fa34 | 0x1c78cf170 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
 | SBSpotlightPresentableViewController | `-.cxx_destruct` | 0x1c6420264 | 0x1c78cfa08 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSpotlightTransientOverlayInteractiveGestureTransaction | `-_begin` | 0x1c5fadef0 | 0x1c742629c | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBSystemUISceneController | `-dealloc` | 0x1c64adce0 | 0x1c796614c | TRIAGE PENDING |
-| SBSystemUISceneController | `-windowSceneDidConnect:` | 0x1c64add34 | 0x1c79661cc | TRIAGE PENDING |
-| SBSystemUISceneController | `-windowSceneDidDisconnect:` | 0x1c64adf98 | 0x1c796647c | TRIAGE PENDING |
-| SBSystemUISceneController | `-_newSceneControllerForWindowScene:sceneRequestOptions:traitsRole:level:` | 0x1c64ae234 | 0x1c7966524 | TRIAGE PENDING |
-| SBSystemUISceneController | `-__newSceneIdentifierForWindowScene:` | 0x1c64ae564 | 0x1c7966834 | TRIAGE PENDING |
-| SBSystemUISceneController | `-createSceneForProcessIdentity:withOptions:completion:` | 0x1c64aec88 | 0x1c7966a6c | TRIAGE PENDING |
-| SBSystemUISceneController | `-destroyScenesWithPersistentIdentifiers:processIdentity:completion:` | 0x1c64ae678 | 0x1c7966de0 | TRIAGE PENDING |
-| SBSystemUISceneController | `-sceneWorkspaceControllerForProcessIdentity:` | 0x1c64ae618 | 0x1c7967488 | TRIAGE PENDING |
+| SBSystemUISceneController | `-dealloc` | 0x1c64adce0 | 0x1c796614c | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-windowSceneDidConnect:` | 0x1c64add34 | 0x1c79661cc | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-windowSceneDidDisconnect:` | 0x1c64adf98 | 0x1c796647c | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-_newSceneControllerForWindowScene:sceneRequestOptions:traitsRole:level:` | 0x1c64ae234 | 0x1c7966524 | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-__newSceneIdentifierForWindowScene:` | 0x1c64ae564 | 0x1c7966834 | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-createSceneForProcessIdentity:withOptions:completion:` | 0x1c64aec88 | 0x1c7966a6c | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-destroyScenesWithPersistentIdentifiers:processIdentity:completion:` | 0x1c64ae678 | 0x1c7966de0 | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
+| SBSystemUISceneController | `-sceneWorkspaceControllerForProcessIdentity:` | 0x1c64ae618 | 0x1c7967488 | NOT PORTED: same as SBSingleSceneController (FEATURES-0.7.9 S1): controllers keyed by display identity instead of window scene, _invalidateSceneControllersForWindowScene:, sceneVendingPolicy; behaviour differs only for display reconnect lifetime |
 | SBSystemUISceneController | `-descriptionBuilderWithMultilinePrefix:` | 0x1c64af1c8 | 0x1c7967950 | EXCLUDED: description / debug text only |
 | SBSystemUISceneController | `-.cxx_destruct` | 0x1c64af2a0 | 0x1c7967b0c | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBSystemUIScenesCoordinator | `-init` | 0x1c630a8a4 | 0x1c77a8f64 | TRIAGE PENDING |
-| SBSystemUIScenesCoordinator | `-sceneWorkspaceControllerForProcessIdentity:` | 0x1c630b18c | 0x1c77a9904 | TRIAGE PENDING |
+| SBSystemUIScenesCoordinator | `-init` | 0x1c630a8a4 | 0x1c77a8f64 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
+| SBSystemUIScenesCoordinator | `-sceneWorkspaceControllerForProcessIdentity:` | 0x1c630b18c | 0x1c77a9904 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
 | SBSystemUIScenesCoordinator | `-.cxx_destruct` | 0x1c630baa0 | 0x1c77a9ef0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBTodayViewSpotlightPresenter | `-presentSpotlightAnimated:` | 0x1c62bf888 | 0x1c775a874 | TRIAGE PENDING |
-| SBTodayViewSpotlightPresenter | `-dismissSpotlightAnimated:` | 0x1c62bf894 | 0x1c775a87c | TRIAGE PENDING |
-| SBTransientOverlayPresentationManager | `-setCoverSheetPresentationManager:` | 0x1c616c2a0 | 0x1c75f3dcc | TRIAGE PENDING |
-| SBTransientOverlayPresentationManager | `-windowSceneDidConnect:` | 0x1c616c958 | 0x1c75f4450 | TRIAGE PENDING |
+| SBTodayViewSpotlightPresenter | `-presentSpotlightAnimated:` | 0x1c62bf888 | 0x1c775a874 | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBTodayViewSpotlightPresenter | `-dismissSpotlightAnimated:` | 0x1c62bf894 | 0x1c775a87c | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
+| SBTransientOverlayPresentationManager | `-setCoverSheetPresentationManager:` | 0x1c616c2a0 | 0x1c75f3dcc | EQUIVALENT: 16.2: embedded scene connect no longer repeated inline (the scene manager connects it), in call presentation manager handed to every presenter (X6InCall.x per scene in call), the dismissal request waits for all presenters through a dispatch group (completion barrier only, G4B.x ports the in scene dismissal) |
+| SBTransientOverlayPresentationManager | `-windowSceneDidConnect:` | 0x1c616c958 | 0x1c75f4450 | EQUIVALENT: 16.2: embedded scene connect no longer repeated inline (the scene manager connects it), in call presentation manager handed to every presenter (X6InCall.x per scene in call), the dismissal request waits for all presenters through a dispatch group (completion barrier only, G4B.x ports the in scene dismissal) |
 | SBTransientOverlayPresentationManager | `-windowSceneDidDisconnect:` | 0x1c616ca94 | 0x1c75f45c0 | PORTED already: hook in G4B.x:2443 |
-| SBTransientOverlayPresentationManager | `-performDismissalRequest:` | 0x1c616d570 | 0x1c75f52f4 | TRIAGE PENDING |
-| SBTransientOverlayScenePresenter | `-dealloc` | 0x1c648fda8 | 0x1c79462a4 | TRIAGE PENDING |
-| SBTransientOverlayScenePresenter | `-performPresentationRequest:` | 0x1c64914fc | 0x1c7947cf4 | TRIAGE PENDING |
-| SBTransientOverlayScenePresenter | `-zStackParticipant:updatePreferences:` | 0x1c64936c0 | 0x1c7949f20 | TRIAGE PENDING |
-| SBTransientOverlayScenePresenter | `-_dismissEntity:animated:completion:` | 0x1c64949c8 | 0x1c794b24c | TRIAGE PENDING |
+| SBTransientOverlayPresentationManager | `-performDismissalRequest:` | 0x1c616d570 | 0x1c75f52f4 | EQUIVALENT: 16.2: embedded scene connect no longer repeated inline (the scene manager connects it), in call presentation manager handed to every presenter (X6InCall.x per scene in call), the dismissal request waits for all presenters through a dispatch group (completion barrier only, G4B.x ports the in scene dismissal) |
+| SBTransientOverlayScenePresenter | `-dealloc` | 0x1c648fda8 | 0x1c79462a4 | EQUIVALENT: ivar offset shift, the in call non modal suppression assertion is released in dealloc (X6InCall.x), System Aperture z stack policy (preventsSystemApertureSuppressionFromBelow, iPhone), banner suppression reason string |
+| SBTransientOverlayScenePresenter | `-performPresentationRequest:` | 0x1c64914fc | 0x1c7947cf4 | 7dd10ca: Y9Misc.x y9_overlayfocus (focus stealing assertion for the overlay window, 16.2 keyFocusStealingAssertion); the rest is ivar renumbering (_inCallPresentationManager, _deviceOrientationUpdateDeferralAssertion) |
+| SBTransientOverlayScenePresenter | `-zStackParticipant:updatePreferences:` | 0x1c64936c0 | 0x1c7949f20 | EQUIVALENT: ivar offset shift, the in call non modal suppression assertion is released in dealloc (X6InCall.x), System Aperture z stack policy (preventsSystemApertureSuppressionFromBelow, iPhone), banner suppression reason string |
+| SBTransientOverlayScenePresenter | `-_dismissEntity:animated:completion:` | 0x1c64949c8 | 0x1c794b24c | 7dd10ca: Y9Misc.x y9_overlayfocus (focus stealing assertion for the overlay window, 16.2 keyFocusStealingAssertion); the rest is ivar renumbering (_inCallPresentationManager, _deviceOrientationUpdateDeferralAssertion) |
 | SBTransientOverlayScenePresenter | `-_updateStatusBarWithCurrentExternalStatusBarSettings:animated:` | 0x1c6496020 | 0x1c794c8c8 | PORTED already: 16.2 address cited in X5Recording.x |
-| SBTransientOverlayScenePresenter | `-_updateDeactivationAssertions` | 0x1c6496868 | 0x1c794d11c | TRIAGE PENDING |
-| SBTransientOverlayScenePresenter | `-_updateFeaturePolicies` | 0x1c6496c60 | 0x1c794d538 | TRIAGE PENDING |
+| SBTransientOverlayScenePresenter | `-_updateDeactivationAssertions` | 0x1c6496868 | 0x1c794d11c | EQUIVALENT: ivar offset shift, the in call non modal suppression assertion is released in dealloc (X6InCall.x), System Aperture z stack policy (preventsSystemApertureSuppressionFromBelow, iPhone), banner suppression reason string |
+| SBTransientOverlayScenePresenter | `-_updateFeaturePolicies` | 0x1c6496c60 | 0x1c794d538 | EQUIVALENT: ivar offset shift, the in call non modal suppression assertion is released in dealloc (X6InCall.x), System Aperture z stack policy (preventsSystemApertureSuppressionFromBelow, iPhone), banner suppression reason string |
 | SBTransientOverlayScenePresenter | `-.cxx_destruct` | 0x1c6497694 | 0x1c794dfac | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBUserNotificationAlert | `-_clearRemoteViewControllerIfPresent` | 0x1c5fa4e3c | 0x1c741dc08 | TRIAGE PENDING |
 | SBVoiceControlUISceneController | `+_setupInfo` | 0x1c5ec15b0 | 0x1c7334548 | PORTED already: hook in G3B.x:427 |
-| _SBTodaySpotlightViewController | `-_setDisplayLayoutElementActive:` | 0x1c62bfca8 | 0x1c775ac8c | TRIAGE PENDING |
+| _SBTodaySpotlightViewController | `-_setDisplayLayoutElementActive:` | 0x1c62bfca8 | 0x1c775ac8c | IRRELEVANT: home screen / Today Spotlight pull down UI (animated flag, search pill reference view, display layout element level): iPad Home Screen only |
 | _SBTransientOverlayPresentedEntity | `-.cxx_destruct` | 0x1c64979d4 | 0x1c794e318 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 
 ## F7 Displays / external display / screens (72)
@@ -1246,32 +1246,32 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBActivityBannerViewController | `-requestIdentifier` | 0x1c5f9a0a8 | 0x1c7411cd4 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivityBannerViewController | `-viewDidLoad` | 0x1c5f9a19c | 0x1c7411e40 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivityBannerViewController | `-viewWillLayoutSubviews` | 0x1c5f9a2b8 | 0x1c7412038 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
-| SBActivityBannerViewController | `-.cxx_destruct` | 0x1c5f9a538 | 0x1c7412800 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
+| SBActivityBannerViewController | `-.cxx_destruct` | 0x1c5f9a538 | 0x1c7412800 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBActivityManager | `-init` | 0x1c6061344 | 0x1c74e0608 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivityManager | `-dealloc` | 0x1c606153c | 0x1c74e08b0 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivityManager | `-startObservingActivityUpdates` | 0x1c6061648 | 0x1c74e0ab8 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivityManager | `-isActivitySupported` | 0x1c6061964 | 0x1c74e0dac | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivityManager | `-_playSoundWithAlertOptions:` | 0x1c6062164 | 0x1c74e2f58 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
-| SBActivityManager | `-.cxx_destruct` | 0x1c60622a0 | 0x1c74e384c | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
+| SBActivityManager | `-.cxx_destruct` | 0x1c60622a0 | 0x1c74e384c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBActivitySystemApertureElementObserver | `-init` | 0x1c6108534 | 0x1c758e930 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivitySystemApertureElementObserver | `-activityDidStart:` | 0x1c61085c0 | 0x1c758ea5c | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
 | SBActivitySystemApertureElementObserver | `-activityDidEnd:` | 0x1c6108948 | 0x1c758ef40 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
-| SBActivitySystemApertureElementObserver | `-.cxx_destruct` | 0x1c61092d8 | 0x1c7593224 | IRRELEVANT: Live Activities (16.1, iPhone only: no Live Activity UI on iPad) |
+| SBActivitySystemApertureElementObserver | `-.cxx_destruct` | 0x1c61092d8 | 0x1c7593224 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBAlwaysOnPolicyCoordinator | `-activate` | 0x1c6319e14 | 0x1c77b9808 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
 | SBAlwaysOnTelemetryEmitter | `-dealloc` | 0x1c6163810 | 0x1c75ead5c | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
 | SBAlwaysOnTelemetryEmitter | `-completeIntializationAfterBLSStartup` | 0x1c6163874 | 0x1c75eadfc | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
 | SBAlwaysOnTelemetryEmitter | `-backlight:didChangeAlwaysOnEnabled:` | 0x1c6163978 | 0x1c75eaf40 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
-| SBAlwaysOnTelemetryEmitter | `-.cxx_destruct` | 0x1c61654d4 | 0x1c75ecff4 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
+| SBAlwaysOnTelemetryEmitter | `-.cxx_destruct` | 0x1c61654d4 | 0x1c75ecff4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBAlwaysOnTelemetryMetrics | `-accumulateRenderHistogram:` | 0x1c6449f10 | 0x1c78fcdb0 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
 | SBAlwaysOnTelemetryMetrics | `-dataForPowerlogEvent:` | 0x1c644a328 | 0x1c78fd594 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
-| SBAlwaysOnTelemetryMetrics | `-.cxx_destruct` | 0x1c644aa50 | 0x1c78fde68 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
+| SBAlwaysOnTelemetryMetrics | `-.cxx_destruct` | 0x1c644aa50 | 0x1c78fde68 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBAppSuggestionManager | `-_evaluateSuggestionUpdates:` | 0x1c5e371ec | 0x1c72a965c | IRRELEVANT: app prediction / suggestions |
 | SBAppSuggestionManager | `-_listenForNotifications` | 0x1c62dafdc | 0x1c7775a74 | IRRELEVANT: app prediction / suggestions |
 | SBAppSuggestionManager | `-_stopListeningForNotifications` | 0x1c62db120 | 0x1c7775b74 | IRRELEVANT: app prediction / suggestions |
 | SBAppVisibilityPreferences | `-update` | 0x1c5fabf8c | 0x1c7424330 | TRIAGE PENDING |
 | SBApplicationInfo | `-_loadFromProxy:` | 0x1c5fb416c | 0x1c742c7ac | IRRELEVANT: app info plist loading (boolForKey: for a new key; no windowing) |
 | SBAssistantController | `-assistantSession:viewWillAppearInWindowScene:` | 0x1c627abb0 | 0x1c7712e48 | IRRELEVANT: Siri |
-| SBAssistantController | `-.cxx_destruct` | 0x1c627cf1c | 0x1c77151c0 | IRRELEVANT: Siri |
+| SBAssistantController | `-.cxx_destruct` | 0x1c627cf1c | 0x1c77151c0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBAssistantGestureManager | `-_setupSystemDismissalGestures` | 0x1c6282fcc | 0x1c771b438 | IRRELEVANT: Siri |
 | SBAssistantSession | `-_viewWillAppear:` | 0x1c6191424 | 0x1c761acec | IRRELEVANT: Siri |
 | SBAudioRecordingManager | `-setNowRecordingAppForActiveAudioRecordingAttributions:callDescriptors:` | 0x1c64ea440 | 0x1c79a70b0 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
@@ -1285,7 +1285,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBCoverSheetPresentationManager | `-setLockScreenEnvironment:` | 0x1c61a3760 | 0x1c762ee4c | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetPresentationManager | `-secureAppOfTypeDidEnd:` | 0x1c61a5784 | 0x1c7630ff0 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetPresentationManager | `-zStackParticipant:updatePreferences:` | 0x1c61a5a90 | 0x1c76312fc | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
-| SBCoverSheetPresentationManager | `-.cxx_destruct` | 0x1c61a756c | 0x1c7633000 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
+| SBCoverSheetPresentationManager | `-.cxx_destruct` | 0x1c61a756c | 0x1c7633000 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBCoverSheetPrimarySlidingViewController | `-_createPanelWallpaperEffectViewIfNeeded` | 0x1c5e7e240 | 0x1c72f0d88 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetPrimarySlidingViewController | `-_beginTransitionFromAppeared:` | 0x1c5e80e8c | 0x1c72f3974 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetPrimarySlidingViewController | `-_endTransitionToAppeared:` | 0x1c5e86bfc | 0x1c72f971c | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
@@ -1298,7 +1298,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBCoverSheetSlidingViewController | `-_updatePositionViewForProgress:forPresentationValue:` | 0x1c5e821b8 | 0x1c72f4cc0 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetSlidingViewController | `-_studyLogForCompletionOfTransitionToPresented:` | 0x1c5e86dbc | 0x1c72f98f8 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetSlidingViewController | `-initWithContentViewController:canBePulledDown:canBePulledUp:dismissalPreemptingGestureRecognizer:` | 0x1c60c5854 | 0x1c7549f34 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
-| SBCoverSheetSlidingViewController | `-.cxx_destruct` | 0x1c60c7d30 | 0x1c754c4d0 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
+| SBCoverSheetSlidingViewController | `-.cxx_destruct` | 0x1c60c7d30 | 0x1c754c4d0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBCoverSheetSpotlightViewController | `-updatePresentationProgress:withOffset:presentationState:` | 0x1c63b58cc | 0x1c785ffa8 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCoverSheetSystemGesturesDelegate | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e52e18 | 0x1c72c5274 | EQUIVALENT: cover sheet / lock screen exists on the embedded display only: the 16.2 change replaces global lookups (mainDisplayManager / sharedInstance) by the window scene's, which is the embedded scene for these objects (external display cover sheet = SBExternalDisplayCoverSheet*) |
 | SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier | `-handleContinuousExposeIdentifiersChangedEvent:` | 0x1c6104180 | 0x1c758977c | PORTED already: hook in G1C.x:988 |
@@ -1310,17 +1310,17 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBDefaultImplementationsSwitcherModifier | `-frameForLayoutRole:inAppLayout:withBounds:` | 0x1c63df34c | 0x1c788a480 | PORTED already: 16.2 address cited in P1SW.m |
 | SBDefaultImplementationsSwitcherModifier | `-scaleForLayoutRole:inAppLayout:` | 0x1c63df6b8 | 0x1c788a930 | PORTED already: 16.2 address cited in P1SW.m |
 | SBDeveloperBuildExpirationTrigger | `-_coverSheetDidDismiss:` | 0x1c62e5c20 | 0x1c7781398 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
-| SBDeviceApplicationSceneView(ClassicSupport) | `-noteApplicationClassicPhoneSceneOrientationPreferenceChangingForUserAction:` | 0x1c62a4ca0 | 0x1c773ecdc | TRIAGE PENDING |
-| SBDeviceApplicationSceneView(ClassicSupport) | `-_createClassicWrapperViewIfNecessaryForHostView:` | 0x1c62a4da0 | 0x1c773ed90 | TRIAGE PENDING |
-| SBDeviceApplicationSceneView(ClassicSupport) | `-_configureSceneLiveHostView:` | 0x1c62a4f24 | 0x1c773ef38 | PORTED already: 16.2 address cited in G3.x |
-| SBDeviceApplicationSceneView(ClassicSupport) | `-_invalidateSceneLiveHostView:` | 0x1c62a4fa0 | 0x1c773f00c | PORTED already: 16.2 address cited in G3.x |
-| SBDeviceApplicationSceneView(ClassicSupport) | `-_transitionViewForHostView` | 0x1c62a4fe4 | 0x1c773f080 | TRIAGE PENDING |
+| SBDeviceApplicationSceneView(ClassicSupport) | `-noteApplicationClassicPhoneSceneOrientationPreferenceChangingForUserAction:` | 0x1c62a4ca0 | 0x1c773ecdc | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView(ClassicSupport) | `-_createClassicWrapperViewIfNecessaryForHostView:` | 0x1c62a4da0 | 0x1c773ed90 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView(ClassicSupport) | `-_configureSceneLiveHostView:` | 0x1c62a4f24 | 0x1c773ef38 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView(ClassicSupport) | `-_invalidateSceneLiveHostView:` | 0x1c62a4fa0 | 0x1c773f00c | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
+| SBDeviceApplicationSceneView(ClassicSupport) | `-_transitionViewForHostView` | 0x1c62a4fe4 | 0x1c773f080 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBDisplayManager(FBDisplayManager) | `-connectedIdentities` | 0x1c64d63ac | 0x1c79927a4 | TRIAGE PENDING |
 | SBElasticHUDViewController | `-elasticValueViewControllerNeedsDismissal:` | 0x1c5f6f468 | 0x1c73e5d9c | IRRELEVANT: volume / brightness HUD live-rendering assertion (no window management) |
 | SBElasticValueViewController | `-viewWillAppear:` | 0x1c60ccc74 | 0x1c7551428 | IRRELEVANT: volume / brightness HUD live-rendering assertion (no window management) |
 | SBElasticValueViewController | `-viewDidMoveToWindow:shouldAppearOrDisappear:` | 0x1c60cce40 | 0x1c75515fc | IRRELEVANT: volume / brightness HUD live-rendering assertion (no window management) |
 | SBElasticValueViewController | `-viewDidDisappear:` | 0x1c60cd0c8 | 0x1c755188c | IRRELEVANT: volume / brightness HUD live-rendering assertion (no window management) |
-| SBElasticValueViewController | `-.cxx_destruct` | 0x1c60d75d8 | 0x1c755bf3c | IRRELEVANT: volume / brightness HUD live-rendering assertion (no window management) |
+| SBElasticValueViewController | `-.cxx_destruct` | 0x1c60d75d8 | 0x1c755bf3c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBFocusModeAlwaysOnPolicy | `-activateAlwaysOnPolicy` | 0x1c633d224 | 0x1c77e12a4 | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
 | SBFocusModeAlwaysOnPolicy | `-_updateFromDNDState:` | 0x1c633d4b8 | 0x1c77e153c | IRRELEVANT: Always-On display (iPhone 14 Pro only) |
 | SBLayoutState(SBAppLayoutConversion) | `-appLayout` | 0x1c5e2a6bc | 0x1c729cfa4 | TRIAGE PENDING |
@@ -1334,7 +1334,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBLockElementViewProvider | `-leadingLock` | 0x1c5f60af4 | 0x1c73d6a00 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockElementViewProvider | `-sizeThatFitsSize:forProvidedView:inLayoutMode:` | 0x1c5f60db4 | 0x1c73d6cc4 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockElementViewProvider | `-_updateTrailingGlyph` | 0x1c5f61420 | 0x1c73d7308 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
-| SBLockElementViewProvider | `-.cxx_destruct` | 0x1c5f61628 | 0x1c73d7538 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
+| SBLockElementViewProvider | `-.cxx_destruct` | 0x1c5f61628 | 0x1c73d7538 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBLockScreenManager | `-_lockUI` | 0x1c5e87c28 | 0x1c72fa758 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockScreenManager | `-lockUIFromSource:withOptions:completion:` | 0x1c5eb04d8 | 0x1c732321c | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockScreenManager | `-_authenticationStateChanged:` | 0x1c5eb3dac | 0x1c7326b5c | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
@@ -1342,10 +1342,10 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBLockScreenManager | `-init` | 0x1c64e0494 | 0x1c799cb98 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockScreenManager | `-_setSystemApertureProudLockElementVisible:backlightState:withReason:` | 0x1c64e211c | 0x1c799e9f0 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockScreenManager | `-_shouldBeShowingLockElementForBacklightState:` | 0x1c64e24dc | 0x1c799ee80 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
-| SBLockScreenManager | `-.cxx_destruct` | 0x1c64e66e4 | 0x1c79a3104 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
+| SBLockScreenManager | `-.cxx_destruct` | 0x1c64e66e4 | 0x1c79a3104 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBLockScreenPreviewView | `-_setupDateViewWithOptions:` | 0x1c619be90 | 0x1c762574c | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLockScreenPreviewView | `-_layoutDateView` | 0x1c619c4f0 | 0x1c7625e1c | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
-| SBLockScreenPreviewView | `-.cxx_destruct` | 0x1c619c7fc | 0x1c7626188 | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
+| SBLockScreenPreviewView | `-.cxx_destruct` | 0x1c619c7fc | 0x1c7626188 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBLockScreenTemperatureWarningView | `-initWithFrame:` | 0x1c6343a34 | 0x1c77e82cc | IRRELEVANT: lock screen (embedded display only; no Stage Manager involvement) |
 | SBLoginAppContainerViewController | `-_reallyAcquireStatusBarAssertionIfNecessaryInitiallyVisible:` | 0x1c633e790 | 0x1c77e28d8 | IRRELEVANT: boot / user switch login UI |
 | SBLoginAppContainerViewController | `-_setupLoginScene` | 0x1c633e8a8 | 0x1c77e2a08 | IRRELEVANT: boot / user switch login UI |
@@ -1356,7 +1356,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBNotchedStatusBarProximityBacklightPolicy | `-proximitySensorManager:objectWithinProximityDidChange:` | 0x1c607fcc8 | 0x1c7502d84 | IRRELEVANT: proximity sensor / notch (iPhone only) |
 | SBNotchedStatusBarProximityBacklightPolicy | `-windowSceneDidConnect:` | 0x1c607fe80 | 0x1c7502f3c | IRRELEVANT: proximity sensor / notch (iPhone only) |
 | SBNotchedStatusBarProximityBacklightPolicy | `-condition:enablementDidChange:` | 0x1c60800d4 | 0x1c750315c | IRRELEVANT: proximity sensor / notch (iPhone only) |
-| SBNotchedStatusBarProximityBacklightPolicy | `-.cxx_destruct` | 0x1c6080420 | 0x1c750340c | IRRELEVANT: proximity sensor / notch (iPhone only) |
+| SBNotchedStatusBarProximityBacklightPolicy | `-.cxx_destruct` | 0x1c6080420 | 0x1c750340c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBPBDisplayItemLayoutAttributes | `-dictionaryRepresentation` | 0x1c62f0840 | 0x1c778cfac | EXCLUDED: protobuf persistence class |
 | SBPBDisplayItemLayoutAttributes | `-writeTo:` | 0x1c62f0fb8 | 0x1c778db80 | EXCLUDED: protobuf persistence class |
 | SBPBDisplayItemLayoutAttributes | `-copyWithZone:` | 0x1c62f1174 | 0x1c778de2c | EXCLUDED: protobuf persistence class |
@@ -1368,7 +1368,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBPowerAlertElement | `-initWithIdentifier:style:batteryPercentage:lowPowerModeEnabled:action:` | 0x1c605c728 | 0x1c74db988 | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
 | SBProximitySensorManager | `-initWithHIDInterface:hardwareDefaults:interfaceOrientationProvider:` | 0x1c6453c80 | 0x1c79084b0 | IRRELEVANT: proximity sensor / notch (iPhone only) |
 | SBProximitySensorManager | `-processHIDEvent:` | 0x1c64541cc | 0x1c7908a10 | IRRELEVANT: proximity sensor / notch (iPhone only) |
-| SBProximitySensorManager | `-.cxx_destruct` | 0x1c6454ca4 | 0x1c790977c | IRRELEVANT: proximity sensor / notch (iPhone only) |
+| SBProximitySensorManager | `-.cxx_destruct` | 0x1c6454ca4 | 0x1c790977c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBRequestSystemApertureElementSuppressionEventResponse | `-descriptionBuilderWithMultilinePrefix:` | 0x1c6103c3c | 0x1c7589150 | EXCLUDED: description / debug text only |
 | SBRestartManager | `-initializeAndRunStartupTransition:` | 0x1c640569c | 0x1c78b26d4 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
 | SBRestartManagerWorkspaceDataSource | `-activePrimaryApplicationBundleID` | 0x1c61627c4 | 0x1c75e9d10 | IRRELEVANT: no windowing / display behaviour (audio recording indicator telemetry, developer build, restart, power log, wake animation) |
@@ -1377,13 +1377,13 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBRingerAlertElement | `-_updateVolumeSliderAnimated:` | 0x1c6451e04 | 0x1c7906104 | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
 | SBRingerAlertElement | `-_updateStateWithTransitionType:` | 0x1c6451e3c | 0x1c7906190 | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
 | SBRingerAlertElement | `-_shakeRingerBell` | 0x1c64528ac | 0x1c79068dc | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
-| SBRingerAlertElement | `-.cxx_destruct` | 0x1c6452b5c | 0x1c79074ec | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
+| SBRingerAlertElement | `-.cxx_destruct` | 0x1c6452b5c | 0x1c79074ec | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBRingerControl | `-activateRingerHUD:withInitialVolume:fromSource:` | 0x1c611bdd4 | 0x1c75a6048 | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
 | SBRingerVolumeSliderView | `-initWithFrame:` | 0x1c5ebdc68 | 0x1c7330ab8 | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
 | SBRingerVolumeSliderView | `-layoutSubviews` | 0x1c5ebe14c | 0x1c7331010 | IRRELEVANT: ringer / power HUD elements of the Dynamic Island (iPhone only) |
 | SBSOSClawGestureObserver | `-_initWithSOSManager:workspace:` | 0x1c5ffa884 | 0x1c74750f0 | IRRELEVANT: Emergency SOS button gesture (iPhone only) |
 | SBSOSClawGestureObserver | `-noteButtonPress:isDown:` | 0x1c5ffa9e4 | 0x1c7475268 | IRRELEVANT: Emergency SOS button gesture (iPhone only) |
-| SBSOSClawGestureObserver | `-.cxx_destruct` | 0x1c5ffb87c | 0x1c74763f0 | IRRELEVANT: Emergency SOS button gesture (iPhone only) |
+| SBSOSClawGestureObserver | `-.cxx_destruct` | 0x1c5ffb87c | 0x1c74763f0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSimScrollToIconTestRecipe | `-_simulateScrollToIconWithDisplayIdentifier:` | 0x1c630d128 | 0x1c77ab590 | IRRELEVANT: internal test recipes |
 | SBSnapshotTestRecipe | `-_sendRequestWithType:` | 0x1c60b9b54 | 0x1c753e21c | IRRELEVANT: internal test recipes |
 | SBSwitcherModifier(SharedModifierUtilities) | `-overlappingModelForAppLayout:` | 0x1c61c4450 | 0x1c7652fc4 | PORTED already: 16.2 address cited in G1C.x |
@@ -1411,7 +1411,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSystemApertureContainerView | `+_defaultCornerRadiusForBounds:inWindow:` | 0x1c5f689f8 | 0x1c73def5c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureContainerView | `-_cornerRadiusForFrame:` | 0x1c5f68a84 | 0x1c73defb4 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureContainerView | `-_updateKeyLineStyle` | 0x1c5f68e94 | 0x1c73df6e4 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureContainerView | `-.cxx_destruct` | 0x1c5f69978 | 0x1c73e036c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureContainerView | `-.cxx_destruct` | 0x1c5f69978 | 0x1c73e036c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemApertureController | `-initWithWindowScene:` | 0x1c65012b4 | 0x1c79be310 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureController | `-createHighLevelWindowSceneWithDisplayConfiguration:` | 0x1c6501374 | 0x1c79be634 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureController | `-createSuperHighLevelCurtainWindowSceneWithDisplayConfiguration:` | 0x1c6501470 | 0x1c79be6d4 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
@@ -1419,14 +1419,14 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSystemApertureController | `-createSuperHighLevelCurtainWithWindowScene:` | 0x1c6501c98 | 0x1c79beef0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureController | `-systemApertureViewController:containsAnyContent:` | 0x1c6501f0c | 0x1c79bf424 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureController | `-_configureLegacyStatusBarPillElementProviderIfNecessary` | 0x1c6502834 | 0x1c79bfc80 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureController | `-.cxx_destruct` | 0x1c65028ec | 0x1c79bfd44 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureController | `-.cxx_destruct` | 0x1c65028ec | 0x1c79bfd44 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemApertureController(Test) | `-stateDump` | 0x1c65029b4 | 0x1c79bfe30 | TRIAGE PENDING |
 | SBSystemApertureElementAuthority | `-elementsOrderedByPromotionFromTemporallyOrderedElements:withPreviousOrdering:` | 0x1c6292a0c | 0x1c772c024 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemAperturePresentableManager | `-_invalidateElement:withReason:` | 0x1c5f92d1c | 0x1c740a5e8 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemAperturePresentableManager | `-_noteElementDidInvalidate:reason:` | 0x1c5f93248 | 0x1c740ab28 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureProximityBacklightPolicy | `-proximitySensorManager:objectWithinProximityDidChange:` | 0x1c640d3dc | 0x1c78ba96c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureProximityBacklightPolicy | `-_scheduleBacklightFactorToZeroForTouchWithinSystemAperture` | 0x1c640dc84 | 0x1c78bb46c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureProximityBacklightPolicy | `-.cxx_destruct` | 0x1c640dde0 | 0x1c78bb5f0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureProximityBacklightPolicy | `-.cxx_destruct` | 0x1c640dde0 | 0x1c78bb5f0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemApertureSceneElement | `-initWithScene:statusBarStyleOverridesSuppresser:readyForPresentationHandler:` | 0x1c645dcac | 0x1c79112f0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureSceneElement | `-invalidate` | 0x1c645e134 | 0x1c791177c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureSceneElement | `-dealloc` | 0x1c645e35c | 0x1c79119d0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
@@ -1458,19 +1458,19 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSystemApertureSceneElement | `-_updateMutableSceneSettings:withParameters:` | 0x1c64633e8 | 0x1c79182a4 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureSceneElement | `-_updateReadyForPresentationIfNeeded` | 0x1c64634ec | 0x1c79183b0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureSceneElement | `-_acquireOrUpdateAppStatusBarSessionsAssertionIfNeeded` | 0x1c64635d0 | 0x1c7918460 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureSceneElement | `-.cxx_destruct` | 0x1c6463f00 | 0x1c7919110 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureSceneElement | `-.cxx_destruct` | 0x1c6463f00 | 0x1c7919110 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemApertureSettings | `-setDefaultValues` | 0x1c63c6d98 | 0x1c78720ec | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureSettings | `+settingsControllerModule` | 0x1c63c8258 | 0x1c78736ac | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElement | `-leadingView` | 0x1c61b453c | 0x1c76421f0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElement | `-activeTintColor` | 0x1c61b4854 | 0x1c7642938 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElement | `-activeSymbolName` | 0x1c61b4bec | 0x1c7642cd8 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureStatusBarPillElement | `-.cxx_destruct` | 0x1c61b4e30 | 0x1c7642fa8 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureStatusBarPillElement | `-.cxx_destruct` | 0x1c61b4e30 | 0x1c7642fa8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemApertureStatusBarPillElementProvider | `-init` | 0x1c62e0a74 | 0x1c777b52c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElementProvider | `-invalidate` | 0x1c62e0ff8 | 0x1c777bf1c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElementProvider | `-setCurrentStyleOverrides:` | 0x1c62e128c | 0x1c777c758 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElementProvider | `-_updateActiveElementIfNeededForReason:` | 0x1c62e1360 | 0x1c777c9cc | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureStatusBarPillElementProvider | `-_updateActiveElementIfNeededWithLayoutState:reason:` | 0x1c62e14f4 | 0x1c777d1c0 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureStatusBarPillElementProvider | `-.cxx_destruct` | 0x1c62e200c | 0x1c777d770 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureStatusBarPillElementProvider | `-.cxx_destruct` | 0x1c62e200c | 0x1c777d770 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemApertureViewController | `-initWithWindowScene:` | 0x1c62036a4 | 0x1c76924d8 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureViewController | `-minimumSensorRegionFrame` | 0x1c6203bec | 0x1c7692a38 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureViewController | `-isTransitionTargetForSceneIdentifier:bundleIdentifier:` | 0x1c6203d30 | 0x1c7692ba8 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
@@ -1513,7 +1513,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 27, EXCLUDED 18, IRRELEVANT 6, OPEN 2, PEND
 | SBSystemApertureViewController | `-_axRegisterForZoomUpdatesIfNecessary` | 0x1c6211ab0 | 0x1c76a1d8c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureViewController | `-_newContainerViewHousingSensorRegion:` | 0x1c6211e30 | 0x1c76a2468 | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
 | SBSystemApertureViewController | `-_updateStatusBarAvoidanceFrameWithAnimationSettings:` | 0x1c6212060 | 0x1c76a26ac | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
-| SBSystemApertureViewController | `-.cxx_destruct` | 0x1c6212b38 | 0x1c76a326c | IRRELEVANT: Dynamic Island / system aperture (iPhone 14 Pro hardware only; iPad has no aperture) |
+| SBSystemApertureViewController | `-.cxx_destruct` | 0x1c6212b38 | 0x1c76a326c | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSystemServiceServer | `-noteDidReceiveMessage:withType:fromClient:` | 0x1c62f91d0 | 0x1c77964d0 | TRIAGE PENDING |
 | SBUIController(SBUIAnimationController) | `+statusBarFrameForDeviceApplicationSceneHandle:displayConfiguration:interfaceOrientation:statusBarStyleRequest:withinBounds:inReferenceSpace:` | 0x1c63166d8 | 0x1c77b523c | TRIAGE PENDING |
 | SBUIStartupFromBlackAnimationController | `-_prepareAnimation` | 0x1c6388af8 | 0x1c78317e8 | IRRELEVANT: boot / user switch login UI |
