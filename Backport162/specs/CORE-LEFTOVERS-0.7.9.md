@@ -182,3 +182,19 @@ Log lines: `g1c: ids16supp: the 16.0 transition blocks verified at ...` (once), 
 and the `GLITCH VC ids update` lines of that switch show one update at phase 2 with the new stage instead of an interim and a final one. (2) Close an app with the home swipe, open an app from the home screen, pinch / zoom: identical to the build without this switch
 (no `ids16supp` line for them). If anything in (2) differs, or the strip fails to update after an app-to-app switch, create `Backport162.off.g1c_ids16supp` and report.
 **Unproven:** that the OPEN-ISSUES 6 / 7 flicker is caused by this (the review's hypothesis, supported by the log excerpt above); the suppression is logged and switchable so the next device log decides.
+
+## 5. Crash: stack overflow when a window is resized from full screen (found on device, build eb694cd)  - fixed
+
+**Evidence.** crash `5.crash` (pid 72981, SIGSEGV in `___chkstk_darwin`, main thread stack exhausted), log 00:40:24: `p1: txn ... created (16.2 mode), type 10` (live window resize) followed by 88 nested `p1: txn ... update` lines in 19 ms
+without a single `layout transaction for the request` line (that line is logged after `addChildTransaction:`, which never returned) and a `transition end src=11 modes 3->3` between every two updates. The five P1 frames of the crash file are (symbolised
+against the dylib of the CI artifact of eb694cd) `P1_V1` <- `P1_Run` (addChildTransaction:) <- `P1_HandleUpdate` <- `P1_MgrUpdate` <- `P1_VCModUpdate`, with BaseBoard BSTransaction frames between them.
+**Root cause.** `P1_WorkspaceRequest` copied `setInLiveResize:` from `[request isLiveResize]`. The disassembly (16.0 0x1c6036318, 16.2 0x1c74b176c) sends `-isLiveResize` to the TRANSACTION (self): NO in `SBFluidSwitcherGestureWorkspaceTransaction`,
+YES in `SBLiveWindowResizeGestureWorkspaceTransaction` (type 10). The SBSwitcherTransitionRequest has no such selector, so the update was treated as a normal Stage Manager window drag update (`chamois && !isInLiveResize`): a scene layout transaction per
+update. Its synchronous completion made the resize modifier ask for the next update (`gestureHandlingModifierRequestsUpdate:` -> M1) from inside `addChildTransaction:`: unbounded nesting. Resize gestures did not use the cross-display
+machinery by design; they only went down the wrong branch.
+**Fix.** (a) `[self isLiveResize]` as in 16.0 / 16.2 (the root fix: resize updates only update the scene sizes, as before P1). (b) Re-entrancy guard, switch `p1_reentry`: an update that arrives while an update of the same transaction runs on this thread is
+not nested; the newest request is kept and replayed after the outer update returns (max 3 replays), logged as `p1: re-entrant update refused (depth N, #n)`; a nested complete is refused with `p1: re-entrant complete refused`. (c) The other hand-offs
+(completion forwarding in `P1_TxnDidComplete`, `p1_modupdate`, ancillary completion) were re-read: completions run once from the animation controller completion, nothing in them starts a gesture update; the guard covers the only synchronous
+update -> layout transaction -> update cycle.
+**Test.** Resize by the corner from full screen (the case of the crash), resize a window on the external monitor, resize a stage window: no `p1: re-entrant update refused` line should appear (it is the last line of defence); a normal window drag across
+displays still shows `p1: txn ... update` / ancillary / `taken over by the scene manager`. Kill file for the guard only: `Backport162.off.p1_reentry`.

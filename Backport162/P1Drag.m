@@ -204,7 +204,10 @@ static id P1_WorkspaceRequest(id self, SEL _cmd, id request, id manager, id labe
     }
     id actx = P1_S0(wreq, "applicationContext");
     P1_VL(actx, "setRequestedFloatingConfiguration:", P1_L0(request, "floatingConfiguration"));
-    P1_VB(actx, "setInLiveResize:", P1_B0(request, "isLiveResize"));
+    // ROOT CAUSE of the stack overflow when a window is resized from full screen (specs/CORE-LEFTOVERS-0.7.9.md section 5): 16.0 0x1c6036318 / 16.2 0x1c74b176c send -isLiveResize to the TRANSACTION (self: NO in
+    // SBFluidSwitcherGestureWorkspaceTransaction, YES in SBLiveWindowResizeGestureWorkspaceTransaction), not to the SBSwitcherTransitionRequest (which has no such selector, so every update looked like a
+    // normal window drag update and ran a layout transaction per update; its completion made the resize modifier request the next update synchronously, nested inside addChildTransaction:).
+    P1_VB(actx, "setInLiveResize:", P1_B0(self, "isLiveResize"));
     P1_ActivateAll(P1_S0(wreq, "applicationContext"));
     P1_V1(P1_S0(wreq, "applicationContext"), "setDelegate:", self);
     return wreq;
@@ -502,8 +505,41 @@ static BOOL P1_KeepForeground(id self, SEL _cmd, id txn, id scene, id __autorele
 }
 
 // ------------------------------------------------------------------------------------------------ handleTransitionRequestForGestureUpdate:fromGestureManager: (16.2 0x1c74afba4; 16.0 updateGestureWithTransitionRequest: 0x1c6034b4c)
+static void P1_HandleUpdateBody(id self, SEL _cmd, id request, id manager);
+// Re-entrancy guard (logged last line, never the only fix): an update that arrives while the update of this thread is still running (the layout transaction of the outer update completes synchronously and
+// the modifier asks for the next update from inside addChildTransaction:) is not nested. The newest one is kept and run when the outer update returns, at most P1_MAXREPLAY times in a row.
+static __thread int tUpdDepth;
+static __thread __unsafe_unretained id tUpdTxn;
+static char kP1PendReq, kP1PendMgr;
+#define P1_MAXREPLAY 3
 static void P1_HandleUpdate(id self, SEL _cmd, id request, id manager) {
     if (!P1_IsNew(self)) { P1_V1(self, "updateGestureWithTransitionRequest:", request); return; }
+    if (tUpdDepth > 0 && tUpdTxn == self && BP_OnName("p1_reentry")) {
+        static unsigned long refused;
+        refused++;
+        if (refused <= 5 || refused % 100 == 0) BP_Log(@"p1: re-entrant update refused (depth %d, #%lu), the newest request is kept and runs when the outer update returns (txn %p)", tUpdDepth, refused, (__bridge void *)self);
+        objc_setAssociatedObject(self, &kP1PendReq, request, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(self, &kP1PendMgr, manager, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
+    id prevTxn = tUpdTxn;
+    tUpdDepth++; tUpdTxn = self;
+    P1_HandleUpdateBody(self, _cmd, request, manager);
+    for (int i = 0; i < P1_MAXREPLAY; i++) {
+        id pr = objc_getAssociatedObject(self, &kP1PendReq), pm = objc_getAssociatedObject(self, &kP1PendMgr);
+        if (!pr) break;
+        objc_setAssociatedObject(self, &kP1PendReq, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(self, &kP1PendMgr, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        P1_HandleUpdateBody(self, _cmd, pr, pm);
+    }
+    if (objc_getAssociatedObject(self, &kP1PendReq)) {
+        BP_Log(@"p1: update replay limit (%d) reached for txn %p, the pending request is dropped (the next gesture update carries the state)", P1_MAXREPLAY, (__bridge void *)self);
+        objc_setAssociatedObject(self, &kP1PendReq, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(self, &kP1PendMgr, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    tUpdDepth--; tUpdTxn = prevTxn;
+}
+static void P1_HandleUpdateBody(id self, SEL _cmd, id request, id manager) {
     id sc = P1_S0(manager, "switcherController");
     if (BP_LogEnabled()) BP_Log(@"p1: txn %p update from the manager of %@ (own display %@), request layout %@", (__bridge void *)self, P1_Disp(sc), P1_Disp(P1_S0(P1_S0(self, "switcherViewController"), "switcherController")), P1_S0(request, "appLayout"));
     id wreq = P1_WorkspaceRequest(self, 0, request, manager, @"UpdateFluidSwitcherGestureAction");
@@ -553,8 +589,17 @@ static void P1_HandleUpdate(id self, SEL _cmd, id request, id manager) {
 }
 
 // ------------------------------------------------------------------------------------------------ handleTransitionRequestForGestureComplete:fromGestureManager: (16.2 0x1c74b0490; 16.0 completeGestureWithTransitionRequest: 0x1c603530c)
+static void P1_HandleCompleteBody(id self, SEL _cmd, id request, id manager);
+static __thread __unsafe_unretained id tCompTxn;
 static void P1_HandleComplete(id self, SEL _cmd, id request, id manager) {
     if (!P1_IsNew(self)) { P1_V1(self, "completeGestureWithTransitionRequest:", request); return; }
+    if (tCompTxn == self && BP_OnName("p1_reentry")) { BP_Log(@"p1: re-entrant complete refused (txn %p), the outer completion is still running", (__bridge void *)self); return; }
+    id prev = tCompTxn;
+    tCompTxn = self;
+    P1_HandleCompleteBody(self, _cmd, request, manager);
+    tCompTxn = prev;
+}
+static void P1_HandleCompleteBody(id self, SEL _cmd, id request, id manager) {
     id appLayout = P1_S0(request, "appLayout");
     long long mode = P1_L0(request, "unlockedEnvironmentMode");
     long long fcfg = P1_L0(request, "floatingConfiguration");
