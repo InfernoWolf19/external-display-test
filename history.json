@@ -1,12 +1,4 @@
 {
- "0.7.5+196.a8aca00": {
-  "date": "2026-10-18T04:37:18Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+196.a8aca00_iphoneos-arm64.deb",
-  "run": 196,
-  "sha": "a8aca00dcc099180c7466e1629c2df7ad3ae5512",
-  "subject": "G3: zoom title hook: %orig; return; on separate lines (Logos drops th\u2026",
-  "version": "0.7.5+196.a8aca00"
- },
  "0.7.5+197.1ec6584": {
   "date": "2026-10-18T04:41:12Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+197.1ec6584_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "0e17444691de427b042b7a3188d3b79c77f6cb0e",
   "subject": "Y10Pip: PiP portal window level, Stage Manager auto PiP candidate among all previous windows, morph to PiP from the window's own frame, PiP stash assertion follows its display's layout transitions (switches y10_portallevel, y10_autopip, y10_morphframe, y10_stashscene); DELTA-SWEEP verdicts for display plumbing and PiP rows",
   "version": "0.7.9+265.0e17444"
+ },
+ "0.7.9+266.80a95ef": {
+  "date": "2026-10-25T15:50:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+266.80a95ef_iphoneos-arm64.deb",
+  "run": 266,
+  "sha": "80a95effcc4722823043d6b79b8bf5f0517184ae",
+  "subject": "Y11Modifiers: entity removal transitions move only the removed window under Stage Manager, tap requests carry the tapped item in shelf / peek handlers (switches y11_removal, y11_tapreq); DELTA-SWEEP verdicts for the switcher modifier rows",
+  "version": "0.7.9+266.80a95ef"
  }
 }
