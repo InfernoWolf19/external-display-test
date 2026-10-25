@@ -1,12 +1,4 @@
 {
- "0.7.5+201.65690f3": {
-  "date": "2026-10-20T19:10:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+201.65690f3_iphoneos-arm64.deb",
-  "run": 201,
-  "sha": "65690f3f4f74b8c33f08d13436f4a9d65ac6f304",
-  "subject": "G1C: comment fix: the 16.2 icon-zoom / PiP-restore creators are ported in G1B.x (review note, no code change)",
-  "version": "0.7.5+201.65690f3"
- },
  "0.7.5+202.2e619c0": {
   "date": "2026-10-20T19:12:27Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+202.2e619c0_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "92b55af07440f7f0947f12f4b7a0610481b0c633",
   "subject": "p1_orient: the layout state orientation replaces the per-element one only when it agrees with the switcher window shape (all logged layout states say Portrait, also for the landscape monitor); drag failure analysis and shadow reasoning written up",
   "version": "0.7.9+270.92b55af"
+ },
+ "0.7.9+271.e105de9": {
+  "date": "2026-10-25T20:35:31Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+271.e105de9_iphoneos-arm64.deb",
+  "run": 271,
+  "sha": "e105de9a7bc6954b66dc922f16c1b64dd880ce18",
+  "subject": "P5 step 2: while a pointer button is held, a pointer move located outside the window of its own scene no longer flips the active pointer display (switch p5_holdflip, logged); device log S/u6/3 shows 170 flips in 2 s from the pinned route",
+  "version": "0.7.9+271.e105de9"
  }
 }
