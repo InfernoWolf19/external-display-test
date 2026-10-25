@@ -1,12 +1,4 @@
 {
- "0.7.5+197.1ec6584": {
-  "date": "2026-10-18T04:41:12Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+197.1ec6584_iphoneos-arm64.deb",
-  "run": 197,
-  "sha": "1ec6584e7d894b7d4f724357dcc4c6269fe7ba1a",
-  "subject": "G4B migrate_stage: windows of the extended display's current stage go\u2026",
-  "version": "0.7.5+197.1ec6584"
- },
  "0.7.5+198.51b4c69": {
   "date": "2026-10-20T14:07:48Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+198.51b4c69_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "80a95effcc4722823043d6b79b8bf5f0517184ae",
   "subject": "Y11Modifiers: entity removal transitions move only the removed window under Stage Manager, tap requests carry the tapped item in shelf / peek handlers (switches y11_removal, y11_tapreq); DELTA-SWEEP verdicts for the switcher modifier rows",
   "version": "0.7.9+266.80a95ef"
+ },
+ "0.7.9+267.dcef91c": {
+  "date": "2026-10-25T15:58:13Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+267.dcef91c_iphoneos-arm64.deb",
+  "run": 267,
+  "sha": "dcef91c55c1234f98e36c9b40fa957b4b51f80f8",
+  "subject": "Y12Dock: the floating dock of a display decides with its own display's environment mode, dock window stays visible while the dock library popover is open (switches y12_dockmode, y12_dockwin); DELTA-SWEEP verdicts for floating dock and window rows",
+  "version": "0.7.9+267.dcef91c"
  }
 }
