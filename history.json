@@ -1,12 +1,4 @@
 {
- "0.7.5+194.2ba62f2": {
-  "date": "2026-10-18T00:49:59Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+194.2ba62f2_iphoneos-arm64.deb",
-  "run": 194,
-  "sha": "2ba62f261168b7e8cb28d9995889b444a531dfa7",
-  "subject": "G3C: Zoom on a stage with several windows applied the old attributes \u2026",
-  "version": "0.7.5+194.2ba62f2"
- },
  "0.7.5+196.a8aca00": {
   "date": "2026-10-18T04:37:18Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+196.a8aca00_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "d5863336ad571e782915674856a11cd08df8fec2",
   "subject": "G3B: -[SBWindowScene medusaHostedKeyboardWindowController] (16.2 0x1c77f80e4) answers the per-scene hosted keyboard window controller, read by P1VC.m (switch kbmedusa)",
   "version": "0.7.9+264.d586333"
+ },
+ "0.7.9+265.0e17444": {
+  "date": "2026-10-25T15:41:25Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+265.0e17444_iphoneos-arm64.deb",
+  "run": 265,
+  "sha": "0e17444691de427b042b7a3188d3b79c77f6cb0e",
+  "subject": "Y10Pip: PiP portal window level, Stage Manager auto PiP candidate among all previous windows, morph to PiP from the window's own frame, PiP stash assertion follows its display's layout transitions (switches y10_portallevel, y10_autopip, y10_morphframe, y10_stashscene); DELTA-SWEEP verdicts for display plumbing and PiP rows",
+  "version": "0.7.9+265.0e17444"
  }
 }
