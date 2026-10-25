@@ -254,6 +254,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y4_widgetfocus | (Y4Home.x) widget gallery: the home screen window steals keyboard focus while it is up and becomes key (16.2), assertion released when it goes away |
 | y5_sbpool | (Y5Apps.x) a window's status bar is recycled into the reuse pool it came from (window dragged to the other display), new status bars get the pool's screen as target screen (16.2) |
 | y5_classicsize | (Y5Apps.x) iPhone-only (classic mode) app launch size table is used on the external display too (16.0: display bounds there) |
+| y6_portal | (Y6Portal.x) cross display window drag: the display under the pointer shows a live copy (CA portal, overlay type 4) of the window being dragged from the other display (16.2); without it the window appears only at the drop |
+| y6_alwayslive | (Y6Portal.x) always-live live content overlays are sized with their own display's screen bounds (16.0: the main screen) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
