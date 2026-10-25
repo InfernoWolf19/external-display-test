@@ -1,12 +1,4 @@
 {
- "0.7.5+187.5010f0e": {
-  "date": "2026-10-17T23:34:05Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+187.5010f0e_iphoneos-arm64.deb",
-  "run": 187,
-  "sha": "5010f0ed1d4265fc114da4413437da022feb0778",
-  "subject": "G2H: fade the layer that really draws the window shadow (SBFView r 70\u2026",
-  "version": "0.7.5+187.5010f0e"
- },
  "0.7.5+188.32e50c5": {
   "date": "2026-10-17T23:34:18Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+188.32e50c5_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "eb694cd5704f8a64fab959008d36230cd8030ef6",
   "subject": "Y5Apps: status bar goes back into the reuse pool it came from (window dragged between displays), pool target screen, classic (iPhone-only) launch size table on every display (switches y5_sbpool, y5_classicsize); DELTA-SWEEP status bar / app verdicts",
   "version": "0.7.9+258.eb694cd"
+ },
+ "0.7.9+259.7dd10ca": {
+  "date": "2026-10-25T15:03:57Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+259.7dd10ca_iphoneos-arm64.deb",
+  "run": 259,
+  "sha": "7dd10ca8af563c68cb6329fc03109415e35a2ef4",
+  "subject": "Y6Portal: cross display window drag shows a live portal copy on the display under the pointer (portaled overlay creator, newPortaledLiveContentOverlayView, liveContentOverlayForAppLayout:, type 4 removal), always-live overlay size per display (switches y6_portal, y6_alwayslive)",
+  "version": "0.7.9+259.7dd10ca"
  }
 }
