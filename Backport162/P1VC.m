@@ -353,6 +353,49 @@ static id PV_Subtitle(id self, SEL _cmd) {
     return label;
 }
 
+// ------------------------------------------------------------------------------------------------ p1_ctrend: decisive per container line at the end of every layout transition
+// (specs/CORE-LEFTOVERS-0.7.9.md 5c, blank window analysis). One line per container whose state differs from its previous line: the scene handle and its scene, the content state, whether
+// the scene's display (settings) is the display of the window scene that holds the container (a mismatch = a container for a scene that the OTHER display's scene manager owns, the ghost
+// that a missed complete leaves behind, p1_endbcast), whether the container view has a window, the context id of the first CALayerHost below it (0 = the container shows no hosted
+// context) and the source of a portal view below it (Y6 live copy). Logging only; nothing is changed. Kill file Backport162.off.p1_ctrend.
+static IMP sCtrEnd;
+static char kPVLastCtr;
+static unsigned PV_U0(id o, const char *s) { SEL x = sel_registerName(s); return PV_Resp(o, x) ? ((unsigned (*)(id, SEL))objc_msgSend)(o, x) : 0; }
+static void PV_Walk(id view, int depth, unsigned *ctx, int *hosts, NSMutableString *portal) {
+    if (!view || depth > 10) return;
+    id layer = PV_S0(view, "layer");
+    if ([NSStringFromClass([layer class]) containsString:@"LayerHost"]) { if (!*ctx) *ctx = PV_U0(layer, "contextId"); (*hosts)++; }
+    if ([NSStringFromClass([view class]) containsString:@"PortalView"]) {
+        id src = PV_S0(view, "sourceView");
+        [portal appendFormat:@"%@%p(window %d)", portal.length ? @"," : @"", (__bridge void *)src, (int)(PV_S0(src, "window") != nil)];
+    }
+    id subs = PV_S0(view, "subviews");
+    if ([subs conformsToProtocol:@protocol(NSFastEnumeration)]) for (id sv in (id<NSFastEnumeration>)subs) PV_Walk(sv, depth + 1, ctx, hosts, portal);
+}
+static void PV_ContainerEnd(id self, SEL _cmd, id coordinator, id ctx) {
+    ((void (*)(id, SEL, id, id))sCtrEnd)(self, _cmd, coordinator, ctx);
+    if (!BP_LogEnabled() || !BP_OnName("p1_ctrend")) return;
+    id handle = PV_Ivar(self, "_deviceApplicationSceneHandle");
+    if (!handle) return;
+    id scene = PV_S0(handle, "sceneIfExists");
+    id settings = PV_S0(scene, "settings");
+    id sdi = PV_S0(settings, "sb_displayIdentityForSceneManagers") ?: PV_S0(settings, "displayIdentity");
+    id view = PV_S0(self, "view");
+    id win = PV_S0(view, "window");
+    id cdi = PV_S0(PV_S0(win, "windowScene"), "_fbsDisplayIdentity");
+    unsigned cid = 0; int hosts = 0;
+    NSMutableString *portal = [NSMutableString string];
+    PV_Walk(view, 0, &cid, &hosts, portal);
+    NSString *same = (sdi && cdi) ? ([sdi isEqual:cdi] ? @"same" : @"MISMATCH") : @"unknown";
+    NSString *line = [NSString stringWithFormat:@"item %@ handle %p scene %p contentState %lld ready %d | scene display %@ container display %@ -> %@ | view window %d hidden %d alpha %.2f | CALayerHost ctx %u (x%d) | portal source %@ | error %d",
+        PV_S0(handle, "sceneIdentifier"), (__bridge void *)handle, (__bridge void *)scene, PV_L0(scene, "contentState"), (int)PV_B0(handle, "isContentReady"), sdi ?: @"nil", cdi ?: @"nil", same,
+        (int)(win != nil), (int)PV_B0(view, "isHidden"), PV_D0(view, "alpha"), cid, hosts, portal.length ? portal : @"none", (int)(PV_S0(ctx, "error") != nil)];
+    NSString *last = objc_getAssociatedObject(self, &kPVLastCtr);
+    if ([last isEqualToString:line]) return;
+    objc_setAssociatedObject(self, &kPVLastCtr, line, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    BP_Log(@"p1ctr: container transition end: %@", line);
+}
+
 void P1VC_Setup(void) {
     const char *V = "SBFluidSwitcherViewController", *I = "SBFluidSwitcherItemContainer", *F = "SBFluidSwitcherItemContainerFooterView", *L = "SBFluidSwitcherItemContainerLayer";
     sKeys = PV_Replace(V, "performKeyboardShortcutAction:", (IMP)PV_Keys);
@@ -369,6 +412,7 @@ void P1VC_Setup(void) {
     sFooterTap = PV_Replace(F, "_handleTapGestureRecognizer:", (IMP)PV_FooterTap);
     sSubtitle = PV_Replace(F, "_makeSubtitleLabel", (IMP)PV_Subtitle);
     sLayerTransform = PV_Replace(L, "setTransform:", (IMP)PV_LayerTransform);
+    sCtrEnd = PV_Replace("SBMedusaDecoratedDeviceApplicationSceneViewController", "layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:", (IMP)PV_ContainerEnd);
     BP_Log(@"p1vc: installed");
 }
 

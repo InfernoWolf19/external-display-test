@@ -261,3 +261,23 @@ Findings:
    rendering of layers with CALayer shadows and no shadow path is a known source of flickering / lopsided shadows. 16.2 compensates through the per-display VC flags (`p1_asyncdrag`, M7), which are ported, but whether that is complete on 16.0 hardware paths is unproven.
 Tests, cheapest first (each is one kill file in `<jbroot>/tmp/`, remove it again afterwards): (a) rotate the iPad with one windowed stage window: if the shadow is right, the orientation guard was the cause; (b) `Backport162.off.p1_asynceval`; (c) `Backport162.off.p1_orient`;
 (d) `Backport162.off.p1_defroles` (only for stages with two or more windows). Send the log with `p1sw:` lines.
+
+## 9. Blank windows after a drag back (u7 data, build 9fb6153 .. 8728cf0)
+
+### 9.1 What a blank window shows (IMG_4264.heic, RPReplay 4093 / 4129)
+The Settings window (com.apple.Preferences) on the extended display after it was dragged to the iPad: a normal window frame with title bar, the left half black, the right half white, row separators of the Settings table drawn over it, no content, no spinner. It is the placeholder of an item container whose scene is not hosted: the container exists, its host view has no remote context.
+
+### 9.2 Which container [PROVEN from the log, 7.log 21:35:14-16, the same in 4 of 8 drops]
+Drag 0x121d17900 (type 9, started on the extended display, window dropped on the iPad):
+- 15.936 update of Main: ancillary request for AirPlay ("1 window moved away to Main"), scene `sceneID:com.apple.Preferences-default` taken over by the scene manager of Main (15.947).
+- 16.347 `complete from the manager of Main`. The final root transaction of that complete finishes synchronously (`animation done` and `coordinator clears the gesture transaction` both at 16.388), the completion block 0x1c74af778 calls `finishWithCompletionType:`.
+- There is NO `complete from the manager of AirPlay` for this drag. The end of a drag is broadcast to the controllers of all displays one after the other (G1D.x `fluidSwitcherGestureManager:didEndGesture:`, 16.2 block 0x1c76d7d18); the manager of the extended display calls `completeGesture...` after the transaction was cleared from it, `P1_MgrComplete` finds no `activeGestureTransaction` and the 16.0 body does nothing.
+- 16.414 `GUARD(end) gesture root ... 'Gesture' child still active (no transition reached this display)`.
+- The extended display never leaves its Preferences layout (`strip [] switcher [com.apple.Preferences]` in every ids update until the home gesture at 35:49.7, which is the first 3->1 transition there). Its item container hosts a scene that the scene manager of Main now owns = the blank window of the photo.
+The drops where both completes ran (33:55, 34:00, 34:36, 35:12) show `complete from the manager of Main` followed 1 ms to 60 ms later by `complete from the manager of AirPlay` and a second final root transaction for the other display; those windows are fine. 4 of 4 broken drops are drags that were started on the extended display, 0 of 4 of those started on the iPad: the final root transaction of the iPad (the window arrives there) completes without waiting, the one of the extended display (the window leaves) is the long one.
+
+### 9.3 Fix: switch `p1_endbcast` (P1Drag.m `P1_EndBroadcastBegin/End`, G1D.x) [documented deviation, no result differs from 16.2 when 16.2 completes all displays]
+While the end broadcast of a window drag runs, the finish of the shared transaction (completion block 0x1c74af778) is held (`p1: ... finishing is held until every display delivered its complete`); when the broadcast returns and no further final root transaction or animation controller is pending, the transaction is finished (`p1: ... end broadcast returned, finishing the held transaction`). With the switch off the code is the faithful 16.2 completion block. 16.2 itself has the same ordering; there the final root transaction of the first complete is never this fast, so the race is not seen. Kill file `Backport162.off.p1_endbcast`.
+
+### 9.4 Decisive container line (P1VC.m, switch `p1_ctrend`, logging only)
+`p1ctr: container transition end: item <scene id> handle <p> scene <p> contentState <n> ready <b> | scene display <d1> container display <d2> -> same|MISMATCH | view window <b> hidden <b> alpha <a> | CALayerHost ctx <id> (xN) | portal source <p(window b)>|none | error <b>`, one line per container whenever its state changed at the end of a layout transition. A blank window shows as `MISMATCH` and/or `CALayerHost ctx 0 (x0)` / `contentState` not ready. Kill file `Backport162.off.p1_ctrend`.
