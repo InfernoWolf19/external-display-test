@@ -256,6 +256,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y5_classicsize | (Y5Apps.x) iPhone-only (classic mode) app launch size table is used on the external display too (16.0: display bounds there) |
 | y6_portal | (Y6Portal.x) cross display window drag: the display under the pointer shows a live copy (CA portal, overlay type 4) of the window being dragged from the other display (16.2); without it the window appears only at the drop |
 | y6_alwayslive | (Y6Portal.x) always-live live content overlays are sized with their own display's screen bounds (16.0: the main screen) |
+| y7_inspolicy | (Y7Requests.x) Shift + click on a Stage Manager strip window: the transition request carries the entity insertion policy (16.2), so the window is added next to the current one; request copies keep it and the activating display item |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
