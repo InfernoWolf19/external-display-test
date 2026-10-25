@@ -1,12 +1,4 @@
 {
- "0.7.5+203.df33142": {
-  "date": "2026-10-20T19:13:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+203.df33142_iphoneos-arm64.deb",
-  "run": 203,
-  "sha": "df331428c07e808a7c5417744dc2322f9fb7cb68",
-  "subject": "BBD crash guard re-arms itself: strikes older than 30 minutes are forgotten (the guard kept the backboardd half out for good once tripped; standing rule: guards are a logged last line, never a permanent switch-off)",
-  "version": "0.7.5+203.df33142"
- },
  "0.7.5+204.5f42e12": {
   "date": "2026-10-20T19:16:14Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+204.5f42e12_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "940d7dbb6fd903f374386ad119a10632fb5807b0",
   "subject": "Y16Contingency: a crashed / exited Stage Manager window no longer sends the whole stage home (y16_stagefail), Command-Tab overlay dismissed when its display goes away (y16_cmdtab), finger corner swipes do not start the corner gesture under Stage Manager (y16_shotcorner), snapshot orientation from the window content orientation (y16_snaporient); DELTA-SWEEP: all remaining rows triaged",
   "version": "0.7.9+272.940d7db"
+ },
+ "0.7.9+273.b23ddb4": {
+  "date": "2026-10-25T20:44:07Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+273.b23ddb4_iphoneos-arm64.deb",
+  "run": 273,
+  "sha": "b23ddb4ede506efad026f81ecac58475399543cc",
+  "subject": "DELTA-SWEEP: shas for Y12..Y16",
+  "version": "0.7.9+273.b23ddb4"
  }
 }
