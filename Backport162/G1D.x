@@ -15,6 +15,8 @@
 #import <dlfcn.h>
 #import <string.h>
 #import "BP.h"
+extern void P1_EndBroadcastBegin(id txn);      // P1Drag.m
+extern void P1_EndBroadcastEnd(id txn);
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -648,10 +650,13 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
     id sc = G1B_Send0(manager, NSSelectorFromString(@"switcherController"));
     long long type = G1B_SendLL0(gesture, @selector(type));
     SEL fwd = NSSelectorFromString(@"fluidSwitcherGestureManager:didEndGesture:");
+    id endTxn = type == 9 ? G1B_Send0(manager, NSSelectorFromString(@"activeGestureTransaction")) : nil;
+    P1_EndBroadcastBegin(endTxn);                         // p1_endbcast (P1Drag.m): the shared transaction is not finished before every display delivered its complete
     ((void (*)(id, SEL, id))objc_msgSend)(me, NSSelectorFromString(@"enumerateSwitcherControllersWithBlock:"), ^(id other, BOOL *stop) {
         if ([other isEqual:sc] || (type == 9 && G1B_SendLL0(other, sWMStyle) == G1B_SendLL0(sc, sWMStyle)))
             if ([other respondsToSelector:fwd]) ((void (*)(id, SEL, id, id))objc_msgSend)(other, fwd, manager, gesture);
     });
+    P1_EndBroadcastEnd(endTxn);
     if (type == 9 && G1B_SendLL0(sc, sWMStyle) == 2) {
         id sel = G1B_Send0(gesture, NSSelectorFromString(@"selectedAppLayout"));
         if (sel) [G1D_Dragging(me) removeObject:sel];

@@ -132,7 +132,7 @@ static void P1_EnumerateValidRoles(void (^blk)(long long)) {
 }
 
 // ------------------------------------------------------------------------------------------------ per transaction state
-static char kP1Mode, kP1Orig, kP1Active, kP1Anc, kP1Comp;
+static char kP1Mode, kP1Orig, kP1Active, kP1Anc, kP1Comp, kP1CoordTxn;
 static BOOL P1_IsNew(id txn) { return [objc_getAssociatedObject(txn, &kP1Mode) boolValue]; }
 static NSMapTable *P1_Map(id txn, char *key) {
     NSMapTable *m = objc_getAssociatedObject(txn, key);
@@ -446,6 +446,28 @@ static double P1_ArcSettle(void) {
     id arc = P1_S0(P1_S0(root, "animationSettings"), "arcSwipeSettings");
     return P1_Dbl(arc, "settlingDuration") * 0.9;
 }
+// p1_endbcast (documented deviation from 16.2, no result differs): the gesture end is delivered to the controllers of all displays one after the other
+// (-[SBMainSwitcherControllerCoordinator fluidSwitcherGestureManager:didEndGesture:], G1D.x). The final root transaction of the FIRST complete can finish at once (nothing left to do
+// on its display); the completion block 0x1c74af778 then finishes the shared transaction, the coordinator clears it from every gesture manager and the complete of the NEXT
+// display finds no transaction (the 16.0 body of the manager does nothing without one). That display never runs its transition: the window it lost (a drag to the other
+// display) stays in its layout state as a ghost container whose scene was taken over by the other scene manager = blank window, FINDINGS-DRAG-LOOP 5.2 candidate 2,
+// logged as GUARD(end) "no transition reached this display". While the end broadcast runs the finish is therefore held and done when the broadcast returned.
+static __thread __unsafe_unretained id tEndBcast;
+static char kP1FinishHeld;
+void P1_EndBroadcastBegin(id txn) { if (txn && P1_IsNew(txn)) { tEndBcast = txn; objc_setAssociatedObject(txn, &kP1FinishHeld, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); } }
+void P1_EndBroadcastEnd(id txn) {
+    if (!txn || tEndBcast != txn) return;
+    tEndBcast = nil;
+    if (![objc_getAssociatedObject(txn, &kP1FinishHeld) boolValue]) return;
+    objc_setAssociatedObject(txn, &kP1FinishHeld, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    id coord = P1_CoordinatorOf(P1_S0(P1_S0(txn, "switcherViewController"), "switcherController"));
+    BOOL stillActive = objc_getAssociatedObject(coord, &kP1CoordTxn) == txn;
+    if (stillActive && !P1_S0(txn, "animationController") && !P1_Ivar(txn, "_finalRootTransaction") && !P1_B0(txn, "isInterrupted")) {
+        if (BP_LogEnabled()) BP_Log(@"p1: txn %p: end broadcast returned, finishing the held transaction", (__bridge void *)txn);
+        P1_VL(txn, "finishWithCompletionType:", 1);
+    } else if (BP_LogEnabled()) BP_Log(@"p1: txn %p: end broadcast returned, the held finish is not needed (active %d animation %d final root %d)", (__bridge void *)txn, (int)stillActive,
+                                       (int)(P1_S0(txn, "animationController") != nil), (int)(P1_Ivar(txn, "_finalRootTransaction") != nil));
+}
 static void P1_TxnDidComplete(id self, SEL _cmd, id txn) {
     if (!P1_IsNew(self)) { ((void (*)(id, SEL, id))sOrigTxnDone)(self, _cmd, txn); return; }
     if (P1_S0(self, "animationController") == txn) {
@@ -491,7 +513,12 @@ static void P1_TxnDidComplete(id self, SEL _cmd, id txn) {
             id s = weakSelf;
             if (!s) return;
             long long st = P1_L0(P1_S0(s, "gestureRecognizer"), "state");
-            if (!((unsigned long long)(st - 1) < 2) && !P1_S0(s, "animationController")) P1_VL(s, "finishWithCompletionType:", 1);
+            if (!((unsigned long long)(st - 1) < 2) && !P1_S0(s, "animationController")) {
+                if (tEndBcast == s && BP_OnName("p1_endbcast")) {                       // not 16.2: the other displays' completes are still to be delivered, see P1_EndBroadcastEnd
+                    objc_setAssociatedObject(s, &kP1FinishHeld, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                    if (BP_LogEnabled()) BP_Log(@"p1: txn %p: the final root transaction completed inside the end broadcast, finishing is held until every display delivered its complete", (__bridge void *)s);
+                } else P1_VL(s, "finishWithCompletionType:", 1);
+            }
             else {
                 id sc = P1_SwitcherControllerForRequest(s, 0, copied);
                 id ls = P1_S0(sc, "layoutState");
@@ -803,7 +830,7 @@ static void P1_MgrSetActive(id self, SEL _cmd, id txn) {
 
 // ------------------------------------------------------------------------------------------------ SBMainSwitcherControllerCoordinator (16.2 0x1c76e2bd4 / 0x1c76e2164 / 0x1c76e2bcc / 0x1c76e2d00)
 extern void G1C_FinishStaleGestureChildren(void);       // G1C.x
-static char kP1CoordTxn, kP1CoordSuspended;
+static char kP1CoordSuspended;
 static NSArray *P1_AllControllers(id coord) {
     NSMutableArray *out = [NSMutableArray array];
     SEL en = sel_registerName("enumerateSwitcherControllersWithBlock:");
