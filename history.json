@@ -1,12 +1,4 @@
 {
- "0.7.9+206.24222ef": {
-  "date": "2026-10-20T19:17:01Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+206.24222ef_iphoneos-arm64.deb",
-  "run": 206,
-  "sha": "24222ef15c252cad1b058e31b3d0cee57d8031ee",
-  "subject": "g3b_axroles stays default ON (standing directive): G3B.x comment, group3b-reconstruct.md and README no longer call it opt-in; review note",
-  "version": "0.7.9+206.24222ef"
- },
  "0.7.9+207.fc6e206": {
   "date": "2026-10-20T19:19:00Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+207.fc6e206_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "256780e895993e260574d8f53cba07bddf468134",
   "subject": "DELTA-SWEEP: port table per family, cross references, floor modifier review",
   "version": "0.7.9+275.256780e"
+ },
+ "0.7.9+276.8728cf0": {
+  "date": "2026-10-25T20:52:17Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+276.8728cf0_iphoneos-arm64.deb",
+  "run": 276,
+  "sha": "8728cf0662ea00f9f07ccb811d5484dcf37354f9",
+  "subject": "DELTA-SWEEP: counts table lists NOT PORTED, last pending rows",
+  "version": "0.7.9+276.8728cf0"
  }
 }
