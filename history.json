@@ -1,12 +1,4 @@
 {
- "0.7.5+202.2e619c0": {
-  "date": "2026-10-20T19:12:27Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+202.2e619c0_iphoneos-arm64.deb",
-  "run": 202,
-  "sha": "2e619c09aade21757e45e2ebbdaa31a772bb324d",
-  "subject": "SPK: crash guard is a logged last line, not a silent switch-off: one counter per audio daemon (audiomxd and mediaserverd are restarted together, a shared file doubled the count and tripped after ~3 quick userspace restarts), 8 strikes within 600 s, counter forgets itself 600 s after the last strike, trip reported with os_log_error + Darwin note (G2D.x logs it)",
-  "version": "0.7.5+202.2e619c0"
- },
  "0.7.5+203.df33142": {
   "date": "2026-10-20T19:13:16Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+203.df33142_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "e105de9a7bc6954b66dc922f16c1b64dd880ce18",
   "subject": "P5 step 2: while a pointer button is held, a pointer move located outside the window of its own scene no longer flips the active pointer display (switch p5_holdflip, logged); device log S/u6/3 shows 170 flips in 2 s from the pinned route",
   "version": "0.7.9+271.e105de9"
+ },
+ "0.7.9+272.940d7db": {
+  "date": "2026-10-25T20:37:23Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+272.940d7db_iphoneos-arm64.deb",
+  "run": 272,
+  "sha": "940d7dbb6fd903f374386ad119a10632fb5807b0",
+  "subject": "Y16Contingency: a crashed / exited Stage Manager window no longer sends the whole stage home (y16_stagefail), Command-Tab overlay dismissed when its display goes away (y16_cmdtab), finger corner swipes do not start the corner gesture under Stage Manager (y16_shotcorner), snapshot orientation from the window content orientation (y16_snaporient); DELTA-SWEEP: all remaining rows triaged",
+  "version": "0.7.9+272.940d7db"
  }
 }
