@@ -10,30 +10,39 @@
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
+
+extern void P1_NoteMissing(id o, SEL x);
+extern Ivar P1_IvarOf(id o, const char *name);
+static inline BOOL PV_Resp(id o, SEL x) {
+    if (!o) return NO;
+    if ([o respondsToSelector:x]) return YES;
+    P1_NoteMissing(o, x);
+    return NO;
+}
 static BOOL PV_On(const char *n) { return BP_OnName("p1_vc") && BP_OnName(n); }
 
-static id PV_S0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL))objc_msgSend)(o, x) : nil; }
-static id PV_S1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, x, a) : nil; }
-static BOOL PV_B0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, x) : NO; }
-static long long PV_L0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((long long (*)(id, SEL))objc_msgSend)(o, x) : 0; }
-static double PV_D0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((double (*)(id, SEL))objc_msgSend)(o, x) : 0.0; }
-static void PV_V0(id o, const char *s) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL))objc_msgSend)(o, x); }
-static void PV_V1(id o, const char *s, id a) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL, id))objc_msgSend)(o, x, a); }
-static void PV_VB(id o, const char *s, BOOL a) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL, BOOL))objc_msgSend)(o, x, a); }
+static id PV_S0(id o, const char *s) { SEL x = sel_registerName(s); return PV_Resp(o, x) ? ((id (*)(id, SEL))objc_msgSend)(o, x) : nil; }
+static id PV_S1(id o, const char *s, id a) { SEL x = sel_registerName(s); return PV_Resp(o, x) ? ((id (*)(id, SEL, id))objc_msgSend)(o, x, a) : nil; }
+static BOOL PV_B0(id o, const char *s) { SEL x = sel_registerName(s); return PV_Resp(o, x) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, x) : NO; }
+static long long PV_L0(id o, const char *s) { SEL x = sel_registerName(s); return PV_Resp(o, x) ? ((long long (*)(id, SEL))objc_msgSend)(o, x) : 0; }
+static double PV_D0(id o, const char *s) { SEL x = sel_registerName(s); return PV_Resp(o, x) ? ((double (*)(id, SEL))objc_msgSend)(o, x) : 0.0; }
+static void PV_V0(id o, const char *s) { SEL x = sel_registerName(s); if (PV_Resp(o, x)) ((void (*)(id, SEL))objc_msgSend)(o, x); }
+static void PV_V1(id o, const char *s, id a) { SEL x = sel_registerName(s); if (PV_Resp(o, x)) ((void (*)(id, SEL, id))objc_msgSend)(o, x, a); }
+static void PV_VB(id o, const char *s, BOOL a) { SEL x = sel_registerName(s); if (PV_Resp(o, x)) ((void (*)(id, SEL, BOOL))objc_msgSend)(o, x, a); }
 static id PV_Ivar(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return BP_ObjIvar(o, iv);
 }
 static void PV_SetIvar(id o, const char *name, id v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     if (iv) BP_SetObjIvar(o, iv, v);
 }
 static unsigned long long PV_IvarULL(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return iv ? *(unsigned long long *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : 0;
 }
 static BOOL PV_IvarB(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return iv ? *(BOOL *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : NO;
 }
 static IMP PV_Replace(const char *cls, const char *sel, IMP imp) {

@@ -198,3 +198,13 @@ not nested; the newest request is kept and replayed after the outer update retur
 update -> layout transaction -> update cycle.
 **Test.** Resize by the corner from full screen (the case of the crash), resize a window on the external monitor, resize a stage window: no `p1: re-entrant update refused` line should appear (it is the last line of defence); a normal window drag across
 displays still shows `p1: txn ... update` / ancillary / `taken over by the scene manager`. Kill file for the guard only: `Backport162.off.p1_reentry`.
+
+### 5b. Audit of every `P1_*` / `PV_*` / `PS_*` helper call (follow-up of the resize crash)
+Method: all 426 helper calls (308 in P1Drag.m, 79 in P1VC.m, 68 in P1SW.m) were extracted with receiver expression and selector and checked against the class dumps of 16.0 and 16.2 (receiver class chain defines the selector?), with the receiver of each
+ambiguous call checked in the disassembly of the method that is ported (hidden `mov x19, x3` style register moves included). Selectors that 16.0 lacks are all ones the port adds at run time (`handleTransitionRequestForGestureUpdate/Complete:fromGestureManager:`,
+`setLiveContentOverlayUpdatesSuspended:` / `draggingAppLayouts` / `enumerateSwitcherControllersWithBlock:` on the coordinator, `_dismissMedusaBanner`, `representsSameLayoutElementAsDescriptor:`, `continuousExposeIdentifiersInSwitcher`, the G2 model selectors),
+UIKit / FrontBoard / BaseBoard methods outside the SpringBoard dump, or the documented 16.2-only `medusaHostedKeyboardWindowController`. Return types were checked too (BOOL selectors through `B0`, `isFloatingSwitcherVisible` is a zero extended `ldrb`).
+Defects found: (1) the resize crash (`isLiveResize` sent to the request instead of the transaction, fixed in 475993c); (2) **P1SW.m `PS_DefFrame` sent `-environment` to the modifier instead of the layout** (16.0 0x1c63df39c / 16.2 0x1c788a4d0 send it to x19 = the retained
+layout argument): the environment 2 / 3 shortcut never applied, silently (fixed). No other wrong receiver found.
+Non-silent helpers: every helper that reaches a missing selector on a NON-NIL receiver now logs once per selector and class, `p1: selector X missing on Y, treated as NO / nil / 0`; a missing ivar logs once as `p1: ivar X missing on Y, treated as nil / 0 / NO`
+(nil receivers stay silent, they are normal). Expect exactly the documented absences in the log (medusaHostedKeyboardWindowController until G3B adds it).

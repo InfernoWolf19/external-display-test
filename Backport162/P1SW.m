@@ -16,25 +16,34 @@
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
-static id PS_S0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL))objc_msgSend)(o, x) : nil; }
-static id PS_S1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, x, a) : nil; }
-static BOOL PS_B0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, x) : NO; }
-static BOOL PS_B1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, x, a) : NO; }
-static long long PS_L0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((long long (*)(id, SEL))objc_msgSend)(o, x) : 0; }
-static double PS_D0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((double (*)(id, SEL))objc_msgSend)(o, x) : 0.0; }
-static CGRect PS_R0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, x) : CGRectZero; }
-static CGPoint PS_P1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(o, x, a) : CGPointZero; }
-static CGSize PS_Z1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((CGSize (*)(id, SEL, id))objc_msgSend)(o, x, a) : CGSizeZero; }
+
+extern void P1_NoteMissing(id o, SEL x);
+extern Ivar P1_IvarOf(id o, const char *name);
+static inline BOOL PS_Resp(id o, SEL x) {
+    if (!o) return NO;
+    if ([o respondsToSelector:x]) return YES;
+    P1_NoteMissing(o, x);
+    return NO;
+}
+static id PS_S0(id o, const char *s) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((id (*)(id, SEL))objc_msgSend)(o, x) : nil; }
+static id PS_S1(id o, const char *s, id a) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((id (*)(id, SEL, id))objc_msgSend)(o, x, a) : nil; }
+static BOOL PS_B0(id o, const char *s) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, x) : NO; }
+static BOOL PS_B1(id o, const char *s, id a) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, x, a) : NO; }
+static long long PS_L0(id o, const char *s) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((long long (*)(id, SEL))objc_msgSend)(o, x) : 0; }
+static double PS_D0(id o, const char *s) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((double (*)(id, SEL))objc_msgSend)(o, x) : 0.0; }
+static CGRect PS_R0(id o, const char *s) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, x) : CGRectZero; }
+static CGPoint PS_P1(id o, const char *s, id a) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((CGPoint (*)(id, SEL, id))objc_msgSend)(o, x, a) : CGPointZero; }
+static CGSize PS_Z1(id o, const char *s, id a) { SEL x = sel_registerName(s); return PS_Resp(o, x) ? ((CGSize (*)(id, SEL, id))objc_msgSend)(o, x, a) : CGSizeZero; }
 static long long PS_IvarLL(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return iv ? *(long long *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : 0;
 }
 static id PS_Ivar(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return BP_ObjIvar(o, iv);
 }
 static CGPoint PS_IvarPoint(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return iv ? *(CGPoint *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : CGPointZero;
 }
 static IMP PS_Replace(const char *cls, const char *sel, IMP imp) {
@@ -166,7 +175,7 @@ static CGRect PS_Integral(CGRect r, double scale) {                             
 static CGRect PS_DefFrame(id self, SEL _cmd, long long role, id layout, CGRect bounds) {
     typedef CGRect (*Orig)(id, SEL, long long, id, CGRect);
     if (!BP_OnName("p1_defroles") || !PS_ModelReady()) return ((Orig)sDefFrame)(self, _cmd, role, layout, bounds);
-    long long env = PS_L0(self, "environment");
+    long long env = PS_L0(layout, "environment");               // 16.0 0x1c63df39c / 16.2 0x1c788a4d0: -environment is sent to the SBAppLayout (x19 = the layout argument), not to the modifier
     if (env == 3 || env == 2 || role == 4 || !PS_B0(self, "isChamoisWindowingUIEnabled")) return ((Orig)sDefFrame)(self, _cmd, role, layout, bounds);   // identical in 16.0 and 16.2
     id calc = PS_S0(self, "displayItemLayoutAttributesCalculator");
     SEL om = sel_registerName("overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:");

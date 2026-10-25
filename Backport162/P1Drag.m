@@ -34,44 +34,74 @@
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
+
+// Non-silent helper gate: a selector missing on a NON-NIL receiver is logged once per selector + class ("treated as NO" / nil / 0), so a wrong receiver can never hide behind a silent default.
+void P1_NoteMissing(id o, SEL x) {
+    static NSMutableSet *seen;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
+    NSString *key = [NSString stringWithFormat:@"%@|%@", NSStringFromSelector(x), NSStringFromClass(object_getClass(o))];
+    @synchronized (seen) { if ([seen containsObject:key]) return; [seen addObject:key]; }
+    BP_Log(@"p1: selector %@ missing on %@, treated as NO / nil / 0", NSStringFromSelector(x), NSStringFromClass(object_getClass(o)));
+}
+static inline BOOL P1_Resp(id o, SEL x) {
+    if (!o) return NO;
+    if ([o respondsToSelector:x]) return YES;
+    P1_NoteMissing(o, x);
+    return NO;
+}
 static BOOL P1_On(const char *n) { return BP_OnName("p1_drag") && BP_OnName(n); }
 
 // ------------------------------------------------------------------------------------------------ helpers (all nil safe: a missing selector yields nil / 0)
-static id P1_S0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL))objc_msgSend)(o, x) : nil; }
-static id P1_S1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, x, a) : nil; }
-static id P1_S2(id o, const char *s, id a, id b) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((id (*)(id, SEL, id, id))objc_msgSend)(o, x, a, b) : nil; }
-static BOOL P1_B0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, x) : NO; }
-static BOOL P1_B1(id o, const char *s, id a) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, x, a) : NO; }
-static long long P1_L0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((long long (*)(id, SEL))objc_msgSend)(o, x) : 0; }
-static void P1_V0(id o, const char *s) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL))objc_msgSend)(o, x); }
-static void P1_V1(id o, const char *s, id a) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL, id))objc_msgSend)(o, x, a); }
-static void P1_VB(id o, const char *s, BOOL a) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL, BOOL))objc_msgSend)(o, x, a); }
-static void P1_VL(id o, const char *s, long long a) { SEL x = sel_registerName(s); if (o && [o respondsToSelector:x]) ((void (*)(id, SEL, long long))objc_msgSend)(o, x, a); }
-static double P1_Dbl(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((double (*)(id, SEL))objc_msgSend)(o, x) : 0.0; }
-static CGRect P1_Rect0(id o, const char *s) { SEL x = sel_registerName(s); return (o && [o respondsToSelector:x]) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, x) : CGRectZero; }
+static id P1_S0(id o, const char *s) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((id (*)(id, SEL))objc_msgSend)(o, x) : nil; }
+static id P1_S1(id o, const char *s, id a) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((id (*)(id, SEL, id))objc_msgSend)(o, x, a) : nil; }
+static id P1_S2(id o, const char *s, id a, id b) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((id (*)(id, SEL, id, id))objc_msgSend)(o, x, a, b) : nil; }
+static BOOL P1_B0(id o, const char *s) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, x) : NO; }
+static BOOL P1_B1(id o, const char *s, id a) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, x, a) : NO; }
+static long long P1_L0(id o, const char *s) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((long long (*)(id, SEL))objc_msgSend)(o, x) : 0; }
+static void P1_V0(id o, const char *s) { SEL x = sel_registerName(s); if (P1_Resp(o, x)) ((void (*)(id, SEL))objc_msgSend)(o, x); }
+static void P1_V1(id o, const char *s, id a) { SEL x = sel_registerName(s); if (P1_Resp(o, x)) ((void (*)(id, SEL, id))objc_msgSend)(o, x, a); }
+static void P1_VB(id o, const char *s, BOOL a) { SEL x = sel_registerName(s); if (P1_Resp(o, x)) ((void (*)(id, SEL, BOOL))objc_msgSend)(o, x, a); }
+static void P1_VL(id o, const char *s, long long a) { SEL x = sel_registerName(s); if (P1_Resp(o, x)) ((void (*)(id, SEL, long long))objc_msgSend)(o, x, a); }
+static double P1_Dbl(id o, const char *s) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((double (*)(id, SEL))objc_msgSend)(o, x) : 0.0; }
+static CGRect P1_Rect0(id o, const char *s) { SEL x = sel_registerName(s); return P1_Resp(o, x) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, x) : CGRectZero; }
 
+// Non-silent ivar lookup: an ivar missing on a non-nil object is logged once per ivar + class (the accessors then answer nil / 0 / NO).
+Ivar P1_IvarOf(id o, const char *name) {
+    if (!o) return NULL;
+    Ivar iv = class_getInstanceVariable(object_getClass(o), name);
+    if (!iv) {
+        static NSMutableSet *seen; static dispatch_once_t once;
+        dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
+        NSString *key = [NSString stringWithFormat:@"%s|%@", name, NSStringFromClass(object_getClass(o))];
+        BOOL fresh;
+        @synchronized (seen) { fresh = ![seen containsObject:key]; if (fresh) [seen addObject:key]; }
+        if (fresh) BP_Log(@"p1: ivar %s missing on %@, treated as nil / 0 / NO", name, NSStringFromClass(object_getClass(o)));
+    }
+    return iv;
+}
 static id P1_Ivar(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return BP_ObjIvar(o, iv);
 }
 static void P1_SetIvar(id o, const char *name, id v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     if (iv) BP_SetObjIvar(o, iv, v);
 }
 static long long P1_IvarLL(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return iv ? *(long long *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : 0;
 }
 static void P1_SetIvarLL(id o, const char *name, long long v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     if (iv) *(long long *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) = v;
 }
 static BOOL P1_IvarB(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     return iv ? *(BOOL *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) : NO;
 }
 static void P1_SetIvarB(id o, const char *name, BOOL v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = P1_IvarOf(o, name);
     if (iv) *(BOOL *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) = v;
 }
 
@@ -750,7 +780,7 @@ static void P1_MgrComplete(id self, SEL _cmd, id request) {
     id txn = P1_S0(self, "activeGestureTransaction");
     if (P1_TxnIsNew(txn)) {
         if ([P1_S0(request, "appLayout") isEqual:P1_S0((id)NSClassFromString(@"SBAppLayout"), "homeScreenAppLayout")])
-            P1_V0(self, "_clearSystemApertureZStackPolicyAssistantSuppression");   // 16.2 only; absent on 16.0 and a no-op without the aperture (iPad)
+            if ([self respondsToSelector:sel_registerName("_clearSystemApertureZStackPolicyAssistantSuppression")]) P1_V0(self, "_clearSystemApertureZStackPolicyAssistantSuppression");   // 16.2 only; absent on 16.0 and a no-op without the aperture (iPad)
         P1_S2(txn, "handleTransitionRequestForGestureComplete:fromGestureManager:", request, self);
         return;
     }
