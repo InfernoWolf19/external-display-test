@@ -269,6 +269,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y10_autopip | (Y10Pip.x) Stage Manager: leaving the stage starts PiP for any window of the previous stage that is playing video (16.0 only looked at the primary / split entities) |
 | y10_morphframe | (Y10Pip.x) the morph to PiP starts from the window's own frame instead of the full container size under Stage Manager |
 | y10_stashscene | (Y10Pip.x) a PiP stash assertion for the other display follows that display's layout transitions (16.0: the iPad's) |
+| y11_removal | (Y11Modifiers.x) removing one window of a Stage Manager stage (entity removal transitions) moves, scales and blurs only that window, the other windows stay (16.0 moved all of them) |
+| y11_tapreq | (Y11Modifiers.x) tapping a window in the shelf / peek builds the request with the tapped item and the pointer source (16.2 requestForTapAppLayoutEvent:) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
