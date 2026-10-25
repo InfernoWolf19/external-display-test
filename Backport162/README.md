@@ -169,6 +169,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | p1_asynceval | 16.2 `SBMainSwitcherControllerCoordinator -_evaluateAsynchronousRenderingEnablement` is empty (async rendering only through the per-display VC flags); can change transition timing | `p1_asynceval` |
 | p1_orient | M5 orientation family of REVIEW-CORE that works on the 16.0 traits code: `SBLayoutState` `...unknownAllowed:`, `coordinateSpaceForLayoutElement:layoutState:` and `sceneEntityFrameForWorkspaceEntity:inLayoutState:` use the layout state orientation with Stage Manager, `_updateAppTransitionContext:withOrientationActuationContext:`, scene settings orientation of `SBApplicationSceneHandle` (the 16.2 SBSwitcherTraitsAssistant rework is not ported, see the spec) | `p1_orient` |
 | g1c_ids16supp | the 16.0 inline `_updateContinuousExposeIdentifiers...` calls of the transition blocks are not made for app-to-app switches (16.2 has only the response driven update after the stage bookkeeping); close / home / zoom keep them; needs `g1c_invalidate` | `g1c_ids16supp` |
+| g1c_floorguard | `_updateFloorModifierWithTransitionEvent:` no longer asserts `A floor modifier is required` (3 SpringBoard crashes on stale transition end events): the current floor stays, logged as `GUARD(floor)` | `g1c_floorguard` |
 
 ### Gap ports (specs/GAPS-IMPLEMENTED-0.7.9.md; closing the gaps of specs/FEATURES-0.7.9.md) [X2Overlay.x and the X* files]
 

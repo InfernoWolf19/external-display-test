@@ -41,6 +41,7 @@
 // INTEGRATION: interface declarations for the hooked classes (Logos only emits @class, ARC needs a visible @interface to message them)
 @interface SBFluidSwitcherGestureManager : NSObject @end
 @interface SBFluidSwitcherViewController : UIViewController @end
+@interface SBFluidSwitcherRootSwitcherModifier : NSObject @end
 @interface SBCycleContinuousExposeGroupAppLayoutsSwitcherModifier : NSObject @end
 @interface SBRevealContinuousExposeStripOverflowRootSwitcherModifier : NSObject @end
 @interface SBContinuousExposeWindowDragModifierEvent : NSObject @end
@@ -6385,6 +6386,49 @@ static void G1C_InstallRouting(void) {
 // ============================================================================================================
 // setup
 // ============================================================================================================
+// ============================================================================================================
+// H3 (specs/CORE-LEFTOVERS-0.7.9.md section 6): "A floor modifier is required" (SBFluidSwitcherRootSwitcherModifier.m:0x1a9) killed SpringBoard three times (device logs u6, build d586333 / dcef91c).
+// 16.0 0x1c61e8d74 / 16.2 0x1c76773a8 -_updateFloorModifierWithTransitionEvent: = `floor = [self floorModifierForTransitionEvent:e]; NSAssert(floor, @"A floor modifier is required"); [self _updateFloorModifierWithProposedFloorModifier:floor]`.
+// floorModifierForTransitionEvent: (16.2 0x1c78180e8, G1C's version above) answers nil for an environment mode outside 1..3 and, in mode 2 without an App Expose bundle, for `[self multitaskingModifier]` when the root no longer
+// has one. The failing events are the late phase 2 / 3 events of a transition that is no longer the root's current one (device: the 1->2 transition of a home gesture on the external display ends after the empty switcher was
+// dismissed to the home floor; a 3->3 layout transaction of a window drag ends after a home swipe), so the mode of the event does not match the floor the root now has. 16.2 never gets there (its end events are dropped for a
+// superseded transition); this port still can, and an exception inside the modifier tree kills SpringBoard. The assertion is replaced by this logged last line: the CURRENT floor stays (an event of an older transition must not
+// change it), else a floor for the event's mode is built (home / full screen / App Switcher), else the home floor. Every use logs the full state so the next log names the exact event. Switch g1c_floorguard (default on).
+%group G1C_FloorGuard
+%hook SBFluidSwitcherRootSwitcherModifier
+- (void)_updateFloorModifierWithTransitionEvent:(id)event {
+    SEL fs = @selector(floorModifierForTransitionEvent:), up = NSSelectorFromString(@"_updateFloorModifierWithProposedFloorModifier:");
+    if (!BP_OnName("g1c_floorguard") || ![self respondsToSelector:fs] || ![self respondsToSelector:up]) {
+        %orig;
+        return;
+    }
+    id floor = G1B_Send1(self, fs, event);
+    if (!floor) {
+        id cur = G1C_Resp(self, @selector(floorModifier)) ? G1B_Send0(self, @selector(floorModifier)) : nil;
+        long long mode = G1C_Resp(event, @selector(toEnvironmentMode)) ? G1B_SendLL0(event, @selector(toEnvironmentMode)) : -1;
+        id toAL = G1C_Resp(event, @selector(toAppLayout)) ? G1B_Send0(event, @selector(toAppLayout)) : nil;
+        id mt = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
+        NSString *how = @"kept the current floor";
+        floor = cur;
+        if (!floor) {
+            if (mode == 3 && toAL) { floor = G1C_NewFullScreenModifier(toAL); how = @"built a full screen floor"; }
+            else if (mode == 2 && mt) { floor = mt; how = @"used the multitasking modifier"; }
+            if (!floor) { floor = G1C_NewHomeModifier(); how = @"built the home floor"; }
+        }
+        static unsigned long n;
+        n++;
+        BP_Log(@"GUARD(floor) #%lu: floorModifierForTransitionEvent: answered nil (stock assertion 'A floor modifier is required'): event phase=%lld animated=%d modes %lld->%lld gesture=%d toAL=%@ toAppExpose=%@ current floor=%@ multitaskingModifier=%@ root=%@ -> %@ (%@)",
+               n, G1C_Resp(event, @selector(phase)) ? G1B_SendLL0(event, @selector(phase)) : -1LL, (int)(G1C_Resp(event, @selector(isAnimated)) && G1B_SendB0(event, @selector(isAnimated))),
+               G1C_Resp(event, @selector(fromEnvironmentMode)) ? G1B_SendLL0(event, @selector(fromEnvironmentMode)) : -1LL, mode,
+               (int)(G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated))), G1C_DbgLayout(toAL),
+               G1C_Resp(event, @selector(toAppExposeBundleID)) ? G1B_Send0(event, @selector(toAppExposeBundleID)) : nil, G1C_DbgCls(cur), G1C_DbgCls(mt), G1C_DbgCls(self), G1C_DbgCls(floor), how);
+        if (!floor) { BP_Log(@"GUARD(floor): no floor could be built, the update is skipped (the root keeps what it has)"); return; }
+    }
+    G1B_SendV1(self, up, floor);
+}
+%end
+%end
+
 void G1C_Setup(void) {
     G1C_UndoDefaultTerminals();
     G1C_InstallRouting();
@@ -6422,6 +6466,7 @@ void G1C_Setup(void) {
     %init(G1C_OverflowRoot);
     G1C_InstallRevealStrips();
     %init(G1C_Cycle);
+    %init(G1C_FloorGuard);
     %init(G1C_VCIds);        // MUST be after the group 2 %init(G2B): it replaces the same method
 }
 #pragma clang diagnostic pop
