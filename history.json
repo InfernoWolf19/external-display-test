@@ -1,12 +1,4 @@
 {
- "0.7.5+200.e8a0299": {
-  "date": "2026-10-20T19:11:51Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+200.e8a0299_iphoneos-arm64.deb",
-  "run": 200,
-  "sha": "e8a029982c52ed9a2819281e64e28cb3e7e6d68a",
-  "subject": "Merge StageManagerToggle 1.0.0 and SpeakerPicker 1.1.0~idle1 into Backport162 (dylibs Backport162SMT / Backport162SPK, switches smtoggle / speaker, Conflicts+Replaces for the old packages incl. AudioRouteProbe and SwitcherDismissFix, interference analysis)",
-  "version": "0.7.5+200.e8a0299"
- },
  "0.7.5+201.65690f3": {
   "date": "2026-10-20T19:10:16Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+201.65690f3_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "9fb61535222812856f283dfd6890323aa0b95d6e",
   "subject": "Crash 'A floor modifier is required': _updateFloorModifierWithTransitionEvent: keeps the current floor (logged GUARD(floor) with the full event / floor state) instead of asserting on a stale transition end event; switch g1c_floorguard",
   "version": "0.7.9+269.9fb6153"
+ },
+ "0.7.9+270.92b55af": {
+  "date": "2026-10-25T20:29:20Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+270.92b55af_iphoneos-arm64.deb",
+  "run": 270,
+  "sha": "92b55af07440f7f0947f12f4b7a0610481b0c633",
+  "subject": "p1_orient: the layout state orientation replaces the per-element one only when it agrees with the switcher window shape (all logged layout states say Portrait, also for the landscape monitor); drag failure analysis and shadow reasoning written up",
+  "version": "0.7.9+270.92b55af"
  }
 }
