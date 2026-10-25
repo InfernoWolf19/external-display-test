@@ -1,12 +1,4 @@
 {
- "0.7.5+191.e196b34": {
-  "date": "2026-10-18T00:04:06Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+191.e196b34_iphoneos-arm64.deb",
-  "run": 191,
-  "sha": "e196b34d1897a043300f6c473ebd934ac7e7fa16",
-  "subject": "OPEN-ISSUES / POINTER-HOVER spec: iPad -> monitor edge specks fixed (\u2026",
-  "version": "0.7.5+191.e196b34"
- },
  "0.7.5+192.61c782c": {
   "date": "2026-10-18T00:07:32Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+192.61c782c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "475993c46432651174de7fd7e6b7b7b64684cca4",
   "subject": "Fix SpringBoard stack overflow on window resize from full screen: isLiveResize is read from the gesture transaction (as 16.0 / 16.2), not from the switcher transition request; re-entrancy guard for gesture update / complete (switch p1_reentry)",
   "version": "0.7.9+261.475993c"
+ },
+ "0.7.9+262.e9afd3e": {
+  "date": "2026-10-25T15:20:57Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+262.e9afd3e_iphoneos-arm64.deb",
+  "run": 262,
+  "sha": "e9afd3e488bfa8bda38f7d243f24aced22eedbdd",
+  "subject": "Audit of all P1/PV/PS helper calls: PS_DefFrame sent environment to the modifier instead of the layout (fixed); helpers and ivar lookups log once when a selector / ivar is missing on a non-nil receiver instead of answering NO silently",
+  "version": "0.7.9+262.e9afd3e"
  }
 }
