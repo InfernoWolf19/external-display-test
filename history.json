@@ -1,12 +1,4 @@
 {
- "0.7.5+198.51b4c69": {
-  "date": "2026-10-20T14:07:48Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+198.51b4c69_iphoneos-arm64.deb",
-  "run": 198,
-  "sha": "51b4c69570b1ad4688f0863c103da8dfd85379b3",
-  "subject": "CI: publish every successful build as a Sileo / Zebra repository on g\u2026",
-  "version": "0.7.5+198.51b4c69"
- },
  "0.7.5+199.51b4c69": {
   "date": "2026-10-20T14:17:56Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+199.51b4c69_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "dcef91c55c1234f98e36c9b40fa957b4b51f80f8",
   "subject": "Y12Dock: the floating dock of a display decides with its own display's environment mode, dock window stays visible while the dock library popover is open (switches y12_dockmode, y12_dockwin); DELTA-SWEEP verdicts for floating dock and window rows",
   "version": "0.7.9+267.dcef91c"
+ },
+ "0.7.9+269.9fb6153": {
+  "date": "2026-10-25T20:21:06Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+269.9fb6153_iphoneos-arm64.deb",
+  "run": 269,
+  "sha": "9fb61535222812856f283dfd6890323aa0b95d6e",
+  "subject": "Crash 'A floor modifier is required': _updateFloorModifierWithTransitionEvent: keeps the current floor (logged GUARD(floor) with the full event / floor state) instead of asserting on a stale transition end event; switch g1c_floorguard",
+  "version": "0.7.9+269.9fb6153"
  }
 }
