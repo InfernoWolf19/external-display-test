@@ -17,6 +17,7 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 | EQUIVALENT | 316 |
 | IRRELEVANT | 308 |
 | EXCLUDED | 117 |
+| NOT PORTED | 157 |
 | OPEN | 27 |
 | CANNOT | 1 |
 | **total** | **1466** |
@@ -355,7 +356,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBChamoisOverlappingController | `-_snapPositionToNearestEdgesIfNecessary:draggingItem:` | 0x1c5f55404 | 0x1c73cb40c | PORTED already: 16.2 address cited in G2.x |
 | SBChamoisOverlappingModel | `-mutableCopyWithZone:` | 0x1c64bfd8c | 0x1c797a72c | PORTED already: hook in G2.x:569 |
 | SBChamoisOverlappingModel | `-.cxx_destruct` | 0x1c64bff38 | 0x1c797b050 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBContinuousExposeAppToAppModifier | `-didMoveToParentModifier:` | 0x1c610b99c | 0x1c759598c | PORTED already: 16.2 address cited in G1B.x, G1C.x |
+| SBContinuousExposeAppToAppModifier | `-didMoveToParentModifier:` | 0x1c610b99c | 0x1c759598c | PORTED already: 16.2 address cited in G1C.x, G1B.x |
 | SBContinuousExposeAppToAppModifier | `-asyncRenderingDisabled` | 0x1c610baa0 | 0x1c7595acc | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeAppToAppModifier | `-transitionWillBegin` | 0x1c610bac0 | 0x1c7595b40 | PORTED already: 16.2 address cited in G1C.x |
 | SBContinuousExposeAppToAppModifier | `-animationAttributesForLayoutElement:` | 0x1c610bd0c | 0x1c7595bd8 | PORTED already: 16.2 address cited in G1C.x |
@@ -569,7 +570,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBFluidSwitcherViewController | `-_orderedViewsForLayoutElement:excludeSwitcherHostedShelves:` | 0x1c5fd6eb8 | 0x1c7450094 | NOT PORTED: 16.2 handles two more layout element types (6 and 7: new in 16.2, window picker / shelf variants) in the type switch; elements of those types are not produced by the 16.0 modifiers |
 | SBFluidSwitcherViewController | `-underlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd7e2c | 0x1c7451034 | EQUIVALENT: 16.2 creates the tap event with modifierFlags:0 (G2B.m:1577 adds the 16.2 event initializer and the flags); the same dispatch |
 | SBFluidSwitcherViewController | `-overlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd8118 | 0x1c7451324 | PORTED already: hook in G1B.x:827 |
-| SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | PORTED already: 16.2 address cited in P1VC.m |
+| SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | PORTED already: P1VC.m (PV_OverlayFrame: without an adjusted layout the container view bounds size is used); the 16.2 log lines are not needed |
 | SBFluidSwitcherViewController | `-_applicationForDisplayItem:` | 0x1c5fd9638 | 0x1c74529cc | EQUIVALENT: _applicationForDisplayItem: 16.2 asks the new +[SBApplicationController applicationForDisplayItem:] (bundle identifier of an app item); _updateForegroundAppLayoutsList: P1VC.m notes the global function pointer of 16.0 is the same function as 16.2's |
 | SBFluidSwitcherViewController | `-gestureHandlingModifierRequestsUpdate:` | 0x1c5fd9860 | 0x1c7452bdc | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherViewController | `-_scrollToAppLayout:animated:alignment:completion:` | 0x1c5fd9c44 | 0x1c7452ff0 | PORTED already: hook in G1C.x:5127 |
