@@ -1,12 +1,4 @@
 {
- "0.7.9+205.6ff8b29": {
-  "date": "2026-10-20T19:18:08Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+205.6ff8b29_iphoneos-arm64.deb",
-  "run": 205,
-  "sha": "6ff8b2997cf12a2656e259288a49f135b37223c2",
-  "subject": "Backport162: FEATURES-0.7.9 feature-level completeness audit of the 16.2 port (checklist, TOP-15 gaps, unverified list)",
-  "version": "0.7.9+205.6ff8b29"
- },
  "0.7.9+206.24222ef": {
   "date": "2026-10-20T19:17:01Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+206.24222ef_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "971056beb10153b4f6cf26650d85e972b5bcf33a",
   "subject": "Y16Contingency: transient overlay keyboard visibility and dismissal use the display of the overlay (y16_overlaykb, y16_overlaydismiss); DELTA-SWEEP updated",
   "version": "0.7.9+274.971056b"
+ },
+ "0.7.9+275.256780e": {
+  "date": "2026-10-25T20:47:55Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+275.256780e_iphoneos-arm64.deb",
+  "run": 275,
+  "sha": "256780e895993e260574d8f53cba07bddf468134",
+  "subject": "DELTA-SWEEP: port table per family, cross references, floor modifier review",
+  "version": "0.7.9+275.256780e"
  }
 }
