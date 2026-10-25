@@ -1,12 +1,4 @@
 {
- "0.7.5+192.61c782c": {
-  "date": "2026-10-18T00:07:32Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+192.61c782c_iphoneos-arm64.deb",
-  "run": 192,
-  "sha": "61c782c2485968ec2ea368d7198c400ded0358c0",
-  "subject": "G4B migrate: scene handle lookup through the owning switcher like 16.\u2026",
-  "version": "0.7.5+192.61c782c"
- },
  "0.7.5+193.c1b1736": {
   "date": "2026-10-18T00:32:44Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+193.c1b1736_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "e9afd3e488bfa8bda38f7d243f24aced22eedbdd",
   "subject": "Audit of all P1/PV/PS helper calls: PS_DefFrame sent environment to the modifier instead of the layout (fixed); helpers and ivar lookups log once when a selector / ivar is missing on a non-nil receiver instead of answering NO silently",
   "version": "0.7.9+262.e9afd3e"
+ },
+ "0.7.9+263.4e79217": {
+  "date": "2026-10-25T15:22:41Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+263.4e79217_iphoneos-arm64.deb",
+  "run": 263,
+  "sha": "4e7921730ff7eaa09b41c0363135cf504f746c7a",
+  "subject": "Y8Layout / Y9Misc: external display layout state default orientation, no home affordance inset under Stage Manager, Spotlight open frame, layout state equality per display (y8_*); Control Center rules per scene, transient overlay keyboard focus (y9_*); DELTA-SWEEP verdicts for layout, overlay, banner, control center rows",
+  "version": "0.7.9+263.4e79217"
  }
 }
