@@ -265,6 +265,10 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y8_stateeq | (Y8Layout.x) layout states of different displays are not equal even with the same elements |
 | y9_ccscene | (Y9Misc.x) Control Center presentation rules read the layout of the iPad's own switcher controller, not the active display's |
 | y9_overlayfocus | (Y9Misc.x) transient overlay windows take keyboard focus while presented (16.2 focus stealing assertion "activeTransientOverlay") |
+| y10_portallevel | (Y10Pip.x) the live copy of a PiP window dragged to the other display is shown at the level of the source window (16.2 sets it, 16.0 left it below the other windows) |
+| y10_autopip | (Y10Pip.x) Stage Manager: leaving the stage starts PiP for any window of the previous stage that is playing video (16.0 only looked at the primary / split entities) |
+| y10_morphframe | (Y10Pip.x) the morph to PiP starts from the window's own frame instead of the full container size under Stage Manager |
+| y10_stashscene | (Y10Pip.x) a PiP stash assertion for the other display follows that display's layout transitions (16.0: the iPad's) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
