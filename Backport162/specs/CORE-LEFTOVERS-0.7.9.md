@@ -225,3 +225,39 @@ same blocks; its serial per-display transitions and the old transaction's interr
 stays (an event of an older transition must not change it), else a floor for the event's mode is built (full screen / multitasking / home); log `GUARD(floor) #n: ... event phase animated modes from->to gesture toAL toAppExpose current floor multitaskingModifier root -> floor (how)`.
 That line names the exact event and state the next time it happens (the three crash logs could not, because the event is logged only after the handler returns). **Not fixed at the cause**: dropping the stale end events needs the guard's log to show which
 transaction they belong to. Test: repeat the external display home swipe on an empty display, and a window drag followed quickly by a home swipe; no crash, `GUARD(floor)` lines in the log (send them).
+
+## 7. "Finicky" drags between the extended display and the iPad: failure patterns in the u6 logs (build d586333 / dcef91c)
+
+Method: every `p1: txn` line of the three log sets was folded per gesture transaction (type, display, updates, completion, layout transactions, ancillary requests); the successful drops were compared with the failing ones.
+Successful: 4 cross-display drops in the u6/3 log (`taken over by the scene manager of ...`, ancillary request for the source display, final root transaction on the target, `GUARD(end)` finishing the stale gesture child of the display that got no
+transition: P4 works as designed).
+Failure patterns:
+* **F1 SpringBoard dies right after a drop** (3 of 3 crashes): the `A floor modifier is required` assertion at the END of the layout transaction of the gesture (section 6). Evidence: all three crashes happen within 80 ms of an
+  `addwin: transition end src=0 error=0 modes 3->3` that closes the layout transaction of an earlier drag while a second transition (home swipe 3->1 in crash 1; the source display going 3->1 with its last window gone, crash 2; the empty switcher of the
+  monitor dismissed to home, crash 3) is already running on the same or the other display. Fixed by the guard `g1c_floorguard` (no crash; `GUARD(floor)` names the event the next time).
+* **F2 a drop that does nothing / the window snaps back** (u6/3, 16:34:55 - 16:34:57, txn 0x10b913a10, iPad -> monitor): the gesture got ONE update (request layout `(null)`) in 1.3 s and completed from the manager of the monitor with an EMPTY request
+  (`HomeScreenAppLayout`, `layoutItems = (empty)`, mode 0): nothing moves, the window stays on the iPad. Cause: during the whole drag the active pointer display flips between the two scenes about every 3 ms (170 `updating active pointer display`
+  lines in 2 s, `flip probe 1/12 .. 12/12`: the SAME press is delivered once as scene 0x111ef6bf0 `location INSIDE the window` (988, 1426 in the 2560x1440 window) and once as scene 0x104f17c30 `location OUTSIDE the window` (848, 305 in the 834x1194
+  window)). The drag updates therefore alternate between the two displays' recognizers, and the target display never sees a stable proposal. This is the pointer flip of FINDINGS-DRAG-LOOP P5 (display agent: G3.x / G4B pointer routing), not P1Drag.m;
+  a successful drop in the same logs happened without flipping. P1Drag.m cannot make an empty drop request meaningful; it keeps the window where it is (the observed result).
+* **F3 `addwin net: stock assertion intercepted (SBMainSwitcherControllerCoordinator.m:1067)` after a drop onto the iPad** (u6/3 16:34:34.894 and earlier logs): the coordinator's `_addAppLayoutToFront:` is called for a layout of another display; the G1B net
+  makes `_appLayouts` contain it (works, logged). Not a failure; it is the same window the crash 2 follows 5 ms later.
+* **F4 `g1d: window drag receiveTouch REFUSED`** (3 lines): the recognizer of the display that does not own the touch refuses it (`env 1`, no stage); expected.
+* No `p1: no workspace request`, `nil animationController`, `last-line guard`, `re-entrant` or `selector missing` line in any of the logs (the three crashed builds predate the resize fix and the non-silent helpers).
+
+## 8. Shadows of a windowed stage window, and after rotating the iPad (no log: reasoning from code)
+
+How the shadow is made: the item container's page view hosts `SBAppSwitcherPageShadowView` with a child layer (radius 70, opacity 0.35, offset y +35, G2H.x notes); strength comes from the modifiers' `shadowOpacityForLayoutRole:atIndex:` (FullScreen floor 1.0 on stage,
+G1C_FS_ShadowOpacity = 16.2 0x1c75c3750) and `shadowStyleForLayoutRole:inAppLayout:` (5), applied by `_applyStyleToAppLayout:roleMask:completion:` (identical in 16.0 and 16.2); its size follows the container, i.e. `frameForLayoutRole:` / `scaleForLayoutRole:`.
+Findings:
+1. `p1_defroles` DOES reach stage windows (the section 3 text saying the default is only reached without a floor was wrong): G1C_FS_RoleFrame / RoleScale call the stock chain, which ends in SBDefaultImplementationsSwitcherModifier. For ONE window on stage the result is the
+   16.0 result (scale 1.0, same frame); for a stage with two or more windows the windows behind get the 16.2 partial-occlusion scale and shift (and the shadow follows the shrunken container). Environment 2 / 3 layouts (floating / center) took the wrong
+   branch until e9afd3e (`environment` was sent to the modifier) - that build is older than the user's, so it is NOT the cause of the current report.
+2. `p1_orient`: under Stage Manager the scene frame and coordinate space use `[layoutState interfaceOrientation]`. Every layout state in the logs (30 dumps, also the ones of the 2560x1440 monitor's transactions) says `UIInterfaceOrientationPortrait`; the 16.0 traits code
+   does not publish a display's real orientation into them (that is the unported SBSwitcherTraitsAssistant work of section 3b). On a landscape display or after rotating the iPad the scene frame was then computed in a PORTRAIT reference frame while the container and its
+   shadow are laid out in the display's real orientation: content and shadow disagree. **Fixed (this commit): the substitution is used only when the layout state orientation is valid and agrees with the shape of the switcher window; otherwise the per-element 16.0
+   orientation is used and one `p1sw: orient: layout state orientation N contradicts the switcher window shape WxH` line is logged.** This is the most likely cause of the rotation report; if the log shows that line the next test tells.
+3. `p1_asynceval` (M6, no-op like 16.2): the 16.0 body switched asynchronous rendering of the switcher window OFF around transitions into the Stage Manager; with the body gone the switcher window renders asynchronously during those transitions and a rotation. Asynchronous
+   rendering of layers with CALayer shadows and no shadow path is a known source of flickering / lopsided shadows. 16.2 compensates through the per-display VC flags (`p1_asyncdrag`, M7), which are ported, but whether that is complete on 16.0 hardware paths is unproven.
+Tests, cheapest first (each is one kill file in `<jbroot>/tmp/`, remove it again afterwards): (a) rotate the iPad with one windowed stage window: if the shadow is right, the orientation guard was the cause; (b) `Backport162.off.p1_asynceval`; (c) `Backport162.off.p1_orient`;
+(d) `Backport162.off.p1_defroles` (only for stages with two or more windows). Send the log with `p1sw:` lines.

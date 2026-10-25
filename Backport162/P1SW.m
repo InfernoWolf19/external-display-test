@@ -272,6 +272,28 @@ static long long PS_LSForElement(id self, SEL _cmd, id element) {
     return ((long long (*)(id, SEL, id))sLSOrientForElement)(self, _cmd, element);
 }
 
+// Sanity gate of the chamois substitution (found while reading the u6 device logs): the 16.2 rule "[layoutState interfaceOrientation] replaces the per-element orientation" is only right when the layout state carries the
+// orientation of ITS display. Layout states made by the 16.0 flows (the external display's states, the ancillary requests of a cross-display drop) were all logged as UIInterfaceOrientationPortrait, also for the 2560x1440 monitor, and
+// the 16.0 traits code (the 16.2 SBSwitcherTraitsAssistant is not ported) never publishes the monitor's orientation into them. A portrait reference frame on a landscape display rotates the scene frame while the container
+// (and its shadow) is laid out in the display's own orientation. So the substitution is used only when the orientation is valid and agrees with the shape of the switcher window (landscape orientation <=> wider than tall);
+// otherwise the per-element 16.0 orientation stays, with one log line per combination.
+static BOOL PS_LayoutOrientationUsable(id switcher, id state) {
+    long long o = PS_L0(state, "interfaceOrientation");
+    CGRect b = PS_R0(PS_S0(switcher, "switcherWindow"), "bounds");
+    BOOL ok = (o >= 1 && o <= 4);
+    BOOL landscape = (o == 3 || o == 4), wide = b.size.width > b.size.height;
+    if (ok && b.size.width > 0 && b.size.height > 0) ok = (landscape == wide);
+    if (!ok) {
+        static NSMutableSet *seen;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
+        NSString *key = [NSString stringWithFormat:@"%lld|%d", o, (int)wide];
+        BOOL fresh;
+        @synchronized (seen) { fresh = ![seen containsObject:key]; if (fresh) [seen addObject:key]; }
+        if (fresh) BP_Log(@"p1sw: orient: layout state orientation %lld contradicts the switcher window shape %.0fx%.0f, the per-element orientation (16.0) is used for the coordinate space / scene frame", o, b.size.width, b.size.height);
+    }
+    return ok;
+}
 // SBSwitcherController -coordinateSpaceForLayoutElement:layoutState: (16.2 0x1c7603a88, 16.0 0x1c617c1c4): with Stage Manager the orientation of the layout state ([layoutState interfaceOrientation]) replaces the per-element one.
 static id PS_CoordSpace(id self, SEL _cmd, id element, id state) {
     if (!BP_OnName("p1_orient")) return ((id (*)(id, SEL, id, id))sCoordSpace)(self, _cmd, element, state);
@@ -279,7 +301,7 @@ static id PS_CoordSpace(id self, SEL _cmd, id element, id state) {
     id appLayout = PS_S0(state, "appLayout");
     SEL so = sel_registerName("interfaceOrientationForLayoutElement:");
     long long o = [state respondsToSelector:so] ? ((long long (*)(id, SEL, id))objc_msgSend)(state, so, element) : 0;
-    if (PS_B0(self, "isChamoisWindowingUIEnabled")) o = PS_L0(state, "interfaceOrientation");
+    if (PS_B0(self, "isChamoisWindowingUIEnabled") && PS_LayoutOrientationUsable(self, state)) o = PS_L0(state, "interfaceOrientation");
     long long role = PS_L0(element, "layoutRole");
     BOOL inset = PS_B0(appLayout, "isInsetForHomeAffordance");
     SEL rf = sel_registerName("referenceFrameForForInterfaceOrientation:layoutRole:appLayout:isInsetForHomeAffordance:");
@@ -298,7 +320,7 @@ static __thread __unsafe_unretained id tFrameSelf;
 static __thread long long tFrameOrient;
 static CGRect PS_SceneFrame(id self, SEL _cmd, id entity, id state) {
     typedef CGRect (*Orig)(id, SEL, id, id);
-    if (!BP_OnName("p1_orient") || !PS_B0(self, "isChamoisWindowingUIEnabled")) return ((Orig)sSceneFrame)(self, _cmd, entity, state);
+    if (!BP_OnName("p1_orient") || !PS_B0(self, "isChamoisWindowingUIEnabled") || !PS_LayoutOrientationUsable(self, state)) return ((Orig)sSceneFrame)(self, _cmd, entity, state);
     id prevSelf = tFrameSelf; long long prevO = tFrameOrient;
     tFrameSelf = self; tFrameOrient = PS_L0(state, "interfaceOrientation");
     CGRect r = ((Orig)sSceneFrame)(self, _cmd, entity, state);
