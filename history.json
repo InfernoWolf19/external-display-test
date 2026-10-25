@@ -1,12 +1,4 @@
 {
- "0.7.5+193.c1b1736": {
-  "date": "2026-10-18T00:32:44Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+193.c1b1736_iphoneos-arm64.deb",
-  "run": 193,
-  "sha": "c1b17364fb5384348d8e3af941f43f278ff5d0cc",
-  "subject": "G3: Zoom/Unzoom menu title re-derived from the committed sizing polic\u2026",
-  "version": "0.7.5+193.c1b1736"
- },
  "0.7.5+194.2ba62f2": {
   "date": "2026-10-18T00:49:59Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+194.2ba62f2_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4e7921730ff7eaa09b41c0363135cf504f746c7a",
   "subject": "Y8Layout / Y9Misc: external display layout state default orientation, no home affordance inset under Stage Manager, Spotlight open frame, layout state equality per display (y8_*); Control Center rules per scene, transient overlay keyboard focus (y9_*); DELTA-SWEEP verdicts for layout, overlay, banner, control center rows",
   "version": "0.7.9+263.4e79217"
+ },
+ "0.7.9+264.d586333": {
+  "date": "2026-10-25T15:26:13Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+264.d586333_iphoneos-arm64.deb",
+  "run": 264,
+  "sha": "d5863336ad571e782915674856a11cd08df8fec2",
+  "subject": "G3B: -[SBWindowScene medusaHostedKeyboardWindowController] (16.2 0x1c77f80e4) answers the per-scene hosted keyboard window controller, read by P1VC.m (switch kbmedusa)",
+  "version": "0.7.9+264.d586333"
  }
 }
