@@ -1118,6 +1118,20 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
 }
 %end
 
+// 16.2 -[SBWindowScene medusaHostedKeyboardWindowController] (0x1c77f80e4) = [[self _abstractWindowSceneDelegate] medusaHostedKeyboardWindowController] (0x1c73c05ac, the
+// controller the delegate made for the scene, kept in the scene context ivar +0x10; SBWindowSceneContext has the same property, 0x1c79bda50).  16.0 has none of these.
+// Here the controller of a scene is the associated object that BPKB_ControllerForWindowScene makes on first use (its init has no side effects, like 16.2's
+// 0x1c7626c38), the same object the SBMainDisplaySceneManager forwarders and shouldKeyboardBeWindowSizedForHostWithIdentity: use.  Reader: P1VC.m
+// PV_UsingMedusaKeyboard (sends isUsingMedusaHostedKeyboardWindow, answered by the controller class above).  Switch kbmedusa (default on); off = nil, which is what 16.0
+// answered (P1VC then falls back to the 16.0 scene manager flag).
+%hook SBWindowScene
+%new
+- (id)medusaHostedKeyboardWindowController {
+    if (!BP_OnName("kbmedusa")) return nil;
+    return BPKB_ControllerForWindowScene(self);
+}
+%end
+
 %end // G3B_KbWindow
 
 

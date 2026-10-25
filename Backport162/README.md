@@ -94,6 +94,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | g3b_menu | top-affordance menu changes | `g3b_menu` |
 | g3b_pip | PiP per display, stash-tab suppression | `g3b_pip` |
 | g3b_kbwindow | per-scene hosted keyboard window controller | `g3b_kbwindow` |
+| hosted keyboard controller accessor | `-[SBWindowScene medusaHostedKeyboardWindowController]` (16.2 0x1c77f80e4, absent in 16.0) answers the per-scene hosted keyboard window controller of G3B.x; read by P1VC.m for the per-display keyboard suppression decision. Off: nil (16.0 answer, P1VC falls back to the scene manager flag) | `kbmedusa` |
 | g3b_statusbar | status bar `options:`, per-display frontmost status bar | `g3b_statusbar` |
 | g3b_orient | user-resize orientation chain, content / container orientation, overlay classes | `g3b_orient` |
 | g3b_grid | orthogonal fixed-aspect grids | `g3b_grid` |
