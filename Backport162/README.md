@@ -95,6 +95,7 @@ Since 0.7.9 StageManagerToggle (Control Centre button / Settings switch toggle S
 | g3b_pip | PiP per display, stash-tab suppression | `g3b_pip` |
 | g3b_kbwindow | per-scene hosted keyboard window controller | `g3b_kbwindow` |
 | hosted keyboard controller accessor | `-[SBWindowScene medusaHostedKeyboardWindowController]` (16.2 0x1c77f80e4, absent in 16.0) answers the per-scene hosted keyboard window controller of G3B.x; read by P1VC.m for the per-display keyboard suppression decision. Off: nil (16.0 answer, P1VC falls back to the scene manager flag) | `kbmedusa` |
+| hold-flip guard | while a pointer button is held, a pointer move whose location lies outside the bounds of the window of the scene it is reported for (the phantom event of the pinned touch route) no longer makes that display the active pointer / active display; the first real crossing still switches. Deviation from 16.2 (which has no such test). Fixes a cross-display window drop that did nothing because the active display flipped every few ms during the drag. specs/FINDINGS-DRAG-LOOP-0.7.9.md P5 | `p5_holdflip` |
 | g3b_statusbar | status bar `options:`, per-display frontmost status bar | `g3b_statusbar` |
 | g3b_orient | user-resize orientation chain, content / container orientation, overlay classes | `g3b_orient` |
 | g3b_grid | orthogonal fixed-aspect grids | `g3b_grid` |
@@ -281,6 +282,9 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y15_incallreq | (Y15InCall.x) expanding / dismissing the call UI of a call on the monitor changes only the monitor |
 | y15_bannerscene | (Y15InCall.x) the call banner is measured in the call's own display scene |
 | y15_bannerorient | (Y15InCall.x) the call banner on the monitor uses the monitor's orientation |
+| y16_stagefail | (Y16Contingency.x) a Stage Manager window that crashes or exits no longer sends the whole stage home: the other windows stay |
+| y16_cmdtab | (Y16Contingency.x) the Command-Tab overlay is dismissed when its display is unplugged |
+| y16_shotcorner | (Y16Contingency.x) a finger swipe from a bottom corner does not start the corner gesture while Stage Manager is on (the corner is the resize handle) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder

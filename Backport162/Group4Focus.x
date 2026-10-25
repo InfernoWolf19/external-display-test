@@ -218,6 +218,7 @@ static id BP_KeyboardFocusController(void) {
     NSHashTable *_connected;                                // weak set of scenes that "have sniffers" (16.2: _sceneToEventSniffers keys)
     NSHashTable *_activeObservers;                          // weak
     NSHashTable *_pointerObservers;                         // weak
+    NSUInteger _holdFlipLogged;                             // P5 step 2: ignored moves logged since the last touch down (first 12)
     NSUInteger _flipProbeCount;                             // P5 step 1 (specs/FINDINGS-DRAG-LOOP-0.7.9.md): flips of the active pointer display since the last pointer touch down (log-only probe)
     __unsafe_unretained id _probeTouch;                     // the touch whose move is being handled (valid only inside handleSendEvent:)
 }
@@ -332,6 +333,7 @@ static id BP_KeyboardFocusController(void) {
     BP_Log(@"coordinator: %s pointer touch down window scene %p (previous %p)", _touchDownWS ? "re-setting" : "setting", ws, _touchDownWS);
     _touchDownWS = ws;
     _flipProbeCount = 0;
+    _holdFlipLogged = 0;
 }
 - (void)_pointerTouchUp {
     if (!_touchDownWS) return;
@@ -343,6 +345,29 @@ static id BP_KeyboardFocusController(void) {
 - (void)_pointerMovedInScene:(id)ws {
     id old = _activePointerWS;
     if (!ws) return;
+    // P5 step 2 (DEVIATION from 16.2, which has no such test: 16.2 0x1c795e838 stores the scene unconditionally).  While a pointer button is held the touch route is pinned to
+    // the press scene (X9Pin `pinbuttondown`), and every move then arrives twice: once for the press scene (location inside its window) and once for the scene of the HID
+    // context of the other display, with the location in THAT window's coordinates, outside its bounds (device log S/u6/3: 170 flips in 2 s, a cross-display drop ignored
+    // because the gesture ran on the wrong display).  Such an event does not say that the pointer is over that display.  The test is by location, not by scene equality, so
+    // the first real crossing (the other scene's event inside its own window) still switches the display.  Switch p5_holdflip (default on).
+    if (_touchDownWS && _probeTouch && BP_OnName("p5_holdflip")) {
+        id t = _probeTouch;
+        id v = [t respondsToSelector:@selector(view)] ? [t view] : nil;
+        id w = [v respondsToSelector:@selector(window)] ? [v window] : ([t respondsToSelector:@selector(window)] ? [t window] : nil);
+        SEL bs = NSSelectorFromString(@"bounds");
+        if (w && [w respondsToSelector:bs] && [t respondsToSelector:@selector(locationInView:)]) {
+            CGRect wb = ((CGRect (*)(id, SEL))objc_msgSend)(w, bs);
+            CGPoint loc = [t locationInView:v];
+            if (!CGRectContainsPoint(wb, loc)) {
+                if (_holdFlipLogged < 12) {
+                    _holdFlipLogged++;
+                    BP_Log(@"coordinator: hold-flip guard %lu/12: pointer move for window scene %p ignored while a button is held (touch down scene %p), location (%.1f, %.1f) is outside its window bounds (%.0f x %.0f)",
+                           (unsigned long)_holdFlipLogged, ws, _touchDownWS, loc.x, loc.y, wb.size.width, wb.size.height);
+                }
+                return;
+            }
+        }
+    }
     _activePointerWS = ws;
     if (ws != old) {
         BP_Log(@"coordinator: updating active pointer display from %p to %p", old, ws);
