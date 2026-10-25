@@ -273,6 +273,13 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y11_tapreq | (Y11Modifiers.x) tapping a window in the shelf / peek builds the request with the tapped item and the pointer source (16.2 requestForTapAppLayoutEvent:) |
 | y12_dockmode | (Y12Dock.x) the floating dock of a display decides with that display's environment mode, not the active display's |
 | y12_dockwin | (Y12Dock.x) the floating dock window stays visible while the library popover of the dock is open and the dock itself is hidden |
+| y13_bringfront | (Y13Fluid.x) clicking the window that is already in front still updates its last interaction time (16.2) |
+| y13_reuse | (Y13Fluid.x) a recycled window container forgets pointer lock suppression, edge hover and hover recognizer state |
+| y13_failgestures | (Y13Fluid.x) events that fail all multitasking gestures also reset the Stage Manager window drag recognizer |
+| y14_openurl | (Y14Open.x) a link opened from a window on the monitor opens its target app on the monitor (16.2 picks the display, 16.0 always the iPad) |
+| y15_incallreq | (Y15InCall.x) expanding / dismissing the call UI of a call on the monitor changes only the monitor |
+| y15_bannerscene | (Y15InCall.x) the call banner is measured in the call's own display scene |
+| y15_bannerorient | (Y15InCall.x) the call banner on the monitor uses the monitor's orientation |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder

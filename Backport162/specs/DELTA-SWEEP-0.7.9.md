@@ -12,18 +12,18 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 428 |
-| PORTED NOW | 70 |
-| EQUIVALENT | 231 |
-| IRRELEVANT | 283 |
+| PORTED already | 439 |
+| PORTED NOW | 75 |
+| EQUIVALENT | 264 |
+| IRRELEVANT | 289 |
 | EXCLUDED | 117 |
 | TO PORT | 16 |
-| OPEN | 25 |
+| OPEN | 26 |
 | CANNOT | 1 |
-| not yet triaged (this sweep is in progress) | 215 |
+| not yet triaged (this sweep is in progress) | 116 |
 | **total** | **1466** |
 
-Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 11, OPEN 2, PENDING 35, PORTED 37, PORTED NOW 10, TO PORT 4; F2: EQUIVALENT 33, EXCLUDED 3, IRRELEVANT 25, NOT PORTED 5, OPEN 2, PENDING 4, PORTED 4, PORTED NOW 10, TO PORT 2; F3: EQUIVALENT 75, EXCLUDED 41, IRRELEVANT 10, NOT PORTED 45, OPEN 5, PENDING 130, PORTED 308, PORTED NOW 42, TO PORT 10; F4: EQUIVALENT 18, EXCLUDED 8, OPEN 16, PENDING 4, PORTED 24, PORTED NOW 4; F5: EXCLUDED 1, NOT PORTED 2, PENDING 3, PORTED 2; F6: EQUIVALENT 19, EXCLUDED 8, IRRELEVANT 22, NOT PORTED 12, PENDING 27, PORTED 11, PORTED NOW 3; F7: EQUIVALENT 18, EXCLUDED 9, IRRELEVANT 8, PENDING 3, PORTED 33, PORTED NOW 1; F8: EQUIVALENT 27, EXCLUDED 29, IRRELEVANT 212, NOT PORTED 5, PENDING 9, PORTED 9
+Per family: F1: CANNOT 1, EQUIVALENT 45, EXCLUDED 18, IRRELEVANT 8, NOT PORTED 14, OPEN 2, PENDING 26, PORTED 37, PORTED NOW 10, TO PORT 4; F2: EQUIVALENT 33, EXCLUDED 3, IRRELEVANT 25, NOT PORTED 5, OPEN 2, PENDING 3, PORTED 5, PORTED NOW 10, TO PORT 2; F3: EQUIVALENT 104, EXCLUDED 41, IRRELEVANT 14, NOT PORTED 85, OPEN 6, PENDING 41, PORTED 318, PORTED NOW 47, TO PORT 10; F4: EQUIVALENT 18, EXCLUDED 8, OPEN 16, PENDING 4, PORTED 24, PORTED NOW 4; F5: EXCLUDED 1, NOT PORTED 2, PENDING 3, PORTED 2; F6: EQUIVALENT 19, EXCLUDED 8, IRRELEVANT 22, NOT PORTED 12, PENDING 27, PORTED 11, PORTED NOW 3; F7: EQUIVALENT 18, EXCLUDED 9, IRRELEVANT 8, PENDING 3, PORTED 33, PORTED NOW 1; F8: EQUIVALENT 27, EXCLUDED 29, IRRELEVANT 212, NOT PORTED 5, PENDING 9, PORTED 9
 
 ## F1 Window scene / scene manager / main workspace / scene handles (165)
 
@@ -35,12 +35,12 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBApplication(Classic_Internal) | `+_defaultLaunchingSizeForDisplayConfiguration:classicMode:` | 0x1c5ec8834 | 0x1c733bc90 | 80a95ef: Y5Apps.x y5_classicsize (classic mode size table on every display) [sha eb694cd] |
 | SBApplication(Classic_Internal) | `-_calculateSupportedTypesForSplashBoard` | 0x1c5ec8d2c | 0x1c733c13c | TO PORT: iPhone-only (classic) app window mode selection: 16.2 adds the 1024 supported type and isTigrisLinked / isSydneyLinked rules (652 insns); effect limited to the window shape of iPhone-only apps, decode pending |
 | SBApplication(Classic_Internal) | `-_classicModeFromSupportedTypes` | 0x1c5ec8f44 | 0x1c733c334 | TO PORT: iPhone-only (classic) app window mode selection: 16.2 adds the 1024 supported type and isTigrisLinked / isSydneyLinked rules (652 insns); effect limited to the window shape of iPhone-only apps, decode pending |
-| SBApplication(Classic_Private) | `+_niceScreenTypeForClassicType:matchingAValidDisplayZoomModeOnScreenType:` | 0x1c5ec6918 | 0x1c7339a44 | TRIAGE PENDING |
+| SBApplication(Classic_Private) | `+_niceScreenTypeForClassicType:matchingAValidDisplayZoomModeOnScreenType:` | 0x1c5ec6918 | 0x1c7339a44 | NOT PORTED: classic app screen type for hardware that has display zoom modes (D7x POR compatibility default); iPad classic apps use the fixed type 32 in 16.2, 16.0 consults hardwareDefaults enableD7xPORCompatibilityMode first; no iPad effect |
 | SBApplicationSceneHandle | `-_createApplicationSceneSettingsFromContext:entity:` | 0x1c5e2b338 | 0x1c729d898 | TO PORT: M5 orientation family (REVIEW-CORE M5): interfaceOrientationForLayoutElement:unknownAllowed: |
 | SBApplicationSceneUpdateTransaction | `-initWithApplicationSceneEntity:transitionRequest:` | 0x1c5e2ae9c | 0x1c729d788 | PORTED already: hook in G3B.x:369 |
-| SBApplicationSceneUpdateTransaction | `-_didComplete` | 0x1c5e48cfc | 0x1c72baf2c | TRIAGE PENDING |
+| SBApplicationSceneUpdateTransaction | `-_didComplete` | 0x1c5e48cfc | 0x1c72baf2c | IRRELEVANT: privacy preflight of the launch (preflightLaunchForApplication:sceneIdentifier:withCompletionHandler:) and a new delegate callback; not windowing |
 | SBApplicationSceneUpdateTransaction | `-.cxx_destruct` | 0x1c5e4ecb4 | 0x1c72c0ef8 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBApplicationSceneUpdateTransaction | `-_willBegin` | 0x1c644ab4c | 0x1c78fe4a8 | TRIAGE PENDING |
+| SBApplicationSceneUpdateTransaction | `-_willBegin` | 0x1c644ab4c | 0x1c78fe4a8 | IRRELEVANT: privacy preflight of the launch (preflightLaunchForApplication:sceneIdentifier:withCompletionHandler:) and a new delegate callback; not windowing |
 | SBApplicationSceneUpdateTransaction | `-_customizedDescriptionProperties` | 0x1c644ac94 | 0x1c78feae0 | EXCLUDED: description / debug text only |
 | SBApplicationSupportServiceDelegate | `-service:overrideClientInitialization:` | 0x1c61c050c | 0x1c764ee7c | TRIAGE PENDING |
 | SBApplicationSupportServiceDelegate | `-destroyScenesWithPersistentIdentifiers:animationType:destroySessions:forClient:completion:` | 0x1c61c0a7c | 0x1c764f3f4 | TRIAGE PENDING |
@@ -55,10 +55,10 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBDeviceApplicationSceneHandle | `-activationInterfaceOrientationForOrientation:` | 0x1c5e58d94 | 0x1c72cb524 | PORTED already: hook in G3.x:277 |
 | SBDeviceApplicationSceneHandle | `-_launchingInterfaceOrientationForOrientation:` | 0x1c5e73fe0 | 0x1c72e6e94 | PORTED already: hook in G3.x:205 |
 | SBDeviceApplicationSceneHandle | `-_resumingInterfaceOrientationForOrientation:` | 0x1c5e9d524 | 0x1c73101d0 | PORTED already: hook in G3.x:285 |
-| SBDeviceApplicationSceneHandle | `-dealloc` | 0x1c6224548 | 0x1c76b4fb0 | TRIAGE PENDING |
+| SBDeviceApplicationSceneHandle | `-dealloc` | 0x1c6224548 | 0x1c76b4fb0 | EQUIVALENT: removes the observers of a 16.2 only observer set; nothing registered in 16.0 |
 | SBDeviceApplicationSceneHandle | `-wantsDeviceOrientationEventsEnabled` | 0x1c6225328 | 0x1c76b5dac | PORTED already: hook in G3.x:260 |
 | SBDeviceApplicationSceneHandle | `-_interfaceOrientationMode` | 0x1c62253b4 | 0x1c76b5e24 | PORTED already: hook in G3.x:255 |
-| SBDeviceApplicationSceneHandle | `-_classicPhoneOnPadActivationOrientationForOrientation:` | 0x1c62262d8 | 0x1c76b6c78 | TRIAGE PENDING |
+| SBDeviceApplicationSceneHandle | `-_classicPhoneOnPadActivationOrientationForOrientation:` | 0x1c62262d8 | 0x1c76b6c78 | EQUIVALENT: the preference is read through the handle's own accessor (_classicAppPhoneOnPadPrefersLandscape) instead of the application's; same value |
 | SBEmbeddedDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c63a0e20 | 0x1c784b1b8 | PORTED already: hook in Group4Focus.x:646 |
 | SBEmbeddedDisplayWindowSceneDelegate | `-.cxx_destruct` | 0x1c63a1588 | 0x1c784b974 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBExternalDisplayWindowSceneDelegate | `-_configureForConnectingWindowScene:windowSceneContext:` | 0x1c5fed084 | 0x1c7467d5c | PORTED already: hook in Group4Focus.x:665 |
@@ -104,7 +104,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBMainWorkspace | `-isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:` | 0x1c5f0c1dc | 0x1c73808a4 | OPEN: NEEDS EDIT IN G3B.x: expose the per-window-scene hosted keyboard controller (BPKB_ControllerForWindowScene) as -[SBWindowScene medusaHostedKeyboardWindowController]; only matters for alerts on the extended display (LOW) |
 | SBMainWorkspace | `-transientOverlayScenePresenter:didDismissViewController:wasTopmostPresentation:` | 0x1c5f0cad0 | 0x1c73811ac | EQUIVALENT: main display presenter: identical (switcherController of the window scene = the coordinator's active controller); extended display presenter only resets the idle timer / clock after a dismissal, LOW, not ported |
 | SBMainWorkspaceLayoutStateContingencyPlan | `-transitionContextForLayoutContext:failedEntities:` | 0x1c6450ce8 | 0x1c7904c94 | TRIAGE PENDING |
-| SBMainWorkspaceTransitionRequest | `-copyMainWorkspaceTransitionRequest` | 0x1c63e6878 | 0x1c7892f40 | TRIAGE PENDING |
+| SBMainWorkspaceTransitionRequest | `-copyMainWorkspaceTransitionRequest` | 0x1c63e6878 | 0x1c7892f40 | NOT PORTED: 16.2 also copies retainsSiri of the application context (Siri on a Stage Manager transition); Siri retention only |
 | SBRecentAppLayouts | `-_setRecents:notifyForChangeDescription:` | 0x1c64eb650 | 0x1c79a8370 | EXCLUDED: description / debug text only |
 | SBRecentAppLayouts | `-_validateAndUpdateRecents:` | 0x1c64ed538 | 0x1c79aa0ec | TRIAGE PENDING |
 | SBRecentAppLayouts | `-_stashModelToPath:` | 0x1c64ee2b4 | 0x1c79ab11c | TRIAGE PENDING |
@@ -137,7 +137,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBSingleSceneController | `-_evaluateSceneActivationState` | 0x1c645c60c | 0x1c790fb30 | NOT PORTED: system UI scenes keyed by display identity with a scene vending policy and activation context generators (16.2): FEATURES-0.7.9 S1 per display system UI scenes (accessibility UI server, eyedropper, Moments) stays PARTIAL; the 16.0 controllers already create scenes per connected window scene |
 | SBSingleSceneController | `-.cxx_destruct` | 0x1c645c950 | 0x1c790fea0 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBStatusBarStateProvider | `-endCoalescentBlock` | 0x1c5e1f2cc | 0x1c72911c4 | IRRELEVANT: status bar post data: lock screen / on-AC battery condition for the lock screen and item enum shift (iPhone status bar items) |
-| SBSuspendedWorkspaceTransaction | `-_childTransactionDidComplete:` | 0x1c5ea0d90 | 0x1c7313a68 | TRIAGE PENDING |
+| SBSuspendedWorkspaceTransaction | `-_childTransactionDidComplete:` | 0x1c5ea0d90 | 0x1c7313a68 | NOT PORTED: Y1Workspace.x header: 16.0 skips the transition context scene update (and the animation fence assertion) of suspended launches for non main displays; the block is inlined in a 108 instruction sequence, not isolated |
 | SBSystemShellExternalDisplaySceneManager | `-_shouldAutoHostScene:` | 0x1c63ae320 | 0x1c7858710 | PORTED already: hook in Tweak.x:292 |
 | SBSystemShellExternalDisplaySceneManager | `-.cxx_destruct` | 0x1c63aeb98 | 0x1c7859118 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBToAppsWorkspaceTransaction | `-initWithTransitionRequest:` | 0x1c5e21e5c | 0x1c7293d24 | EQUIVALENT: ancillary-request helper moved from an instance method to +[SBMainWorkspaceTransitionRequest ancillaryTransitionRequestsForTransitionRequest:], delegate passed to SBSceneLayoutWorkspaceTransaction init (setDelegate: before): same objects, no behaviour change |
@@ -161,7 +161,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBWindowScenePIPManager | `-windowSceneDidDisconnect:` | 0x1c5ecab4c | 0x1c733e3c8 | PORTED already: hook in G3B.x:594 |
 | SBWindowScenePIPManager | `-.cxx_destruct` | 0x1c5ecc7c0 | 0x1c7340174 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBWindowSceneStatusBarManager | `-setAvoidanceFrame:reason:statusBar:animationSettings:` | 0x1c5ef798c | 0x1c736bd64 | EQUIVALENT: 4-argument convenience forwards options 0 to ...options: (group3-plumbing) |
-| SBWorkspaceApplicationSceneTransitionContext | `-frameForApplicationSceneEntity:` | 0x1c5e2b91c | 0x1c729dee0 | TRIAGE PENDING |
+| SBWorkspaceApplicationSceneTransitionContext | `-frameForApplicationSceneEntity:` | 0x1c5e2b91c | 0x1c729dee0 | EQUIVALENT: 16.2 adds an error log for an empty frame |
 | SBWorkspaceKeyboardFocusController | `-lockFocusToSpringBoardWindowScene:forReason:` | 0x1c6321c94 | 0x1c77c19f0 | PORTED already: hook in G4B.x:2152 |
 | SBWorkspaceKeyboardFocusController | `-userFocusRequestForScene:reason:completion:` | 0x1c6322844 | 0x1c77c29d8 | PORTED already: 16.2 address cited in X7Keyboard.x |
 | SBWorkspaceKeyboardFocusController | `-removeKeyboardFocusFromScene:` | 0x1c6322ec4 | 0x1c77c3074 | PORTED already: 16.2 address cited in X7Keyboard.x |
@@ -170,7 +170,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBWorkspaceKeyboardFocusController | `-sceneManager:didRemoveExternalForegroundApplicationSceneHandle:` | 0x1c6323e94 | 0x1c77c44e0 | TRIAGE PENDING |
 | SBWorkspaceKeyboardFocusController | `-_filterFocusedSceneIdentityToken:focusedPID:resultBlock:` | 0x1c6323f3c | 0x1c77c4590 | PORTED already: 16.2 address cited in X7Keyboard.x |
 | SBWorkspaceKeyboardFocusController | `-.cxx_destruct` | 0x1c63285ac | 0x1c77c9334 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBWorkspaceTransitionRequest | `-applicationTransitionContext:frameForApplicationSceneEntity:` | 0x1c5f42650 | 0x1c73b6c6c | TRIAGE PENDING |
+| SBWorkspaceTransitionRequest | `-applicationTransitionContext:frameForApplicationSceneEntity:` | 0x1c5f42650 | 0x1c73b6c6c | EQUIVALENT: 16.2 adds an error log for an empty frame |
 | SpringBoard | `-noteSceneLayoutDidUpdateOnDisplayWithIdentity:` | 0x1c5e4b7cc | 0x1c72bda18 | EQUIVALENT: still main display only (isMainDisplay gate kept); only the coordinator singleton became the window scene's switcher controller / presenter |
 | SpringBoard | `-startupInterfaceOrientation` | 0x1c5ed5ba0 | 0x1c734a2d4 | PORTED already: hook in G3.x:923 |
 | SpringBoard | `-application:configurationForConnectingSceneSession:options:` | 0x1c5ed6c24 | 0x1c734b1f8 | TRIAGE PENDING |
@@ -230,7 +230,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBHomeHardwareButtonActions | `-performSinglePressUpActionsWithSourceType:` | 0x1c6144ea8 | 0x1c75c8670 | TRIAGE PENDING |
 | SBHomeScreenBackdropView | `-_updateBackdropViewIfNeededInvalidatingSnapshot:` | 0x1c5ea20e8 | 0x1c7314d90 | IRRELEVANT: home screen blur snapshot / opaque layer only |
 | SBHomeScreenBackdropView | `-homeScreenBlurredContentSnapshotImage` | 0x1c62977dc | 0x1c7731058 | IRRELEVANT: home screen blur snapshot / opaque layer only |
-| SBHomeScreenContinuousExposeSwitcherModifier | `-init` | 0x1c634e174 | 0x1c77f3898 | TRIAGE PENDING |
+| SBHomeScreenContinuousExposeSwitcherModifier | `-init` | 0x1c634e174 | 0x1c77f3898 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeScreenViewController | `-_acquireFloatingDockBehaviorAssertionIfNecessaryForFloatingDockController:` | 0x1c637a27c | 0x1c7821698 | EQUIVALENT: 16.2 reads the dock controller's windowScene property instead of its view controller's window scene: the same scene |
 | SBHomeScreenWindow | `-initWithWindowScene:rootViewController:layoutStrategy:role:debugName:` | 0x1c63e935c | 0x1c7895b98 | EQUIVALENT: 16.0 already takes the bounds of [windowScene screen] when it responds (it does); 16.2 drops the mainScreen fallback |
 | SBIconController | `-_effectiveOrientation` | 0x1c5e65b1c | 0x1c72d83dc | EQUIVALENT: edge fallback only (view not loaded / no window orientation: 16.2 derives the orientation from allowedInterfaceOrientations); main display home screen |
@@ -320,28 +320,28 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBAppSwitcherContinuousExposeSwitcherModifier | `-_fittedContentSize` | 0x1c636bf40 | 0x1c7812504 | PORTED already: 16.2 address cited in G1C.x |
 | SBAppSwitcherContinuousExposeSwitcherModifier | `-contentOffsetForIndex:alignment:` | 0x1c636bfd8 | 0x1c7812518 | PORTED already: 16.2 address cited in G1C.x |
 | SBAppSwitcherContinuousExposeSwitcherModifier | `-distanceToLeadingEdgeOfLeadingCardFromTrailingEdgeOfScreenWithVisibleIndexToStartSearch:` | 0x1c636c158 | 0x1c781264c | PORTED already: 16.2 address cited in G1C.x |
-| SBAppSwitcherPageView | `-initWithFrame:` | 0x1c5e5cba4 | 0x1c72cf0a4 | TRIAGE PENDING |
-| SBAppSwitcherPageView | `-willMoveToWindow:` | 0x1c5f1a404 | 0x1c738eac0 | TRIAGE PENDING |
-| SBAppSwitcherPageView | `-invalidate` | 0x1c5f1ae98 | 0x1c738f548 | TRIAGE PENDING |
-| SBAppSwitcherPageView | `-pointerWillExitRegion` | 0x1c5f1ba90 | 0x1c7390130 | TRIAGE PENDING |
-| SBAppSwitcherPageView | `-styleForRegion:forView:` | 0x1c5f1bbd8 | 0x1c739027c | TRIAGE PENDING |
-| SBAppSwitcherReusableSnapshotView | `-_snapshotImageFrameForCacheEntry:` | 0x1c5e35608 | 0x1c72a7a60 | TRIAGE PENDING |
-| SBAppSwitcherReusableSnapshotView | `-prepareForReuse` | 0x1c5e70774 | 0x1c72e3504 | TRIAGE PENDING |
+| SBAppSwitcherPageView | `-initWithFrame:` | 0x1c5e5cba4 | 0x1c72cf0a4 | PORTED already: G2B.m:1856 (the page view now passes itself to the container's appSwitcherPageView:pointerIsHoveringOverEdge:, -_updateForPointerHoveringOverEdge:, per scene pointer interaction registration); the remaining differences are ivar renumbering and a feature availability test |
+| SBAppSwitcherPageView | `-willMoveToWindow:` | 0x1c5f1a404 | 0x1c738eac0 | PORTED already: G2B.m:1856 (the page view now passes itself to the container's appSwitcherPageView:pointerIsHoveringOverEdge:, -_updateForPointerHoveringOverEdge:, per scene pointer interaction registration); the remaining differences are ivar renumbering and a feature availability test |
+| SBAppSwitcherPageView | `-invalidate` | 0x1c5f1ae98 | 0x1c738f548 | PORTED already: G2B.m:1856 (the page view now passes itself to the container's appSwitcherPageView:pointerIsHoveringOverEdge:, -_updateForPointerHoveringOverEdge:, per scene pointer interaction registration); the remaining differences are ivar renumbering and a feature availability test |
+| SBAppSwitcherPageView | `-pointerWillExitRegion` | 0x1c5f1ba90 | 0x1c7390130 | PORTED already: G2B.m:1856 (the page view now passes itself to the container's appSwitcherPageView:pointerIsHoveringOverEdge:, -_updateForPointerHoveringOverEdge:, per scene pointer interaction registration); the remaining differences are ivar renumbering and a feature availability test |
+| SBAppSwitcherPageView | `-styleForRegion:forView:` | 0x1c5f1bbd8 | 0x1c739027c | PORTED already: G2B.m:1856 (the page view now passes itself to the container's appSwitcherPageView:pointerIsHoveringOverEdge:, -_updateForPointerHoveringOverEdge:, per scene pointer interaction registration); the remaining differences are ivar renumbering and a feature availability test |
+| SBAppSwitcherReusableSnapshotView | `-_snapshotImageFrameForCacheEntry:` | 0x1c5e35608 | 0x1c72a7a60 | NOT PORTED: classic (iPhone only) apps in the "scaled" full screen mode are stretched with non uniform scaling (new -_doNonUniformScalingForApplication: 0x1c7921848: chamois or display test, app classicAppScaled and classicAppFullScreen) instead of letterboxed; classic apps only |
+| SBAppSwitcherReusableSnapshotView | `-prepareForReuse` | 0x1c5e70774 | 0x1c72e3504 | EQUIVALENT: assertion text and ivar renumbering only |
 | SBAppSwitcherReusableSnapshotView | `-initWithDelegate:snapshotCache:lockoutVCProvider:appClipOverlayCoordinator:containerViewController:` | 0x1c646a704 | 0x1c791fdbc | TRIAGE PENDING |
 | SBAppSwitcherReusableSnapshotView | `-dealloc` | 0x1c646ae1c | 0x1c792038c | TRIAGE PENDING |
 | SBAppSwitcherReusableSnapshotView | `-_contentOrientationForSnapshotCacheEntry:` | 0x1c646c7f0 | 0x1c7921eec | TRIAGE PENDING |
 | SBAppSwitcherSettings | `-chamoisSettings` | 0x1c6385014 | 0x1c782cf88 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-_loadSnapshotForRequest:withDisplayItem:inAppLayout:` | 0x1c5e45610 | 0x1c72b7a54 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-_representedApplicationSceneEntityForDisplayItem:` | 0x1c5e45fdc | 0x1c72b84f4 | PORTED already: hook in G1D.x:2562 |
-| SBAppSwitcherSnapshotImageCache | `-_cacheSnapshotForRequest:withDisplayItem:inAppLayout:` | 0x1c5e4637c | 0x1c72b898c | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-_asynchronouslyLoadSnapshotFromRequest:` | 0x1c5e4f164 | 0x1c72c13e0 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-_snapshotImage:finishedLoadingForRequest:` | 0x1c5e4f994 | 0x1c72c1d64 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-setCachableAppLayouts:` | 0x1c6302dcc | 0x1c77a0818 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-cachableAppLayouts` | 0x1c6302ee4 | 0x1c77a0940 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-setFullSizeCachableAppLayouts:` | 0x1c6303038 | 0x1c77a0a98 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-fullSizeCachableAppLayouts` | 0x1c6303150 | 0x1c77a0bc0 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-reloadSnapshotsForInterfaceStyleChange:` | 0x1c6303860 | 0x1c77a12d4 | TRIAGE PENDING |
-| SBAppSwitcherSnapshotImageCache | `-_createDownscaledVariantForRequest:snapshot:displayItem:sceneHandle:application:` | 0x1c6303e78 | 0x1c77a1a00 | TRIAGE PENDING |
+| SBAppSwitcherSnapshotImageCache | `-_loadSnapshotForRequest:withDisplayItem:inAppLayout:` | 0x1c5e45610 | 0x1c72b7a54 | NOT PORTED: 16.2 asks the delegate for the display identity of the cache (displayIdentityForImageCache:) and takes the scale / classic launch size from that display's configuration instead of FBDisplayManager mainConfiguration, and captures self weakly in its blocks; for a window on the monitor 16.0 loads the snapshot at the iPad's scale (the image view scales it to the container); the weak captures only matter for lifetime |
+| SBAppSwitcherSnapshotImageCache | `-_representedApplicationSceneEntityForDisplayItem:` | 0x1c5e45fdc | 0x1c72b84f4 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
+| SBAppSwitcherSnapshotImageCache | `-_cacheSnapshotForRequest:withDisplayItem:inAppLayout:` | 0x1c5e4637c | 0x1c72b898c | NOT PORTED: 16.2 asks the delegate for the display identity of the cache (displayIdentityForImageCache:) and takes the scale / classic launch size from that display's configuration instead of FBDisplayManager mainConfiguration, and captures self weakly in its blocks; for a window on the monitor 16.0 loads the snapshot at the iPad's scale (the image view scales it to the container); the weak captures only matter for lifetime |
+| SBAppSwitcherSnapshotImageCache | `-_asynchronouslyLoadSnapshotFromRequest:` | 0x1c5e4f164 | 0x1c72c13e0 | NOT PORTED: 16.2 asks the delegate for the display identity of the cache (displayIdentityForImageCache:) and takes the scale / classic launch size from that display's configuration instead of FBDisplayManager mainConfiguration, and captures self weakly in its blocks; for a window on the monitor 16.0 loads the snapshot at the iPad's scale (the image view scales it to the container); the weak captures only matter for lifetime |
+| SBAppSwitcherSnapshotImageCache | `-_snapshotImage:finishedLoadingForRequest:` | 0x1c5e4f994 | 0x1c72c1d64 | NOT PORTED: 16.2 asks the delegate for the display identity of the cache (displayIdentityForImageCache:) and takes the scale / classic launch size from that display's configuration instead of FBDisplayManager mainConfiguration, and captures self weakly in its blocks; for a window on the monitor 16.0 loads the snapshot at the iPad's scale (the image view scales it to the container); the weak captures only matter for lifetime |
+| SBAppSwitcherSnapshotImageCache | `-setCachableAppLayouts:` | 0x1c6302dcc | 0x1c77a0818 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
+| SBAppSwitcherSnapshotImageCache | `-cachableAppLayouts` | 0x1c6302ee4 | 0x1c77a0940 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
+| SBAppSwitcherSnapshotImageCache | `-setFullSizeCachableAppLayouts:` | 0x1c6303038 | 0x1c77a0a98 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
+| SBAppSwitcherSnapshotImageCache | `-fullSizeCachableAppLayouts` | 0x1c6303150 | 0x1c77a0bc0 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
+| SBAppSwitcherSnapshotImageCache | `-reloadSnapshotsForInterfaceStyleChange:` | 0x1c6303860 | 0x1c77a12d4 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
+| SBAppSwitcherSnapshotImageCache | `-_createDownscaledVariantForRequest:snapshot:displayItem:sceneHandle:application:` | 0x1c6303e78 | 0x1c77a1a00 | NOT PORTED: see _loadSnapshotForRequest: (per display configuration of the snapshot cache, weak self in blocks) |
 | SBAppViewController | `-viewWillTransitionToSize:withTransitionCoordinator:` | 0x1c5ea7fa4 | 0x1c731acf4 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBAppViewController | `-_createSceneViewController` | 0x1c5eb715c | 0x1c7329f40 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBAppViewController | `-_deactivateHostedApp` | 0x1c5eb7440 | 0x1c732a234 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
@@ -398,13 +398,13 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBContinuousExposeWindowDragSwitcherModifier | `-_appLayoutContainingDisplayItem:` | 0x1c6182694 | 0x1c760b404 | PORTED already: 16.2 address cited in G1C.x |
 | SBCrossfadeDosidoSwitcherModifier | `-frameForIndex:` | 0x1c638c57c | 0x1c783537c | PORTED already: hook in G1B.x:2674 |
 | SBCrossfadeDosidoSwitcherModifier | `-scaleForIndex:` | 0x1c638c5ec | 0x1c78353ec | PORTED already: hook in G1B.x:2679 |
-| SBDeckFloatingSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6312e6c | 0x1c77b19a4 | TRIAGE PENDING |
-| SBDeckSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c642bc48 | 0x1c78dbad4 | TRIAGE PENDING |
-| SBDeckSwitcherViewController | `-performTransitionWithContext:animated:completion:` | 0x1c5ea2514 | 0x1c73151d8 | TRIAGE PENDING |
-| SBDeckSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c632894c | 0x1c77c97c0 | TRIAGE PENDING |
-| SBDeckSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c6328aec | 0x1c77c99cc | TRIAGE PENDING |
+| SBDeckFloatingSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6312e6c | 0x1c77b19a4 | 80a95ef: Y11Modifiers.x y11_tapreq [sha 80a95ef] |
+| SBDeckSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c642bc48 | 0x1c78dbad4 | 80a95ef: Y11Modifiers.x y11_tapreq (the Deck tap request carries the tapped item) [sha 80a95ef] |
+| SBDeckSwitcherViewController | `-performTransitionWithContext:animated:completion:` | 0x1c5ea2514 | 0x1c73151d8 | NOT PORTED: the card deck switcher (not Stage Manager): 16.2 pauses the app suggestion model's updates while the deck is not shown (disable / enableListeningForUpdatesForReason:); the suggestions model of the deck only |
+| SBDeckSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c632894c | 0x1c77c97c0 | NOT PORTED: the card deck switcher (not Stage Manager): 16.2 pauses the app suggestion model's updates while the deck is not shown (disable / enableListeningForUpdatesForReason:); the suggestions model of the deck only |
+| SBDeckSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c6328aec | 0x1c77c99cc | NOT PORTED: the card deck switcher (not Stage Manager): 16.2 pauses the app suggestion model's updates while the deck is not shown (disable / enableListeningForUpdatesForReason:); the suggestions model of the deck only |
 | SBDeckSwitcherViewController | `-.cxx_destruct` | 0x1c6328ee4 | 0x1c77c9f14 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBDeviceApplicationSceneClassicAccessoryView | `-_rotateApplicationScene:` | 0x1c60e9b10 | 0x1c756e464 | TRIAGE PENDING |
+| SBDeviceApplicationSceneClassicAccessoryView | `-_rotateApplicationScene:` | 0x1c60e9b10 | 0x1c756e464 | EQUIVALENT: the preference is toggled through the scene handle's accessor instead of the application's; same value |
 | SBDeviceApplicationSceneClassicWrapperView | `+shouldUseWrapperViewForSceneHandle:` | 0x1c642041c | 0x1c78cfbac | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBDeviceApplicationSceneClassicWrapperView | `-initWithSceneHandle:` | 0x1c64204b8 | 0x1c78cfc5c | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
 | SBDeviceApplicationSceneClassicWrapperView | `-layoutSubviews` | 0x1c64207e0 | 0x1c78d0208 | NOT PORTED: content / container orientation split of the scene view stack (contentOrientation + containerOrientation, needsCounterRotation overlay views, basic overlay wrapper in non rotating windows, delegate wired scene update transactions): CORE-LEFTOVERS 3b Tier B and G3B 1.5 / 1.6 / 1.7 (classes and adapters exist, the 16.0 rotation path stays authoritative) |
@@ -428,7 +428,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBDeviceApplicationSceneViewController | `-_configureStatusBarWithCurrentStyleRequest` | 0x1c6131834 | 0x1c75bc5ec | PORTED already: 16.2 address cited in X5Recording.x |
 | SBDeviceApplicationSceneViewController | `-_removeStatusBar` | 0x1c613214c | 0x1c75bcefc | 80a95ef: Y5Apps.x y5_sbpool (the status bar goes back into the reuse pool it came from when the window moved to the other display) [sha eb694cd] |
 | SBDeviceApplicationSceneViewController | `-_configureForSecureDisplay:` | 0x1c6132918 | 0x1c75bd6b4 | IRRELEVANT: secure display (lock screen) rendersWhileLocked and display mode notifications to the overlay providers; same providers are created in 16.0 |
-| SBDeviceApplicationSceneViewPlaceholderContentViewProvider | `-sceneView:requestsPlaceholderContentViewWithContext:` | 0x1c5e3780c | 0x1c72a9bf8 | TRIAGE PENDING |
+| SBDeviceApplicationSceneViewPlaceholderContentViewProvider | `-sceneView:requestsPlaceholderContentViewWithContext:` | 0x1c5e3780c | 0x1c72a9bf8 | NOT PORTED: classic app placeholder (launch image) sizing: 16.2 takes the default launching size from the scene's display configuration for every display (16.0 only for the main display) and handles landscape classic windows under Stage Manager; iPhone only apps; Y5Apps.x y5_classicsize ports the launch size table |
 | SBDismissOverlaysAnimationController | `-initWithTransitionContextProvider:options:` | 0x1c5ea7524 | 0x1c731a220 | EQUIVALENT: display identity now read from the stored transition context instead of an ivar (same identity) |
 | SBDismissOverlaysAnimationController | `-_startAnimation` | 0x1c5ea7634 | 0x1c731a36c | EQUIVALENT: display identity now read from the stored transition context instead of an ivar (same identity) |
 | SBDisplayItem | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5e4668c | 0x1c72b8cf8 | EXCLUDED: description / debug text only |
@@ -467,25 +467,25 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBEntityRemovalSlideOffscreenSwitcherModifier | `-scaleForIndex:` | 0x1c5f9bb18 | 0x1c741445c | 80a95ef: Y11Modifiers.x y11_removal (same as the Crossblur variant, with the slide offset kept) [sha 80a95ef] |
 | SBEntityRemovalSlideOffscreenSwitcherModifier | `-animationAttributesForLayoutElement:` | 0x1c5f9bb78 | 0x1c7414b2c | 80a95ef: Y11Modifiers.x y11_removal (same as the Crossblur variant, with the slide offset kept) [sha 80a95ef] |
 | SBFluidSwitcherGestureManager | `-grabberTongue:shouldReceiveTouch:` | 0x1c5e52900 | 0x1c72c4d40 | PORTED already: hook in G1D.x:1363 |
-| SBFluidSwitcherGestureManager | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e529d0 | 0x1c72c4e70 | TRIAGE PENDING |
+| SBFluidSwitcherGestureManager | `-gestureRecognizer:shouldReceiveTouch:` | 0x1c5e529d0 | 0x1c72c4e70 | PORTED already: G1D.x section 4b (the per recognizer touch rules _shouldLiveResizeGesture:receiveTouch: / _shouldTapToBringItemContainerForward:receiveTouch: / the strip overflow pan rule of this table are G1D_GMTouch); the removed SBIndirectPanGestureRecognizer / hover branch belongs with the OPEN SBIndirectPanGestureRecognizer item |
 | SBFluidSwitcherGestureManager | `-grabberTongue:shouldShowTongueOnFirstSwipeWithEdgeLocation:` | 0x1c5e56c48 | 0x1c72c90ac | PORTED already: hook in G1D.x:1374 |
 | SBFluidSwitcherGestureManager | `-grabberTongue:shouldAllowSecondSwipeWithEdgeLocation:` | 0x1c5e58070 | 0x1c72ca7a0 | PORTED already: hook in G1D.x:1378 |
 | SBFluidSwitcherGestureManager | `-_gestureTypeForGestureRecognizer:` | 0x1c5e585b4 | 0x1c72cad14 | PORTED already: hook in G1D.x:1355 |
-| SBFluidSwitcherGestureManager | `-setActiveGestureTransaction:` | 0x1c5e58e5c | 0x1c72cb5f8 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-failMultitaskingGesturesForReason:` | 0x1c5ea0a20 | 0x1c73136e0 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-initWithSwitcherController:delegate:` | 0x1c643de04 | 0x1c78efafc | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:` | 0x1c643e1e0 | 0x1c78eff04 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-gestureRecognizer:shouldRequireFailureOfGestureRecognizer:` | 0x1c643e2fc | 0x1c78f0024 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-configureIndirectBottomEdgePanGestureRecognizer` | 0x1c643e4a8 | 0x1c78f01d4 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-_configureTapToBringItemContainerForwardGesture` | 0x1c643e5f0 | 0x1c78f0318 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-_configureFloatingApplicationGestureRecognizers` | 0x1c643e7fc | 0x1c78f0518 | TRIAGE PENDING |
+| SBFluidSwitcherGestureManager | `-setActiveGestureTransaction:` | 0x1c5e58e5c | 0x1c72cb5f8 | IRRELEVANT: 16.2 drops the call of -_updateSystemApertureZStackPolicyAssistant (System Aperture, iPhone hardware); P1Drag.m replaces the setter for the shared gesture transaction |
+| SBFluidSwitcherGestureManager | `-failMultitaskingGesturesForReason:` | 0x1c5ea0a20 | 0x1c73136e0 | 80a95ef: Y13Fluid.x y13_failgestures (the Stage Manager window drag recognizer, -_unpinSplitViewApplicationGestureRecognizer, is reset as well) |
+| SBFluidSwitcherGestureManager | `-initWithSwitcherController:delegate:` | 0x1c643de04 | 0x1c78efafc | NOT PORTED: 16.2 additionally registers the gesture manager as transition observer of the In-Call banner manager (multitasking gestures fail while a call banner transitions); the weak ivars swap places; In-Call is X6InCall.x scope and the observer protocol does not exist in 16.0 |
+| SBFluidSwitcherGestureManager | `-gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:` | 0x1c643e1e0 | 0x1c78eff04 | EQUIVALENT: the cover sheet's present gestures are read as a set (presentGestures containsObject:) in 16.0 and as a single recognizer (presentGestureRecognizer isEqual:) in 16.2 from the same systemGesturesDelegate; same relation |
+| SBFluidSwitcherGestureManager | `-gestureRecognizer:shouldRequireFailureOfGestureRecognizer:` | 0x1c643e2fc | 0x1c78f0024 | EQUIVALENT: the cover sheet's present gestures are read as a set (presentGestures containsObject:) in 16.0 and as a single recognizer (presentGestureRecognizer isEqual:) in 16.2 from the same systemGesturesDelegate; same relation |
+| SBFluidSwitcherGestureManager | `-configureIndirectBottomEdgePanGestureRecognizer` | 0x1c643e4a8 | 0x1c78f01d4 | NOT PORTED: SBIndirectPanGestureRecognizer is created without the scene's system gesture manager in 16.2 (OPEN item, same family as the Control Center gesture rows); the tap to bring forward recognizer only differs by its availability test |
+| SBFluidSwitcherGestureManager | `-_configureTapToBringItemContainerForwardGesture` | 0x1c643e5f0 | 0x1c78f0318 | NOT PORTED: SBIndirectPanGestureRecognizer is created without the scene's system gesture manager in 16.2 (OPEN item, same family as the Control Center gesture rows); the tap to bring forward recognizer only differs by its availability test |
+| SBFluidSwitcherGestureManager | `-_configureFloatingApplicationGestureRecognizers` | 0x1c643e7fc | 0x1c78f0518 | NOT PORTED: Slide Over (floating application) move / pin gestures: Medusa multitasking, never active under Stage Manager (G1D.x section 4b); 16.2 only judges them with the scene's own system gesture manager instead of the main display's |
 | SBFluidSwitcherGestureManager | `-_configureChamoisGestureRecognizersIfNeeded` | 0x1c643eea4 | 0x1c78f0c08 | PORTED already: hook in G1D.x:1297 |
 | SBFluidSwitcherGestureManager | `-updateForChamoisWindowingUIEnabled:` | 0x1c643f408 | 0x1c78f0fe8 | PORTED already: hook in G1D.x:759 |
 | SBFluidSwitcherGestureManager | `-_updateSwitcherBottomEdgeGesturePresence` | 0x1c643f760 | 0x1c78f1380 | PORTED already: 16.2 address cited in G2D.x |
 | SBFluidSwitcherGestureManager | `-invalidate` | 0x1c643fa90 | 0x1c78f16c0 | PORTED already: hook in G1D.x:1302 |
 | SBFluidSwitcherGestureManager | `-_handleTapToBringItemContainerForward:` | 0x1c6440998 | 0x1c78f2690 | PORTED already: hook in G1D.x:1575 |
-| SBFluidSwitcherGestureManager | `-_shouldFloatingApplicationMoveGesture:receiveTouch:` | 0x1c644236c | 0x1c78f4184 | TRIAGE PENDING |
-| SBFluidSwitcherGestureManager | `-_shouldFloatingApplicationPinGesture:receiveTouch:` | 0x1c64426c0 | 0x1c78f44f8 | TRIAGE PENDING |
+| SBFluidSwitcherGestureManager | `-_shouldFloatingApplicationMoveGesture:receiveTouch:` | 0x1c644236c | 0x1c78f4184 | NOT PORTED: Slide Over (floating application) move / pin gestures: Medusa multitasking, never active under Stage Manager (G1D.x section 4b); 16.2 only judges them with the scene's own system gesture manager instead of the main display's |
+| SBFluidSwitcherGestureManager | `-_shouldFloatingApplicationPinGesture:receiveTouch:` | 0x1c64426c0 | 0x1c78f44f8 | NOT PORTED: Slide Over (floating application) move / pin gestures: Medusa multitasking, never active under Stage Manager (G1D.x section 4b); 16.2 only judges them with the scene's own system gesture manager instead of the main display's |
 | SBFluidSwitcherGestureManager | `-_shouldSplitViewApplicationUnpinGesture:receiveTouch:` | 0x1c6442888 | 0x1c78f46e8 | PORTED already: hook in G1D.x:1872 |
 | SBFluidSwitcherGestureManager | `-_shouldLiveResizeItemContainerGestureWithTouch:receiveTouch:` | 0x1c6443064 | 0x1c78f51a4 | PORTED already: hook in G1D.x:1524 |
 | SBFluidSwitcherGestureManager | `-_shouldLiveResizeItemContainerGestureWithPointer:receiveTouch:` | 0x1c6443414 | 0x1c78f56d0 | EQUIVALENT: checked in G1D.x section 4b (log only change) |
@@ -493,9 +493,9 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBFluidSwitcherGestureManager | `-_shouldTapToBringItemContainerForward:receiveTouch:` | 0x1c6443604 | 0x1c78f5ac0 | PORTED already: hook in G1D.x:1538 |
 | SBFluidSwitcherGestureManager | `-gestureRecognizerShouldBegin:` | 0x1c6443b1c | 0x1c78f61dc | PORTED already: hook in Group4Focus.x:752 |
 | SBFluidSwitcherGestureManager | `-_shouldBeginTapToBringItemContainerForwardGesture:` | 0x1c644493c | 0x1c78f7064 | PORTED already: hook in G1D.x:1560 |
-| SBFluidSwitcherGestureManager | `-_shouldAllowFloatingApplicationGesture:gestureType:failureReason:` | 0x1c64457e8 | 0x1c78f7ff0 | TRIAGE PENDING |
+| SBFluidSwitcherGestureManager | `-_shouldAllowFloatingApplicationGesture:gestureType:failureReason:` | 0x1c64457e8 | 0x1c78f7ff0 | EQUIVALENT: 16.2 refuses every floating application gesture first when Stage Manager is on; under Stage Manager 16.0 has no first floating app layout and refuses as well |
 | SBFluidSwitcherGestureManager | `-_shouldBeginSplitViewApplicationUnpinGesture:` | 0x1c6446a7c | 0x1c78f92b8 | PORTED already: hook in G1D.x:1877 |
-| SBFluidSwitcherGestureManager | `-_updateSystemApertureZStackPolicyAssistantWithLayoutState:` | 0x1c64477f4 | 0x1c78fa178 | TRIAGE PENDING |
+| SBFluidSwitcherGestureManager | `-_updateSystemApertureZStackPolicyAssistantWithLayoutState:` | 0x1c64477f4 | 0x1c78fa178 | IRRELEVANT: System Aperture z-stack policy assistant (Dynamic Island hardware) |
 | SBFluidSwitcherGestureManager | `-grabberTongueOrPullEnabled:forGestureRecognizer:` | 0x1c6447a44 | 0x1c78fa3c0 | PORTED already: hook in G1D.x:1344 |
 | SBFluidSwitcherGestureManager | `-grabberTongueBeganPulling:withDistance:andVelocity:andGesture:` | 0x1c6447ae8 | 0x1c78fa480 | PORTED already: hook in G1D.x:1388 |
 | SBFluidSwitcherGestureManager | `-grabberTongueUpdatedPulling:withDistance:andVelocity:andGesture:` | 0x1c6447b9c | 0x1c78fa55c | PORTED already: hook in G1D.x:1392 |
@@ -523,15 +523,15 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBFluidSwitcherGestureWorkspaceTransaction | `-_willInterruptWithReason:` | 0x1c6034270 | 0x1c74af0d0 | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherGestureWorkspaceTransaction | `-_startSceneUpdateTransaction:forSceneIdentifier:` | 0x1c6034fe4 | 0x1c74b0128 | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherGestureWorkspaceTransaction | `-_acquireBackgroundingScenesDeactivationAssertionForTransitionRequest:` | 0x1c6035d64 | 0x1c74b1168 | PORTED already: 16.2 address cited in P1Drag.m |
-| SBFluidSwitcherItemContainer | `-_addPageView` | 0x1c5e5c848 | 0x1c72ced9c | TRIAGE PENDING |
-| SBFluidSwitcherItemContainer | `-prepareForReuse` | 0x1c5e704c8 | 0x1c72e3220 | TRIAGE PENDING |
-| SBFluidSwitcherItemContainer | `-initWithFrame:` | 0x1c615a38c | 0x1c75e0f64 | TRIAGE PENDING |
+| SBFluidSwitcherItemContainer | `-_addPageView` | 0x1c5e5c848 | 0x1c72ced9c | EQUIVALENT: CORE-LEFTOVERS-0.7.9 section 2: the padding 16.2 forwards from the VC's style block is the value 16.0 sets itself |
+| SBFluidSwitcherItemContainer | `-prepareForReuse` | 0x1c5e704c8 | 0x1c72e3220 | 80a95ef: Y13Fluid.x y13_reuse (a recycled container forgets the pointer lock suppression, the hovering edge and any recognizer state of the window it showed) |
+| SBFluidSwitcherItemContainer | `-initWithFrame:` | 0x1c615a38c | 0x1c75e0f64 | EQUIVALENT: both builds assert "Override initWithFrame:delegate: instead"; 16.2 then calls the designated initializer with a nil window scene (G2B.m:1868 adds it, P1VC.m:276 initWithCoder: the same) |
 | SBFluidSwitcherItemContainer | `-initWithCoder:` | 0x1c615a440 | 0x1c75e101c | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherItemContainer | `-setContentViewBlocksTouches:` | 0x1c615a6dc | 0x1c75e15c8 | PORTED already: hook in G4B.x:1596 |
 | SBFluidSwitcherItemContainer | `-setSelectable:` | 0x1c615d654 | 0x1c75e15f4 | PORTED already: hook in G4B.x:1599 |
 | SBFluidSwitcherItemContainer | `-didUpdateFocusInContext:withAnimationCoordinator:` | 0x1c615bf10 | 0x1c75e2f2c | PORTED already: 16.2 address cited in P1VC.m |
-| SBFluidSwitcherItemContainer | `-_returnKeyPressed:` | 0x1c615c03c | 0x1c75e305c | TRIAGE PENDING |
-| SBFluidSwitcherItemContainer | `-_handlePageViewTap:` | 0x1c615c3a4 | 0x1c75e33d4 | TRIAGE PENDING |
+| SBFluidSwitcherItemContainer | `-_returnKeyPressed:` | 0x1c615c03c | 0x1c75e305c | PORTED already: G2B.m:1612-1626 (tap / return key forward the modifier flags to didSelectContainer:modifierFlags:, Shift selection) |
+| SBFluidSwitcherItemContainer | `-_handlePageViewTap:` | 0x1c615c3a4 | 0x1c75e33d4 | PORTED already: G2B.m:1612-1626 (tap / return key forward the modifier flags to didSelectContainer:modifierFlags:, Shift selection) |
 | SBFluidSwitcherItemContainerFooterView | `-layoutSubviews` | 0x1c61010d8 | 0x1c75865c0 | TRIAGE PENDING |
 | SBFluidSwitcherItemContainerFooterView | `-_handleTapGestureRecognizer:` | 0x1c6102688 | 0x1c7587b90 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherItemContainerFooterView | `-_makeSubtitleLabel` | 0x1c6102b0c | 0x1c7587ff4 | PORTED already: 16.2 address cited in P1VC.m |
@@ -539,40 +539,40 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBFluidSwitcherPanGestureRecognizer | `-touchesBegan:withEvent:` | 0x1c61b130c | 0x1c763f01c | EQUIVALENT: 16.2 also stores the initial touch location in touchesBegan (16.0 stores it on the first touchesMoved); the initial leaf app layout is G1D.x |
 | SBFluidSwitcherPanGestureRecognizer | `-reset` | 0x1c61b1600 | 0x1c763f334 | PORTED already: G1D.x (setInitialTouchLeafAppLayout:) |
 | SBFluidSwitcherPanGestureRecognizer | `-.cxx_destruct` | 0x1c61b1728 | 0x1c763f48c | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBFluidSwitcherRootSwitcherModifier | `-handleGestureEvent:` | 0x1c61e7a88 | 0x1c7676094 | TRIAGE PENDING |
-| SBFluidSwitcherSpaceOverlayAccessoryView | `-prepareForReuse` | 0x1c6106378 | 0x1c758c730 | TRIAGE PENDING |
-| SBFluidSwitcherSpaceOverlayAccessoryView | `-layoutSubviews` | 0x1c61065c0 | 0x1c758c9c4 | TRIAGE PENDING |
-| SBFluidSwitcherSpaceOverlayAccessoryView | `-pointInside:withEvent:` | 0x1c61068b4 | 0x1c758cc98 | TRIAGE PENDING |
-| SBFluidSwitcherSpaceOverlayAccessoryView | `-hitTest:withEvent:` | 0x1c6106984 | 0x1c758cd6c | TRIAGE PENDING |
+| SBFluidSwitcherRootSwitcherModifier | `-handleGestureEvent:` | 0x1c61e7a88 | 0x1c7676094 | NOT PORTED: root modifier of the non Stage Manager switcher: gesture child level 3 instead of 2 and the floor update for a window drag event; the Stage Manager root (SBContinuousExposeRootSwitcherModifier, G1B.x / G1C.x) has its own gesture routing (G1C.x:5316) |
+| SBFluidSwitcherSpaceOverlayAccessoryView | `-prepareForReuse` | 0x1c6106378 | 0x1c758c730 | NOT PORTED: removes one more accessory subview that exists only in 16.2 |
+| SBFluidSwitcherSpaceOverlayAccessoryView | `-layoutSubviews` | 0x1c61065c0 | 0x1c758c9c4 | NOT PORTED: pixel alignment: 16.2 uses the view's trait collection display scale where 16.0 uses [UIScreen mainScreen].scale; differs only for an icon overlay on a display whose scale is not the iPad's (zoom of an icon on the monitor) |
+| SBFluidSwitcherSpaceOverlayAccessoryView | `-pointInside:withEvent:` | 0x1c61068b4 | 0x1c758cc98 | EQUIVALENT: 16.2 adds a nil check of the content view before reading its alpha |
+| SBFluidSwitcherSpaceOverlayAccessoryView | `-hitTest:withEvent:` | 0x1c6106984 | 0x1c758cd6c | EQUIVALENT: 16.2 adds a nil check of the content view before reading its alpha |
 | SBFluidSwitcherViewController | `-_removeVisibleItemContainerForAppLayout:` | 0x1c5e70268 | 0x1c72e2f98 | PORTED already: hook in G1B.x:1769 |
 | SBFluidSwitcherViewController | `-dealloc` | 0x1c5fbcc50 | 0x1c7434be0 | PORTED already: 16.2 address cited in G4B.x |
-| SBFluidSwitcherViewController | `-viewDidLoad` | 0x1c5fbcdec | 0x1c7434dbc | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-viewDidLoad` | 0x1c5fbcdec | 0x1c7434dbc | PORTED already: G2B.m:2020-2040 (post event hooks of 16.2 -_updateImplicitModifierStackInvalidatables 0x1c745b0e8, the block of updates that 16.0 does inline in -_dispatchEventAndHandleAction: and 16.2 moved out and also runs once from viewDidLoad); the 16.0 inline updates stay as they are |
 | SBFluidSwitcherViewController | `-appLayoutContainsAnUnoccludedMaximizedDisplayItem:` | 0x1c5fbdb84 | 0x1c74360dc | PORTED already: 16.2 address cited in G2B.m |
-| SBFluidSwitcherViewController | `-chamoisLayoutAttributes` | 0x1c5fbea9c | 0x1c7437110 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-prefersStripHidden` | 0x1c5fbf280 | 0x1c743794c | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-prefersDockHidden` | 0x1c5fbf2f8 | 0x1c74379ac | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-chamoisLayoutAttributes` | 0x1c5fbea9c | 0x1c7437110 | EQUIVALENT: 16.2 passes [self floatingDockHeight] to the new 4 argument layoutAttributesForWindowScene:interfaceOrientation:requiresFullScreen:floatingDockHeight: (added by G2.x:1668); the 16.0 3 argument form reads the same height from the scene's floating dock controller inside |
+| SBFluidSwitcherViewController | `-prefersStripHidden` | 0x1c5fbf280 | 0x1c743794c | EQUIVALENT: 16.2 reads SBSwitcherChamoisSettings' cached copies (_cachedChamoisHideStrips / ...External, _cachedChamoisHideDock / ...External, observed from the same SBAppSwitcherDefaults keys) through -_shouldPreferStripHiddenForWindowScene:interfaceOrientation: / -_shouldPreferDockHiddenForWindowScene:; 16.0 reads the defaults directly (embedded display: chamoisHideStrips / chamoisHideDock, external: ...External); same values |
+| SBFluidSwitcherViewController | `-prefersDockHidden` | 0x1c5fbf2f8 | 0x1c74379ac | EQUIVALENT: 16.2 reads SBSwitcherChamoisSettings' cached copies (_cachedChamoisHideStrips / ...External, _cachedChamoisHideDock / ...External, observed from the same SBAppSwitcherDefaults keys) through -_shouldPreferStripHiddenForWindowScene:interfaceOrientation: / -_shouldPreferDockHiddenForWindowScene:; 16.0 reads the defaults directly (embedded display: chamoisHideStrips / chamoisHideDock, external: ...External); same values |
 | SBFluidSwitcherViewController | `-appLayoutsToEnsureExistForMainTransitionEvent:` | 0x1c5fbf36c | 0x1c74379cc | PORTED already: hook in G2.x:1966 |
-| SBFluidSwitcherViewController | `-appLayoutByBringingItemToFront:inAppLayout:` | 0x1c5fc0130 | 0x1c7438794 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-appLayoutByBringingItemToFront:inAppLayout:` | 0x1c5fc0130 | 0x1c7438794 | 80a95ef: Y13Fluid.x y13_bringfront (16.2 no longer returns early when the item is already first: its last interaction time is still bumped) |
 | SBFluidSwitcherViewController | `-handleTapToBringItemContainerForward:` | 0x1c5fc0b10 | 0x1c7439690 | PORTED already: hook in G1D.x:1590 |
 | SBFluidSwitcherViewController | `-handleContinuousExposeHoverGesture:` | 0x1c5fc0c28 | 0x1c7439724 | PORTED already: hook in G2.x:2002 |
 | SBFluidSwitcherViewController | `-_leafAppLayoutInLiveContentOverlaysWithLayoutRole:` | 0x1c5fc1424 | 0x1c7439f84 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-clickReceivedForHomeGrabberView:` | 0x1c5fc1864 | 0x1c743a460 | PORTED already: 16.2 address cited in G2B.m |
-| SBFluidSwitcherViewController | `-canPerformKeyboardShortcutAction:forBundleIdentifier:` | 0x1c5fc1b10 | 0x1c743a70c | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in P1VC.m, G3C.x |
+| SBFluidSwitcherViewController | `-canPerformKeyboardShortcutAction:forBundleIdentifier:` | 0x1c5fc1b10 | 0x1c743a70c | OPEN: G2B.m:1728 ports the window navigation actions 4 / 5 / 15 / 16 only ("UNSURE: 16.2's version is a 280 instruction decision tree", jump table 0x1c743a85c..); the other branches (App Exposé action 3 with chamois on, floating window action, split view actions) differ from 16.0 in the checks of isChamoisWindowingUIEnabled, multi window support and the focused scene's layout environment; only menu / shortcut availability, the actions themselves are ported by P1VC.m performKeyboardShortcutAction: |
+| SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in G3C.x, P1VC.m |
 | SBFluidSwitcherViewController | `-_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:` | 0x1c5fc29c8 | 0x1c743b200 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-invalidate` | 0x1c5fc335c | 0x1c743bc98 | PORTED already: hook in G1D.x:2289, G4B.x:2463 |
 | SBFluidSwitcherViewController | `-_updateAutoHideForGrabberAffordancesInAppLayout:withResetDelay:unhideDelay:` | 0x1c5fc3b2c | 0x1c743c5f0 | PORTED already: 16.2 address cited in G2C.x |
 | SBFluidSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c5fc493c | 0x1c743d59c | PORTED already: 16.2 address cited in X7Keyboard.x |
-| SBFluidSwitcherViewController | `-_blurItemContainer:blurParameters:withAnimationUpdateMode:` | 0x1c5fc6858 | 0x1c743f438 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-_blurItemContainer:blurParameters:withAnimationUpdateMode:` | 0x1c5fc6858 | 0x1c743f438 | NOT PORTED: blur quality and rasterisation: 16.2 only rasterizes the blurred container when the parameters say so (SBBlurItemContainerParameters.shouldRasterize, new) and skips the root blur animation when the layer has no filters; visual quality / performance, no windowing effect |
 | SBFluidSwitcherViewController | `-_configureApplicationAndTransientOverlayDockBehaviorAssertionsForContext:` | 0x1c5fc8890 | 0x1c74414e4 | PORTED already: hook in G1D.x:2340 |
-| SBFluidSwitcherViewController | `-_applyRootContentViewBlurRadiusWithCompletion:` | 0x1c5fc9e04 | 0x1c74429e8 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_ensureSubviewOrdering` | 0x1c5fce534 | 0x1c74473b0 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_addVisibleItemContainerForAppLayout:reusingItemContainerIfExists:` | 0x1c5fcf9f8 | 0x1c7448894 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_orderedViewsForLayoutElement:excludeSwitcherHostedShelves:` | 0x1c5fd6eb8 | 0x1c7450094 | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-underlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd7e2c | 0x1c7451034 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-_applyRootContentViewBlurRadiusWithCompletion:` | 0x1c5fc9e04 | 0x1c74429e8 | NOT PORTED: blur quality and rasterisation: 16.2 only rasterizes the blurred container when the parameters say so (SBBlurItemContainerParameters.shouldRasterize, new) and skips the root blur animation when the layer has no filters; visual quality / performance, no windowing effect |
+| SBFluidSwitcherViewController | `-_ensureSubviewOrdering` | 0x1c5fce534 | 0x1c74473b0 | NOT PORTED: 16.2 brings one more subview to the front at the end of the ordering (an additional accessory view that only exists in 16.2); no 16.0 view to order |
+| SBFluidSwitcherViewController | `-_addVisibleItemContainerForAppLayout:reusingItemContainerIfExists:` | 0x1c5fcf9f8 | 0x1c7448894 | PORTED already: G2B.m:1868 (SBFluidSwitcherItemContainer initWithFrame:appLayout:delegate:active:windowScene: added, the container knows its scene) and P1VC.m:278; the 16.0 body creates containers with the 16.0 initializer, which G2B's replacement forwards the scene to |
+| SBFluidSwitcherViewController | `-_orderedViewsForLayoutElement:excludeSwitcherHostedShelves:` | 0x1c5fd6eb8 | 0x1c7450094 | NOT PORTED: 16.2 handles two more layout element types (6 and 7: new in 16.2, window picker / shelf variants) in the type switch; elements of those types are not produced by the 16.0 modifiers |
+| SBFluidSwitcherViewController | `-underlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd7e2c | 0x1c7451034 | EQUIVALENT: 16.2 creates the tap event with modifierFlags:0 (G2B.m:1577 adds the 16.2 event initializer and the flags); the same dispatch |
 | SBFluidSwitcherViewController | `-overlayAccessoryView:didSelectHeaderForRole:` | 0x1c5fd8118 | 0x1c7451324 | PORTED already: hook in G1B.x:827 |
 | SBFluidSwitcherViewController | `-overlayAccessoryViewFrameForIconOverlayView:fullPresented:` | 0x1c5fd8350 | 0x1c7451420 | PORTED already: 16.2 address cited in P1VC.m |
-| SBFluidSwitcherViewController | `-_applicationForDisplayItem:` | 0x1c5fd9638 | 0x1c74529cc | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-_applicationForDisplayItem:` | 0x1c5fd9638 | 0x1c74529cc | EQUIVALENT: _applicationForDisplayItem: 16.2 asks the new +[SBApplicationController applicationForDisplayItem:] (bundle identifier of an app item); _updateForegroundAppLayoutsList: P1VC.m notes the global function pointer of 16.0 is the same function as 16.2's |
 | SBFluidSwitcherViewController | `-gestureHandlingModifierRequestsUpdate:` | 0x1c5fd9860 | 0x1c7452bdc | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherViewController | `-_scrollToAppLayout:animated:alignment:completion:` | 0x1c5fd9c44 | 0x1c7452ff0 | PORTED already: hook in G1C.x:5126 |
 | SBFluidSwitcherViewController | `-_areContinuousExposeStripsUnoccluded` | 0x1c5fda820 | 0x1c7453b80 | PORTED already: hook in G2.x:1994 |
@@ -583,8 +583,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBFluidSwitcherViewController | `-_updateAsyncRenderingAndResizesHostedContext` | 0x1c5fdffb4 | 0x1c745929c | PORTED already: 16.2 address cited in P1Drag.m |
 | SBFluidSwitcherViewController | `-_acquireKeyboardSuppressionAssertionForMode:` | 0x1c5fe088c | 0x1c7459e50 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-_updateFloatingDockWindowLevelAssertion` | 0x1c5fe0c60 | 0x1c745a234 | PORTED already: 16.2 address cited in P1VC.m |
-| SBFluidSwitcherViewController | `-_dispatchEventAndHandleAction:` | 0x1c5fe17e4 | 0x1c745ae4c | TRIAGE PENDING |
-| SBFluidSwitcherViewController | `-_updateForegroundAppLayoutsList` | 0x1c5fe1c90 | 0x1c745b368 | TRIAGE PENDING |
+| SBFluidSwitcherViewController | `-_dispatchEventAndHandleAction:` | 0x1c5fe17e4 | 0x1c745ae4c | PORTED already: G2B.m:2020-2040 (post event hooks of 16.2 -_updateImplicitModifierStackInvalidatables 0x1c745b0e8, the block of updates that 16.0 does inline in -_dispatchEventAndHandleAction: and 16.2 moved out and also runs once from viewDidLoad); the 16.0 inline updates stay as they are |
+| SBFluidSwitcherViewController | `-_updateForegroundAppLayoutsList` | 0x1c5fe1c90 | 0x1c745b368 | EQUIVALENT: _applicationForDisplayItem: 16.2 asks the new +[SBApplicationController applicationForDisplayItem:] (bundle identifier of an app item); _updateForegroundAppLayoutsList: P1VC.m notes the global function pointer of 16.0 is the same function as 16.2's |
 | SBFluidSwitcherViewController | `-_performEventResponse:` | 0x1c5fe2024 | 0x1c745b6f0 | PORTED already: hook in G1B.x:798, G1B.x:1108 |
 | SBFluidSwitcherViewController | `-_performModifierUpdateLayoutResponse:` | 0x1c5fe30b8 | 0x1c745c7dc | PORTED already: hook in G1D.x:897 |
 | SBFluidSwitcherViewController | `-_performModifierIconViewVisibilityUpdateResponse:` | 0x1c5fe35dc | 0x1c745cd90 | PORTED already: 16.2 address cited in P1VC.m |
@@ -651,7 +651,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBFullScreenSwitcherSceneLiveContentOverlay | `-setContentReferenceSize:interfaceOrientation:` | 0x1c6052de4 | 0x1c74cfa18 | NOT PORTED: content / container orientation split of the live overlay (contentOrientation rename, container orientation argument) and the touch behavior update through the scene layer manager observer (_updateTouchBehaviorForScene:): CORE-LEFTOVERS 3b Tier B and the G3B 1.6 adapter keep the 16.0 behaviour |
 | SBFullScreenSwitcherSceneLiveContentOverlay | `-sceneHandle:didCreateScene:` | 0x1c60534a8 | 0x1c74d00f4 | NOT PORTED: content / container orientation split of the live overlay (contentOrientation rename, container orientation argument) and the touch behavior update through the scene layer manager observer (_updateTouchBehaviorForScene:): CORE-LEFTOVERS 3b Tier B and the G3B 1.6 adapter keep the 16.0 behaviour |
 | SBFullScreenSwitcherSceneLiveContentOverlay | `-setTouchBehavior:` | 0x1c6053638 | 0x1c74d02cc | NOT PORTED: content / container orientation split of the live overlay (contentOrientation rename, container orientation argument) and the touch behavior update through the scene layer manager observer (_updateTouchBehaviorForScene:): CORE-LEFTOVERS 3b Tier B and the G3B 1.6 adapter keep the 16.0 behaviour |
-| SBFullScreenToHomeIconZoomSwitcherModifier | `-initWithTransitionID:appLayout:direction:` | 0x1c61278d0 | 0x1c75b1dd0 | TRIAGE PENDING |
+| SBFullScreenToHomeIconZoomSwitcherModifier | `-initWithTransitionID:appLayout:direction:` | 0x1c61278d0 | 0x1c75b1dd0 | EQUIVALENT: same stores, ivar renumbering |
 | SBFullScreenToHomeIconZoomSwitcherModifier | `-shouldAsyncRenderUntilDelay:` | 0x1c6127b18 | 0x1c75b2034 | PORTED already: hook in G1B.x:2212 |
 | SBFullScreenToHomeIconZoomSwitcherModifier | `-wantsDockBehaviorAssertion` | 0x1c6128f18 | 0x1c75b3988 | PORTED already: 16.2 address cited in G1B.x |
 | SBFullScreenToHomePIPSwitcherModifier | `-transitionWillBegin` | 0x1c633b640 | 0x1c77def90 | PORTED already: 16.2 address cited in G1C.x |
@@ -666,18 +666,18 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBFullScreenToHomeSlideOverSwitcherModifier | `-visibleAppLayouts` | 0x1c638de9c | 0x1c783713c | PORTED already: hook in G1B.x:2240 |
 | SBFullScreenToHomeSystemApertureSwitcherModifier | `-transitionWillBegin` | 0x1c6075a7c | 0x1c74f8a08 | IRRELEVANT: zoom out of the Dynamic Island (iPhone only) |
 | SBFullScreenToHomeSystemApertureSwitcherModifier | `-_blurItemContainerParameters` | 0x1c60774fc | 0x1c74fa48c | IRRELEVANT: zoom out of the Dynamic Island (iPhone only) |
-| SBGestureRootSwitcherModifier | `-handleEvent:` | 0x1c60565c0 | 0x1c74d3724 | TRIAGE PENDING |
+| SBGestureRootSwitcherModifier | `-handleEvent:` | 0x1c60565c0 | 0x1c74d3724 | EQUIVALENT: private accessor rename (_gestureModifier in 16.0, gestureModifier in 16.2), same object |
 | SBGridSwipeUpGestureSwitcherModifier | `-initWithGestureID:` | 0x1c64260d0 | 0x1c78d5e88 | PORTED already: 16.2 address cited in G1C.x |
 | SBGridSwipeUpGestureSwitcherModifier | `-handleGestureEvent:` | 0x1c64265e0 | 0x1c78d63b0 | PORTED already: 16.2 address cited in G1C.x |
-| SBGridSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c640b234 | 0x1c78b8620 | TRIAGE PENDING |
+| SBGridSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c640b234 | 0x1c78b8620 | NOT PORTED: non Stage Manager grid switcher: 16.2 builds its tap request with requestForTapAppLayoutEvent: (activating item + pointer source); the Stage Manager switcher (BP162AppSwitcherContinuousExposeSwitcherModifier, G1C.x) no longer uses the grid modifier and handles taps itself |
 | SBHistorianSwitcherModifier | `-_querySnapshotFromModifier:` | 0x1c64b9b98 | 0x1c7973fb8 | TRIAGE PENDING |
 | SBHomeGestureRootSwitcherModifier | `-gestureChildModifierForGestureEvent:activeTransitionModifier:` | 0x1c643c05c | 0x1c78edb44 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureRootSwitcherModifier | `-transitionChildModifierForMainTransitionEvent:activeGestureModifier:` | 0x1c643c20c | 0x1c78edd24 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureSwitcherModifier | `-didMoveToParentModifier:` | 0x1c6038bac | 0x1c74b4138 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureSwitcherModifier | `-appLayoutsToCacheSnapshots` | 0x1c603c58c | 0x1c74b7b80 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureSwitcherModifier | `-appLayoutsToCacheFullsizeSnapshots` | 0x1c603c6bc | 0x1c74b7c54 | PORTED already: 16.2 address cited in G1C.x |
-| SBHomeGestureToHomeSwitcherModifier | `-frameForIndex:` | 0x1c5f44db8 | 0x1c73b941c | TRIAGE PENDING |
-| SBHomeGestureToHomeSwitcherModifier | `-scaleForIndex:` | 0x1c5f44df8 | 0x1c73b947c | TRIAGE PENDING |
+| SBHomeGestureToHomeSwitcherModifier | `-frameForIndex:` | 0x1c5f44db8 | 0x1c73b941c | NOT PORTED: card fly-in on returning home (new ivar _showingOrAnimatingCardsForFlyIn, offscreen card scale): 16.2 animation of the cards of the home gesture; no Stage Manager window involved |
+| SBHomeGestureToHomeSwitcherModifier | `-scaleForIndex:` | 0x1c5f44df8 | 0x1c73b947c | NOT PORTED: card fly-in on returning home (new ivar _showingOrAnimatingCardsForFlyIn, offscreen card scale): 16.2 animation of the cards of the home gesture; no Stage Manager window involved |
 | SBHomeGestureToSwitcherSwitcherModifier | `-transitionWillBegin` | 0x1c6498dd8 | 0x1c794f6fc | PORTED already: hook in G1D.x:2386 |
 | SBHomeGestureToSwitcherSwitcherModifier | `-_appLayoutToScrollToDuringTransition` | 0x1c6499a54 | 0x1c795038c | PORTED already: 16.2 address cited in P1SW.m |
 | SBInlineAppExposeContinuousExposeSwitcherModifier | `-handleTransitionEvent:` | 0x1c61f81fc | 0x1c76868e0 | PORTED already: 16.2 address cited in G1C.x |
@@ -762,7 +762,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBMainSwitcherControllerCoordinator | `-.cxx_destruct` | 0x1c624e1f0 | 0x1c76e3740 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBMedusaAppsTestRecipe | `-_toggle` | 0x1c611d940 | 0x1c75a7ce8 | IRRELEVANT: internal test recipes |
 | SBMedusaBannerViewController | `-_bannerView` | 0x1c637cd80 | 0x1c782418c | PORTED already: hook in G3B.x:146 |
-| SBMedusaDecoratedDeviceApplicationSceneViewController | `-viewWillLayoutSubviews` | 0x1c5e3c200 | 0x1c72ae4fc | TRIAGE PENDING |
+| SBMedusaDecoratedDeviceApplicationSceneViewController | `-viewWillLayoutSubviews` | 0x1c5e3c200 | 0x1c72ae4fc | EQUIVALENT: accessor rename (contentInterfaceOrientation -> contentOrientation), same value |
 | SBMedusaDecoratedDeviceApplicationSceneViewController | `-initWithDeviceApplicationSceneHandle:layoutRole:workspace:setupManager:` | 0x1c6329ec4 | 0x1c77caf30 | PORTED already: hook in G3.x:724 |
 | SBMedusaDecoratedDeviceApplicationSceneViewController | `-layoutStateTransitionCoordinator:transitionWillEndWithTransitionContext:` | 0x1c632b5e8 | 0x1c77cc710 | TRIAGE PENDING |
 | SBMedusaDecoratedDeviceApplicationSceneViewController | `-_topAffordanceViewController:handleActionType:transitionSource:` | 0x1c632ba50 | 0x1c77ccb6c | PORTED already: hook in G3C.x:283 |
@@ -869,27 +869,27 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBSwitcherChamoisSettings | `-.cxx_destruct` | 0x1c64149a4 | 0x1c78c32b4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBSwitcherController | `-initWithWindowScene:switcherCoordinator:` | 0x1c61781f8 | 0x1c75ffe28 | PORTED already: hook in G3.x:803 |
 | SBSwitcherController | `-_orientationStateDescription` | 0x1c6178588 | 0x1c76001a8 | EXCLUDED: description / debug text only |
-| SBSwitcherController | `-dealloc` | 0x1c6178718 | 0x1c7600360 | TRIAGE PENDING |
-| SBSwitcherController | `-isChamoisWindowingUIEnabled` | 0x1c6178a54 | 0x1c760069c | TRIAGE PENDING |
+| SBSwitcherController | `-dealloc` | 0x1c6178718 | 0x1c7600360 | EQUIVALENT: 16.2 no longer invalidates the traits policy specifier (replaced by SBSwitcherTraitsAssistant, Tier B of CORE-LEFTOVERS-0.7.9 section 3b) and invalidates one more banner timer (education banner, irrelevant here); the weak window scene ivar moved |
+| SBSwitcherController | `-isChamoisWindowingUIEnabled` | 0x1c6178a54 | 0x1c760069c | EQUIVALENT: 16.0 and 16.2 both test a feature availability call, then `_chamoisWindowingUIEnabled`, and answer YES for the external display scene only when both hold; only the feature test is a different function |
 | SBSwitcherController | `-setChamoisWindowingUIEnabled:` | 0x1c6178ac0 | 0x1c76006fc | PORTED already: hook in G1D.x:749, G3.x:785 |
-| SBSwitcherController | `-switcherOrientation:elementsOrientations:forTransitionRequest:previousLayoutState:layoutState:` | 0x1c6178cec | 0x1c7600950 | TRIAGE PENDING |
+| SBSwitcherController | `-switcherOrientation:elementsOrientations:forTransitionRequest:previousLayoutState:layoutState:` | 0x1c6178cec | 0x1c7600950 | NOT PORTED: Tier B of CORE-LEFTOVERS-0.7.9 section 3b: the SBSwitcherTraitsAssistant rework of the switcher traits / orientation flow (new class, new ivars, decision rules changed in three places); the 16.0 ivar layout cannot change and the traits arbiter of the main display would be at risk; guiding participants for orientation locked Stage Manager windows are therefore absent |
 | SBSwitcherController | `-_setupSwitcherTraitsParticipantAndPolicySpecifiers` | 0x1c6179fc8 | 0x1c7601458 | PORTED already: hook in G3B.x:1732 |
-| SBSwitcherController | `-_invalidateLayoutElementsTraitsParticipants` | 0x1c617a190 | 0x1c76015ac | TRIAGE PENDING |
-| SBSwitcherController | `-didChangeSettingsForParticipant:context:` | 0x1c617a610 | 0x1c7601ce0 | TRIAGE PENDING |
-| SBSwitcherController | `-_enqueueOrientationTransitionWithActuationContext:suggestedAnimator:completionTask:validator:label:` | 0x1c617aa5c | 0x1c760212c | TRIAGE PENDING |
+| SBSwitcherController | `-_invalidateLayoutElementsTraitsParticipants` | 0x1c617a190 | 0x1c76015ac | NOT PORTED: Tier B of CORE-LEFTOVERS-0.7.9 section 3b: the SBSwitcherTraitsAssistant rework of the switcher traits / orientation flow (new class, new ivars, decision rules changed in three places); the 16.0 ivar layout cannot change and the traits arbiter of the main display would be at risk; guiding participants for orientation locked Stage Manager windows are therefore absent |
+| SBSwitcherController | `-didChangeSettingsForParticipant:context:` | 0x1c617a610 | 0x1c7601ce0 | NOT PORTED: Tier B of CORE-LEFTOVERS-0.7.9 section 3b: the SBSwitcherTraitsAssistant rework of the switcher traits / orientation flow (new class, new ivars, decision rules changed in three places); the 16.0 ivar layout cannot change and the traits arbiter of the main display would be at risk; guiding participants for orientation locked Stage Manager windows are therefore absent |
+| SBSwitcherController | `-_enqueueOrientationTransitionWithActuationContext:suggestedAnimator:completionTask:validator:label:` | 0x1c617aa5c | 0x1c760212c | NOT PORTED: Tier B of CORE-LEFTOVERS-0.7.9 section 3b: the SBSwitcherTraitsAssistant rework of the switcher traits / orientation flow (new class, new ivars, decision rules changed in three places); the 16.0 ivar layout cannot change and the traits arbiter of the main display would be at risk; guiding participants for orientation locked Stage Manager windows are therefore absent |
 | SBSwitcherController | `-_updateAppTransitionContext:withOrientationActuationContext:` | 0x1c617af88 | 0x1c76026a4 | PORTED already: 16.2 address cited in P1SW.m |
-| SBSwitcherController | `-layoutElementSizingPoliciesForLayoutState:` | 0x1c617b708 | 0x1c7602f8c | TRIAGE PENDING |
+| SBSwitcherController | `-layoutElementSizingPoliciesForLayoutState:` | 0x1c617b708 | 0x1c7602f8c | EQUIVALENT: 16.2 converts the element with +[SBDisplayItem displayItemForLayoutElement:] instead of the layout state's -displayItemFromLayoutElement: and loads the window scene weakly; same display item, same calculator call |
 | SBSwitcherController | `-coordinateSpaceForLayoutElement:layoutState:` | 0x1c617c1c4 | 0x1c7603a88 | PORTED already: 16.2 address cited in P1SW.m |
-| SBSwitcherController | `-frameForItemWithRole:inMainAppLayout:interfaceOrientation:` | 0x1c617c2cc | 0x1c7603bb0 | TRIAGE PENDING |
-| SBSwitcherController | `-frameForFloatingAppLayoutInInterfaceOrientation:floatingConfiguration:` | 0x1c617c36c | 0x1c7603c98 | TRIAGE PENDING |
-| SBSwitcherController | `-frameForCenterItemWithConfiguration:interfaceOrientation:` | 0x1c617c3f0 | 0x1c7603d64 | TRIAGE PENDING |
-| SBSwitcherController | `-referenceFrameForForInterfaceOrientation:layoutRole:appLayout:isInsetForHomeAffordance:` | 0x1c617c474 | 0x1c7603e30 | TRIAGE PENDING |
-| SBSwitcherController | `-referenceFrameForForInterfaceOrientation:floatingConfiguration:` | 0x1c617c64c | 0x1c760409c | TRIAGE PENDING |
-| SBSwitcherController | `-referenceFrameForForInterfaceOrientation:centerConfiguration:` | 0x1c617c6f4 | 0x1c76041b4 | TRIAGE PENDING |
-| SBSwitcherController | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c617c79c | 0x1c76042cc | TRIAGE PENDING |
+| SBSwitcherController | `-frameForItemWithRole:inMainAppLayout:interfaceOrientation:` | 0x1c617c2cc | 0x1c7603bb0 | EQUIVALENT: 16.2 only adds an error log when the frame comes back empty (os_log, cold path) and uses the renumbered window scene ivar; same calculator calls and arithmetic |
+| SBSwitcherController | `-frameForFloatingAppLayoutInInterfaceOrientation:floatingConfiguration:` | 0x1c617c36c | 0x1c7603c98 | EQUIVALENT: 16.2 only adds an error log when the frame comes back empty (os_log, cold path) and uses the renumbered window scene ivar; same calculator calls and arithmetic |
+| SBSwitcherController | `-frameForCenterItemWithConfiguration:interfaceOrientation:` | 0x1c617c3f0 | 0x1c7603d64 | EQUIVALENT: 16.2 only adds an error log when the frame comes back empty (os_log, cold path) and uses the renumbered window scene ivar; same calculator calls and arithmetic |
+| SBSwitcherController | `-referenceFrameForForInterfaceOrientation:layoutRole:appLayout:isInsetForHomeAffordance:` | 0x1c617c474 | 0x1c7603e30 | EQUIVALENT: 16.2 only adds an error log when the frame comes back empty (os_log, cold path) and uses the renumbered window scene ivar; same calculator calls and arithmetic |
+| SBSwitcherController | `-referenceFrameForForInterfaceOrientation:floatingConfiguration:` | 0x1c617c64c | 0x1c760409c | EQUIVALENT: 16.2 only adds an error log when the frame comes back empty (os_log, cold path) and uses the renumbered window scene ivar; same calculator calls and arithmetic |
+| SBSwitcherController | `-referenceFrameForForInterfaceOrientation:centerConfiguration:` | 0x1c617c6f4 | 0x1c76041b4 | EQUIVALENT: 16.2 only adds an error log when the frame comes back empty (os_log, cold path) and uses the renumbered window scene ivar; same calculator calls and arithmetic |
+| SBSwitcherController | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c617c79c | 0x1c76042cc | NOT PORTED: Tier B of CORE-LEFTOVERS-0.7.9 section 3b: the SBSwitcherTraitsAssistant rework of the switcher traits / orientation flow (new class, new ivars, decision rules changed in three places); the 16.0 ivar layout cannot change and the traits arbiter of the main display would be at risk; guiding participants for orientation locked Stage Manager windows are therefore absent |
 | SBSwitcherController | `-_currentLayoutState` | 0x1c617dab8 | 0x1c7605754 | PORTED already: 16.2 address cited in P1Drag.m |
-| SBSwitcherController | `-_presentMedusaEducationBanner` | 0x1c617ddac | 0x1c7605aa0 | TRIAGE PENDING |
-| SBSwitcherController | `-_invalidateMedusaEducationBannerTimer` | 0x1c617e0dc | 0x1c7605fd4 | TRIAGE PENDING |
+| SBSwitcherController | `-_presentMedusaEducationBanner` | 0x1c617ddac | 0x1c7605aa0 | IRRELEVANT: Split View / Slide Over education banner (iPad multitasking tips) of the Medusa switcher; 16.2 splits it into _presentMedusaBanner:fireInterval:dismissInterval: and a dismiss timer |
+| SBSwitcherController | `-_invalidateMedusaEducationBannerTimer` | 0x1c617e0dc | 0x1c7605fd4 | IRRELEVANT: Split View / Slide Over education banner (iPad multitasking tips) of the Medusa switcher; 16.2 splits it into _presentMedusaBanner:fireInterval:dismissInterval: and a dismiss timer |
 | SBSwitcherController | `-_ancillaryTransitionRequestForTransitionRequest:` | 0x1c617e6e0 | 0x1c76066fc | PORTED already: 16.2 address cited in P1Drag.m |
 | SBSwitcherController | `-sceneEntityFrameForWorkspaceEntity:inLayoutState:` | 0x1c617ef24 | 0x1c76073e4 | PORTED already: 16.2 address cited in P1SW.m |
 | SBSwitcherLayoutCalculationsCache | `-frameForKey:validityToken:fallback:` | 0x1c630132c | 0x1c779ec58 | TRIAGE PENDING |
@@ -901,15 +901,15 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | SBSwitcherShelfViewController | `-dealloc` | 0x1c64cb1b0 | 0x1c79865a8 | TRIAGE PENDING |
 | SBSwitcherShelfViewController | `-viewWillAppear:` | 0x1c64cb658 | 0x1c7986a60 | PORTED already: 16.2 address cited in Y2Gestures.x |
 | SBSwitcherShelfViewController | `-viewWillDisappear:` | 0x1c64cb730 | 0x1c7986b58 | PORTED already: 16.2 address cited in Y2Gestures.x |
-| SBSwitcherSnapshotImageView | `-layoutSubviews` | 0x1c5e33de8 | 0x1c72a6254 | TRIAGE PENDING |
-| SBSwitcherSnapshotImageView | `-setImage:` | 0x1c5e50750 | 0x1c72c2b48 | TRIAGE PENDING |
+| SBSwitcherSnapshotImageView | `-layoutSubviews` | 0x1c5e33de8 | 0x1c72a6254 | NOT PORTED: 16.2 calls sizeToFit on the image view before scaling it (non uniform scaling of classic app snapshots, see SBAppSwitcherReusableSnapshotView); iPhone only app windows |
+| SBSwitcherSnapshotImageView | `-setImage:` | 0x1c5e50750 | 0x1c72c2b48 | NOT PORTED: 16.2 calls sizeToFit on the image view before scaling it (non uniform scaling of classic app snapshots, see SBAppSwitcherReusableSnapshotView); iPhone only app windows |
 | SBSwitcherSystemApertureSettings | `-setDefaultValues` | 0x1c6147278 | 0x1c75cab6c | IRRELEVANT: Dynamic Island debug settings |
 | SBSwitcherSystemApertureSettings | `+settingsControllerModule` | 0x1c61479f4 | 0x1c75cb300 | IRRELEVANT: Dynamic Island debug settings |
 | SBSwitcherTransitionRequest | `-init` | 0x1c5f95aa0 | 0x1c740d4c8 | EQUIVALENT: ivar offset of _floatingSwitcherVisible (stur -> str) only |
 | SBSwitcherTransitionRequest | `-descriptionBuilderWithMultilinePrefix:` | 0x1c5f95d24 | 0x1c740d8a8 | EXCLUDED: description / debug text only |
 | SBSwitcherTransitionRequest | `-mutableCopyWithZone:` | 0x1c5f96074 | 0x1c740dc2c | 80a95ef: Y7Requests.x y7_inspolicy (copies entityInsertionPolicy and the G1D activatingDisplayItem associated object) [sha afc0109] |
 | SBSwitcherTransitionRequest | `-.cxx_destruct` | 0x1c5f962d4 | 0x1c740dee4 | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBTapAppLayoutSwitcherModifierEvent | `-copyWithZone:` | 0x1c6014910 | 0x1c748f1e0 | TRIAGE PENDING |
+| SBTapAppLayoutSwitcherModifierEvent | `-copyWithZone:` | 0x1c6014910 | 0x1c748f1e0 | EQUIVALENT: address shift only (same two instructions); G1C.x:1553 / G2B.m:1577 add source / modifierFlags to the event |
 | SBTapAppLayoutSwitcherModifierEvent | `-descriptionBuilderWithMultilinePrefix:` | 0x1c6014990 | 0x1c748f280 | EXCLUDED: description / debug text only |
 | SBTopAffordanceViewController | `-initWithDeviceApplicationSceneHandle:` | 0x1c64570ec | 0x1c790bbc4 | 80a95ef: Y2Gestures.x y2_tuiscene (manager of the scene of the scene handle; presence controller registers with it). The 16.2 removal of the expanded-dots animation settings in init is the F3 top affordance row (TO PORT) [sha a557a56] |
 | SBTopAffordanceViewController | `-viewDidLoad` | 0x1c6457330 | 0x1c790bdb0 | TO PORT: 16.2 drops the expanded-dots mode (_setTopAffordanceMode:animated: / _updateDotsForTopAffordanceMode:animated:): isExpanded = dotsView.isHeld, dismissAnimated: no longer collapses, setHidden:YES dismisses, viewDidLoad sets the dots alpha from the presence controller; visual / pointer behaviour of the window title dots (needs device A/B) |
@@ -953,8 +953,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 41, EXCLUDED 18, IRRELEVANT 6, NOT PORTED 1
 | _SBDisplayItemFixedAspectGrid | `-_buildFixedGridWithScreenScale:` | 0x1c6469854 | 0x1c791ed14 | PORTED already: hook in G3B.x:1724 |
 | _SBDisplayItemFlexibleGrid | `-_buildGridWithScreenScale:` | 0x1c6468f0c | 0x1c791e5d4 | PORTED already: hook in G2.x:1720 |
 | _SBDisplayItemFlexibleGrid | `-_gridWidthsForSafeWidth:minimumWidth:` | 0x1c64691b4 | 0x1c791e630 | TRIAGE PENDING |
-| _SBFullScreenAppFloorSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6148ef4 | 0x1c75cc850 | TRIAGE PENDING |
-| _SBFullScreenAppFloorSwitcherModifier | `-isItemResizingAllowedForLayoutRole:inAppLayout:` | 0x1c6149450 | 0x1c75cce18 | TRIAGE PENDING |
+| _SBFullScreenAppFloorSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6148ef4 | 0x1c75cc850 | NOT PORTED: pointer tap on the full screen floor: 16.2 builds the request with requestForTapAppLayoutEvent: and, for a pointer tap (source 1) outside Stage Manager, performs it directly; G1C.x patches the Stage Manager full screen modifier (G1C_FS_*) that sits above this floor and answers taps first |
+| _SBFullScreenAppFloorSwitcherModifier | `-isItemResizingAllowedForLayoutRole:inAppLayout:` | 0x1c6149450 | 0x1c75cce18 | EQUIVALENT: 16.2 drops the override: the Stage Manager answer comes from SBFullScreenContinuousExposeSwitcherModifier (G1C.x) / the super class chain (G2B.m:2567 adds the floor constants) |
 | _SBPIPEndStashTabSuppressionGestureManager | `-_addSystemRecognizers` | 0x1c635d6c0 | 0x1c7340510 | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
 | _SBPIPEndStashTabSuppressionGestureManager | `-_removeGestureRecognizers` | 0x1c635d908 | 0x1c7340728 | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
 | _SBPIPEndStashTabSuppressionGestureManager | `-.cxx_destruct` | 0x1c635da68 | 0x1c734085c | EXCLUDED: ivar teardown only (.cxx_destruct) |

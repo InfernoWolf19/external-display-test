@@ -11,7 +11,7 @@
 //                 animationAttributesForLayoutElement:   the 16.0 attributes only for the app layout element that equals _appLayout, super for the rest
 //               Ported: wrappers that run the 16.0 body in exactly those cases and the super implementation otherwise; Stage Manager frame = overlapping model bounding box (the slide offset of the
 //               16.0 body is kept: it is the difference of the 16.0 result and the container bounds).  Reached from -[SBContinuousExposeRootSwitcherModifier transitionModifierForMainTransitionEvent:].
-//  y11_tapreq   SBShelfCarouselSwitcherModifier / SBSlideOverPeekSwitcherModifier / SBPeekSplitViewRoutingSwitcherModifier -handleTapAppLayoutEvent: 16.2 (0x1c78e4460 / 0x1c75dda00 / 0x1c74e7108) build
+//  y11_tapreq   SBShelfCarouselSwitcherModifier / SBSlideOverPeekSwitcherModifier / SBPeekSplitViewRoutingSwitcherModifier / SBDeckSwitcherModifier / SBDeckFloatingSwitcherModifier -handleTapAppLayoutEvent: 16.2 (0x1c78e4460 / 0x1c75dda00 / 0x1c74e7108 / 0x1c78dbad4 / 0x1c77b19a4) build
 //               their request with +[SBSwitcherTransitionRequest requestForTapAppLayoutEvent:] (appLayout + activatingDisplayItem of the tapped role + pointer source) instead of
 //               +requestForActivatingAppLayout:.  G1C.x adds requestForTapAppLayoutEvent: to 16.0; here the old request is replaced by it for the duration of those three handlers.
 //               Not ported: -[SBPeekSplitViewRoutingSwitcherModifier responseForProposedChildResponse:childModifier:event:] 16.2 sets activatingDisplayItem on its request too (Split View peek only).
@@ -138,7 +138,7 @@ static void Y11_Patch(Y11Set *s, Class c, BOOL withOpacity) {
 
 // ---- y11_tapreq ----
 static __thread __unsafe_unretained id tY11Tap;                 // the tap event while one of the three handlers runs
-static IMP gY11OrigReq, gY11OrigShelf, gY11OrigSlide, gY11OrigPeek;
+static IMP gY11OrigReq, gY11OrigShelf, gY11OrigSlide, gY11OrigPeek, gY11OrigDeck, gY11OrigDeckF;
 static id Y11_ReqActivating(id cls, SEL _cmd, id layout) {
     id ev = tY11Tap;
     if (ev && layout && BP_OnName("y11_tapreq") && BPY_Responds((id)cls, "requestForTapAppLayoutEvent:") && [layout isEqual:BPX_Obj0(ev, "appLayout")]) {
@@ -157,6 +157,8 @@ static id Y11_HandleTap(IMP orig, id self, SEL _cmd, id event) {
 static id Y11_ShelfTap(id self, SEL _cmd, id e) { return Y11_HandleTap(gY11OrigShelf, self, _cmd, e); }
 static id Y11_SlideTap(id self, SEL _cmd, id e) { return Y11_HandleTap(gY11OrigSlide, self, _cmd, e); }
 static id Y11_PeekTap(id self, SEL _cmd, id e) { return Y11_HandleTap(gY11OrigPeek, self, _cmd, e); }
+static id Y11_DeckTap(id self, SEL _cmd, id e) { return Y11_HandleTap(gY11OrigDeck, self, _cmd, e); }
+static id Y11_DeckFTap(id self, SEL _cmd, id e) { return Y11_HandleTap(gY11OrigDeckF, self, _cmd, e); }
 
 __attribute__((constructor)) static void Y11_Setup(void) {
     if (!BPY_BuildOK()) return;
@@ -176,6 +178,9 @@ __attribute__((constructor)) static void Y11_Setup(void) {
             gY11OrigShelf = BPX_Replace(sh, "handleTapAppLayoutEvent:", (IMP)Y11_ShelfTap);
             gY11OrigSlide = BPX_Replace(so, "handleTapAppLayoutEvent:", (IMP)Y11_SlideTap);
             gY11OrigPeek = BPX_Replace(pk, "handleTapAppLayoutEvent:", (IMP)Y11_PeekTap);
+            Class dk = NSClassFromString(@"SBDeckSwitcherModifier"), df = NSClassFromString(@"SBDeckFloatingSwitcherModifier");
+            if (dk && class_getInstanceMethod(dk, sel_registerName("handleTapAppLayoutEvent:"))) gY11OrigDeck = BPX_Replace(dk, "handleTapAppLayoutEvent:", (IMP)Y11_DeckTap);
+            if (df && class_getInstanceMethod(df, sel_registerName("handleTapAppLayoutEvent:"))) gY11OrigDeckF = BPX_Replace(df, "handleTapAppLayoutEvent:", (IMP)Y11_DeckFTap);
             n++;
         }
         BP_Log(@"[y11] installed %d of 2 groups (switches y11_removal, y11_tapreq)", n);

@@ -67,7 +67,9 @@ static id Y10_Portal(id self, SEL _cmd, id view, id srcScene, id dstScene, id ro
 static BOOL Y10_AutoPIP(id self, SEL _cmd, id req, id *outEntity, long long *outMode, long long *outStyle, long long reason) {
     id ctx = nil, cand = nil;
     BOOL arm = NO;
-    if (req && BP_OnName("y10_autopip") && BPY_Responds(req, "applicationContext")) {
+    // source 11 is the source of every gesture transaction request (a window drag / drop between displays): the Stage Manager candidate search is not applied to them, so a window that is dragged to
+    // the other display is never taken for a window that leaves the stage into PiP (the 16.0 path decides those requests exactly as before this port)
+    if (req && BP_OnName("y10_autopip") && BPY_Responds(req, "applicationContext") && BPX_LL0(req, "source") != 11) {
         id lock = BPX_Obj0((id)NSClassFromString(@"SBLockScreenManager"), "sharedInstance");
         if (!(lock && BPX_Bool0(lock, "isUILocked"))) {
             id scene = BPY_SceneForIdentity(BPX_Obj0(req, "displayIdentity"));
