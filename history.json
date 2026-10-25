@@ -1,12 +1,4 @@
 {
- "0.7.5+199.51b4c69": {
-  "date": "2026-10-20T14:17:56Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+199.51b4c69_iphoneos-arm64.deb",
-  "run": 199,
-  "sha": "51b4c69570b1ad4688f0863c103da8dfd85379b3",
-  "subject": "CI: publish every successful build as a Sileo / Zebra repository on gh-pages with version history (version = control version + run + commit, commit subject in the description), optional backfill of earlier builds",
-  "version": "0.7.5+199.51b4c69"
- },
  "0.7.5+200.e8a0299": {
   "date": "2026-10-20T19:11:51Z",
   "file": "debs/com.infernowolf19.backport162_0.7.5+200.e8a0299_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "dcef91c55c1234f98e36c9b40fa957b4b51f80f8",
   "subject": "Y12Dock: the floating dock of a display decides with its own display's environment mode, dock window stays visible while the dock library popover is open (switches y12_dockmode, y12_dockwin); DELTA-SWEEP verdicts for floating dock and window rows",
   "version": "0.7.9+267.dcef91c"
+ },
+ "0.7.9+268.f47012c": {
+  "date": "2026-10-25T20:21:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+268.f47012c_iphoneos-arm64.deb",
+  "run": 268,
+  "sha": "f47012c6aaa34ed44c58419766d615267e3d9ed0",
+  "subject": "Y13Fluid / Y14Open / Y15InCall: bring-to-front stamp, container reuse reset, gesture fail reset (y13_*); URL open picks the target display (y14_openurl); In-Call transitions and banner on the session's own display (y15_*); Y10 auto PiP skips gesture requests, Y11 Deck tap requests; DELTA-SWEEP verdicts",
+  "version": "0.7.9+268.f47012c"
  },
  "0.7.9+269.9fb6153": {
   "date": "2026-10-25T20:21:06Z",
