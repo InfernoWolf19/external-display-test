@@ -12,16 +12,17 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 452 |
-| PORTED NOW | 86 |
-| EQUIVALENT | 317 |
+| PORTED already | 451 |
+| PORTED NOW | 88 |
+| EQUIVALENT | 316 |
 | IRRELEVANT | 308 |
 | EXCLUDED | 117 |
-| OPEN | 30 |
+| OPEN | 27 |
 | CANNOT | 1 |
+| not yet triaged (this sweep is in progress) | 1 |
 | **total** | **1466** |
 
-Per family: F1: CANNOT 1, EQUIVALENT 54, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 26, OPEN 2, PORTED 40, PORTED NOW 12; F2: EQUIVALENT 33, EXCLUDED 3, IRRELEVANT 25, NOT PORTED 9, OPEN 3, PORTED 5, PORTED NOW 10; F3: EQUIVALENT 125, EXCLUDED 41, IRRELEVANT 17, NOT PORTED 100, OPEN 7, PORTED 327, PORTED NOW 49; F4: EQUIVALENT 19, EXCLUDED 8, OPEN 18, PORTED 24, PORTED NOW 5; F5: EXCLUDED 1, NOT PORTED 2, PORTED 3, PORTED NOW 2; F6: EQUIVALENT 35, EXCLUDED 8, IRRELEVANT 29, NOT PORTED 12, PORTED 11, PORTED NOW 7; F7: EQUIVALENT 19, EXCLUDED 9, IRRELEVANT 10, PORTED 33, PORTED NOW 1; F8: EQUIVALENT 32, EXCLUDED 29, IRRELEVANT 215, NOT PORTED 6, PORTED 9
+Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 26, OPEN 1, PORTED 40, PORTED NOW 14; F2: EQUIVALENT 33, EXCLUDED 3, IRRELEVANT 25, NOT PORTED 9, OPEN 3, PENDING 1, PORTED 4, PORTED NOW 10; F3: EQUIVALENT 125, EXCLUDED 41, IRRELEVANT 17, NOT PORTED 100, OPEN 7, PORTED 327, PORTED NOW 49; F4: EQUIVALENT 19, EXCLUDED 8, NOT PORTED 2, OPEN 16, PORTED 24, PORTED NOW 5; F5: EXCLUDED 1, NOT PORTED 2, PORTED 3, PORTED NOW 2; F6: EQUIVALENT 35, EXCLUDED 8, IRRELEVANT 29, NOT PORTED 12, PORTED 11, PORTED NOW 7; F7: EQUIVALENT 19, EXCLUDED 9, IRRELEVANT 10, PORTED 33, PORTED NOW 1; F8: EQUIVALENT 32, EXCLUDED 29, IRRELEVANT 215, NOT PORTED 6, PORTED 9
 
 ## F1 Window scene / scene manager / main workspace / scene handles (165)
 
@@ -99,8 +100,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 54, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBMainWorkspace | `-_removeApplicationEntitiesFromWorkspace:error:` | 0x1c5f036fc | 0x1c7377ba0 | PORTED NOW: Y1Workspace.x y1_appremoved (any-display layout lookup) [sha 82bc14e] |
 | SBMainWorkspace | `-_targetWindowSceneForApplication:preferringDisplay:requireForeground:options:` | 0x1c5f04228 | 0x1c7378764 | EQUIVALENT: 16.2 adds a consistency filter (scene settings display == manager's display) that only differs while a scene is being taken by another display; LOW, not ported |
 | SBMainWorkspace | `-_handleOpenApplicationRequest:options:activationSettings:origin:withResult:` | 0x1c5f060d0 | 0x1c737a760 | EQUIVALENT: selector sequence identical; device capability gates (blraaz) became direct calls, register renumbering only |
-| SBMainWorkspace | `-isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:` | 0x1c5f0c1dc | 0x1c73808a4 | OPEN: NEEDS EDIT IN G3B.x: expose the per-window-scene hosted keyboard controller (BPKB_ControllerForWindowScene) as -[SBWindowScene medusaHostedKeyboardWindowController]; only matters for alerts on the extended display (LOW) |
-| SBMainWorkspace | `-transientOverlayScenePresenter:didDismissViewController:wasTopmostPresentation:` | 0x1c5f0cad0 | 0x1c73811ac | EQUIVALENT: main display presenter: identical (switcherController of the window scene = the coordinator's active controller); extended display presenter only resets the idle timer / clock after a dismissal, LOW, not ported |
+| SBMainWorkspace | `-isKeyboardVisibleForSpringBoardForTransientOverlayScenePresenter:` | 0x1c5f0c1dc | 0x1c73808a4 | PORTED NOW: Y16Contingency.x y16_overlaykb (a presenter of another display asks that scene hosted keyboard controller, exported by G3B.x medusaHostedKeyboardWindowController) [sha 940d7db] |
+| SBMainWorkspace | `-transientOverlayScenePresenter:didDismissViewController:wasTopmostPresentation:` | 0x1c5f0cad0 | 0x1c73811ac | PORTED NOW: Y16Contingency.x y16_overlaydismiss (the primary element tested after the dismissal is the one of the presenter display: Y3_PushActive of its switcher controller) [sha 940d7db] |
 | SBMainWorkspaceLayoutStateContingencyPlan | `-transitionContextForLayoutContext:failedEntities:` | 0x1c6450ce8 | 0x1c7904c94 | PORTED NOW: Y16Contingency.x y16_stagefail (Stage Manager branch keeps the other windows; the switcher mode flow of a windowed extended display, the preflight leg and the floating switcher tail are NOT PORTED, see the file header) [sha 940d7db] |
 | SBMainWorkspaceTransitionRequest | `-copyMainWorkspaceTransitionRequest` | 0x1c63e6878 | 0x1c7892f40 | NOT PORTED: 16.2 also copies retainsSiri of the application context (Siri on a Stage Manager transition); Siri retention only |
 | SBRecentAppLayouts | `-_setRecents:notifyForChangeDescription:` | 0x1c64eb650 | 0x1c79a8370 | EXCLUDED: description / debug text only |
@@ -228,7 +229,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 54, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBHomeHardwareButtonActions | `-performSinglePressUpActionsWithSourceType:` | 0x1c6144ea8 | 0x1c75c8670 | NOT PORTED: no home button on the M2 iPad Pro; 16.2 hands the active window scene to the home button handler (AssistiveTouch home only) |
 | SBHomeScreenBackdropView | `-_updateBackdropViewIfNeededInvalidatingSnapshot:` | 0x1c5ea20e8 | 0x1c7314d90 | IRRELEVANT: home screen blur snapshot / opaque layer only |
 | SBHomeScreenBackdropView | `-homeScreenBlurredContentSnapshotImage` | 0x1c62977dc | 0x1c7731058 | IRRELEVANT: home screen blur snapshot / opaque layer only |
-| SBHomeScreenContinuousExposeSwitcherModifier | `-init` | 0x1c634e174 | 0x1c77f3898 | PORTED already: 16.2 address cited in G1C.x |
+| SBHomeScreenContinuousExposeSwitcherModifier | `-init` | 0x1c634e174 | 0x1c77f3898 | TRIAGE PENDING |
 | SBHomeScreenViewController | `-_acquireFloatingDockBehaviorAssertionIfNecessaryForFloatingDockController:` | 0x1c637a27c | 0x1c7821698 | EQUIVALENT: 16.2 reads the dock controller's windowScene property instead of its view controller's window scene: the same scene |
 | SBHomeScreenWindow | `-initWithWindowScene:rootViewController:layoutStrategy:role:debugName:` | 0x1c63e935c | 0x1c7895b98 | EQUIVALENT: 16.0 already takes the bounds of [windowScene screen] when it responds (it does); 16.2 drops the mainScreen fallback |
 | SBIconController | `-_effectiveOrientation` | 0x1c5e65b1c | 0x1c72d83dc | EQUIVALENT: edge fallback only (view not loaded / no window orientation: 16.2 derives the orientation from allowedInterfaceOrientations); main display home screen |
@@ -556,7 +557,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 54, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBFluidSwitcherViewController | `-_leafAppLayoutInLiveContentOverlaysWithLayoutRole:` | 0x1c5fc1424 | 0x1c7439f84 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-clickReceivedForHomeGrabberView:` | 0x1c5fc1864 | 0x1c743a460 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-canPerformKeyboardShortcutAction:forBundleIdentifier:` | 0x1c5fc1b10 | 0x1c743a70c | OPEN: G2B.m:1728 ports the window navigation actions 4 / 5 / 15 / 16 only ("UNSURE: 16.2's version is a 280 instruction decision tree", jump table 0x1c743a85c..); the other branches (App Exposé action 3 with chamois on, floating window action, split view actions) differ from 16.0 in the checks of isChamoisWindowingUIEnabled, multi window support and the focused scene's layout environment; only menu / shortcut availability, the actions themselves are ported by P1VC.m performKeyboardShortcutAction: |
-| SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in G3C.x, P1VC.m |
+| SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in P1VC.m, G3C.x |
 | SBFluidSwitcherViewController | `-_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:` | 0x1c5fc29c8 | 0x1c743b200 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-invalidate` | 0x1c5fc335c | 0x1c743bc98 | PORTED already: hook in G1D.x:2289, G4B.x:2463 |
 | SBFluidSwitcherViewController | `-_updateAutoHideForGrabberAffordancesInAppLayout:withResetDelay:unhideDelay:` | 0x1c5fc3b2c | 0x1c743c5f0 | PORTED already: 16.2 address cited in G2C.x |
@@ -987,8 +988,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 54, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBIndirectPanGestureRecognizer | `-.cxx_destruct` | 0x1c639af38 | 0x1c7845264 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBInteractiveScreenshotGestureManager | `-_updateFailureRequirements` | 0x1c62f56f0 | 0x1c77929c8 | EQUIVALENT: gesture manager passed through a register (ivar), same call |
 | SBInteractiveScreenshotGestureManager | `-gestureRecognizerShouldBegin:` | 0x1c62f621c | 0x1c77934fc | PORTED NOW: Y16Contingency.x y16_shotcorner (finger corner swipes do not start the corner gesture under Stage Manager) [sha 940d7db] |
-| SBKeyboardHomeAffordanceController | `-_getHomeGrabberContainingView:isAlwaysPortrait:` | 0x1c640ebdc | 0x1c78bc418 | OPEN: NEEDS EDIT IN G3B.x: 16.2 asks [[sourceWindow windowScene] medusaHostedKeyboardWindowController] (home grabber of the hosted keyboard on the extended display); needs -[SBWindowScene medusaHostedKeyboardWindowController] exported from G3B.x (BPKB_ControllerForWindowScene) |
-| SBKeyboardHomeAffordanceController | `-_updateHomeAffordance` | 0x1c640ed54 | 0x1c78bc648 | OPEN: NEEDS EDIT IN G3B.x: 16.2 asks [[sourceWindow windowScene] medusaHostedKeyboardWindowController] (home grabber of the hosted keyboard on the extended display); needs -[SBWindowScene medusaHostedKeyboardWindowController] exported from G3B.x (BPKB_ControllerForWindowScene) |
+| SBKeyboardHomeAffordanceController | `-_getHomeGrabberContainingView:isAlwaysPortrait:` | 0x1c640ebdc | 0x1c78bc418 | NOT PORTED: 16.2 reads the home grabber of the hosted keyboard through the source window scene instead of the main display scene manager; the monitor has no touch input so no on-screen keyboard home grabber is ever shown there, the iPad itself behaves as in 16.0 |
+| SBKeyboardHomeAffordanceController | `-_updateHomeAffordance` | 0x1c640ed54 | 0x1c78bc648 | NOT PORTED: 16.2 reads the home grabber of the hosted keyboard through the source window scene instead of the main display scene manager; the monitor has no touch input so no on-screen keyboard home grabber is ever shown there, the iPad itself behaves as in 16.0 |
 | SBLockedPointerManager | `-clientWithSceneIdentifier:prefersPointerLockStatus:` | 0x1c6227784 | 0x1c76b8d74 | PORTED already: hook in G4B.x:1411 |
 | SBLockedPointerManager | `-layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:` | 0x1c62278a4 | 0x1c76b93c4 | PORTED already: hook in G4B.x:1430 |
 | SBLockedPointerManager | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c62278fc | 0x1c76b9528 | PORTED already: hook in G4B.x:1434 |
