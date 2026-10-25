@@ -1,12 +1,4 @@
 {
- "0.7.5+204.5f42e12": {
-  "date": "2026-10-20T19:16:14Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.5+204.5f42e12_iphoneos-arm64.deb",
-  "run": 204,
-  "sha": "5f42e1239745421788599355a1ccfe5412d9132c",
-  "subject": "REVIEW-PLUMBING-0.7.9: coverage matrix, fixed / open defects of the plumbing, display lifecycle and pointer area incl. SMT.x / SPK.c; README speaker row: new crash guard",
-  "version": "0.7.5+204.5f42e12"
- },
  "0.7.9+205.6ff8b29": {
   "date": "2026-10-20T19:18:08Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+205.6ff8b29_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b23ddb4ede506efad026f81ecac58475399543cc",
   "subject": "DELTA-SWEEP: shas for Y12..Y16",
   "version": "0.7.9+273.b23ddb4"
+ },
+ "0.7.9+274.971056b": {
+  "date": "2026-10-25T20:46:15Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+274.971056b_iphoneos-arm64.deb",
+  "run": 274,
+  "sha": "971056beb10153b4f6cf26650d85e972b5bcf33a",
+  "subject": "Y16Contingency: transient overlay keyboard visibility and dismissal use the display of the overlay (y16_overlaykb, y16_overlaydismiss); DELTA-SWEEP updated",
+  "version": "0.7.9+274.971056b"
  }
 }
