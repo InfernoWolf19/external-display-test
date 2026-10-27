@@ -641,7 +641,10 @@ static void P1_HandleUpdate(id self, SEL _cmd, id request, id manager) {
 }
 static void P1_HandleUpdateBody(id self, SEL _cmd, id request, id manager) {
     id sc = P1_S0(manager, "switcherController");
-    if (BP_LogEnabled()) BP_Log(@"p1: txn %p update from the manager of %@ (own display %@), request layout %@", (__bridge void *)self, P1_Disp(sc), P1_Disp(P1_S0(P1_S0(self, "switcherViewController"), "switcherController")), P1_S0(request, "appLayout"));
+    static __unsafe_unretained id logTxn; static unsigned long logN;       // a drag sends two updates per input event (120 Hz): the full request description is logged for the first 4 of a transaction and every 60th
+    if (logTxn != self) { logTxn = self; logN = 0; }
+    logN++;
+    if (BP_LogEnabled() && (logN <= 4 || logN % 60 == 0)) BP_Log(@"p1: txn %p update #%lu from the manager of %@ (own display %@), request layout %@", (__bridge void *)self, logN, P1_Disp(sc), P1_Disp(P1_S0(P1_S0(self, "switcherViewController"), "switcherController")), P1_S0(request, "appLayout"));
     id wreq = P1_WorkspaceRequest(self, 0, request, manager, @"UpdateFluidSwitcherGestureAction");
     if (!wreq) return;
     id appCtx = P1_S0(wreq, "applicationContext");
@@ -1011,7 +1014,9 @@ static void P1_VCAsync(id self, SEL _cmd) {
             min = (attrs >> 8) & 1;
             BOOL wants = [root respondsToSelector:wantsR] ? ((BOOL (*)(id, SEL, id))objc_msgSend)(root, wantsR, adjusted) : NO;
             if ((attrs & 1) && wants) {
-                BP_Log(@"p1: async rendering and resizing hosted content both requested for %@ (16.2 logs this error and renders synchronously)", key);
+                static unsigned long bothN;                              // 16.2 takes this branch for every dragged layout on every update (the drag modifier answers both): same result as the branch below, logged 3 times and then every 500th
+                bothN++;
+                if (bothN <= 3 || bothN % 500 == 0) BP_Log(@"p1: async rendering and resizing hosted content both requested for %@ (16.2 logs this error and renders synchronously; #%lu)", key, bothN);
             } else if (attrs & 1) {
                 async = ![dragging containsObject:key];
                 resizes = async ? NO : chamois;

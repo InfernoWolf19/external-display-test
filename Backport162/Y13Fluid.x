@@ -38,7 +38,11 @@ static id Y13_BringFront(id self, SEL _cmd, id item, id layout) {
                 id attrs = BPX_Obj1(layout, "layoutAttributesForItem:", item);
                 id stamped = attrs ? BPY_SEND(id, (long long), attrs, "attributesByModifyingLastInteractionTime:", t) : nil;
                 id r = stamped ? BPX_Obj2(layout, "appLayoutByModifyingLayoutAttributes:forItem:", stamped, item) : nil;
-                if (r) { BPY_LOG(@"[y13] bring to front of the front window %@: interaction time stamped (%lld)", item, t); return r; }
+                if (r) {
+                    static long long lastLogged = -1;                   // logged when the stamp changes only: during a window drag this runs twice per input event (the log line, a 5 line item description, was 20 % of a drag's log)
+                    if (t != lastLogged) { lastLogged = t; BPY_LOG(@"[y13] bring to front of the front window %@: interaction time stamped (%lld)", item, t); }
+                    return r;
+                }
             }
         }
     }
