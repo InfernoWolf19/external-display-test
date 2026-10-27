@@ -17,6 +17,7 @@
 #import "BP.h"
 extern void P1_EndBroadcastBegin(id txn);      // P1Drag.m
 extern void P1_EndBroadcastEnd(id txn);
+extern void G1C_RevealRecognizerEvent(id mgr, id gr);   // G1C.x
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -1317,6 +1318,7 @@ static BOOL G1D_VC_IsEdgeProtected(id vc, double loc, unsigned long long edge) {
     SEL dis = NSSelectorFromString(@"dismissWithStyle:animated:");
     if ([tongue respondsToSelector:dis]) ((BOOL (*)(id, SEL, long long, BOOL))objc_msgSend)(tongue, dis, 0, YES);
     G1B_SendV1(self, NSSelectorFromString(@"_handleFluidGesture:"), gesture);
+    G1C_RevealRecognizerEvent(self, gesture);                                              // G1C.x: lifecycle log + watchdog of the reveal transaction (g1c_revealwatch)
 }
 
 // overflow gestures: availability / touch rules of 16.2 (the 16.0 versions miss the `hidden` half and use the main display)

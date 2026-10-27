@@ -1120,6 +1120,22 @@ static id G1C_NewPerformActivate(id appLayout, BOOL gesture) {
     return req ? ((id (*)(id, SEL, id, BOOL))objc_msgSend)([pc alloc], ps, req, gesture) : nil;
 }
 static NSString *const kG1CRevealTimeout = @"BP162RevealStripsCompletionTimeout";
+// ROOT CAUSE of "strip reveal, hide, reveal again within ~2 s: the strip disappears and the display is frozen until a tap" (specs/FINDINGS-STRIPREVEAL-FREEZE-0.7.9.md): the safety net timer
+// above carried the SAME reason string for every gesture, timer events go to every modifier of the stack, so the timer armed by the END of reveal N (2.0 s + ~0.1 s) reached the
+// modifier of reveal N+1 (begun in between) and finished it while the finger was still down (GUARD line 2.1 s after the previous end, 4 of 4 times in device log u11).  The gesture
+// then lost its end event (the modifier was gone: no 'ended', no transition request, the shared transaction stayed open with the window at the last reveal progress) until a tap
+// interrupted the transaction.  16.2 stock timers carry per instance reasons (_timeoutReason 0x1c7589cb4, the slide modifier 'WaitingToAnimate' reasons).  Fix: the reason is unique per
+// modifier instance (serial number, never an address that a later modifier could reuse); switch g1c_revealtimer (off = the shared reason of 0.7.9).
+static char kG1CRevealReason, kG1CRevealEnded;
+static unsigned long long gG1CRevealSerial;
+static id gG1CRevealInitial;                         // initial layout of the newest reveal gesture modifier (for the watchdog below)
+static __weak id gG1CRevealInitialMgr;               // the gesture manager that gesture belongs to
+static NSString *G1C_RevealReason(id m) {
+    if (!BP_OnName("g1c_revealtimer")) return kG1CRevealTimeout;
+    NSString *r = G1B_GET(m, kG1CRevealReason);
+    if (!r) { r = [NSString stringWithFormat:@"%@-%llu", kG1CRevealTimeout, ++gG1CRevealSerial]; G1B_SET(m, kG1CRevealReason, r); }
+    return r;
+}
 static IMP gRevealOrigHandle;      // the 16.0 handleGestureEvent: of the class (NULL when it was inherited): used when the group is switched off (review B8)
 static id G1C_Rv_HandleGesture(id self, SEL _cmd, id event) {
     if (!G1C_ON()) {
@@ -1138,14 +1154,20 @@ static id G1C_Rv_HandleGesture(id self, SEL _cmd, id event) {
     double raw = strip > 0 ? (delta > 0 ? delta : 0.0) / strip : 0.0;
     double progress = G1C_Constrain01(raw, range);
     G1C_SetIvarD(self, "_progress", progress);
-    if (G1B_SendLL0(event, @selector(phase)) != 3) return resp;
+    long long evPhase = G1B_SendLL0(event, @selector(phase));
+    if (evPhase == 1) {
+        gG1CRevealInitial = G1C_IvarObj(self, "_initialAppLayout");
+        if (BP_LogEnabled()) BP_Log(@"g1c: strip reveal modifier %p begins: reason %@ indirect=%d initial layout %@", (__bridge void *)self, G1C_RevealReason(self), (int)indirect, G1C_DbgLayout(gG1CRevealInitial));
+    }
+    if (evPhase != 3) return resp;
+    G1B_SET(self, kG1CRevealEnded, @YES);
     BOOL canceled = [event respondsToSelector:@selector(isCanceled)] && G1B_SendB0(event, @selector(isCanceled));
     BOOL show;
     if (indirect) {
         unsigned long long reason = [event respondsToSelector:@selector(indirectPanEndReason)] ? ((unsigned long long (*)(id, SEL))objc_msgSend)(event, @selector(indirectPanEndReason)) : 0;
         show = canceled ? (reason == 5) : (reason == 3 || progress >= 0.25);
     } else show = !canceled && progress >= 0.25;
-    if (BP_LogEnabled()) BP_Log(@"GLITCH strip reveal gesture ended: show=%d canceled=%d indirect=%d progress=%.3f initial layout=%@", show, canceled, indirect, progress, G1C_DbgLayout(G1C_IvarObj(self, "_initialAppLayout")));
+    if (BP_LogEnabled()) BP_Log(@"GLITCH strip reveal gesture ended: show=%d canceled=%d indirect=%d progress=%.3f initial layout=%@ modifier=%p reason=%@", show, canceled, indirect, progress, G1C_DbgLayout(G1C_IvarObj(self, "_initialAppLayout")), (__bridge void *)self, G1C_RevealReason(self));
     id pres = show ? G1C_NewStripsPresentationResponse(1, 0) : G1C_NewStripsPresentationResponse(0, 1);
     if (pres) resp = G1B_Append(pres, resp);
     id upd = G1B_NewUpdateLayoutResponse(0xc, 3);
@@ -1153,23 +1175,83 @@ static id G1C_Rv_HandleGesture(id self, SEL _cmd, id event) {
     id perform = G1C_NewPerformActivate(G1C_IvarObj(self, "_initialAppLayout"), YES);
     if (perform) resp = G1B_Append(perform, resp);
     // safety net (not in 16.2): if no transition event ever reaches this modifier (the activate request can be a no-op) it would never complete
-    id timer = G1C_NewTimerResponse(2.0, kG1CRevealTimeout);
+    id timer = G1C_NewTimerResponse(2.0, G1C_RevealReason(self));
     if (timer) resp = G1B_Append(timer, resp);
     return resp;
 }
 static id G1C_Rv_HandleTransition(id self, SEL _cmd, id event) {
     id resp = G1B_SUPER(id, gRevealSuper, self, _cmd, (struct objc_super *, SEL, id), event);
-    if (event && [event respondsToSelector:@selector(phase)] && G1B_SendLL0(event, @selector(phase)) >= 2) G1B_SendVLL(self, @selector(setState:), 1);
+    if (event && [event respondsToSelector:@selector(phase)] && G1B_SendLL0(event, @selector(phase)) >= 2) {
+        // 16.2 0x1c7817abc does exactly this (any transition event of phase >= 2 finishes the modifier); the line below only records when it happens BEFORE the gesture's own end
+        if (BP_LogEnabled() && G1B_SendLL0(self, @selector(state)) != 1 && ![G1B_GET(self, kG1CRevealEnded) boolValue])
+            BP_Log(@"GLITCH strip reveal modifier %p finished by a transition event (phase %lld, gesture %d) before its own gesture ended (progress %.3f, reason %@): a transition that started during the reveal", (__bridge void *)self, G1B_SendLL0(event, @selector(phase)), (int)G1B_SendB0(event, @selector(isGestureInitiated)), G1C_IvarD(self, "_progress"), G1C_RevealReason(self));
+        G1B_SendVLL(self, @selector(setState:), 1);
+    }
     return resp;
 }
 static id G1C_Rv_HandleTimer(id self, SEL _cmd, id event) {
     id resp = G1B_HasSuper(gRevealSuper, _cmd) ? G1B_SUPER(id, gRevealSuper, self, _cmd, (struct objc_super *, SEL, id), event) : nil;
     id reason = [event respondsToSelector:@selector(reason)] ? G1B_Send0(event, @selector(reason)) : nil;
-    if ([reason isKindOfClass:[NSString class]] && [reason isEqualToString:kG1CRevealTimeout]) {
-        if (BP_LogEnabled() && G1B_SendLL0(self, @selector(state)) != 1) BP_Log(@"GUARD strip reveal gesture: no transition began within 2 s of the gesture end -> completing the gesture modifier (16.2 has no such timeout)");
-        G1B_SendVLL(self, @selector(setState:), 1);
+    if ([reason isKindOfClass:[NSString class]] && [reason hasPrefix:kG1CRevealTimeout]) {
+        NSString *mine = G1C_RevealReason(self);
+        BOOL ended = [G1B_GET(self, kG1CRevealEnded) boolValue];
+        if ([reason isEqualToString:mine]) {
+            if (BP_LogEnabled() && G1B_SendLL0(self, @selector(state)) != 1) BP_Log(@"GUARD strip reveal gesture: no transition began within 2 s of the gesture end -> completing the gesture modifier %p (16.2 has no such timeout), reason %@, gesture ended %d", (__bridge void *)self, reason, (int)ended);
+            G1B_SendVLL(self, @selector(setState:), 1);
+        } else if (BP_LogEnabled()) {
+            BP_Log(@"g1c: strip reveal modifier %p (reason %@, gesture ended %d, state %lld) ignores the completion timer %@ of an earlier gesture", (__bridge void *)self, mine, (int)ended, G1B_SendLL0(self, @selector(state)), reason);
+        }
     }
     return resp;
+}
+// ---- strip reveal recognizer lifecycle + watchdog (switch g1c_revealwatch) ---------------------------------------------------------------------------------------------------------
+// Called by G1D.x after the manager handled a state of a strip reveal recognizer (touch edge pull or pointer pan; UIGestureRecognizerState 1 began .. 5 failed).  Logs begin / end with the
+// shared transaction and the modifier state (decisive line for the next occurrence) and arms the last-line watchdog: a reveal transaction that is still open and never received its
+// complete 3 s after the recognizer ended (the end event had no modifier to land in) is completed with the request the modifier would have made (activate the initial layout, gesture
+// initiated) through the view controller's own response path.  With the timer fix above this must not fire; if it does the GUARD(reveal txn) line names the cause.
+extern void P1_NoteMissing(id o, SEL x);                // P1Drag.m
+static unsigned long long gG1CRevealSeq, gG1CRevealUpdates;
+static id G1C_RvMgrTxn(id mgr) {
+    SEL s = sel_registerName("activeGestureTransaction");
+    if (![mgr respondsToSelector:s]) { P1_NoteMissing(mgr, s); return nil; }
+    return ((id (*)(id, SEL))objc_msgSend)(mgr, s);
+}
+void G1C_RevealRecognizerEvent(id mgr, id gr) {
+    if (!G1C_ON() || !mgr || !gr) return;
+    SEL stSel = sel_registerName("state");
+    if (![gr respondsToSelector:stSel]) { P1_NoteMissing(gr, stSel); return; }
+    long long st = ((long long (*)(id, SEL))objc_msgSend)(gr, stSel);
+    gG1CRevealSeq++;
+    if (st == 2) { gG1CRevealUpdates++; return; }
+    id txn = G1C_RvMgrTxn(mgr);
+    if (BP_LogEnabled()) BP_Log(@"g1c: strip reveal recognizer %@ state %lld (after %llu updates) transaction %p %@ completed=%d", G1C_DbgCls(gr), st, gG1CRevealUpdates, (__bridge void *)txn, G1C_DbgCls(txn), (int)G1C_IvarBool(txn, "_completedGestureWithTransitionRequest"));
+    if (st == 1) { gG1CRevealUpdates = 0; gG1CRevealInitialMgr = mgr; return; }
+    if (st < 3 || st > 5 || !txn || !BP_OnName("g1c_revealwatch")) return;
+    __weak id wmgr = mgr, wtxn = txn;
+    unsigned long long seq = gG1CRevealSeq;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        id m = wmgr, t = wtxn;
+        if (!m || !t || seq != gG1CRevealSeq || G1C_RvMgrTxn(m) != t) return;          // gone, a newer reveal event re-arms it, or the transaction finished: nothing is held
+        SEL gtSel = sel_registerName("_gestureType");
+        if (![t respondsToSelector:gtSel]) { P1_NoteMissing(t, gtSel); return; }
+        if (((long long (*)(id, SEL))objc_msgSend)(t, gtSel) != 0xb) return;            // not a strip reveal transaction (another gesture owns the manager now)
+        Ivar done = class_getInstanceVariable(object_getClass(t), "_completedGestureWithTransitionRequest");
+        if (!done) { if (BP_LogEnabled()) BP_Log(@"GUARD(reveal txn) %p: ivar _completedGestureWithTransitionRequest missing on %@, watchdog does nothing", (__bridge void *)t, G1C_DbgCls(t)); return; }
+        if (G1C_IvarBool(t, "_completedGestureWithTransitionRequest")) {
+            if (BP_LogEnabled()) BP_Log(@"g1c: strip reveal transaction %p got its complete but is still running 3 s after the recognizer ended (animation / layout transaction in flight), watchdog leaves it", (__bridge void *)t);
+            return;
+        }
+        id vc = BP_ObjIvar(m, class_getInstanceVariable(object_getClass(m), "_switcherContentController"));
+        SEL perf = sel_registerName("_performModifierPerformTransitionResponse:");
+        id initial = (gG1CRevealInitialMgr == m) ? gG1CRevealInitial : nil;
+        id resp = initial ? G1C_NewPerformActivate(initial, YES) : nil;
+        if (!vc || ![vc respondsToSelector:perf] || !resp) {
+            if (BP_LogEnabled()) BP_Log(@"GUARD(reveal txn) %p: still open 3 s after the recognizer ended and no complete was made, but it cannot be completed (view controller %@, initial layout %@, response %@)", (__bridge void *)t, G1C_DbgCls(vc), G1C_DbgLayout(initial), G1C_DbgCls(resp));
+            return;
+        }
+        BP_Log(@"GUARD(reveal txn) %p: the strip reveal gesture ended 3 s ago and its transaction never received a complete (no modifier saw the end) -> completing it with a request that activates %@ (16.2 has no such watchdog)", (__bridge void *)t, G1C_DbgLayout(initial));
+        ((void (*)(id, SEL, id))objc_msgSend)(vc, perf, resp);
+    });
 }
 typedef struct { double tl, bl, br, tr; } G1CRadii;          // UIRectCornerRadii {topLeft, bottomLeft, bottomRight, topRight}
 // 162 0x1c7817530: initial layout -> radius = [self displayCornerRadius] (0 -> chamoisLayoutAttributes.stageCornerRaddii) / [self scaleForIndex:i], all four corners; else [super]
