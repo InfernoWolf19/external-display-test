@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 279, commit 7e26771: G3B hosted keyboard window: the iPad's window no longer shows the keyboard of a host scene that lives on the monitor (switch kbhosthere); every SHOW/HIDE logs the requester, reason, orientations, frames and displays
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+279.7e26771
+Installed-Size: 4248
+Filename: debs/com.infernowolf19.backport162_0.7.9+279.7e26771_iphoneos-arm64.deb
+Size: 1401556
+MD5sum: 1654f5a4b57198501c1a72d654f5ea13
+SHA1: c4b203c12a1cf38356a2f885208c25a8219992d3
+SHA256: dc7b746f9182564f0d40d10b73c778e10db175f09c8ef6ed7332c87305f840f9
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 278, commit d336e87: Y17Snapshot: switcher snapshot cache looks up snapshots at the scale of its own display (y17_snapscale), no scene entity without a handle provider (y17_snapentity), synchronous style reload (y17_snapreload); DELTA-SWEEP: snapshot cache rows decided
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1285,24 +1307,3 @@ Size: 1030768
 MD5sum: 1508b1fe6fd43ac5a0543b7f04ec1b0b
 SHA1: 3d8bc52784ac79814c9a93914cfd7b6a304df1e2
 SHA256: d50270b2fd08847a3237a5b31f02c4ee5c31d45d26bb2a45e45665f6aa538ed0
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 209, commit 968f1cf: G1D: scene handle of a display item is looked up on the display that owns it (g1d_scenehandle)
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+209.968f1cf
-Installed-Size: 3192
-Filename: debs/com.infernowolf19.backport162_0.7.9+209.968f1cf_iphoneos-arm64.deb
-Size: 1030142
-MD5sum: 2e50d502d891719e02d1afea98a1e5d8
-SHA1: ba6dcca287bfab2f4bed72ce3b9cf749958df2e0
-SHA256: 30e78a00d0b9ff9d3986b8287c32730436dba370f5420482d75ee347bcae51b4
