@@ -795,6 +795,25 @@ static id BPKB_FBSceneManager(void) {
 }
 static id BPKB_WindowSceneManager(void) { return BP_G3B_Send0(BP_G3B_App(), NSSelectorFromString(@"windowSceneManager")); }
 
+// Who asked for the evaluation (debug line of every SHOW / HIDE): set by the forwarding hooks below, read in updateMedusaHostedKeyboardWindowForScene:.
+static __thread const char *tBPKbWhy;
+static NSString *BPKB_Desc(id o) {
+    if (!o) return @"nil";
+    SEL idf = NSSelectorFromString(@"identifier");
+    NSString *i = [o respondsToSelector:idf] ? ((id (*)(id, SEL))objc_msgSend)(o, idf) : nil;
+    return [NSString stringWithFormat:@"%p%@%@", (__bridge void *)o, [i isKindOfClass:[NSString class]] ? @" " : @"", [i isKindOfClass:[NSString class]] ? i : @""];
+}
+static NSString *BPKB_RectDesc(id o, const char *sel) {
+    SEL s = sel_registerName(sel);
+    if (!o || ![o respondsToSelector:s]) return @"?";
+    CGRect r = ((CGRect (*)(id, SEL))objc_msgSend)(o, s);
+    return [NSString stringWithFormat:@"(%.0f,%.0f %.0fx%.0f)", r.origin.x, r.origin.y, r.size.width, r.size.height];
+}
+static long long BPKB_Orient(id o, const char *sel) {
+    SEL s = sel_registerName(sel);
+    return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL))objc_msgSend)(o, s) : -1;
+}
+
 @interface BPMedusaHostedKeyboardWindowController : NSObject
 @property (nonatomic, weak) id windowScene;
 @property (nonatomic, readonly) id medusaHostedKeyboardWindow;
@@ -917,6 +936,8 @@ static id BPKB_WindowSceneManager(void) { return BP_G3B_Send0(BP_G3B_App(), NSSe
         host = [fbs sceneWithIdentifier:hostId];
     }
     BOOL forMedusa = NO;
+    BOOL hostElsewhere = NO;
+    const char *why = host ? "?" : "no host scene";
     if (host) {
         id handle = ((id (*)(id, SEL, id))objc_msgSend)(sceneMgr, NSSelectorFromString(@"existingSceneHandleForScene:"), host);
         BOOL hostFg;
@@ -933,29 +954,39 @@ static id BPKB_WindowSceneManager(void) { return BP_G3B_Send0(BP_G3B_App(), NSSe
         if ([ctx respondsToSelector:NSSelectorFromString(@"presentedLayerTypes")]) types = ((unsigned long long (*)(id, SEL))objc_msgSend)(ctx, NSSelectorFromString(@"presentedLayerTypes"));
         NSString *(*sysId)(void) = (NSString *(*)(void))dlsym(RTLD_DEFAULT, "FBSystemAppBundleID");
         if (hostFg && (types & ~2ull) == 0) {                      // foreground app that cannot present the keyboard itself
-            forMedusa = YES; resFg = YES;
+            forMedusa = YES; resFg = YES; why = "foreground host app that cannot present the keyboard itself";
         } else if (sysId && [hostId isEqualToString:sysId()]) {    // preferred host is SpringBoard
-            forMedusa = NO; resFg = YES;
+            forMedusa = NO; resFg = YES; why = "preferred host is SpringBoard";
         } else {
             id sc = BP_G3B_Send0(ws, NSSelectorFromString(@"switcherController"));
             BOOL chamois = [sc respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && ((BOOL (*)(id, SEL))objc_msgSend)(sc, @selector(isChamoisWindowingUIEnabled));
             BOOL enhanced = chamois && ((BOOL (*)(id, SEL))objc_msgSend)(BP_G3B_Send0(host, NSSelectorFromString(@"uiSettings")), NSSelectorFromString(@"enhancedWindowingEnabled"));
             BOOL resizable = enhanced && [app respondsToSelector:NSSelectorFromString(@"supportsChamoisSceneResizing")] && ((BOOL (*)(id, SEL))objc_msgSend)(app, NSSelectorFromString(@"supportsChamoisSceneResizing"));
-            if (resizable) forMedusa = YES;                         // Chamois window UI: resizable app windows use the Medusa keyboard (resFg unchanged)
-            else { forMedusa = NO; resFg = NO; }                    // the host scene can host the keyboard itself
+            // DEVIATION (switch kbhosthere, default on).  16.2 can take the resizable branch unconditionally because its keyboard scene follows the display of the host
+            // (the scene display and the host display agree).  Here the keyboard scene's display and the host's display are not kept in step (device log S/u10/c: the
+            // iPad's window showed the keyboard of a Filza window that lives on the monitor, drawn in the orientation of that host, 16:24:01 / :06 / :31): a window may only
+            // show a keyboard whose host scene belongs to ITS display.
+            id hostDisplay = BP_G3B_Send0(BP_G3B_Send0(host, @selector(settings)), NSSelectorFromString(@"sb_displayIdentityForSceneManagers"));
+            hostElsewhere = hostDisplay && ![hostDisplay isEqual:myIdentity] && BP_OnName("kbhosthere");
+            if (hostElsewhere) { forMedusa = NO; resFg = NO; why = "the host scene is on another display (resizable branch refused)"; }
+            else if (resizable) { forMedusa = YES; why = "chamois resizable host window"; }          // Chamois window UI: resizable app windows use the Medusa keyboard (resFg unchanged)
+            else { forMedusa = NO; resFg = NO; why = "host can host the keyboard itself"; }       // the host scene can host the keyboard itself
         }
     }
     Class wc = NSClassFromString(@"SBWorkspace");
     id pip = BP_G3B_Send0([wc respondsToSelector:@selector(mainWorkspace)] ? [wc mainWorkspace] : nil, NSSelectorFromString(@"pipCoordinator"));
     SEL preq = NSSelectorFromString(@"isPresentingPictureInPictureRequiringMedusaKeyboard");
-    if ([pip respondsToSelector:preq] && ((BOOL (*)(id, SEL))objc_msgSend)(pip, preq)) { forMedusa = YES; resFg = YES; }
+    if ([pip respondsToSelector:preq] && ((BOOL (*)(id, SEL))objc_msgSend)(pip, preq)) { forMedusa = YES; resFg = YES; why = "picture in picture requires the Medusa keyboard"; }
     if (!_window) {
         Class winC = NSClassFromString(@"SBMedusaHostedKeyboardWindow");
         id wscene = [BPKB_WindowSceneManager() windowSceneForDisplayIdentity:myIdentity];
         if (!winC || !wscene) return;
         _window = [[winC alloc] initWithWindowScene:wscene keyboardScene:kbScene];
     }
-    BP_Log(@"hosted keyboard window %p %s", ws, forMedusa ? "SHOWING" : "HIDING");
+    BP_Log(@"hosted keyboard window %p %s (%s): requested by %s; reason: %s; window scene display %@ orientation %lld; keyboard scene display %@ orientation %lld frame %@; host %@ on display %@; window frame %@",
+           ws, forMedusa ? "SHOWING" : "HIDING", (_using == forMedusa) ? "unchanged" : "changed", tBPKbWhy ?: "unknown", why,
+           myIdentity, BPKB_Orient(ws, "interfaceOrientation"), dispIdentity, BPKB_Orient(kbSettings, "interfaceOrientation"), BPKB_RectDesc(kbSettings, "frame"),
+           BPKB_Desc(host), host ? BP_G3B_Send0(BP_G3B_Send0(host, @selector(settings)), NSSelectorFromString(@"sb_displayIdentityForSceneManagers")) : nil, BPKB_RectDesc(_window, "frame"));
     ((void (*)(id, SEL, BOOL))objc_msgSend)(_window, @selector(setHidden:), !forMedusa);
     id coord = [NSClassFromString(@"SBMainSwitcherControllerCoordinator") sharedInstance];
     if (forMedusa) { if ([coord respondsToSelector:@selector(noteKeyboardIsForMedusaWithOwningScene:)]) [coord noteKeyboardIsForMedusaWithOwningScene:host]; }
@@ -1011,8 +1042,11 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
             if ([obs respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(obs, s, me);
         }];
     };
+    tBPKbWhy = "main display scene manager _updateMedusaHostedKeyboardWindow";
     [c updateMedusaHostedKeyboardWindow];
+    tBPKbWhy = "fan-out of the main display update";
     BPKB_FanOut(ws, nil);
+    tBPKbWhy = NULL;
 }
 - (void)_updateMedusaHostedKeyboardWindowForScene:(id)scene isForeground:(BOOL *)fg {
     if (!BP_G3B_On("g3b_kbwindow")) {
@@ -1033,8 +1067,11 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
             if ([obs respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(obs, s, me);
         }];
     };
+    tBPKbWhy = "main display scene manager _updateMedusaHostedKeyboardWindowForScene:";
     [c updateMedusaHostedKeyboardWindowForScene:scene isForeground:fg];
+    tBPKbWhy = "fan-out of the main display ForScene update";
     BPKB_FanOut(ws, scene);
+    tBPKbWhy = NULL;
 }
 - (id)_medusaHostedKeyboardWindow {
     if (!BP_G3B_On("g3b_kbwindow")) return %orig;
@@ -1061,7 +1098,9 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
 - (void)_updateMedusaHostedKeyboardWindow {
     %orig;
     if (!BP_G3B_On("g3b_kbwindow")) return;
+    tBPKbWhy = "external display scene manager _updateMedusaHostedKeyboardWindow";
     [BPKB_ControllerForWindowScene(BPKB_MainWindowScene(self)) updateMedusaHostedKeyboardWindow];
+    tBPKbWhy = NULL;
 }
 %end
 
