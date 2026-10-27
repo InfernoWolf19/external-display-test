@@ -1,12 +1,4 @@
 {
- "0.7.9+211.4db74f7": {
-  "date": "2026-10-20T19:34:55Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+211.4db74f7_iphoneos-arm64.deb",
-  "run": 211,
-  "sha": "4db74f706b5fb96e45146df4819553b2c992cf65",
-  "subject": "G2: overlays on the embedded display (16.2 prefersEmbeddedDisplayPresentation of Control Centre module, in-call, passcode, voice control, Spotlight; request modifyTransientOverlayContext:, interactive Spotlight display configuration, per display switcher mode)",
-  "version": "0.7.9+211.4db74f7"
- },
  "0.7.9+212.946d44b": {
   "date": "2026-10-20T19:39:49Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+212.946d44b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "edf44f3435f2a97efb6c07c0c13b616d7f54a6f2",
   "subject": "P1VC: container line also prints scene settings orientation, frame and the handle's windowed flag",
   "version": "0.7.9+280.edf44f3"
+ },
+ "0.7.9+282.cc9d0eb": {
+  "date": "2026-10-27T16:57:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+282.cc9d0eb_iphoneos-arm64.deb",
+  "run": 282,
+  "sha": "cc9d0eb8cfb966885b4120e5d677c65124e675b4",
+  "subject": "Drag log load: update / async-both / bring-to-front lines are logged for the first updates of a transaction and on change only (a drag logged ~500 multi line records per second, every BP_Log opens and writes the file on the main thread)",
+  "version": "0.7.9+282.cc9d0eb"
  }
 }
