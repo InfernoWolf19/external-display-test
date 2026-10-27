@@ -291,6 +291,9 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y16_platter | (Y16Contingency.x) the drag platter of a dragged item has the size of the window it will become under Stage Manager |
 | y16_overlaykb | (Y16Contingency.x) alert / overlay keyboard visibility is asked for the display of the overlay |
 | y16_overlaydismiss | (Y16Contingency.x) after an overlay on the monitor is dismissed the monitor front app decides the idle timer reset |
+| y17_snapscale | (Y17Snapshot.x) the switcher snapshots of a window on the monitor are looked up at the monitor display scale (16.0 used the iPad panel scale for every display) |
+| y17_snapentity | (Y17Snapshot.x) the snapshot cache returns no scene entity when its delegate has no scene handle provider (logged), like 16.2 |
+| y17_snapreload | (Y17Snapshot.x) an interface style change reloads the snapshot cache synchronously (16.2), not asynchronously |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
