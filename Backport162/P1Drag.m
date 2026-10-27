@@ -440,6 +440,49 @@ static void P1_Perform(id self, SEL _cmd, id txn, void (^completion)(void)) {
     }
 }
 
+// ------------------------------------------------------------------------------------------------ SBToAppsWorkspaceTransaction -transaction:performTransitionWithCompletion: (16.2 0x1c72b0460, block 0x1c784e3f8; 16.0 0x1c5e3e06c, block 0x1c63a3f80)
+// p1_toappstake. Every non gesture request that places an application scene on a display (the "Move to Display" / "Move to iPad" item of the window menu, SBAppToApp requests of a display)
+// runs this block when the layout transaction of the request starts: for every other scene manager it looks for the scene of each target entity and lets the manager of the request's
+// display take it over (takeScene:fromSceneManager:, then setWantsEnhancedWindowingEnabled: = chamois of that display, 16.2 only). The only change between the releases is the match:
+//   16.0: scene == [[entity sceneHandle] sceneIfExists]   (the handle of the entity belongs to the manager of the TARGET display and only references the scene when that manager already
+//         had it; a window that lives on the other display never matches: the scene stays with the other display's scene manager, its settings keep the display, the orientation and the
+//         frame logic of the display it came from, and the container shows a white / portrait window; 7 of 8 moves in the u9 log have no "scene ... taken by" line)
+//   16.2: [scene identifier] isEqualToString:[[entity sceneHandle] sceneIdentifier]
+// The 16.0 body still runs after this pre-step (scenes that were taken are no longer in the other manager's list, so it finds nothing to do twice).
+static IMP sOrigToAppsPerform;
+static void P1_ToAppsPerform(id self, SEL _cmd, id txn, void (^completion)(void)) {
+    if (BP_OnName("p1_toappstake") && txn) {
+        id entities = P1_S0(P1_S0(txn, "transitionRequest"), "toApplicationSceneEntities");
+        id scene = P1_SceneForDisplay(P1_S0(txn, "displayIdentity"));
+        id sm = P1_S0(scene, "sceneManager");
+        if (sm && [entities conformsToProtocol:@protocol(NSFastEnumeration)] && [entities count]) {
+            BOOL chamois = P1_B0(P1_S0(scene, "switcherController"), "isChamoisWindowingUIEnabled");
+            SEL take = sel_registerName("takeScene:fromSceneManager:");
+            id scm = P1_S0((id)NSClassFromString(@"SBSceneManagerCoordinator"), "sharedInstance");
+            void (^blk)(id) = ^(id m) {
+                if (m == sm) return;
+                id scenes = [P1_S0(m, "allScenes") copy];
+                if (![scenes conformsToProtocol:@protocol(NSFastEnumeration)]) return;
+                for (id scn in (id<NSFastEnumeration>)scenes) {
+                    for (id ent in (id<NSFastEnumeration>)entities) {
+                        NSString *uid = P1_S0(P1_S0(ent, "sceneHandle"), "sceneIdentifier");
+                        if (![uid isKindOfClass:[NSString class]] || ![P1_S0(scn, "identifier") isEqualToString:uid]) continue;
+                        if (![sm respondsToSelector:take]) { BP_Log(@"p1: scene manager has no takeScene:fromSceneManager:"); return; }
+                        ((void (*)(id, SEL, id, id))objc_msgSend)(sm, take, scn, m);
+                        id h = P1_S1(sm, "existingSceneHandleForScene:", scn);
+                        if ([h isKindOfClass:NSClassFromString(@"SBDeviceApplicationSceneHandle")]) P1_VB(h, "setWantsEnhancedWindowingEnabled:", chamois);
+                        if (BP_LogEnabled()) BP_Log(@"p1: toapps: scene %@ taken over from %@ by the scene manager of %@ (the 16.0 match by scene handle misses a scene of the other display; handle now %p, wantsEnhancedWindowing %d)",
+                                                    uid, m, P1_Disp(P1_S0(scene, "switcherController")), (__bridge void *)h, (int)chamois);
+                        break;
+                    }
+                }
+            };
+            P1_V1(scm, "enumerateSceneManagersWithBlock:", blk);
+        }
+    }
+    ((void (*)(id, SEL, id, id))sOrigToAppsPerform)(self, _cmd, txn, completion);
+}
+
 // ------------------------------------------------------------------------------------------------ transactionDidComplete: (16.2 0x1c72dd5fc; 16.0 0x1c5e6aa38) + final root transaction completion block 0x1c74af778
 static double P1_ArcSettle(void) {
     id root = P1_S0((id)NSClassFromString(@"SBAppSwitcherDomain"), "rootSettings");
@@ -1045,6 +1088,7 @@ void P1Drag_Setup(void) {
     if (mr && !class_getClassMethod(mr, sel_registerName("ancillaryTransitionRequestsForTransitionRequest:")))
         class_addMethod(object_getClass(mr), sel_registerName("ancillaryTransitionRequestsForTransitionRequest:"), (IMP)P1_ClsAncillary, "@24@0:8@16");
 
+    P1_Replace("SBToAppsWorkspaceTransaction", "transaction:performTransitionWithCompletion:", (IMP)P1_ToAppsPerform, &sOrigToAppsPerform);
     P1_Replace(V, "gestureHandlingModifierRequestsUpdate:", (IMP)P1_VCModUpdate, &sOrigGestureModUpdate);
     P1_Replace(V, "_updateAsyncRenderingAndResizesHostedContext", (IMP)P1_VCAsync, &sOrigAsyncRendering);
     P1SW_Setup();                                                               // P1SW.m: M4 default role frame / scale, M6 async rendering evaluation, M8 home gesture scroll target (item 3)
