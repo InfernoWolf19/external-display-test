@@ -1,12 +1,4 @@
 {
- "0.7.9+210.cbdfb2a": {
-  "date": "2026-10-20T19:34:44Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+210.cbdfb2a_iphoneos-arm64.deb",
-  "run": 210,
-  "sha": "cbdfb2ac24518ad10cde8744d99d43cc96ef3ba2",
-  "subject": "G1D: failMultitaskingGesturesForReason: fails the gestures of every display (g1d_failgestures)",
-  "version": "0.7.9+210.cbdfb2a"
- },
  "0.7.9+211.4db74f7": {
   "date": "2026-10-20T19:34:55Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+211.4db74f7_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "7e26771d17b974ff0a3f29d0d0522c6afc090c5e",
   "subject": "G3B hosted keyboard window: the iPad's window no longer shows the keyboard of a host scene that lives on the monitor (switch kbhosthere); every SHOW/HIDE logs the requester, reason, orientations, frames and displays",
   "version": "0.7.9+279.7e26771"
+ },
+ "0.7.9+280.edf44f3": {
+  "date": "2026-10-27T16:54:37Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+280.edf44f3_iphoneos-arm64.deb",
+  "run": 280,
+  "sha": "edf44f3435f2a97efb6c07c0c13b616d7f54a6f2",
+  "subject": "P1VC: container line also prints scene settings orientation, frame and the handle's windowed flag",
+  "version": "0.7.9+280.edf44f3"
  }
 }
