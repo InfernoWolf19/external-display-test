@@ -386,10 +386,13 @@ static void PV_ContainerEnd(id self, SEL _cmd, id coordinator, id ctx) {
     unsigned cid = 0; int hosts = 0;
     NSMutableString *portal = [NSMutableString string];
     PV_Walk(view, 0, &cid, &hosts, portal);
+    SEL fr = sel_registerName("frame");
+    CGRect sf = (settings && [settings respondsToSelector:fr]) ? ((CGRect (*)(id, SEL))objc_msgSend)(settings, fr) : CGRectZero;
     NSString *same = (sdi && cdi) ? ([sdi isEqual:cdi] ? @"same" : @"MISMATCH") : @"unknown";
-    NSString *line = [NSString stringWithFormat:@"item %@ handle %p scene %p contentState %lld ready %d | scene display %@ container display %@ -> %@ | view window %d hidden %d alpha %.2f | CALayerHost ctx %u (x%d) | portal source %@ | error %d",
+    NSString *line = [NSString stringWithFormat:@"item %@ handle %p scene %p contentState %lld ready %d | scene display %@ container display %@ -> %@ | view window %d hidden %d alpha %.2f | settings orientation %lld frame {%.0f, %.0f, %.0f, %.0f} windowed %d | CALayerHost ctx %u (x%d) | portal source %@ | error %d",
         PV_S0(handle, "sceneIdentifier"), (__bridge void *)handle, (__bridge void *)scene, PV_L0(scene, "contentState"), (int)PV_B0(handle, "isContentReady"), sdi ?: @"nil", cdi ?: @"nil", same,
-        (int)(win != nil), (int)PV_B0(view, "isHidden"), PV_D0(view, "alpha"), cid, hosts, portal.length ? portal : @"none", (int)(PV_S0(ctx, "error") != nil)];
+        (int)(win != nil), (int)PV_B0(view, "isHidden"), PV_D0(view, "alpha"), PV_L0(settings, "interfaceOrientation"), sf.origin.x, sf.origin.y, sf.size.width, sf.size.height,
+        (int)PV_B0(handle, "wantsEnhancedWindowingEnabled"), cid, hosts, portal.length ? portal : @"none", (int)(PV_S0(ctx, "error") != nil)];
     NSString *last = objc_getAssociatedObject(self, &kPVLastCtr);
     if ([last isEqualToString:line]) return;
     objc_setAssociatedObject(self, &kPVLastCtr, line, OBJC_ASSOCIATION_COPY_NONATOMIC);
