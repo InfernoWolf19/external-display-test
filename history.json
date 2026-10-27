@@ -1,12 +1,4 @@
 {
- "0.7.9+213.237c8ef": {
-  "date": "2026-10-20T19:42:32Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+213.237c8ef_iphoneos-arm64.deb",
-  "run": 213,
-  "sha": "237c8ef40860c96a3ad58f40df049c471daef992",
-  "subject": "G8: 16.2 zoom / full-screen / banner / education pill labels as fallback localisation (41 languages embedded from the 16.2 SpringBoard.loctable, switch l10n162); education pill reads the SpringBoard table",
-  "version": "0.7.9+213.237c8ef"
- },
  "0.7.9+214.1229d25": {
   "date": "2026-10-20T19:45:10Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+214.1229d25_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "cc9d0eb8cfb966885b4120e5d677c65124e675b4",
   "subject": "Drag log load: update / async-both / bring-to-front lines are logged for the first updates of a transaction and on change only (a drag logged ~500 multi line records per second, every BP_Log opens and writes the file on the main thread)",
   "version": "0.7.9+282.cc9d0eb"
+ },
+ "0.7.9+283.4897c3e": {
+  "date": "2026-10-27T16:59:56Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+283.4897c3e_iphoneos-arm64.deb",
+  "run": 283,
+  "sha": "4897c3e4cd8f0c230680e5597e5bef1d0b711c29",
+  "subject": "CORE-LEFTOVERS: Move to Display analysis (sections 10, 11): scene take-over, cross-display animations, u10 log scan",
+  "version": "0.7.9+283.4897c3e"
  }
 }
