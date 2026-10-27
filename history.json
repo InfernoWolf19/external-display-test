@@ -1,12 +1,4 @@
 {
- "0.7.9+212.946d44b": {
-  "date": "2026-10-20T19:39:49Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+212.946d44b_iphoneos-arm64.deb",
-  "run": 212,
-  "sha": "946d44bed6854105aabca238dbc79073a745e115",
-  "subject": "G1C: VC _scrollToAppLayout:... scrolls to the index in appLayouts like 16.2 0x1c7452ff0 (with g1c_piles)",
-  "version": "0.7.9+212.946d44b"
- },
  "0.7.9+213.237c8ef": {
   "date": "2026-10-20T19:42:32Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+213.237c8ef_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "edf44f3435f2a97efb6c07c0c13b616d7f54a6f2",
   "subject": "P1VC: container line also prints scene settings orientation, frame and the handle's windowed flag",
   "version": "0.7.9+280.edf44f3"
+ },
+ "0.7.9+281.aeb09df": {
+  "date": "2026-10-27T16:57:53Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+281.aeb09df_iphoneos-arm64.deb",
+  "run": 281,
+  "sha": "aeb09dfe0c7e60b74545555a4d1fa25f940ef295",
+  "subject": "G1C/G1D: strip reveal no longer freezes after a quick second reveal: the completion timer of a reveal gesture carried one shared reason and finished the NEXT reveal's modifier mid-drag (g1c_revealtimer); last-line watchdog for a reveal transaction that never gets its complete (g1c_revealwatch); reveal recognizer / modifier lifecycle log lines",
+  "version": "0.7.9+281.aeb09df"
  },
  "0.7.9+282.cc9d0eb": {
   "date": "2026-10-27T16:57:32Z",
