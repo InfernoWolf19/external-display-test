@@ -1,12 +1,4 @@
 {
- "0.7.9+208.0b2d6e2": {
-  "date": "2026-10-20T19:25:47Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+208.0b2d6e2_iphoneos-arm64.deb",
-  "run": 208,
-  "sha": "0b2d6e27e6a3bf274854775b3d7ab642b6de7d1b",
-  "subject": "postinst: ask Sileo for a userspace reboot (finish:usreboot) instead of the restart SpringBoard button after install / update",
-  "version": "0.7.9+208.0b2d6e2"
- },
  "0.7.9+209.968f1cf": {
   "date": "2026-10-20T19:27:33Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+209.968f1cf_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "c4f10937db6104cc9450a0e2fa4befea5f78671c",
   "subject": "P1VC: decisive per container line at the end of a layout transition (p1_ctrend); docs for the blank window analysis",
   "version": "0.7.9+277.c4f1093"
+ },
+ "0.7.9+278.d336e87": {
+  "date": "2026-10-27T16:37:31Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+278.d336e87_iphoneos-arm64.deb",
+  "run": 278,
+  "sha": "d336e87e7a3ae6dff3a06c087d01ee2755772255",
+  "subject": "Y17Snapshot: switcher snapshot cache looks up snapshots at the scale of its own display (y17_snapscale), no scene entity without a handle provider (y17_snapentity), synchronous style reload (y17_snapreload); DELTA-SWEEP: snapshot cache rows decided",
+  "version": "0.7.9+278.d336e87"
  }
 }
