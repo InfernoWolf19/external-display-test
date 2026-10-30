@@ -31,3 +31,7 @@ static inline double Y17_ScaleForIdentity(const char *tag, id identity) {
     if (!cfg || ![cfg respondsToSelector:sel_registerName("scale")]) { Y17_GuardOnce(tag, cfg, "scale"); return 0; }
     return ((double (*)(id, SEL))objc_msgSend)(cfg, sel_registerName("scale"));
 }
+static inline long long Y17_LL1(id o, const char *sel, id a) {
+    SEL s = sel_registerName(sel);
+    return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL, id))objc_msgSend)(o, s, a) : 0;
+}

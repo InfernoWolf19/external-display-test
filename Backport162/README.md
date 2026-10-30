@@ -315,6 +315,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_indirectgate | (Y19PanDelegates.x) the pointer edge recognizer receives hover events only and the dock / control center delegates accept it (16.2 split of the gate between recognizer and owners) |
 | y17_dockfolder | (Y19PanDelegates.x) an open folder in the floating dock no longer keeps the dock open during App Expose or a tap outside (16.2 removed that rule) |
 | y17_dockclip | (Y19PanDelegates.x) the floating dock window does not clip its content to its bounds (16.2) |
+| y17_kbdshortcuts | (Y20Kbd.x) keyboard shortcut availability (menu / Command-hold overlay) follows the complete 16.2 decision tree of the Stage Manager switcher: same-app window navigation, zoom (action 17), no actions 21 / 22 |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder

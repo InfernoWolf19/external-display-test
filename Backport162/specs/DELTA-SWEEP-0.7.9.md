@@ -13,12 +13,12 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 | verdict | rows |
 |---|---|
 | PORTED already | 452 |
-| PORTED NOW | 104 |
+| PORTED NOW | 105 |
 | EQUIVALENT | 339 |
 | IRRELEVANT | 311 |
 | EXCLUDED | 117 |
 | NOT PORTED | 133 |
-| OPEN | 9 |
+| OPEN | 8 |
 | CANNOT | 1 |
 | **total** | **1466** |
 
@@ -556,7 +556,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBFluidSwitcherViewController | `-handleContinuousExposeHoverGesture:` | 0x1c5fc0c28 | 0x1c7439724 | PORTED already: hook in G2.x:2002 |
 | SBFluidSwitcherViewController | `-_leafAppLayoutInLiveContentOverlaysWithLayoutRole:` | 0x1c5fc1424 | 0x1c7439f84 | PORTED already: 16.2 address cited in P1VC.m |
 | SBFluidSwitcherViewController | `-clickReceivedForHomeGrabberView:` | 0x1c5fc1864 | 0x1c743a460 | PORTED already: 16.2 address cited in G2B.m |
-| SBFluidSwitcherViewController | `-canPerformKeyboardShortcutAction:forBundleIdentifier:` | 0x1c5fc1b10 | 0x1c743a70c | OPEN: G2B.m:1728 ports the window navigation actions 4 / 5 / 15 / 16 only ("UNSURE: 16.2's version is a 280 instruction decision tree", jump table 0x1c743a85c..); the other branches (App Exposé action 3 with chamois on, floating window action, split view actions) differ from 16.0 in the checks of isChamoisWindowingUIEnabled, multi window support and the focused scene's layout environment; only menu / shortcut availability, the actions themselves are ported by P1VC.m performKeyboardShortcutAction: |
+| SBFluidSwitcherViewController | `-canPerformKeyboardShortcutAction:forBundleIdentifier:` | 0x1c5fc1b10 | 0x1c743a70c | PORTED NOW: Y20Kbd.x y17_kbdshortcuts (the complete 16.2 tree decoded from both jump tables: Stage Manager rule for the same-app window actions 4 / 5, new action 17 (not while an unoccluded maximized window), actions 21 / 22 removed; supersedes the partial hook of G2B.m while the switch is on, no edit in G2B.m needed) [sha pending] |
 | SBFluidSwitcherViewController | `-performKeyboardShortcutAction:` | 0x1c5fc2070 | 0x1c743ace4 | PORTED already: 16.2 address cited in P1VC.m, G3C.x |
 | SBFluidSwitcherViewController | `-_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:` | 0x1c5fc29c8 | 0x1c743b200 | PORTED already: 16.2 address cited in G2B.m |
 | SBFluidSwitcherViewController | `-invalidate` | 0x1c5fc335c | 0x1c743bc98 | PORTED already: hook in G1D.x:2289, G4B.x:2463 |
@@ -1555,6 +1555,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | Y17Snapshot.x | y17_snapscale, y17_snapentity, y17_snapreload | pending |
 | Y18IndirectPan.x | y17_indirectpan, y17_pancancel | pending |
 | Y19PanDelegates.x | y17_indirectgate, y17_dockfolder, y17_dockclip | pending |
+| Y20Kbd.x | y17_kbdshortcuts | pending |
 
 ## Cross references and edits in other files
 
