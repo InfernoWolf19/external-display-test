@@ -27,8 +27,8 @@ jobs:
             echo "=== $f"
             make all FINALPACKAGE=1 ARCHS=arm64e Backport162_FILES="$f" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true
           done
-          # the separate dylibs (SMT.x, SPK.c) have their own flags and are not part of Backport162_FILES: build each one by itself (TWEAK_NAME on the command line replaces the Makefile list)
-          for t in Backport162SMT Backport162SPK; do
+          # the separate dylibs (SMT.x, SPK.c, UIK.m) have their own flags and are not part of Backport162_FILES: build each one by itself (TWEAK_NAME on the command line replaces the Makefile list)
+          for t in Backport162SMT Backport162SPK Backport162UIK; do
             rm -rf .theos
             echo "=== $t"
             make all FINALPACKAGE=1 ARCHS=arm64e TWEAK_NAME="$t" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: " | head -60 || true
