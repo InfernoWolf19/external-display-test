@@ -1,12 +1,4 @@
 {
- "0.7.9+214.1229d25": {
-  "date": "2026-10-20T19:45:10Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+214.1229d25_iphoneos-arm64.deb",
-  "run": 214,
-  "sha": "1229d258e35a4a6ccdbfb40c4e38be9ee9c81fb4",
-  "subject": "G9: pinOnButtonDown for the system gesture windows (16.2 requestGlobalMouseEventsForDisplay:targetContextID:options:, switch pinbuttondown)",
-  "version": "0.7.9+214.1229d25"
- },
  "0.7.9+215.4773dc9": {
   "date": "2026-10-20T19:45:58Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+215.4773dc9_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4897c3e4cd8f0c230680e5597e5bef1d0b711c29",
   "subject": "CORE-LEFTOVERS: Move to Display analysis (sections 10, 11): scene take-over, cross-display animations, u10 log scan",
   "version": "0.7.9+283.4897c3e"
+ },
+ "0.7.9+284.ccf3424": {
+  "date": "2026-10-30T15:08:59Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+284.ccf3424_iphoneos-arm64.deb",
+  "run": 284,
+  "sha": "ccf34247fbc867472d7a187103018134da7c6332",
+  "subject": "Z2OrientTraits: 16.2 body of SBSwitcherController switcherOrientation:... (chamois / non primary overlay / canDetermineActiveOrientation rules, follow-up rotation in transitionDidBegin, unique transition labels, actuateOrientationForTraitsDelegate:), external display arbiter input follows the display's real orientation (switches or_traits, or_label, or_extinputs, or_extreal)",
+  "version": "0.7.9+284.ccf3424"
  }
 }
