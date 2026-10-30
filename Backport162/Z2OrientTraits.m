@@ -21,6 +21,7 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <dlfcn.h>
 #import "BPY.h"
 
 #pragma clang diagnostic push
@@ -172,7 +173,22 @@ static long long Z2O_GuardExternal(id sw, long long o, id request) {
     return real;
 }
 
+// Which rotation machinery is live in 16.0?  16.0 gates the traits arbiter orientation actuation behind feature flags (_SBTraitsArbiterActuationEnabled 0x1c5f9bdf4 =
+// os_feature_enabled(SpringBoard, TraitsArbiterActuation) || ...; _SBPostModernRotationEnabled 0x1c616e980 = PostModernRotation || TraitsArbiterActuation || the rotation defaults);
+// 16.2 removed the flags (every role except a fixed exclusion list actuates, 0x1c7414d24) together with the pre modern rotation code.  One line per run names the live state.
+static void Z2O_LogRotationMachinery(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        BOOL (*act)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "_SBTraitsArbiterActuationEnabled");
+        BOOL (*pm)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "_SBPostModernRotationEnabled");
+        BOOL (*forRole)(id) = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "_SBTraitsArbiterOrientationActuationEnabledForRole");
+        BP_Log(@"z2o: 16.0 rotation machinery: TraitsArbiterActuationEnabled=%@ PostModernRotationEnabled=%@ (role actuation function %@; 16.2 has no flags)",
+               act ? (act() ? @"YES" : @"NO") : @"(symbol not found)", pm ? (pm() ? @"YES" : @"NO") : @"(symbol not found)", forRole ? @"present" : @"not found");
+    });
+}
+
 static void Z2O_SwitcherOrientation(id self, SEL _cmd, long long *outOri, id __autoreleasing *outMap, id request, id prev, id state) {
+    Z2O_LogRotationMachinery();
     if (!BP_OnName("or_traits") || !outOri || !outMap || !request || !state || !prev || !Z2O_FlowReady(self)) {     // nil arguments: the 16.0 body raises its NSAssert exactly like 16.2
         sSwOri(self, _cmd, outOri, outMap, request, prev, state);
         return;
