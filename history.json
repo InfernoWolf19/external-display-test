@@ -1,12 +1,4 @@
 {
- "0.7.9+223.fbade74": {
-  "date": "2026-10-21T01:18:12Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+223.fbade74_iphoneos-arm64.deb",
-  "run": 223,
-  "sha": "fbade747740bc8fcf26086312ae0e1acf9df958a",
-  "subject": "G3: monitor mode choice like 16.2 (SDR CADisplayModeCriteria, published mode copies the current mode, logical scale 1 for display type 2; switches modecriteria, modebase, modelogical)",
-  "version": "0.7.9+223.fbade74"
- },
  "0.7.9+224.47bde76": {
   "date": "2026-10-21T01:44:34Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+224.47bde76_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "2d933eb630ee92d2eecce9ed626a147245f4616e",
   "subject": "ORIENTATION-0.7.9: traits flow and external display data path documented, README switch rows, DELTA-SWEEP SBSwitcherController rows",
   "version": "0.7.9+288.2d933eb"
+ },
+ "0.7.9+289.25ce873": {
+  "date": "2026-10-30T15:16:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+289.25ce873_iphoneos-arm64.deb",
+  "run": 289,
+  "sha": "25ce873a0d8b7a7ddc7faf2a80eb60540e31ff12",
+  "subject": "Y18IndirectPan / Y19PanDelegates: SBIndirectPanGestureRecognizer follows the 16.2 hover state machine (pointer leaving ends the gesture, idle timers on entering, touches of the monitor cancelled instead of the iPad's: y17_indirectpan, y17_pancancel), hover-only gate with accepting owners (y17_indirectgate), floating dock folder rule and window clipping (y17_dockfolder, y17_dockclip); DELTA-SWEEP: indirect pan family rows decided",
+  "version": "0.7.9+289.25ce873"
  }
 }
