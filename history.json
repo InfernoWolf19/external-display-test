@@ -1,12 +1,4 @@
 {
- "0.7.9+221.aa242d9": {
-  "date": "2026-10-21T00:55:46Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+221.aa242d9_iphoneos-arm64.deb",
-  "run": 221,
-  "sha": "aa242d9d553d953429394f5e361baf8e0071d401",
-  "subject": "G6: in-call presentation sessions follow the display of their scene handle (switch incallscene); remote alert targets recorded (reduce to 16.0 logic for 16.0 clients)",
-  "version": "0.7.9+221.aa242d9"
- },
  "0.7.9+222.024caa9": {
   "date": "2026-10-21T01:00:52Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+222.024caa9_iphoneos-arm64.deb",
@@ -462,6 +454,14 @@
   "sha": "ccf34247fbc867472d7a187103018134da7c6332",
   "subject": "Z2OrientTraits: 16.2 body of SBSwitcherController switcherOrientation:... (chamois / non primary overlay / canDetermineActiveOrientation rules, follow-up rotation in transitionDidBegin, unique transition labels, actuateOrientationForTraitsDelegate:), external display arbiter input follows the display's real orientation (switches or_traits, or_label, or_extinputs, or_extreal)",
   "version": "0.7.9+284.ccf3424"
+ },
+ "0.7.9+285.dd088e7": {
+  "date": "2026-10-30T15:12:53Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+285.dd088e7_iphoneos-arm64.deb",
+  "run": 285,
+  "sha": "dd088e78d96ff05dec5a00c952905ab9378510af",
+  "subject": "G1D: the early refusal of the window drag gesture logs (was silent); CORE-LEFTOVERS section 12: outcome of every press of the u9 drag test",
+  "version": "0.7.9+285.dd088e7"
  },
  "0.7.9+286.ac633da": {
   "date": "2026-10-30T15:11:59Z",
