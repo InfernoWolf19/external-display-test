@@ -309,3 +309,22 @@ What the older logs were for: u7 / u9 = the drag tests of builds 9fb6153 .. 8728
 - GUARD lines: b has 5 `GUARD scene handle ... destroy of scene [com.mac.virtual-default] ignored` (the Mac virtual display scene destroyed and recreated, display Main, 16:06-16:10, designed P6 behaviour) and 4 `GUARD(floor)` #27-#30 at 20:11:24 / 20:11:27 (modes 0->0 stale events after home swipes, kept floor, same as the u7 six); a has 2 `GUARD scene handle` for Reynard (window closed and reopened); no `GUARD(end)` in b or c: no ghost drop there (b and c have no cross-display drag at all: every transaction has 1 switcher controller or the extended display only).
 - Moved windows ending portrait: every menu move to the monitor shows `contentOrientation portrait (1)` in the layout attributes of the monitor (all logged monitor layout states are portrait, FINDINGS-DRAG-LOOP / p1_orient), every move to the iPad shows `landscapeRight (3)` in the layout but the container menu line shows `orientation 1` for the moved scene (a: 21:43:16, 21:43:33, 21:43:48, 21:44:59; b: 16:09:11) = scene settings of the other display (10.2); b 19:28:09 `portrait (1) maximized` on Main is Aidoku opened from home (no ancillary request, single display; its scene reports orientation 1 on the landscape iPad, a different cause: the app's own orientation handling, the Z2Orient work), not a move; `src=14` also appears there, so `src=14` is not specific to the move path.
 - Blank / ghost containers: u7 (4 of 8 drops) = 9.2; a: the menu moves = 10.2; b / c none.
+
+## 12. Finicky drags: outcome of every press of the u9 test (57 press / release pairs, 10 of them longer than 0.3 s or with a drag transaction)
+Press = `coordinator: setting pointer touch down` .. `clearing pointer touch down`; outcome from the `p1: txn ... complete` lines, the layout of the complete and GUARD(end); hold-flip = `P5` guard lines (they only stop the active display from flipping, they do not touch the gesture):
+| press (21:3x) | length | drag | outcome | evidence |
+|---|---|---|---|---|
+| 33:55 (AirPlay -> Main) | | type 9 | took effect | both completes, window on Main |
+| 33:57.9 (Main -> AirPlay) | 2.3 s | type 9 | took effect | completes of Main (home) and AirPlay (Preferences, ordinal 1 after the drop), 18 hold-flip lines, 1 flip |
+| 34:02.9 (AirPlay -> Main) | 1.6 s | type 9 | took effect on Main, LOST on the monitor (ghost) | only `complete from Main`, GUARD(end) 34:04.455 |
+| 34:05.07 (press on empty monitor area) | 0.3 s | none | ignored, correct | `receiveTouch -> no window` |
+| 34:07.3 (AirPlay -> Main) | 3.1 s | type 9 | took effect on Main, ghost on the monitor | only `complete from Main`, GUARD(end) 34:10.446 |
+| 34:33.2 (Main -> AirPlay) | 3.3 s | type 9 | took effect | both completes |
+| 34:44.8 (AirPlay -> Main) | 2.5 s | type 9 | took effect on Main, ghost on the monitor | GUARD(end) 34:47.412 |
+| 35:02.4 (title of the Preferences window on the iPad, pointer leaves the top edge after 0.64 s) | 0.9 s | none | ignored: the press was accepted (`receiveTouch -> <layout>`), no transaction, no `Won't begin` line | cause not provable from this log: the recognizer never began; the new line in G1D_WD_ShouldBegin names an early refusal if that is where it ends |
+| 35:09.3 (Main -> AirPlay, back and forth inside one press) | 2.9 s | type 9 | took effect on the monitor | both completes, 3 flips (the pointer crossed three times) |
+| 35:14.0 (AirPlay -> Main) | 2.4 s | type 9 | took effect on Main, ghost on the monitor | GUARD(end) 35:16.414 |
+| 43:08.9 (resize on the monitor) | 5.0 s | type 10 | took effect | |
+The 47 other presses are taps (menus, zoom, close) with no drag.
+Pattern: 4 of the 5 drags that started on the monitor and ended on the iPad show the ghost (the first, 33:55, does not): the single missed complete of the monitor (9.2, p1_endbcast); the drags that started on the iPad all took effect. Nothing here is a snap back: no drop returned the window to its start display (the drop of every type 9 drag is the display of the last pointer position, the ordinals of the dropped layouts follow it). The hold-flip guard did what it was meant to do (flips per press 0 .. 3 instead of 170); the two presses without drag are the monitor press on empty wallpaper (correct) and 35:02.
+

@@ -1768,7 +1768,10 @@ static BOOL G1D_WD_ShouldBegin(id gm, id gr) {
     id vc = G1D_GM_VC(gm), sc = G1D_GM_SC(gm);
     id leaf = G1D_InitialLeaf(gr);
     id adjusted = G1B_Send1(vc, NSSelectorFromString(@"adjustedAppLayoutForLeafAppLayout:"), leaf);
-    if (!leaf || !adjusted) return NO;
+    if (!leaf || !adjusted) {                                                  // was silent: a press that never becomes a drag (u9 21:35:02) left no line at all
+        if (BP_LogEnabled()) BP_Log(@"g1d: Won't begin window drag gesture: initial leaf %@ adjusted %@ (gesture manager %p)", leaf ?: @"nil", adjusted ?: @"nil", gm);
+        return NO;
+    }
     id item = G1D_ItemForRole(leaf, 1);
     id apps = G1B_Send0((id)NSClassFromString(@"SBApplicationController"), NSSelectorFromString(@"sharedInstance"));
     id app = G1B_Send1(apps, NSSelectorFromString(@"applicationWithBundleIdentifier:"), G1B_Send0(item, NSSelectorFromString(@"bundleIdentifier")));
