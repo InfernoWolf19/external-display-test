@@ -1,12 +1,4 @@
 {
- "0.7.9+225.e783a7b": {
-  "date": "2026-10-21T01:48:18Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+225.e783a7b_iphoneos-arm64.deb",
-  "run": 225,
-  "sha": "e783a7b61a14bf9066bbe26dc1c2423f3eafec26",
-  "subject": "REVIEW-SENDLOGS-0.7.9: checklist verdicts, 9 defects fixed, what leaves the device, open items",
-  "version": "0.7.9+225.e783a7b"
- },
  "0.7.9+226.b1d8482": {
   "date": "2026-10-21T08:03:23Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+226.b1d8482_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "2ded79c3805043b7e58068a2a17c810252bb631c",
   "subject": "Z2OrientDelegate: 16.2 _sanitizedMask:forApplication: (the iPhone-on-iPad mask restriction moved to the traits guides; switch or_delegate, guarded by g3b_guide), SBFloatingDockRootViewController without the 16.0 supportedInterfaceOrientations lock (or_dock); Z2OrientTraits logs which 16.0 rotation machinery is live",
   "version": "0.7.9+291.2ded79c"
+ },
+ "0.7.9+292.8be2cdd": {
+  "date": "2026-10-30T15:24:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+292.8be2cdd_iphoneos-arm64.deb",
+  "run": 292,
+  "sha": "8be2cddf7d97bf95a6bf172c1b595439a0a64089",
+  "subject": "G3B hosted keyboard window: the SHOW / HIDE debug line (ten message sends for its arguments) is only built while Backport162.debug exists",
+  "version": "0.7.9+292.8be2cdd"
  }
 }
