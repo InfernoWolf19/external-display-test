@@ -310,6 +310,11 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_snapscale | (Y17Snapshot.x) the switcher snapshots of a window on the monitor are looked up at the monitor display scale (16.0 used the iPad panel scale for every display) |
 | y17_snapentity | (Y17Snapshot.x) the snapshot cache returns no scene entity when its delegate has no scene handle provider (logged), like 16.2 |
 | y17_snapreload | (Y17Snapshot.x) an interface style change reloads the snapshot cache synchronously (16.2), not asynchronously |
+| y17_indirectpan | (Y18IndirectPan.x) the pointer / trackpad edge recognizer (dock, strip reveal, control center, home pan) follows the 16.2 hover state machine: pointer leaving the window ends the gesture, idle timers set up on entering, held event dropped on reset |
+| y17_pancancel | (Y18IndirectPan.x) activating a pointer edge gesture on the monitor cancels the touches of the monitor (16.0 always cancelled the iPad touches) |
+| y17_indirectgate | (Y19PanDelegates.x) the pointer edge recognizer receives hover events only and the dock / control center delegates accept it (16.2 split of the gate between recognizer and owners) |
+| y17_dockfolder | (Y19PanDelegates.x) an open folder in the floating dock no longer keeps the dock open during App Expose or a tap outside (16.2 removed that rule) |
+| y17_dockclip | (Y19PanDelegates.x) the floating dock window does not clip its content to its bounds (16.2) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
