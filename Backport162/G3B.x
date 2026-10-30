@@ -983,7 +983,7 @@ static long long BPKB_Orient(id o, const char *sel) {
         if (!winC || !wscene) return;
         _window = [[winC alloc] initWithWindowScene:wscene keyboardScene:kbScene];
     }
-    BP_Log(@"hosted keyboard window %p %s (%s): requested by %s; reason: %s; window scene display %@ orientation %lld; keyboard scene display %@ orientation %lld frame %@; host %@ on display %@; window frame %@",
+    if (BP_LogEnabled()) BP_Log(@"hosted keyboard window %p %s (%s): requested by %s; reason: %s; window scene display %@ orientation %lld; keyboard scene display %@ orientation %lld frame %@; host %@ on display %@; window frame %@",
            ws, forMedusa ? "SHOWING" : "HIDING", (_using == forMedusa) ? "unchanged" : "changed", tBPKbWhy ?: "unknown", why,
            myIdentity, BPKB_Orient(ws, "interfaceOrientation"), dispIdentity, BPKB_Orient(kbSettings, "interfaceOrientation"), BPKB_RectDesc(kbSettings, "frame"),
            BPKB_Desc(host), host ? BP_G3B_Send0(BP_G3B_Send0(host, @selector(settings)), NSSelectorFromString(@"sb_displayIdentityForSceneManagers")) : nil, BPKB_RectDesc(_window, "frame"));
