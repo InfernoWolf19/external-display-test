@@ -1,12 +1,4 @@
 {
- "0.7.9+220.7cc0b19": {
-  "date": "2026-10-21T00:52:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+220.7cc0b19_iphoneos-arm64.deb",
-  "run": 220,
-  "sha": "7cc0b1977652496daae2592afaf2f33e7bbee05a",
-  "subject": "X7Keyboard: scope macro passed nil through (__bridge void *) (invalid on Apple clang, nil is void *): pointer helper X7_Ptr(id)",
-  "version": "0.7.9+220.7cc0b19"
- },
  "0.7.9+221.aa242d9": {
   "date": "2026-10-21T00:55:46Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+221.aa242d9_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "ac633da5c5506054327293415de8e7b11efd0f6c",
   "subject": "P5 hold-flip guard compares the pointer location in window coordinates (locationInView:nil) with the window bounds, not the location in the touch's own view",
   "version": "0.7.9+286.ac633da"
+ },
+ "0.7.9+287.8585700": {
+  "date": "2026-10-30T15:12:38Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+287.8585700_iphoneos-arm64.deb",
+  "run": 287,
+  "sha": "858570012660724f7cd186074fbe672f972000c8",
+  "subject": "Backport162UIK (new in-app dylib, UIK.m): U1 UIScreen bounds of an external main-like screen are never swapped by the interface orientation, _connectScreen sets it to portrait without notification (16.2; screenBoundsIgnoresSceneOrientation is unread in 16.2 UIKit); switches uik, uik_screenbounds; specs/UIKIT-APP-0.7.9.md",
+  "version": "0.7.9+287.8585700"
  }
 }

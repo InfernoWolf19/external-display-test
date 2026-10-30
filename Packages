@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 287, commit 8585700: Backport162UIK (new in-app dylib, UIK.m): U1 UIScreen bounds of an external main-like screen are never swapped by the interface orientation, _connectScreen sets it to portrait without notification (16.2; screenBoundsIgnoresSceneOrientation is unread in 16.2 UIKit); switches uik, uik_screenbounds; specs/UIKIT-APP-0.7.9.md
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+287.8585700
+Installed-Size: 4448
+Filename: debs/com.infernowolf19.backport162_0.7.9+287.8585700_iphoneos-arm64.deb
+Size: 1429158
+MD5sum: 7e79cb9511647d14d868a427a8128d69
+SHA1: 1242fbea7a06f7ee7111f2f9c42347dc4025896e
+SHA256: fb36bf23b15d9dad14ccb828ffa0be3e021579924742dc7d8c737b59052c2212
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 286, commit ac633da: P5 hold-flip guard compares the pointer location in window coordinates (locationInView:nil) with the window bounds, not the location in the touch's own view
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1292,24 +1314,3 @@ Size: 1135132
 MD5sum: b58e0e8542522a5c580cd003ea396572
 SHA1: 81df0101a56d7088be0aa2833f2ae9ace02cf61b
 SHA256: 71f78991a95a1552811c844996ce4095c27d3ec26becbfea4d9163488b5a02bf
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 220, commit 7cc0b19: X7Keyboard: scope macro passed nil through (__bridge void *) (invalid on Apple clang, nil is void *): pointer helper X7_Ptr(id)
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate, preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+220.7cc0b19
-Installed-Size: 3584
-Filename: debs/com.infernowolf19.backport162_0.7.9+220.7cc0b19_iphoneos-arm64.deb
-Size: 1128578
-MD5sum: 65b54a5f72ba353d4258e785f6aa00cd
-SHA1: 084b6976efc949fada658b528993d8d50311b522
-SHA256: 78bae777267cd4ba76d670e19301c3fb5722e75dbdcba2708070d3dddb9e2255
