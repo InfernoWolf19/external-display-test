@@ -1,12 +1,4 @@
 {
- "0.7.9+222.024caa9": {
-  "date": "2026-10-21T01:00:52Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+222.024caa9_iphoneos-arm64.deb",
-  "run": 222,
-  "sha": "024caa96dde7b13cc84e16fab1d8b923b253d4a3",
-  "subject": "G5: one recording indicator manager per window scene (extended display gets its own camera / microphone indicator, switch recindicator)",
-  "version": "0.7.9+222.024caa9"
- },
  "0.7.9+223.fbade74": {
   "date": "2026-10-21T01:18:12Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+223.fbade74_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "858570012660724f7cd186074fbe672f972000c8",
   "subject": "Backport162UIK (new in-app dylib, UIK.m): U1 UIScreen bounds of an external main-like screen are never swapped by the interface orientation, _connectScreen sets it to portrait without notification (16.2; screenBoundsIgnoresSceneOrientation is unread in 16.2 UIKit); switches uik, uik_screenbounds; specs/UIKIT-APP-0.7.9.md",
   "version": "0.7.9+287.8585700"
+ },
+ "0.7.9+288.2d933eb": {
+  "date": "2026-10-30T15:15:43Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+288.2d933eb_iphoneos-arm64.deb",
+  "run": 288,
+  "sha": "2d933eb630ee92d2eecce9ed626a147245f4616e",
+  "subject": "ORIENTATION-0.7.9: traits flow and external display data path documented, README switch rows, DELTA-SWEEP SBSwitcherController rows",
+  "version": "0.7.9+288.2d933eb"
  }
 }

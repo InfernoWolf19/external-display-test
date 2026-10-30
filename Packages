@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 288, commit 2d933eb: ORIENTATION-0.7.9: traits flow and external display data path documented, README switch rows, DELTA-SWEEP SBSwitcherController rows
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+288.2d933eb
+Installed-Size: 4448
+Filename: debs/com.infernowolf19.backport162_0.7.9+288.2d933eb_iphoneos-arm64.deb
+Size: 1429060
+MD5sum: 251565ed0c3618a85236bc4ed807c7e3
+SHA1: f113ac7c8ff2532d7bcad230448f0dee1a863f2f
+SHA256: 5caeca73df165b9e7470e67da7d8754d975958f09e2b43d90df29843b61d8888
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 287, commit 8585700: Backport162UIK (new in-app dylib, UIK.m): U1 UIScreen bounds of an external main-like screen are never swapped by the interface orientation, _connectScreen sets it to portrait without notification (16.2; screenBoundsIgnoresSceneOrientation is unread in 16.2 UIKit); switches uik, uik_screenbounds; specs/UIKIT-APP-0.7.9.md
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1294,24 +1316,3 @@ Size: 1141216
 MD5sum: 4fabbadcbcba9566bf63684ae7024fd2
 SHA1: 440c1718a150586d0e6199a2239432b2d8f1cd4c
 SHA256: 887fc57f293e37526b368aa188e447674af2fb466baf0579d99bdf11c11261db
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 222, commit 024caa9: G5: one recording indicator manager per window scene (extended display gets its own camera / microphone indicator, switch recindicator)
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate, preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+222.024caa9
-Installed-Size: 3616
-Filename: debs/com.infernowolf19.backport162_0.7.9+222.024caa9_iphoneos-arm64.deb
-Size: 1137416
-MD5sum: 680e24f58795bf70dd564557f7bbfea6
-SHA1: a83d4219033020307ef22deb8915a966c82fd4e4
-SHA256: 609a12bc1305760c4105c0f7397d0c254773b27a1d05b4faeea607cd29460cd1
