@@ -357,7 +357,7 @@ static id BP_KeyboardFocusController(void) {
         SEL bs = NSSelectorFromString(@"bounds");
         if (w && [w respondsToSelector:bs] && [t respondsToSelector:@selector(locationInView:)]) {
             CGRect wb = ((CGRect (*)(id, SEL))objc_msgSend)(w, bs);
-            CGPoint loc = [t locationInView:v];
+            CGPoint loc = [t locationInView:nil];       // WINDOW coordinates (nil view), the space of `wb`: the touch's own view can sit at an offset inside the window (a location in a subview's space would be compared with the window bounds)
             if (!CGRectContainsPoint(wb, loc)) {
                 if (_holdFlipLogged < 12) {
                     _holdFlipLogged++;
@@ -376,7 +376,7 @@ static id BP_KeyboardFocusController(void) {
             id t = _probeTouch;
             id v = [t respondsToSelector:@selector(view)] ? [t view] : nil;
             id w = [v respondsToSelector:@selector(window)] ? [v window] : ([t respondsToSelector:@selector(window)] ? [t window] : nil);
-            CGPoint loc = [t respondsToSelector:@selector(locationInView:)] ? [t locationInView:v] : CGPointZero;
+            CGPoint loc = [t respondsToSelector:@selector(locationInView:)] ? [t locationInView:nil] : CGPointZero;
             CGRect wb = [w respondsToSelector:NSSelectorFromString(@"bounds")] ? ((CGRect (*)(id, SEL))objc_msgSend)(w, NSSelectorFromString(@"bounds")) : CGRectZero;
             unsigned int cid = [w respondsToSelector:@selector(_contextId)] ? ((unsigned int (*)(id, SEL))objc_msgSend)(w, @selector(_contextId)) : 0;
             BP_Log(@"coordinator: flip probe %lu/12: ws %p touchDownWS %p (press scene %s) location in view (%.1f, %.1f) window %p bounds (%.0f, %.0f, %.0f x %.0f) %s contextID %u phase %lld",
