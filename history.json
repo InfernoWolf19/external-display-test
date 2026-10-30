@@ -1,12 +1,4 @@
 {
- "0.7.9+224.47bde76": {
-  "date": "2026-10-21T01:44:34Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+224.47bde76_iphoneos-arm64.deb",
-  "run": 224,
-  "sha": "47bde76c182bd453f462ab26c81168824d1e2c53",
-  "subject": "Send logs spec / README: setup steps, privacy, Recommends, new state word and request",
-  "version": "0.7.9+224.47bde76"
- },
  "0.7.9+225.e783a7b": {
   "date": "2026-10-21T01:48:18Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+225.e783a7b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "25ce873a0d8b7a7ddc7faf2a80eb60540e31ff12",
   "subject": "Y18IndirectPan / Y19PanDelegates: SBIndirectPanGestureRecognizer follows the 16.2 hover state machine (pointer leaving ends the gesture, idle timers on entering, touches of the monitor cancelled instead of the iPad's: y17_indirectpan, y17_pancancel), hover-only gate with accepting owners (y17_indirectgate), floating dock folder rule and window clipping (y17_dockfolder, y17_dockclip); DELTA-SWEEP: indirect pan family rows decided",
   "version": "0.7.9+289.25ce873"
+ },
+ "0.7.9+291.2ded79c": {
+  "date": "2026-10-30T15:23:07Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+291.2ded79c_iphoneos-arm64.deb",
+  "run": 291,
+  "sha": "2ded79c3805043b7e58068a2a17c810252bb631c",
+  "subject": "Z2OrientDelegate: 16.2 _sanitizedMask:forApplication: (the iPhone-on-iPad mask restriction moved to the traits guides; switch or_delegate, guarded by g3b_guide), SBFloatingDockRootViewController without the 16.0 supportedInterfaceOrientations lock (or_dock); Z2OrientTraits logs which 16.0 rotation machinery is live",
+  "version": "0.7.9+291.2ded79c"
  }
 }
