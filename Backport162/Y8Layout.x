@@ -34,13 +34,12 @@ static IMP gY8SuperVisible, gY8OrigEq;
 // -[SBMainDisplayLayoutState isDisplayExternal]
 static BOOL Y8_IsExternal(id self, SEL _cmd) { return BPX_LL0(self, "displayOrdinal") == 1; }
 
-// -[SBLayoutState interfaceOrientation]
+// -[SBLayoutState interfaceOrientation]   (hot: asked for every frame during layout / drag; the ivar offset is looked up once, the switch is read only for a state without an orientation)
 static long long Y8_Orient(id self, SEL _cmd) {
-    if (BP_OnName("y8_extorient")) {
-        Ivar iv = class_getInstanceVariable(object_getClass(self), "_interfaceOrientation");
-        long long own = iv ? *(long long *)((uint8_t *)(__bridge void *)self + ivar_getOffset(iv)) : 0;
-        if (own == 0 && BPY_Responds(self, "isDisplayExternal") && BPX_Bool0(self, "isDisplayExternal")) return 1;
-    }
+    static ptrdiff_t off = -2;                                  // _interfaceOrientation of SBLayoutState (+0x8 in 20A8372); -1 = not found
+    if (off == -2) { Ivar iv = class_getInstanceVariable(NSClassFromString(@"SBLayoutState"), "_interfaceOrientation"); off = iv ? ivar_getOffset(iv) : -1; }
+    if (off >= 0 && *(long long *)((uint8_t *)(__bridge void *)self + off) == 0 && BP_OnName("y8_extorient") &&
+        BPY_Responds(self, "isDisplayExternal") && BPX_Bool0(self, "isDisplayExternal")) return 1;       // 16.2 -[SBMainDisplayLayoutState _defaultInterfaceOrientation] 0x1c7721500
     return gY8OrigOrient ? ((long long (*)(id, SEL))gY8OrigOrient)(self, _cmd) : 0;
 }
 
@@ -58,10 +57,9 @@ static id Y8_PreferredScene(id self, SEL _cmd) {
 static BOOL Y8_Inset(id self, SEL _cmd) {
     if (BP_OnName("y8_insethome")) {
         long long idiom = BPX_LL0(BPX_Obj0((id)NSClassFromString(@"UIDevice"), "currentDevice"), "userInterfaceIdiom");
-        if ((idiom & ~4LL) == 1) {
-            id sc = BPX_Obj0(BPX_Obj0(self, "_preferredWindowScene"), "switcherController");
-            if (sc && BPX_Bool0(sc, "isChamoisWindowingUIEnabled")) return NO;
-        }
+        if ((idiom & ~4LL) != 1) return NO;                                    // 16.2 0x1c7727144: the per item test only runs on the iPad idiom (1 / 5)
+        id sc = BPX_Obj0(BPX_Obj0(self, "_preferredWindowScene"), "switcherController");
+        if (sc && BPX_Bool0(sc, "isChamoisWindowingUIEnabled")) return NO;
     }
     return gY8OrigInset ? ((BOOL (*)(id, SEL))gY8OrigInset)(self, _cmd) : NO;
 }
