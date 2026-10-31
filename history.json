@@ -1,12 +1,4 @@
 {
- "0.7.9+248.7e3599c": {
-  "date": "2026-10-24T23:16:22Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+248.7e3599c_iphoneos-arm64.deb",
-  "run": 248,
-  "sha": "7e3599cec68ccf72af194c1e5b372667eac16966",
-  "subject": "Item 2: P1VC.m ports the remaining SBFluidSwitcherViewController / item container / footer / layer methods of REVIEW-CORE 2.1 (keyboard shortcut actions, keyboard suppression, plus button, dock level assertion, overlay frame, focus, footer tap, layer transform); switches p1_vc*",
-  "version": "0.7.9+248.7e3599c"
- },
  "0.7.9+249.32d525e": {
   "date": "2026-10-24T23:17:20Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+249.32d525e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "5681d4b191fd45eb6253a48c40564a41e1b33755",
   "subject": "Y24Drag: drop session tracking of the switcher follows 16.2 (point inside the view inset by 0.5, strip hit only while the strips are unoccluded, content drag over a full screen container, y24_droptrack); DELTA-SWEEP row",
   "version": "0.7.9+308.5681d4b"
+ },
+ "0.7.9+309.7439c69": {
+  "date": "2026-10-31T18:41:52Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+309.7439c69_iphoneos-arm64.deb",
+  "run": 309,
+  "sha": "7439c693d0429458dcc37e47443aa4aa8e856b16",
+  "subject": "Y25Workspace: accelerated Home press reads the main display switcher mode, retainsSiri on request copies, suspended launches build their transition context for every display, gesture manager observes the banner manager (no tap-to-front while a call banner shows); DELTA-SWEEP: languageChanged / HomeHardwareButtonActions / recents validation / transactionDidComplete decoded as equivalent",
+  "version": "0.7.9+309.7439c69"
  }
 }
