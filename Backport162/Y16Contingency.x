@@ -119,7 +119,7 @@ static id Y16_CtInit(id self, SEL _cmd) {
     if (r && BP_OnName("y16_cmdtab")) [[NSNotificationCenter defaultCenter] addObserver:r selector:sel_registerName("_sceneDidDisconnect:") name:@"UISceneDidDisconnectNotification" object:nil];
     return r;
 }
-static void Y16_CtDealloc(id self, SEL _cmd) {
+static void Y16_CtDealloc(__unsafe_unretained id self, SEL _cmd) {      // no ARC retain of an object that is being deallocated
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     if (gY16CtDealloc) ((void (*)(id, SEL))gY16CtDealloc)(self, _cmd);
 }
