@@ -180,8 +180,10 @@ static void Z2O_LogRotationMachinery(void) {
         BOOL (*act)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "_SBTraitsArbiterActuationEnabled");
         BOOL (*pm)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "_SBPostModernRotationEnabled");
         BOOL (*forRole)(id) = (BOOL (*)(id))dlsym(RTLD_DEFAULT, "_SBTraitsArbiterOrientationActuationEnabledForRole");
-        BP_Log(@"z2o: 16.0 rotation machinery: TraitsArbiterActuationEnabled=%@ PostModernRotationEnabled=%@ (role actuation function %@; 16.2 has no flags)",
-               act ? (act() ? @"YES" : @"NO") : @"(symbol not found)", pm ? (pm() ? @"YES" : @"NO") : @"(symbol not found)", forRole ? @"present" : @"not found");
+        BOOL actOn = act ? act() : NO, pmOn = pm ? pm() : NO;
+        BP_Log(@"z2o: 16.0 rotation machinery: TraitsArbiterActuationEnabled=%@ PostModernRotationEnabled=%@ (role actuation function %@; 16.2 has no flags; the stock 20A8372 SpringBoard.plist ships both ON, ORIENTATION-0.7.9 2.5)",
+               act ? (actOn ? @"YES" : @"NO") : @"(symbol not found)", pm ? (pmOn ? @"YES" : @"NO") : @"(symbol not found)", forRole ? @"present" : @"not found");
+        if (act && !actOn) BP_Log(@"z2o: GUARD the traits arbiter orientation actuation flag is OFF on this device although the stock plist ships it ON: the legacy rotation path is live and the 16.2 flow of this file does not drive rotation");
     });
 }
 
