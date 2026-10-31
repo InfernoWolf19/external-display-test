@@ -333,6 +333,9 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y24_retainssiri | (Y25Workspace.x) copying a main workspace transition request keeps retainsSiri of its application context (16.2) |
 | y24_suspendedctx | (Y25Workspace.x) suspended launches onto the monitor get their scene transition context (scene update, scene-less actions such as Open URL), not only those on the iPad display (16.2) |
 | y24_gmbanner | (Y25Workspace.x) while a call banner (scene backed banner) is presented on a display, tap to bring a Stage Manager window forward is refused there (16.2 gesture manager observes the banner manager) |
+| y24_classicmode | (Y26Classic.x) the classic mode (iPhone window size row) of iPhone-only apps follows the 16.2 decision tree for the screen / home button (12.9 inch iPad Pro: apps supporting the 4.7 / 5.5 inch launch sizes get the larger rows) |
+| y24_topaffordance | (Y27Views.x) the Stage Manager window title dots follow 16.2 (alpha from presence only, no inset offset, menu dismissed when hidden, pointer interaction toggled without animation flag) |
+| y24_overlayscale | (Y27Views.x) the icon zoom overlay footer is aligned at the display scale of its own display (monitor) instead of the iPad scale |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
