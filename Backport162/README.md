@@ -277,8 +277,10 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y7_inspolicy | (Y7Requests.x) Shift + click on a Stage Manager strip window: the transition request carries the entity insertion policy (16.2), so the window is added next to the current one; request copies keep it and the activating display item |
 | or_traits | (Z2OrientTraits.m) the 16.2 body of `SBSwitcherController switcherOrientation:...` (three changed decision rules), the follow-up rotation in `transitionDidBegin`, `actuateOrientationForTraitsDelegate:` (specs/ORIENTATION-0.7.9.md 1) |
 | or_label | (Z2OrientTraits.m) unique "label-N" of orientation transition requests (16.2 `_enqueueOrientationTransition...`) |
-| or_extinputs | (Z2OrientTraits.m) the traits arbiter input of an external display follows the display's real orientation and is refreshed (the 16.0 pipeline manager caches a snapshot of the scene orientation); documented deviation, ORIENTATION-0.7.9 2 |
-| or_extreal | (Z2OrientTraits.m) logged last line guard: an external display's layout state orientation that contradicts its canvas shape is replaced by the real orientation |
+| or_extinputs | (Z2OrientTraits.m) the traits arbiter input of an external display follows the scene's orientation and is refreshed on change, unset (0) becomes the 16.2 value Portrait (the pipeline manager caches a snapshot made once); documented deviation, ORIENTATION-0.7.9 2 |
+| or_extreal | (Z2OrientTraits.m) logged last line guard: an invalid (0) container orientation of an external display's layout state is replaced by the 16.2 value |
+| or_delegate | (Z2OrientDelegate.m) 16.2 `SBTraitsSceneParticipantDelegate _sanitizedMask:forApplication:` (the iPhone-on-iPad mask restriction lives in the traits guides; only while g3b_guide is active) |
+| or_dock | (Z2OrientDelegate.m) the floating dock has no 16.0 `supportedInterfaceOrientations` lock during its presentation (16.2) |
 | y8_extorient | (Y8Layout.x) an external display's layout state without its own orientation answers portrait instead of the iPad's rotation (16.2 isDisplayExternal / _defaultInterfaceOrientation) |
 | y8_insethome | (Y8Layout.x) Stage Manager: app layouts are not inset for the home affordance (16.2), new -[SBAppLayout _preferredWindowScene] |
 | y8_spotlight | (Y8Layout.x) opening an app from Spotlight with Stage Manager: the window's own frame, other stage windows stay visible |

@@ -10,11 +10,11 @@
 // 16.2 body statement by statement.  Switches (default on, Backport162.off.<name> kill files; every replaced IMP runs the saved 16.0 IMP when its switch is off):
 //   or_traits    the 16.2 body of switcherOrientation:... (decision rules, follow-up in transitionDidBegin, actuation context handling)
 //   or_label     unique label "<label>-<n>" of orientation transition requests
-//   or_extinputs the arbiter input of an EXTERNAL display (SBTraitsExternalDisplayPipelineManager -inputs, 16.0 0x1c616fa60 / 16.2 0x1c75f7740, same body) is the display's
-//                real orientation and is refreshed when the scene changes: 16.0 builds the input object once (lazy ivar _inputs) from [windowScene interfaceOrientation] at the
-//                first call and never again; everything that follows the monitor's "device orientation" then resolves against that snapshot.  DEVIATION from the 16.2 body (which
-//                has the same lazy cache) because on 16.2 the scene is already in its final orientation at that moment; documented in ORIENTATION-0.7.9.md section 2.
-//   or_extreal   last line guard: a layout state orientation of an external display that contradicts the display shape is replaced by the real orientation (logged GUARD)
+//   or_extinputs the arbiter input of an EXTERNAL display (SBTraitsExternalDisplayPipelineManager -inputs, 16.0 0x1c616fa60 / 16.2 0x1c75f7740, same body) follows the scene's
+//                orientation and is refreshed when it changes: both releases build the input object once (lazy ivar _inputs) from [windowScene interfaceOrientation] at the first
+//                call; 16.2 UIScreen -_connectScreen has put the external screen at Portrait by then, 16.0 may still report 0.  Unset (0) -> 1 like 16.2; a valid value is never rewritten.
+//                DEVIATION from the 16.2 body (refresh on change); documented in ORIENTATION-0.7.9.md section 2.
+//   or_extreal   last line guard: an invalid (0) container orientation of an external display's layout state is replaced by the 16.2 value; differences from the scene are logged
 // Logs: grep "z2o:" in Backport162.log (debug only).
 
 #import <Foundation/Foundation.h>
@@ -81,7 +81,6 @@ static BOOL Z2O_GetReeval(id o) { return [objc_getAssociatedObject(o, &kZ2OReeva
 static void Z2O_SetReeval(id o, BOOL b) { objc_setAssociatedObject(o, &kZ2OReeval, b ? @YES : nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
 
 static BOOL Z2O_ValidOri(long long o) { return o >= 1 && o <= 4; }
-static BOOL Z2O_IsLandscapeOri(long long o) { return o == 3 || o == 4; }
 static const char *Z2O_Tag(id switcher) { return Z2O_Bool0(Z2O_Obj0(switcher, "windowScene", "z2o tag"), "isExternalDisplayWindowScene", "z2o tag") ? "ext" : "main"; }
 
 // shape of a window scene's canvas: 2 landscape, 1 portrait, 0 unknown
@@ -91,15 +90,14 @@ static int Z2O_SceneShape(id scene) {
     if (b.size.width <= 0 || b.size.height <= 0) return 0;
     return b.size.width > b.size.height ? 2 : 1;
 }
-// the real orientation of an external display: the scene's own interface orientation when it agrees with the canvas shape, else derived from the shape
-// (the stack from the calculator to the page containers uses the iPad convention: landscape shaped canvas <-> landscape orientation, 16.0 logs show 3 for the 2560x1440 monitor)
+// The orientation of an external (main-like, Stage Manager) display in 16.2: UIScreen -_connectScreen (16.2 0x189161788, found by specs/UIKIT-APP-0.7.9.md U1) puts such a screen at
+// PORTRAIT without notification and UIScreen never swaps its landscape bounds for it, so the monitor is "Portrait" with a 2560x1440 canvas (also -[SBMainDisplayLayoutState _defaultInterfaceOrientation]
+// answers 1 for an external state, Y8Layout.x).  A layout state of the monitor that says Portrait is therefore the 16.2 state, NOT a defect.  The 16.0 scene may still report 0 (never set) when the
+// arbiter input is built: then the 16.2 value 1 is used.  A valid scene orientation is never rewritten (the switcher window and the screen of the process must agree with the layout state).
 static long long Z2O_RealOrientation(id scene, long long *outSceneOri) {
     long long so = Z2O_LL0(scene, "interfaceOrientation", "z2o real");
     if (outSceneOri) *outSceneOri = so;
-    int shape = Z2O_SceneShape(scene);
-    if (shape == 0) return Z2O_ValidOri(so) ? so : 1;
-    if (Z2O_ValidOri(so) && (Z2O_IsLandscapeOri(so) == (shape == 2))) return so;
-    return shape == 2 ? 3 : 1;
+    return Z2O_ValidOri(so) ? so : 1;
 }
 
 // ------------------------------------------------------------------------------------------------ 1. -switcherOrientation:elementsOrientations:forTransitionRequest:previousLayoutState:layoutState:
@@ -159,17 +157,17 @@ static BOOL Z2O_FlowReady(id sw) {
     return YES;
 }
 
-// External display guard (or_extreal): the container orientation of a layout state must agree with the display's canvas
+// External display guard (or_extreal): the container orientation of a layout state of an external display must be a valid orientation (an unset participant answer 0 would make every
+// consumer fall back to the main display's rotation); a valid answer is kept even if it differs from the scene's (logged: that difference is what rotates a moved window).
 static long long Z2O_GuardExternal(id sw, long long o, id request) {
     id scene = Z2O_Obj0(sw, "windowScene", "z2o guard");
     if (!Z2O_Bool0(scene, "isExternalDisplayWindowScene", "z2o guard")) return o;
     long long sceneOri = 0, real = Z2O_RealOrientation(scene, &sceneOri);
     int shape = Z2O_SceneShape(scene);
-    BOOL consistent = Z2O_ValidOri(o) && (shape == 0 || Z2O_IsLandscapeOri(o) == (shape == 2));
-    BPY_LOG(@"z2o: ext display state orientation: participant %lld, scene orientation %lld, canvas shape %d -> real %lld (%@) request %@", o, sceneOri, shape, real, consistent ? @"consistent" : @"CONTRADICTS", Z2O_Obj0(request, "eventLabel", "z2o guard"));
-    if (consistent) return o;
-    if (!BP_OnName("or_extreal")) { BP_Log(@"z2o: ext display orientation %lld contradicts the canvas shape %d (guard switch or_extreal is off, kept)", o, shape); return o; }
-    BP_Log(@"z2o: GUARD(or_extreal) external display layout state orientation %lld contradicts canvas shape %d (scene orientation %lld): using %lld", o, shape, sceneOri, real);
+    BPY_LOG(@"z2o: ext display state orientation: participant %lld, scene orientation %lld, canvas shape %d, 16.2 value %lld%@ request %@", o, sceneOri, shape, real, (Z2O_ValidOri(o) && o != sceneOri && Z2O_ValidOri(sceneOri)) ? @" (DIFFERS from the scene)" : @"", Z2O_Obj0(request, "eventLabel", "z2o guard"));
+    if (Z2O_ValidOri(o)) return o;
+    if (!BP_OnName("or_extreal")) { BP_Log(@"z2o: ext display orientation %lld is not valid (guard switch or_extreal is off, kept)", o); return o; }
+    BP_Log(@"z2o: GUARD(or_extreal) external display layout state orientation %lld is not valid (scene orientation %lld): using %lld", o, sceneOri, real);
     return real;
 }
 
