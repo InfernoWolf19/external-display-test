@@ -84,7 +84,11 @@ static inline void BPDW_Line(const char *tag, const char *text) {
     struct tm tmv; localtime_r(&ts.tv_sec, &tmv);
     char line[1400];
     int n = snprintf(line, sizeof line, "%02d:%02d:%02d.%03ld %s[%d] %s\n", tmv.tm_hour, tmv.tm_min, tmv.tm_sec, ts.tv_nsec / 1000000, tag, (int)getpid(), text);
-    if (n > 0) (void)!write(fd, line, (size_t)(n < (int)sizeof line ? n : (int)sizeof line - 1));
+    if (n > 0) {
+        size_t len = (size_t)(n < (int)sizeof line ? n : (int)sizeof line - 1);
+        if (n >= (int)sizeof line) line[sizeof line - 2] = '\n';       // a truncated line still ends with its newline (the next line used to be glued to it)
+        (void)!write(fd, line, len);
+    }
     close(fd);
 }
 
