@@ -1,12 +1,4 @@
 {
- "0.7.9+253.92a22e8": {
-  "date": "2026-10-24T23:29:52Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+253.92a22e8_iphoneos-arm64.deb",
-  "run": 253,
-  "sha": "92a22e89d60c7f42ad991abce4ed2e792c8e7f5f",
-  "subject": "Item 3 (M5): P1SW.m orientation family on the 16.0 traits code: SBLayoutState unknownAllowed methods, scene settings orientation, coordinate space / scene entity frame with the layout state orientation under Stage Manager, 2 argument transition context update; switch p1_orient; SBSwitcherTraitsAssistant rework documented as not ported",
-  "version": "0.7.9+253.92a22e8"
- },
  "0.7.9+254.1636f3b": {
   "date": "2026-10-24T23:30:47Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+254.1636f3b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "e91ef7f742f5e913e326cd59cd3625f81f1534d4",
   "subject": "DELTA-SWEEP: Pass 3 section with counts, corrections and remaining rows; shas; classic wrapper view rows decoded (old EQUIVALENT claim wrong), y24_wrapperview",
   "version": "0.7.9+313.e91ef7f"
+ },
+ "0.7.9+314.6ce66cd": {
+  "date": "2026-10-31T19:38:34Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+314.6ce66cd_iphoneos-arm64.deb",
+  "run": 314,
+  "sha": "6ce66cd60a7599ee48ec235934c2d59eb20a25d4",
+  "subject": "DELTA-SWEEP: sha of the wrapper view row",
+  "version": "0.7.9+314.6ce66cd"
  }
 }
