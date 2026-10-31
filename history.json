@@ -1,12 +1,4 @@
 {
- "0.7.9+239.ae4adf4": {
-  "date": "2026-10-24T18:14:55Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+239.ae4adf4_iphoneos-arm64.deb",
-  "run": 239,
-  "sha": "ae4adf475a4aba654b9ca14d82c74a43121042a3",
-  "subject": "G1B: routing162 guard log built lazily (suppression test first on scalars, no NSString per query), FINDINGS-DRAG-LOOP P1",
-  "version": "0.7.9+239.ae4adf4"
- },
  "0.7.9+240.780b69a": {
   "date": "2026-10-24T18:15:09Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+240.780b69a_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4b72fbf37d9a03f443b6537b984830f00cf0930e",
   "subject": "Y22Modifiers: Expose grid / floor taps build their request from the tap event (y17_gridtap, y17_floortap), home gesture fly-in only while cards fly in (y17_homeflyin), no window drag pin override (y17_windragpin); DELTA-SWEEP rows, root modifier level shift documented",
   "version": "0.7.9+305.4b72fbf"
+ },
+ "0.7.9+307.8372845": {
+  "date": "2026-10-31T18:14:05Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+307.8372845_iphoneos-arm64.deb",
+  "run": 307,
+  "sha": "837284577e484aa8b42a78e7f4e26f603cf468f4",
+  "subject": "DELTA-SWEEP: pass 2 shas, summary, note on the red run 290",
+  "version": "0.7.9+307.8372845"
  }
 }
