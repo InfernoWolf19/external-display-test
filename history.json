@@ -1,12 +1,4 @@
 {
- "0.7.9+230.09f6a30": {
-  "date": "2026-10-24T08:04:10Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+230.09f6a30_iphoneos-arm64.deb",
-  "run": 230,
-  "sha": "09f6a308f7f9a93015451d891a458f95c973ddcf",
-  "subject": "X3Mode: BPSceneHostingDisplayPreferences + displayPreferencesForDisplayController: on both policies, the 16.2 controller transform (criteria mode, per-axis clamp, keepOtherModes, mirrored displays), setCloningSupported: and the non-interactive policy factory (switches modetransform, cloningsupported)",
-  "version": "0.7.9+230.09f6a30"
- },
  "0.7.9+231.82bc14e": {
   "date": "2026-10-24T08:06:59Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+231.82bc14e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "675c7f90c01f92f27412b9a00b7921fed62b2ded",
   "subject": "Backport162UIK K1: no software keyboard for text entry on the external display (16.2 softwareKeyboardAllowedForActiveKeyboardSceneDelegate + ChamoisExternalSWKeyboard preference NO, gates in _showKeyboardIgnoringPolicyDelegate: / _shouldMinimizeForHardwareKeyboard / _showsScribbleIconsInAssistantView / _isShowKeyboardButtonVisible, 16.2 visualMode table, keyboardScreen / textEntryFocusOnExternalDisplay / _windowHostingScene:didMoveFromScreen:toScreen:); switch uik_keyboard; spec K1",
   "version": "0.7.9+296.675c7f9"
+ },
+ "0.7.9+297.a62c67d": {
+  "date": "2026-10-31T10:27:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+297.a62c67d_iphoneos-arm64.deb",
+  "run": 297,
+  "sha": "a62c67d8c022d8b7c102d5b96397fb99ab9cd3fb",
+  "subject": "P1Drag/G1D core review: the ToApps scene take-over skips ancillary layout transactions like 16.2 0x1c72b0504 (p1_toappstake), the held finish of the end broadcast also recognises the transaction when p1_share is off, a queued re-entrant update is dropped by a complete, P1_NoteMissing builds no strings for a pair already reported (120 Hz path), the strip tongue failure requirement is added once per recognizer pair",
+  "version": "0.7.9+297.a62c67d"
  }
 }
