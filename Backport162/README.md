@@ -329,6 +329,10 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_applibrary | (Y23Home.x) the App Library of a window scene on the monitor gets its own expanded category pod layout instead of changing the iPad one |
 | y17_sbrecording | (Y23Home.x) the status bar of the monitor updates the recording indicator of its own scene |
 | y24_droptrack | (Y24Drag.x) the drop target tracking of a drag over the switcher follows 16.2: point inside the view only, Stage Manager strip hit only while the strips are unoccluded, content drag over a full screen window accepted when the window container fills the view |
+| y24_homebutton | (Y25Workspace.x) the accelerated Home press (AssistiveTouch Home) reads the environment mode of the iPad main display switcher, not of the active display (16.2) |
+| y24_retainssiri | (Y25Workspace.x) copying a main workspace transition request keeps retainsSiri of its application context (16.2) |
+| y24_suspendedctx | (Y25Workspace.x) suspended launches onto the monitor get their scene transition context (scene update, scene-less actions such as Open URL), not only those on the iPad display (16.2) |
+| y24_gmbanner | (Y25Workspace.x) while a call banner (scene backed banner) is presented on a display, tap to bring a Stage Manager window forward is refused there (16.2 gesture manager observes the banner manager) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
