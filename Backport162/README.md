@@ -345,6 +345,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y24_classicsb | (Y31Misc.x) the status bar frame inside the classic jail of an iPhone-only app is computed on every display |
 | y24_shelfscale | (Y31Misc.x) the classic switcher shelf expansion clamps its presentation value like 16.2 |
 | y24_protoextras | (Y32Proto.x) the recents protobuf also stores the reference bounds and semantic size types of the window layout attributes (16.2 fields), so they survive a respring |
+| y24_wrapperview | (Y31Misc.x) a hosted secure app is not put into the classic wrapper view (16.2) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder

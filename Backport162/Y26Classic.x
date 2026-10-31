@@ -13,7 +13,7 @@
 //                     * 820 x 1180 (iPad Air) with screen type 31, type 524288 and KJH: 0 instead of 14.
 //                   Devices with a home button (any other SBFEffectiveHomeButtonType) give identical answers in both builds (checked leaf by leaf).
 //                   Not covered by the tree (device class other than 2, the iPhone branches of the function) -> the 16.0 body runs, logged once.
-//                   The supported types themselves come from -_calculateSupportedTypesLazilyIfNecessary (see Y27Classic.x).
+//                   The supported types themselves come from -_calculateSupportedTypesLazilyIfNecessary / -_calculateSupportedTypesForSplashBoard (16.0 bodies still run: see DELTA-SWEEP, Pass 3).
 // Needs a device: with an iPhone-only app installed (supporting the 4.7 inch launch size) open it in a window on the 12.9 inch iPad: the window is the 7th classic size row (375 x 667), not
 // the 4 inch one.
 

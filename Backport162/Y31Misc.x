@@ -8,6 +8,10 @@
 //                  scale = (X + (1 - X) * (1 - pow(1 - p, _bezierCurveScaleExponent))) * [super scaleForIndex:], X = _dismissalScale; 16.0 used p unclamped.  Style != 1: X + p * (1 - X) in both.
 //                  The shelf (bottom shelf of the Split View / Slide Over multitasking of the classic iPad switcher) is created by the classic switcher, i.e. with Stage Manager off (the
 //                  Stage Manager toggle SMT.x): class and ivars exist in 16.0, so the rule is applied.
+//  y24_wrapperview +[SBDeviceApplicationSceneClassicWrapperView shouldUseWrapperViewForSceneHandle:]  16.2 0x1c78cfbac (16.0 0x1c642041c): classic app -> YES (both); otherwise 16.2 first answers NO for
+//                  a hosted secure app ([handle isHostedSecureApp], 0x1c78cfbe8; exists in 16.0), then the Stage Manager scene resizing test that 16.0 ran.  The other 16.2 changes of this view
+//                  (init: minification / magnification filter of the host positioning view and the rasterizeScaledApps observer; layoutSubviews: overlay frames, classicAppPhoneAppRunningOnPad
+//                  orientation) and of SBDeviceApplicationSceneView(ClassicSupport) are listed in DELTA-SWEEP, Pass 3.
 //  y24_minviable   -[SBMinimumViableSwitcherTableViewController isWindowVisible]  16.2 0x1c74eeebc (16.0 0x1c606c49c): "unlocked environment mode == 2" is read from the switcher controller of
 //                  the view's own window scene ([[self _sbWindowScene] switcherController]); 16.0 reads +[SBMainSwitcherControllerCoordinator sharedInstance] unlockedEnvironmentMode, the ACTIVE display's
 //                  (0x1c623a020).  Ported with the coordinator's active controller set to the scene's controller for the call (Y3_PushActive).  The other row of the class,
@@ -82,6 +86,19 @@ static double Y31_ShelfScale(id self, SEL _cmd, unsigned long long index) {
     return a * sup;
 }
 
+// ---- y24_wrapperview ----
+static IMP gY31OrigWrapperUse;
+static BOOL Y31_UseWrapper(id cls, SEL _cmd, id handle) {
+    BOOL r = gY31OrigWrapperUse ? ((BOOL (*)(id, SEL, id))gY31OrigWrapperUse)(cls, _cmd, handle) : NO;
+    if (r && BP_OnName("y24_wrapperview") && handle) {
+        id app = Y17_Obj0("wrapperview", handle, "application");
+        BOOL classic = BPY_Responds(app, "isClassic") && BPY_SEND(BOOL, (), app, "isClassic");
+        if (!classic && BPY_Responds(handle, "isHostedSecureApp") && BPY_SEND(BOOL, (), handle, "isHostedSecureApp")) return NO;      // 16.2 0x1c78cfbe8: a hosted secure app never gets the wrapper
+        if (!BPY_Responds(handle, "isHostedSecureApp")) Y17_GuardOnce("wrapperview", handle, "isHostedSecureApp");
+    }
+    return r;
+}
+
 // ---- y24_minviable ----
 static BOOL Y31_WindowVisible(id self, SEL _cmd) {
     if (!BP_OnName("y24_minviable")) return gY31OrigWindowVisible ? ((BOOL (*)(id, SEL))gY31OrigWindowVisible)(self, _cmd) : NO;
@@ -122,6 +139,10 @@ __attribute__((constructor)) static void Y31_Setup(void) {
         Class sh = NSClassFromString(@"SBShelfExpansionSwitcherModifier");
         if (sh && class_getInstanceMethod(sh, sel_registerName("scaleForIndex:")) && class_getInstanceMethod(sh, sel_registerName("_presentationValueForIndex:"))) { gY31OrigShelfScale = BPX_Replace(sh, "scaleForIndex:", (IMP)Y31_ShelfScale); n++; }
         else BP_Log(@"[y31] GUARD(shelfscale) SBShelfExpansionSwitcherModifier scaleForIndex: / _presentationValueForIndex: missing: not installed");
+        Class wv = NSClassFromString(@"SBDeviceApplicationSceneClassicWrapperView");
+        Class wvMeta = wv ? object_getClass((id)wv) : Nil;
+        if (wvMeta && class_getInstanceMethod(wvMeta, sel_registerName("shouldUseWrapperViewForSceneHandle:"))) { gY31OrigWrapperUse = BPX_Replace(wvMeta, "shouldUseWrapperViewForSceneHandle:", (IMP)Y31_UseWrapper); n++; }
+        else BP_Log(@"[y31] GUARD(wrapperview) +SBDeviceApplicationSceneClassicWrapperView shouldUseWrapperViewForSceneHandle: missing: not installed");
         Class mv = NSClassFromString(@"SBMinimumViableSwitcherTableViewController");
         if (mv && class_getInstanceMethod(mv, sel_registerName("isWindowVisible"))) { gY31OrigWindowVisible = BPX_Replace(mv, "isWindowVisible", (IMP)Y31_WindowVisible); n++; }
         else BP_Log(@"[y31] GUARD(minviable) SBMinimumViableSwitcherTableViewController isWindowVisible missing: not installed");
