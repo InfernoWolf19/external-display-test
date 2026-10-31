@@ -1,12 +1,4 @@
 {
- "0.7.9+251.3d6977c": {
-  "date": "2026-10-24T23:22:18Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+251.3d6977c_iphoneos-arm64.deb",
-  "run": 251,
-  "sha": "3d6977c9d47c8b0c867463b172c27998e79b11d6",
-  "subject": "Item 3 (M4, M6, M8): P1SW.m ports the 16.2 home gesture scroll target, the default role scale / frame of SBDefaultImplementationsSwitcherModifier (with the fully occluded peeking centre the review missed) and the empty async rendering evaluation; switches p1_sw p1_homescroll p1_defroles p1_asynceval",
-  "version": "0.7.9+251.3d6977c"
- },
  "0.7.9+252.f7e180d": {
   "date": "2026-10-24T23:29:24Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+252.f7e180d_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "50bd5e8c357bcadcb333cd97308031be151374b6",
   "subject": "Y28Keyboard / Y29Blur / Y30Snapshot / Y31Misc: keyboard home grabber per scene, cross blur rasterization and root blur early out, classic snapshot stretch, centre window presentation animation, minimum viable switcher mode, classic jail status bar on every display; DELTA-SWEEP rows",
   "version": "0.7.9+311.50bd5e8"
+ },
+ "0.7.9+312.96a92ad": {
+  "date": "2026-10-31T19:28:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+312.96a92ad_iphoneos-arm64.deb",
+  "run": 312,
+  "sha": "96a92ad17c5382b197e0501c4f880399368ff983",
+  "subject": "Y32Proto / Y31Misc: recents protobuf carries the 16.2 reference bounds and semantic size types (the plist side channel never covered the recents), shelf expansion scale clamp; DELTA-SWEEP rows",
+  "version": "0.7.9+312.96a92ad"
  }
 }
