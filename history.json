@@ -1,12 +1,4 @@
 {
- "0.7.9+252.f7e180d": {
-  "date": "2026-10-24T23:29:24Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+252.f7e180d_iphoneos-arm64.deb",
-  "run": 252,
-  "sha": "f7e180dfb0fd3fafa7af867877197c1ec7d86c64",
-  "subject": "Y4Home: alert items prefer the home screen's own window scene (SBAlertItem preferred activation scene, presenter resolver), widget gallery keyboard focus (switches y4_alertscene, y4_widgetfocus); DELTA-SWEEP SBIconController verdicts, Y3 sha",
-  "version": "0.7.9+252.f7e180d"
- },
  "0.7.9+253.92a22e8": {
   "date": "2026-10-24T23:29:52Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+253.92a22e8_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "96a92ad17c5382b197e0501c4f880399368ff983",
   "subject": "Y32Proto / Y31Misc: recents protobuf carries the 16.2 reference bounds and semantic size types (the plist side channel never covered the recents), shelf expansion scale clamp; DELTA-SWEEP rows",
   "version": "0.7.9+312.96a92ad"
+ },
+ "0.7.9+313.e91ef7f": {
+  "date": "2026-10-31T19:32:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+313.e91ef7f_iphoneos-arm64.deb",
+  "run": 313,
+  "sha": "e91ef7f742f5e913e326cd59cd3625f81f1534d4",
+  "subject": "DELTA-SWEEP: Pass 3 section with counts, corrections and remaining rows; shas; classic wrapper view rows decoded (old EQUIVALENT claim wrong), y24_wrapperview",
+  "version": "0.7.9+313.e91ef7f"
  }
 }
