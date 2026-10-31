@@ -1,12 +1,4 @@
 {
- "0.7.9+227.4dbfe23": {
-  "date": "2026-10-24T07:51:45Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+227.4dbfe23_iphoneos-arm64.deb",
-  "run": 227,
-  "sha": "4dbfe232cc523c09fdf4ef3509b7ccf77ee3c156",
-  "subject": "X7Keyboard: SBUniversalControlServer block (hook by address, display scoped suppression), OverlayUI requesting-focus tracking and the 16.2 _filterFocusedSceneIdentityToken: consumer",
-  "version": "0.7.9+227.4dbfe23"
- },
  "0.7.9+228.004fd24": {
   "date": "2026-10-24T07:53:21Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+228.004fd24_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "fa3b283d9052f415577c7b842a4185cad6426005",
   "subject": "BPDaemon.h: a daemon log line longer than the buffer keeps its newline (the next line was glued to it)",
   "version": "0.7.9+293.fa3b283"
+ },
+ "0.7.9+294.4ea593a": {
+  "date": "2026-10-31T10:23:03Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+294.4ea593a_iphoneos-arm64.deb",
+  "run": 294,
+  "sha": "4ea593aec8a95a847350b2345999b7cb96a23e3f",
+  "subject": "REVIEW-DISPLAY-0.7.9: differential review of the display side hooks (table per hook, defects D1..D4, answers to the keyboard / drag / lock / daemon / token questions)",
+  "version": "0.7.9+294.4ea593a"
  }
 }
