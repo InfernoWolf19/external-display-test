@@ -1,12 +1,4 @@
 {
- "0.7.9+236.a557a56": {
-  "date": "2026-10-24T18:07:00Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+236.a557a56_iphoneos-arm64.deb",
-  "run": 236,
-  "sha": "a557a567db16976386e931ba7b26b5c3987df299",
-  "subject": "Y2Gestures: transient UI recognizers (window menu dismiss, shelf, tap to unhide) register with the gesture manager of their own window scene (switch y2_tuiscene); DELTA-SWEEP F4 verdicts",
-  "version": "0.7.9+236.a557a56"
- },
  "0.7.9+237.90e7140": {
   "date": "2026-10-24T18:11:51Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+237.90e7140_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "25197c1055aaa01f356169e2a5512137ee8d92f7",
   "subject": "ORIENTATION-0.7.9: arbiter actuation flags are ON on stock 20A8372 (device FeatureFlags + adoption defaults), no flag hook; DELTA-SWEEP: 50 orientation rows decided (delegate, dock, view stack, live overlay); Z2OrientTraits logs a GUARD if the actuation flag is off",
   "version": "0.7.9+302.25197c1"
+ },
+ "0.7.9+304.7915bb5": {
+  "date": "2026-10-31T10:37:04Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+304.7915bb5_iphoneos-arm64.deb",
+  "run": 304,
+  "sha": "7915bb5edde9dfc010109b2d41c2303badfdf2c0",
+  "subject": "REVIEW-Y-0.7.9: differential review of the Y1..Y16 hooks (table per hook, answers to the y5 / y8 / y10 / y13 / y16 / y6 questions, defects D1..D7)",
+  "version": "0.7.9+304.7915bb5"
  }
 }
