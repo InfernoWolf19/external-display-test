@@ -1,12 +1,12 @@
 // Y4Home.x : delta sweep family F2 (specs/DELTA-SWEEP-0.7.9.md): home screen alerts and widget editing focus.  Setup: constructor.  Log prefix "[y4]".
 //
 //  y4_alertscene  16.2 gives an alert item a preferred activation window scene.  -[SBAlertItem _setPreferredActivationWindowScene:] / _preferredActivationWindowScene are NEW in 16.2
-//                 (the selector does not exist in 20A8372); the only setter is -[SBIconController iconManager:wantsUninstallForIcon:location:] 0x1c74a4914 (the "hide app" and
-//                 "delete" confirmation items, scene = [self _sbWindowScene], the home screen's own scene) and the only reader is
+//                 (the selector does not exist in 20A8372); the only setter is -[SBIconController iconManager:wantsUninstallForIcon:location:] 0x1c74a4914 (the "hide app", "remove widget" and
+//                 "delete" (folder) confirmation items, scene = [self _sbWindowScene], the home screen's own scene) and the only reader is
 //                 -[SBAlertItemPresenterWindowSceneResolver resolvedSharedModalAlertItemPresenterForAlertItem:] 0x1c74c0984 (16.0 0x1c6045050): the alert controller's scene first,
 //                 else the preferred scene, else the ACTIVE display's scene.  16.0 had no preferred scene: the confirmation of a home screen icon opened on whichever display was
 //                 active (the monitor after the pointer had been there).  Ported: the two accessors (associated object, weak), the setter on the two alert items while that
-//                 SBIconController method runs (thread local flag; only those two creations, like 16.2), the resolver with the 16.2 order.
+//                 SBIconController method runs (thread local flag; only those three creations, like 16.2), the resolver with the 16.2 order.
 //  y4_widgetfocus 16.2 -iconManagerWillPresentWidgetEditing: 0x1c74a89c8 / -iconManagerDidDismissWidgetEditing: 0x1c74a8b2c: the first presentation (no add widget sheet floating dock
 //                 assertion yet) asks the workspace keyboard focus controller for focus stealing for the home screen window (reason "addWidgetSheet") and makes the window key
 //                 when it is not, the assertion (new ivar _addWidgetSheetKeyboardFocusAssertion, associated object here) is invalidated when the editing UI goes away.  Without it a
@@ -29,7 +29,7 @@
 static const void *kY4PrefScene = &kY4PrefScene;
 static const void *kY4FocusAssertion = &kY4FocusAssertion;
 static __thread void *tY4PrefScene;            // unretained: the scene given to alert items created while -iconManager:wantsUninstallForIcon:location: runs
-static IMP gY4OrigUninstall, gY4OrigHideInit, gY4OrigDelInit, gY4OrigResolve, gY4OrigWillPresent, gY4OrigDidDismiss;
+static IMP gY4OrigUninstall, gY4OrigHideInit, gY4OrigDelInit, gY4OrigWidgetInit, gY4OrigResolve, gY4OrigWillPresent, gY4OrigDidDismiss;
 
 // -[SBAlertItem _setPreferredActivationWindowScene:] / -_preferredActivationWindowScene (new in 16.2)
 static void Y4_SetPref(id self, SEL _cmd, id scene) {
@@ -65,6 +65,12 @@ static id Y4_HideInit(id self, SEL _cmd, id icon, id location) {
 }
 static id Y4_DelInit(id self, SEL _cmd, id icon, id location) {
     id r = gY4OrigDelInit ? ((id (*)(id, SEL, id, id))gY4OrigDelInit)(self, _cmd, icon, location) : nil;
+    return Y4_ApplyPref(r);
+}
+
+// -[SBRemoveWidgetAlertItem initWithWidgetIcon:location:iconManager:]: 16.2 0x1c74a4914 gives the remove widget confirmation the home screen's scene as well (the widget branch shares the setter call with the folder branch)
+static id Y4_WidgetInit(id self, SEL _cmd, id icon, id location, id iconManager) {
+    id r = gY4OrigWidgetInit ? ((id (*)(id, SEL, id, id, id))gY4OrigWidgetInit)(self, _cmd, icon, location, iconManager) : nil;
     return Y4_ApplyPref(r);
 }
 
@@ -115,8 +121,8 @@ __attribute__((constructor)) static void Y4_Setup(void) {
     if (!BPY_BuildOK()) return;
     @autoreleasepool {
         Class ic = NSClassFromString(@"SBIconController"), ai = NSClassFromString(@"SBAlertItem"), rs = NSClassFromString(@"SBAlertItemPresenterWindowSceneResolver");
-        Class hide = NSClassFromString(@"SBHideAppIconAlertItem"), del = NSClassFromString(@"SBDeleteNonAppIconAlertItem");
-        if (!ic || !ai || !rs || !hide || !del) { BP_Log(@"[y4] NOT installed (class missing)"); return; }
+        Class hide = NSClassFromString(@"SBHideAppIconAlertItem"), del = NSClassFromString(@"SBDeleteNonAppIconAlertItem"), wid = NSClassFromString(@"SBRemoveWidgetAlertItem");
+        if (!ic || !ai || !rs || !hide || !del || !wid) { BP_Log(@"[y4] NOT installed (class missing)"); return; }
         if (!class_getInstanceMethod(ai, sel_registerName("_setPreferredActivationWindowScene:"))) {
             class_addMethod(ai, sel_registerName("_setPreferredActivationWindowScene:"), (IMP)Y4_SetPref, "v24@0:8@16");
             class_addMethod(ai, sel_registerName("_preferredActivationWindowScene"), (IMP)Y4_GetPref, "@16@0:8");
@@ -124,6 +130,7 @@ __attribute__((constructor)) static void Y4_Setup(void) {
         gY4OrigUninstall = BPX_Replace(ic, "iconManager:wantsUninstallForIcon:location:", (IMP)Y4_Uninstall);
         gY4OrigHideInit = BPX_Replace(hide, "initWithIcon:location:", (IMP)Y4_HideInit);
         gY4OrigDelInit = BPX_Replace(del, "initWithIcon:location:", (IMP)Y4_DelInit);
+        gY4OrigWidgetInit = BPX_Replace(wid, "initWithWidgetIcon:location:iconManager:", (IMP)Y4_WidgetInit);
         gY4OrigResolve = BPX_Replace(rs, "resolvedSharedModalAlertItemPresenterForAlertItem:", (IMP)Y4_Resolve);
         gY4OrigWillPresent = BPX_Replace(ic, "iconManagerWillPresentWidgetEditing:", (IMP)Y4_WillPresent);
         gY4OrigDidDismiss = BPX_Replace(ic, "iconManagerDidDismissWidgetEditing:", (IMP)Y4_DidDismiss);
