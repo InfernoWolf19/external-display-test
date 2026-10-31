@@ -326,6 +326,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_floortap | (Y22Modifiers.x) tap on the floor layout of a full screen app builds its transition from the tap event, pointer tap on a center window leaf |
 | y17_homeflyin | (Y22Modifiers.x) going home by gesture: the card fly-in position and scale apply only while cards fly in (16.2), not always |
 | y17_windragpin | (Y22Modifiers.x) center window drag transition no longer pins layouts of the dragged layout to the space (16.2) |
+| y17_applibrary | (Y23Home.x) the App Library of a window scene on the monitor gets its own expanded category pod layout instead of changing the iPad one |
+| y17_sbrecording | (Y23Home.x) the status bar of the monitor updates the recording indicator of its own scene |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
