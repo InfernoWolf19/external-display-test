@@ -37,6 +37,10 @@ static id Y15_Config(id session, BOOL viaHandle) {
     id scene = nil;
     if (viaHandle) scene = BPX_Obj1(BPX_WindowSceneManager(), "windowSceneForSceneHandle:", BPX_IvarObj(session, "_sceneHandle"));
     if (!scene) scene = BPX_Obj0(session, "windowScene");
+    if (viaHandle) {                                                     // 16.2 0x1c757bbd8 asks -_sbDisplayConfiguration (the scene settings' configuration); the dismissal asks -_fbsDisplayConfiguration (the screen's)
+        id sb = BPX_Obj0(scene, "_sbDisplayConfiguration");
+        if (sb) return sb;
+    }
     return BPX_Obj0(scene, "_fbsDisplayConfiguration");
 }
 
