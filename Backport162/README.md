@@ -229,6 +229,7 @@ Runs inside apps (filter `com.apple.UIKit`, build 20A8372, not SpringBoard); pla
 | feature | what it ports | switch |
 |---|---|---|
 | uik_screenbounds | U1: `UIScreen _boundsForInterfaceOrientation:` / `_unjailedReferenceBoundsForInterfaceOrientation:` / `_mainSceneBoundsForInterfaceOrientation:` never swap width and height for an external main-like screen (the extended display), `_connectScreen` sets such a screen to portrait without notification (16.2). Fixes an app window that thinks it is vertical on the monitor after Move to display | `uik_screenbounds` |
+| uik_keyboard | K1: no software keyboard for text entry on the external display: `UIKeyboardVisualModeManager softwareKeyboardAllowedForActiveKeyboardSceneDelegate` (+ the `ChamoisExternalSWKeyboard` preference, NO), `_showKeyboardIgnoringPolicyDelegate:` / `_shouldMinimizeForHardwareKeyboard` / `_showsScribbleIconsInAssistantView` / `_isShowKeyboardButtonVisible` honour it, 16.2 `visualMode` table, `UIKeyboardSceneDelegate keyboardScreen` / `textEntryFocusOnExternalDisplay` / `_windowHostingScene:didMoveFromScreen:toScreen:`. Fixes the rotated keyboard that appeared on the iPad for a field on the monitor | `uik_keyboard` |
 
 ### Notes
 

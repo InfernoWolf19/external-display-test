@@ -144,24 +144,26 @@ static BOOL UIK_EncMatch(const char *have, const char *want) {
     }
     return YES;
 }
-// Replaces instance method `sn` of class `cn`. `enc` is the type encoding the port was written for (NULL = do not check). Returns NO (and logs once) when the class or
-// method is missing or has another encoding; the original IMP (the 16.0 one, or the inherited one) is stored in *orig.
-static BOOL UIK_Hook(const char *cn, const char *sn, const char *enc, IMP imp, IMP *orig) {
+// Replaces instance method `sn` (meta = NO) or class method `sn` (meta = YES) of class `cn`. `enc` is the type encoding the port was written for (NULL = do not
+// check). Returns NO (and logs once) when the class or method is missing or has another encoding; the original IMP (the 16.0 one, or the inherited one) is stored in *orig.
+static BOOL UIK_HookEx(const char *cn, BOOL meta, const char *sn, const char *enc, IMP imp, IMP *orig) {
     Class c = objc_getClass(cn);
     if (!c) { UIK_Problem(cn, "skip hook %s %s: class not found", cn, sn); return NO; }
     SEL sel = sel_registerName(sn);
-    Method m = class_getInstanceMethod(c, sel);
-    if (!m) { UIK_Problem(sn, "skip hook -[%s %s]: selector not found", cn, sn); return NO; }
+    Class target = meta ? object_getClass((id)c) : c;
+    Method m = class_getInstanceMethod(target, sel);
+    if (!m) { UIK_Problem(sn, "skip hook %c[%s %s]: selector not found", meta ? '+' : '-', cn, sn); return NO; }
     const char *have = method_getTypeEncoding(m);
     if (enc && (!have || !UIK_EncMatch(have, enc))) {
-        UIK_Problem(sn, "skip hook -[%s %s]: type encoding %s, expected %s", cn, sn, have ? have : "(null)", enc);
+        UIK_Problem(sn, "skip hook %c[%s %s]: type encoding %s, expected %s", meta ? '+' : '-', cn, sn, have ? have : "(null)", enc);
         return NO;
     }
     *orig = method_getImplementation(m);
-    class_replaceMethod(c, sel, imp, have);
-    UIK_Log("hooked -[%s %s]", cn, sn);
+    class_replaceMethod(target, sel, imp, have);
+    UIK_Log("hooked %c[%s %s]", meta ? '+' : '-', cn, sn);
     return YES;
 }
+static BOOL UIK_Hook(const char *cn, const char *sn, const char *enc, IMP imp, IMP *orig) { return UIK_HookEx(cn, NO, sn, enc, imp, orig); }
 // YES when instances of class `cn` respond to `sn` (used for selectors the port sends itself).
 static BOOL UIK_Has(const char *cn, const char *sn) {
     Class c = objc_getClass(cn);
@@ -233,6 +235,205 @@ static void UIK_InstallU1(void) {
         UIK_Hook("UIScreen", "_connectScreen", "v16@0:8", (IMP)uik_connectScreen, (IMP *)&orig_connectScreen);
 }
 
+// ---------------------------------------------------------------- K1: no software keyboard for text entry on the external display (16.2 UIKeyboardVisualModeManager / UIKeyboardImpl)
+//
+// 16.2 (UIKitCore 16.0 has none of this):
+//   +[UIKeyboardVisualModeManager softwareKeyboardAllowedOnExternalScreen]               16.2 0x1898b5584: the UIKeyboardPreferencesController preference "ChamoisExternalSWKeyboard"
+//                                                                                        (valueForPreferenceKey:, boolValue, cached by dispatch_once): NO unless someone sets it
+//   +[UIKeyboardVisualModeManager softwareKeyboardAllowedForActiveKeyboardSceneDelegate] 16.2 0x1898b5664:
+//        d = [UIKeyboardSceneDelegate activeKeyboardSceneDelegate]; if (!d) YES;
+//        windowing = [[d visualModeManager] windowingModeEnabled]; embedded = [d isKeyboardOnEmbeddedScreen];
+//        allowed = windowing ? [VMM windowingSoftwareKeyboardAllowed] : YES;
+//        if (embedded || !allowed) return embedded && allowed;  return [VMM softwareKeyboardAllowedOnExternalScreen];
+//     16.0 spread the same test (without the external flag) over -[UIKeyboardInputMode isAllowedForTraits:], -[UIKeyboardImpl automaticMinimizationEnabled] and
+//     +[UIAssistantBarButtonItemProvider _isShowKeyboardButtonVisible]; 16.2 calls the function from those three AND from three NEW places:
+//   -[UIKeyboardImpl _showKeyboardIgnoringPolicyDelegate:]          16.2 0x189b08ce4: after the two shouldSuppressSoftwareKeyboard tests: if (!allowed) return (keyboard is not shown)
+//   -[UIKeyboardImpl _shouldMinimizeForHardwareKeyboard]            16.0 0x18909f044 / 16.2 0x1891d56b4: if (!allowed) return YES (minimized), then the old body
+//   -[UIKeyboardImpl _showsScribbleIconsInAssistantView]            16.0 0x1899cf688 / 16.2 0x189b12918: after (suppressSoftwareKeyboard || floatingForced): if (!allowed) return NO
+//   +[UIAssistantBarButtonItemProvider _isShowKeyboardButtonVisible] 16.0 0x189cf6384 / 16.2 0x189e41c90: (isMinimized || _suppressSoftwareKeyboard || scribble icons) && allowed
+// Also new in 16.2: -[UIKeyboardSceneDelegate keyboardScreen] (= [[self scene] screen]) 0x189837eb8, -textEntryFocusOnExternalDisplay (= ![[[self scene] screen] _isEmbeddedScreen])
+// 0x189839bd4, -expectedInputViewSetIsCustom 0x189839940, -expectedInputModeIsSpecialized 0x189839ac4, -_windowHostingScene:didMoveFromScreen:toScreen: 0x189839c24 (log,
+// [self forceReloadInputViews]; called by -[UIScene _noteDisplayIdentityDidChangeWithConfiguration:] for every scene component that responds), -[UIKeyboardVisualModeManager
+// textEntryFocusOnExternalDisplay] 0x1898b5e4c / -expectedInputModeIsSpecialized 0x1898b5f50 (delegate forwarding) and a new -[UIKeyboardVisualModeManager visualMode]
+// 16.0 0x189779e74 / 16.2 0x1898b574c, ported below WITHOUT the keyboard camera term (the keyboard camera session class and keyboardCameraNotification: are 16.2 only).
+// Effect: with the monitor as the keyboard scene's screen a software keyboard is never shown, anywhere (16.2 needs the hardware keyboard that the extended display
+// requires anyway); the minimized accessory bar is what remains with a hardware keyboard.
+
+static Class gKSD, gVMM, gKImpl, gKPC, gABBIP;
+static SEL sActiveKSD, sVMM, sWindowingEnabled, sEmbeddedKB, sWindowingSWAllowed, sSharedPrefs, sPrefValue, sBoolValue, sActiveInstance, sIsMinimized, sDelegate, sAccessoryOnly, sScene, sScreen, sIsEmbeddedScreen, sCurrentDevice, sHWKB, sResponder, sInputVC, sInputView, sFrame, sInputModeCtl, sCurrentInputMode, sIsSpecialized, sForceReload, sDelegateAsResponder, sSuppressSW, sScribble, sExpectCustom, sExpectSpecialized, sTextEntryExt;
+static BOOL gKHaveSpecialized, gKHaveResponder;
+static BOOL (*orig_shouldMinimizeHW)(id, SEL);
+static BOOL (*orig_scribble)(id, SEL);
+static void (*orig_showKeyboard)(id, SEL, BOOL);
+static BOOL (*orig_showKeyboardButton)(id, SEL);
+static int (*orig_visualMode)(id, SEL);
+
+// Message senders that answer nil / NO for a nil receiver (like ObjC) and for a receiver that does not implement the selector (a 16.0 difference then reads as "no").
+static BOOL UIK_Responds(id o, SEL s) { return o && class_getInstanceMethod(object_getClass(o), s) != NULL; }
+static id UIK_Id(id o, SEL s) { return UIK_Responds(o, s) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
+static BOOL UIK_B(id o, SEL s) { return UIK_Responds(o, s) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
+static id UIK_ClsId(Class c, SEL s) { return ((id (*)(id, SEL))objc_msgSend)((id)c, s); }
+static BOOL UIK_ClsB(Class c, SEL s) { return ((BOOL (*)(id, SEL))objc_msgSend)((id)c, s); }
+
+// +[UIKeyboardVisualModeManager softwareKeyboardAllowedOnExternalScreen]
+static BOOL UIK_ExternalSWKeyboardFlag(void) {
+    static BOOL value, done;
+    if (!done) {
+        id pc = UIK_ClsId(gKPC, sSharedPrefs);
+        id v = pc ? ((id (*)(id, SEL, id))objc_msgSend)(pc, sPrefValue, @"ChamoisExternalSWKeyboard") : nil;
+        value = (v && [v respondsToSelector:sBoolValue]) ? UIK_B(v, sBoolValue) : NO;
+        done = YES;
+        UIK_Log("K1 ChamoisExternalSWKeyboard preference = %d", (int)value);
+    }
+    return value;
+}
+// +[UIKeyboardVisualModeManager softwareKeyboardAllowedForActiveKeyboardSceneDelegate]
+static BOOL UIK_SWKeyboardAllowed(void) {
+    id d = UIK_ClsId(gKSD, sActiveKSD);
+    if (!d) return YES;
+    BOOL windowing = UIK_B(UIK_Id(d, sVMM), sWindowingEnabled);
+    BOOL embedded = UIK_B(UIK_ClsId(gKSD, sActiveKSD), sEmbeddedKB);
+    BOOL allowed = windowing ? UIK_ClsB(gVMM, sWindowingSWAllowed) : YES;
+    if (embedded || !allowed) return embedded && allowed;
+    return UIK_ExternalSWKeyboardFlag();
+}
+static BOOL uik_cls_swAllowedExternal(id self, SEL _cmd) { return UIK_ExternalSWKeyboardFlag(); }
+static BOOL uik_cls_swAllowedActive(id self, SEL _cmd) { return UIK_SWKeyboardAllowed(); }
+
+// -[UIKeyboardSceneDelegate keyboardScreen] / -textEntryFocusOnExternalDisplay
+static id uik_ksd_keyboardScreen(id self, SEL _cmd) { return UIK_Id(UIK_Id(self, sScene), sScreen); }
+static BOOL uik_ksd_externalFocus(id self, SEL _cmd) { return !UIK_B(UIK_Id(UIK_Id(self, sScene), sScreen), sIsEmbeddedScreen); }
+// -[UIKeyboardSceneDelegate expectedInputViewSetIsCustom]: the responder has an input view controller, or an input view with a positive height
+static BOOL uik_ksd_expectCustom(id self, SEL _cmd) {
+    if (!gKHaveResponder) return NO;
+    id r = UIK_Id(self, sResponder);
+    if (UIK_Id(r, sInputVC)) return YES;
+    id iv = UIK_Id(r, sInputView);
+    if (!iv) return NO;
+    CGRect f = ((CGRect (*)(id, SEL))objc_msgSend)(iv, sFrame);
+    return f.size.height > 0;
+}
+// -[UIKeyboardSceneDelegate expectedInputModeIsSpecialized]: [[[UIKeyboardInputModeController sharedInputModeController] currentInputMode] isSpecializedInputMode]
+static BOOL uik_ksd_expectSpecialized(id self, SEL _cmd) {
+    if (!gKHaveSpecialized) return NO;
+    id ctl = UIK_ClsId(objc_getClass("UIKeyboardInputModeController"), sInputModeCtl);
+    return UIK_B(UIK_Id(ctl, sCurrentInputMode), sIsSpecialized);
+}
+// -[UIKeyboardSceneDelegate _windowHostingScene:didMoveFromScreen:toScreen:]
+static void uik_ksd_didMove(id self, SEL _cmd, id scene, id from, id to) {
+    if (!UIK_On(UIK_SW_KEYBOARD)) return;
+    UIK_Log("K1 keyboard scene delegate %p: window hosting scene %p moved from screen %p to screen %p, forceReloadInputViews", (__bridge void *)self, (__bridge void *)scene, (__bridge void *)from, (__bridge void *)to);
+    if ([self respondsToSelector:sForceReload]) ((void (*)(id, SEL))objc_msgSend)(self, sForceReload);
+}
+// -[UIKeyboardVisualModeManager textEntryFocusOnExternalDisplay] / -expectedInputModeIsSpecialized (forward to the delegate, NO without one)
+static BOOL uik_vmm_externalFocus(id self, SEL _cmd) { id d = UIK_Id(self, sDelegate); return d ? UIK_B(d, sTextEntryExt) : NO; }
+static BOOL uik_vmm_expectSpecialized(id self, SEL _cmd) { id d = UIK_Id(self, sDelegate); return d ? UIK_B(d, sExpectSpecialized) : NO; }
+
+static void UIK_Rate(const char *what, BOOL allowed) {
+    static int n;
+    if (n < 40 && UIK_Debug()) { n++; UIK_Log("K1 %s: software keyboard %s for the active keyboard scene delegate", what, allowed ? "allowed" : "NOT allowed (text entry focus on the external display)"); }
+}
+static void uik_showKeyboard(id self, SEL _cmd, BOOL ignore) {
+    if (UIK_On(UIK_SW_KEYBOARD) && !UIK_SWKeyboardAllowed()) {
+        UIK_Rate("_showKeyboardIgnoringPolicyDelegate: returns without showing", NO);
+        return;
+    }
+    orig_showKeyboard(self, _cmd, ignore);
+}
+static BOOL uik_shouldMinimizeHW(id self, SEL _cmd) {
+    if (UIK_On(UIK_SW_KEYBOARD) && !UIK_SWKeyboardAllowed()) { UIK_Rate("_shouldMinimizeForHardwareKeyboard answers YES", NO); return YES; }
+    return orig_shouldMinimizeHW(self, _cmd);
+}
+static BOOL uik_scribble(id self, SEL _cmd) {
+    BOOL r = orig_scribble(self, _cmd);
+    if (r && UIK_On(UIK_SW_KEYBOARD) && !UIK_SWKeyboardAllowed()) return NO;
+    return r;
+}
+static BOOL uik_showKeyboardButton(id self, SEL _cmd) {
+    if (!UIK_On(UIK_SW_KEYBOARD)) return orig_showKeyboardButton(self, _cmd);
+    id ki = UIK_ClsId(gKImpl, sActiveInstance);
+    BOOL x = UIK_B(ki, sIsMinimized) || UIK_B(UIK_Id(ki, sDelegateAsResponder), sSuppressSW) || UIK_B(ki, sScribble);
+    return x && UIK_SWKeyboardAllowed();
+}
+// -[UIKeyboardVisualModeManager visualMode] 16.2 0x1898b574c (1 = regular, 2 = minimized), without the keyboard camera term
+static int uik_visualMode(id self, SEL _cmd) {
+    if (!UIK_On(UIK_SW_KEYBOARD)) return orig_visualMode(self, _cmd);
+    BOOL chamois = UIK_B(self, sWindowingEnabled);
+    id ki = UIK_ClsId(gKImpl, sActiveInstance);
+    BOOL hw = UIK_B(UIK_ClsId(objc_getClass("UIDevice"), sCurrentDevice), sHWKB);
+    BOOL minimized = UIK_B(UIK_ClsId(gKImpl, sActiveInstance), sIsMinimized);
+    id del = UIK_Id(self, sDelegate);
+    BOOL custom = UIK_B(del, sExpectCustom);
+    BOOL external = UIK_B(self, sTextEntryExt);
+    BOOL special = UIK_B(self, sExpectSpecialized);
+    int mode;
+    if (!chamois) mode = 1;
+    else if (!ki) mode = (hw && !external) ? ((custom || special) ? 1 : 2) : (hw ? 2 : 1);
+    else if (!hw) mode = (UIK_B(UIK_Id(self, sDelegate), sAccessoryOnly) || minimized) ? 2 : 1;
+    else if (custom || special) mode = external ? 2 : 1;
+    else mode = minimized ? 2 : 1;
+    return mode;
+}
+
+static void UIK_AddMethod(Class c, BOOL meta, const char *sn, const char *enc, IMP imp) {
+    Class target = meta ? object_getClass((id)c) : c;
+    if (!class_addMethod(target, sel_registerName(sn), imp, enc)) UIK_Log("K1 %c[%s %s] already exists, not added", meta ? '+' : '-', class_getName(c), sn);
+    else UIK_Log("K1 added %c[%s %s]", meta ? '+' : '-', class_getName(c), sn);
+}
+static BOOL UIK_ClsHas(Class c, BOOL meta, const char *sn) { return c && class_getInstanceMethod(meta ? object_getClass((id)c) : c, sel_registerName(sn)) != NULL; }
+
+static void UIK_InstallK1(void) {
+    gKSD = objc_getClass("UIKeyboardSceneDelegate");
+    gVMM = objc_getClass("UIKeyboardVisualModeManager");
+    gKImpl = objc_getClass("UIKeyboardImpl");
+    gKPC = objc_getClass("UIKeyboardPreferencesController");
+    gABBIP = objc_getClass("UIAssistantBarButtonItemProvider");
+    if (!gKSD || !gVMM || !gKImpl || !gKPC || !gABBIP) { UIK_Problem("K1classes", "K1 skipped: a keyboard class is missing (KSD %p VMM %p Impl %p Prefs %p Assistant %p)", (__bridge void *)gKSD, (__bridge void *)gVMM, (__bridge void *)gKImpl, (__bridge void *)gKPC, (__bridge void *)gABBIP); return; }
+    sActiveKSD = sel_registerName("activeKeyboardSceneDelegate"); sVMM = sel_registerName("visualModeManager"); sWindowingEnabled = sel_registerName("windowingModeEnabled");
+    sEmbeddedKB = sel_registerName("isKeyboardOnEmbeddedScreen"); sWindowingSWAllowed = sel_registerName("windowingSoftwareKeyboardAllowed");
+    sSharedPrefs = sel_registerName("sharedPreferencesController"); sPrefValue = sel_registerName("valueForPreferenceKey:"); sBoolValue = sel_registerName("boolValue");
+    sActiveInstance = sel_registerName("activeInstance"); sIsMinimized = sel_registerName("isMinimized"); sDelegate = sel_registerName("delegate");
+    sAccessoryOnly = sel_registerName("showingAccessoryViewOnly"); sScene = sel_registerName("scene"); sScreen = sel_registerName("screen"); sIsEmbeddedScreen = sel_registerName("_isEmbeddedScreen");
+    sCurrentDevice = sel_registerName("currentDevice"); sHWKB = sel_registerName("_isHardwareKeyboardAvailable"); sResponder = sel_registerName("responder");
+    sInputVC = sel_registerName("inputViewController"); sInputView = sel_registerName("inputView"); sFrame = sel_registerName("frame");
+    sInputModeCtl = sel_registerName("sharedInputModeController"); sCurrentInputMode = sel_registerName("currentInputMode"); sIsSpecialized = sel_registerName("isSpecializedInputMode");
+    sForceReload = sel_registerName("forceReloadInputViews"); sDelegateAsResponder = sel_registerName("delegateAsResponder"); sSuppressSW = sel_registerName("_suppressSoftwareKeyboard");
+    sScribble = sel_registerName("_showsScribbleIconsInAssistantView"); sExpectCustom = sel_registerName("expectedInputViewSetIsCustom"); sExpectSpecialized = sel_registerName("expectedInputModeIsSpecialized");
+    sTextEntryExt = sel_registerName("textEntryFocusOnExternalDisplay");
+    // every selector the ported bodies send must exist in 16.0 (checked against the 16.0 disassembly); a missing one skips the whole item, logged once
+    BOOL ok = YES;
+    ok &= UIK_ClsHas(gKSD, YES, "activeKeyboardSceneDelegate") && UIK_ClsHas(gKSD, NO, "visualModeManager") && UIK_ClsHas(gKSD, NO, "isKeyboardOnEmbeddedScreen");
+    ok &= UIK_ClsHas(gVMM, NO, "windowingModeEnabled") && UIK_ClsHas(gVMM, YES, "windowingSoftwareKeyboardAllowed") && UIK_ClsHas(gVMM, NO, "delegate");
+    ok &= UIK_ClsHas(gKPC, YES, "sharedPreferencesController") && UIK_ClsHas(gKPC, NO, "valueForPreferenceKey:");
+    ok &= UIK_ClsHas(gKImpl, YES, "activeInstance") && UIK_ClsHas(gKImpl, NO, "isMinimized") && UIK_ClsHas(gKImpl, NO, "delegateAsResponder") && UIK_ClsHas(gKImpl, NO, "_showsScribbleIconsInAssistantView");
+    ok &= UIK_ClsHas(objc_getClass("UIScreen"), NO, "_isEmbeddedScreen") && UIK_ClsHas(objc_getClass("UIDevice"), NO, "_isHardwareKeyboardAvailable");
+    if (!ok) { UIK_Problem("K1sel", "K1 skipped: a selector the 16.2 keyboard logic sends is missing in this UIKit (see the lines above)"); return; }
+    if (!UIK_ClsHas(gKSD, NO, "scene") || !UIK_ClsHas(gKSD, NO, "showingAccessoryViewOnly") || !UIK_ClsHas(gKSD, NO, "forceReloadInputViews"))
+        UIK_Problem("K1ksd", "K1: UIKeyboardSceneDelegate lacks scene / showingAccessoryViewOnly / forceReloadInputViews: the dependent terms read as NO / are skipped");
+    gKHaveResponder = UIK_ClsHas(gKSD, NO, "responder");
+    if (!gKHaveResponder) UIK_Problem("responder", "K1: -[UIKeyboardSceneDelegate responder] missing, expectedInputViewSetIsCustom answers NO");
+    Class imc = objc_getClass("UIKeyboardInputMode");
+    gKHaveSpecialized = UIK_ClsHas(imc, NO, "isSpecializedInputMode") && UIK_ClsHas(objc_getClass("UIKeyboardInputModeController"), YES, "sharedInputModeController") && UIK_ClsHas(objc_getClass("UIKeyboardInputModeController"), NO, "currentInputMode");
+    if (!gKHaveSpecialized) UIK_Problem("specialized", "K1: UIKeyboardInputMode isSpecializedInputMode missing, expectedInputModeIsSpecialized answers NO");
+
+    // the 16.2 methods that 16.0 lacks (16.2 callers: the scene component dispatch, the ported hooks below)
+    UIK_AddMethod(gVMM, YES, "softwareKeyboardAllowedOnExternalScreen", "B16@0:8", (IMP)uik_cls_swAllowedExternal);
+    UIK_AddMethod(gVMM, YES, "softwareKeyboardAllowedForActiveKeyboardSceneDelegate", "B16@0:8", (IMP)uik_cls_swAllowedActive);
+    UIK_AddMethod(gKSD, NO, "keyboardScreen", "@16@0:8", (IMP)uik_ksd_keyboardScreen);
+    UIK_AddMethod(gKSD, NO, "textEntryFocusOnExternalDisplay", "B16@0:8", (IMP)uik_ksd_externalFocus);
+    UIK_AddMethod(gKSD, NO, "expectedInputViewSetIsCustom", "B16@0:8", (IMP)uik_ksd_expectCustom);
+    UIK_AddMethod(gKSD, NO, "expectedInputModeIsSpecialized", "B16@0:8", (IMP)uik_ksd_expectSpecialized);
+    UIK_AddMethod(gKSD, NO, "_windowHostingScene:didMoveFromScreen:toScreen:", "v40@0:8@16@24@32", (IMP)uik_ksd_didMove);
+    UIK_AddMethod(gVMM, NO, "textEntryFocusOnExternalDisplay", "B16@0:8", (IMP)uik_vmm_externalFocus);
+    UIK_AddMethod(gVMM, NO, "expectedInputModeIsSpecialized", "B16@0:8", (IMP)uik_vmm_expectSpecialized);
+
+    UIK_Hook("UIKeyboardImpl", "_showKeyboardIgnoringPolicyDelegate:", "v@:B", (IMP)uik_showKeyboard, (IMP *)&orig_showKeyboard);
+    UIK_Hook("UIKeyboardImpl", "_shouldMinimizeForHardwareKeyboard", "B@:", (IMP)uik_shouldMinimizeHW, (IMP *)&orig_shouldMinimizeHW);
+    UIK_Hook("UIKeyboardImpl", "_showsScribbleIconsInAssistantView", "B@:", (IMP)uik_scribble, (IMP *)&orig_scribble);
+    UIK_HookEx("UIAssistantBarButtonItemProvider", YES, "_isShowKeyboardButtonVisible", "B@:", (IMP)uik_showKeyboardButton, (IMP *)&orig_showKeyboardButton);
+    UIK_Hook("UIKeyboardVisualModeManager", "visualMode", "i@:", (IMP)uik_visualMode, (IMP *)&orig_visualMode);
+}
+
 // ---------------------------------------------------------------- entry
 
 static BOOL UIK_BuildMatches(void) {
@@ -257,4 +458,5 @@ __attribute__((constructor)) static void UIK_Init(void) {
     Dl_info di;
     if (UIK_Debug() && dladdr((void *)&UIK_Init, &di)) UIK_Log("Backport162UIK loaded, image base %p", di.dli_fbase);
     UIK_InstallU1();
+    UIK_InstallK1();
 }
