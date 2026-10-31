@@ -4,6 +4,10 @@
 //                  creates a default critically damped SBFFluidBehaviorSettings (new ivar), and the NEW method -animationAttributesForLayoutElement: (16.2 0x1c78398e4, absent in 16.0) answers, unless
 //                  the transition is the in app morph (ivar _isInAppMorphAnimation = the isMorph argument, 16.0 ivar +0x90), a mutable copy of super's attributes whose layout, position and scale
 //                  settings are that object.  Ported: the method is added (class_addMethod, super's IMP called through the superclass), the settings object is an associated object created on first use.
+//  y24_shelfscale  -[SBShelfExpansionSwitcherModifier scaleForIndex:]  16.2 0x1c74db034 (16.0 0x1c605bdec): style 1 only: the presentation value p is clamped to 0...1 (fmaxnm / fminnm) before
+//                  scale = (X + (1 - X) * (1 - pow(1 - p, _bezierCurveScaleExponent))) * [super scaleForIndex:], X = _dismissalScale; 16.0 used p unclamped.  Style != 1: X + p * (1 - X) in both.
+//                  The shelf (bottom shelf of the Split View / Slide Over multitasking of the classic iPad switcher) is created by the classic switcher, i.e. with Stage Manager off (the
+//                  Stage Manager toggle SMT.x): class and ivars exist in 16.0, so the rule is applied.
 //  y24_minviable   -[SBMinimumViableSwitcherTableViewController isWindowVisible]  16.2 0x1c74eeebc (16.0 0x1c606c49c): "unlocked environment mode == 2" is read from the switcher controller of
 //                  the view's own window scene ([[self _sbWindowScene] switcherController]); 16.0 reads +[SBMainSwitcherControllerCoordinator sharedInstance] unlockedEnvironmentMode, the ACTIVE display's
 //                  (0x1c623a020).  Ported with the coordinator's active controller set to the scene's controller for the call (Y3_PushActive).  The other row of the class,
@@ -54,6 +58,30 @@ static id Y31_CenterAttrs(id self, SEL _cmd, id element) {
     return copy;
 }
 
+// ---- y24_shelfscale ----
+static IMP gY31OrigShelfScale;
+static double Y31_ShelfScale(id self, SEL _cmd, unsigned long long index) {
+    if (!BP_OnName("y24_shelfscale")) return gY31OrigShelfScale ? ((double (*)(id, SEL, unsigned long long))gY31OrigShelfScale)(self, _cmd, index) : 1.0;
+    Class own = NSClassFromString(@"SBShelfExpansionSwitcherModifier");
+    Ivar iStyle = class_getInstanceVariable(own, "_style"), iDismiss = class_getInstanceVariable(own, "_dismissalScale"), iExp = class_getInstanceVariable(own, "_bezierCurveScaleExponent");
+    Method sm = own ? class_getInstanceMethod(class_getSuperclass(own), _cmd) : NULL;
+    if (!iStyle || !iDismiss || !iExp || !sm || !BPY_Responds(self, "_presentationValueForIndex:")) {
+        Y17_GuardOnce("shelfscale", self, "_style / _dismissalScale / _bezierCurveScaleExponent / super scaleForIndex: / _presentationValueForIndex:");
+        return gY31OrigShelfScale ? ((double (*)(id, SEL, unsigned long long))gY31OrigShelfScale)(self, _cmd, index) : 1.0;
+    }
+    char *base = (char *)(__bridge void *)self;
+    double p = BPY_SEND(double, (unsigned long long), self, "_presentationValueForIndex:", index);
+    unsigned long long style = *(unsigned long long *)(base + ivar_getOffset(iStyle));
+    double x = *(double *)(base + ivar_getOffset(iDismiss));
+    double a;
+    if (style == 1) {
+        double c = fmin(fmax(p, 0.0), 1.0);                                         // 16.2 0x1c74db074: fmaxnm / fminnm, 16.0 used p unclamped
+        a = x + (1.0 - x) * (1.0 - pow(1.0 - c, *(double *)(base + ivar_getOffset(iExp))));
+    } else a = x + p * (1.0 - x);
+    double sup = ((double (*)(id, SEL, unsigned long long))method_getImplementation(sm))(self, _cmd, index);
+    return a * sup;
+}
+
 // ---- y24_minviable ----
 static BOOL Y31_WindowVisible(id self, SEL _cmd) {
     if (!BP_OnName("y24_minviable")) return gY31OrigWindowVisible ? ((BOOL (*)(id, SEL))gY31OrigWindowVisible)(self, _cmd) : NO;
@@ -91,6 +119,9 @@ __attribute__((constructor)) static void Y31_Setup(void) {
         if (cw && supM && (!ownM || ownM == supM)) {                       // 16.0: only inherited
             class_addMethod(cw, aa, (IMP)Y31_CenterAttrs, "@24@0:8@16"); n++;
         } else BP_Log(@"[y31] GUARD(centerpage) SBCenterWindowPagePresentationSwitcherModifier missing or already has animationAttributesForLayoutElement: (%p): not added", (__bridge void *)cw);
+        Class sh = NSClassFromString(@"SBShelfExpansionSwitcherModifier");
+        if (sh && class_getInstanceMethod(sh, sel_registerName("scaleForIndex:")) && class_getInstanceMethod(sh, sel_registerName("_presentationValueForIndex:"))) { gY31OrigShelfScale = BPX_Replace(sh, "scaleForIndex:", (IMP)Y31_ShelfScale); n++; }
+        else BP_Log(@"[y31] GUARD(shelfscale) SBShelfExpansionSwitcherModifier scaleForIndex: / _presentationValueForIndex: missing: not installed");
         Class mv = NSClassFromString(@"SBMinimumViableSwitcherTableViewController");
         if (mv && class_getInstanceMethod(mv, sel_registerName("isWindowVisible"))) { gY31OrigWindowVisible = BPX_Replace(mv, "isWindowVisible", (IMP)Y31_WindowVisible); n++; }
         else BP_Log(@"[y31] GUARD(minviable) SBMinimumViableSwitcherTableViewController isWindowVisible missing: not installed");
