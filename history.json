@@ -1,12 +1,4 @@
 {
- "0.7.9+249.32d525e": {
-  "date": "2026-10-24T23:17:20Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+249.32d525e_iphoneos-arm64.deb",
-  "run": 249,
-  "sha": "32d525e94e03674c7e518d29460314b74158550f",
-  "subject": "Item 5 (G6 A1 remote alert targets): decision with call chain; 16.2 Siri exception of performPresentationRequest:forSession: ported over the 16.0 body (switch siriexception, decision logged)",
-  "version": "0.7.9+249.32d525e"
- },
  "0.7.9+250.b1fc8da": {
   "date": "2026-10-24T23:23:22Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+250.b1fc8da_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "7439c693d0429458dcc37e47443aa4aa8e856b16",
   "subject": "Y25Workspace: accelerated Home press reads the main display switcher mode, retainsSiri on request copies, suspended launches build their transition context for every display, gesture manager observes the banner manager (no tap-to-front while a call banner shows); DELTA-SWEEP: languageChanged / HomeHardwareButtonActions / recents validation / transactionDidComplete decoded as equivalent",
   "version": "0.7.9+309.7439c69"
+ },
+ "0.7.9+310.c8bf6ae": {
+  "date": "2026-10-31T19:07:04Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+310.c8bf6ae_iphoneos-arm64.deb",
+  "run": 310,
+  "sha": "c8bf6ae97d3e0be300c51d0dbf3e3626c56673c2",
+  "subject": "Y26Classic / Y27Views: classic mode decision tree of 16.2 (generated from the machine code), Stage Manager title dots and icon overlay footer follow 16.2; DELTA-SWEEP rows (classic screen type remap and overlay prepareForReuse decoded as equivalent)",
+  "version": "0.7.9+310.c8bf6ae"
  }
 }
