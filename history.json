@@ -1,12 +1,4 @@
 {
- "0.7.9+232.a02046e": {
-  "date": "2026-10-24T08:11:58Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+232.a02046e_iphoneos-arm64.deb",
-  "run": 232,
-  "sha": "a02046e062ca334e562fa8e69b224582ce30901c",
-  "subject": "edu: the native education alert is chosen automatically when the installed SpringBoardEducation.app has no external display content controller (switch eduauto), 16.2 app strings embedded in 41 languages, live hardware recommendation",
-  "version": "0.7.9+232.a02046e"
- },
  "0.7.9+233.d6916dc": {
   "date": "2026-10-24T18:02:35Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+233.d6916dc_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "ea97abc3c640f1b9b0923b7d422cd58c08bca0c2",
   "subject": "P1SW p1_orient: the layout state orientation replaces the per-element one whenever it is valid (16.2 has no gate); the window SHAPE rule rejected the Portrait state of an external display (normal in 16.2: UIScreen _connectScreen, unswapped bounds) and rotated windows on the monitor by 90 degrees; shape rule kept as opt-in Backport162.on.p1_orientshape, difference to the window orientation logged once per combination",
   "version": "0.7.9+298.ea97abc"
+ },
+ "0.7.9+299.cd5cd7c": {
+  "date": "2026-10-31T10:31:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+299.cd5cd7c_iphoneos-arm64.deb",
+  "run": 299,
+  "sha": "cd5cd7c5640f6068602dbaadb64134203415da35",
+  "subject": "REVIEW-CORE2-0.7.9: second differential review of the core files (P1Drag, P1VC, P1SW, G1/G2 deltas), six defects fixed, end broadcast / ToApps take-over / container hook order answers, interface expectations towards the orientation work",
+  "version": "0.7.9+299.cd5cd7c"
  }
 }
