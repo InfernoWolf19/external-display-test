@@ -6,7 +6,7 @@
 //                  ([[[switcherController switcherCoordinator] _recentAppLayoutsController] _nextInteractionTime] through -attributesByModifyingLastInteractionTime:) like any other bring to front.  The stamp
 //                  decides which window of a stage / pile counts as the most recently used one (strip order, recents).  Ported: wrapper for exactly that case, everything else runs the 16.0 body.
 //  y13_reuse       -[SBFluidSwitcherItemContainer prepareForReuse] 16.2 0x1c72e3220 (16.0 0x1c5e704c8) additionally resets -setPreferredPointerLockStatusSuppressed:NO, -_updateForPointerHoveringOverEdge:0 and
-//                  toggles one gesture recognizer's enabled state off and on (cancels an in flight recognizer; it sits next to the pointer state in the ivar order, the hover recognizer).  16.0 left a recycled
+//                  toggles one gesture recognizer's enabled state off and on (cancels an in flight recognizer: ivar slot 0x2a8 = _hoverGestureRecognizer, resolved from the 16.2 ivar offset table).  16.0 left a recycled
 //                  container with the previous window's edge hover / pointer lock suppression / hover highlight.  Ported: the same three calls after the 16.0 body (the container is inactive and has no
 //                  app layout at that point, 16.2 does them just before -setAppLayout:nil).
 //  y13_failgestures  -[SBFluidSwitcherGestureManager failMultitaskingGesturesForReason:] 16.2 0x1c73136e0 (16.0 0x1c5ea0a20) also resets _unpinSplitViewApplicationGestureRecognizer (the recognizer of the Stage Manager
@@ -53,8 +53,14 @@ static id Y13_BringFront(id self, SEL _cmd, id item, id layout) {
 static void Y13_Reuse(id self, SEL _cmd) {
     if (gY13OrigReuse) ((void (*)(id, SEL))gY13OrigReuse)(self, _cmd);
     if (!BP_OnName("y13_reuse")) return;
+    // 16.0 has no preferredPointerLockStatusSuppressed (a 16.2 property; nothing in 20A8372 reads it, so there is nothing to reset: logged once).  The hover edge reset is
+    // 16.2 -_updateForPointerHoveringOverEdge: 0x1c75e44a8, which is the 16.0 -pointerIsHoveringOverEdge: 0x1c615d4b8 renamed (instruction for instruction the same:
+    // [delegate pointerIsResizingItemContainer:(edge ? self : nil)]); 16.0 has only that name.
+    static BOOL warned;
     if (BPY_Responds(self, "setPreferredPointerLockStatusSuppressed:")) BPY_SEND(void, (BOOL), self, "setPreferredPointerLockStatusSuppressed:", NO);
+    else if (!warned) { warned = YES; BP_Log(@"[y13] reuse: no setPreferredPointerLockStatusSuppressed: on this build (16.2 property, nothing reads it here), skipped"); }
     if (BPY_Responds(self, "_updateForPointerHoveringOverEdge:")) BPY_SEND(void, (unsigned long long), self, "_updateForPointerHoveringOverEdge:", 0ULL);
+    else if (BPY_Responds(self, "pointerIsHoveringOverEdge:")) BPY_SEND(void, (unsigned long long), self, "pointerIsHoveringOverEdge:", 0ULL);
     Ivar iv = class_getInstanceVariable(object_getClass(self), "_hoverGestureRecognizer");
     id r = iv ? object_getIvar(self, iv) : nil;
     if (r && BPY_Responds(r, "setEnabled:")) {
