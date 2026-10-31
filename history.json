@@ -1,12 +1,4 @@
 {
- "0.7.9+240.780b69a": {
-  "date": "2026-10-24T18:15:09Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+240.780b69a_iphoneos-arm64.deb",
-  "run": 240,
-  "sha": "780b69ab995aca575dc4d96ef11b68eea3d9be24",
-  "subject": "P3: BP_Log keeps its fd open (rotation / replacement test once a second, one write per line), BP_OnName / BP_OptInName / BP_On lock-free with a pointer-keyed slot cache, switch table overflow is logged once",
-  "version": "0.7.9+240.780b69a"
- },
  "0.7.9+247.aeac0c2": {
   "date": "2026-10-24T23:12:34Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+247.aeac0c2_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "4b72fbf37d9a03f443b6537b984830f00cf0930e",
   "subject": "Y22Modifiers: Expose grid / floor taps build their request from the tap event (y17_gridtap, y17_floortap), home gesture fly-in only while cards fly in (y17_homeflyin), no window drag pin override (y17_windragpin); DELTA-SWEEP rows, root modifier level shift documented",
   "version": "0.7.9+305.4b72fbf"
+ },
+ "0.7.9+306.5d92cb5": {
+  "date": "2026-10-31T18:15:08Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+306.5d92cb5_iphoneos-arm64.deb",
+  "run": 306,
+  "sha": "5d92cb5e4a2a16d724eb95b65019c76073bedcd3",
+  "subject": "Y23Home: App Library of a monitor scene gets its own expanded pod layout instead of mutating the shared one (y17_applibrary), status bar updates the recording indicator of its own scene (y17_sbrecording); DELTA-SWEEP: corrected classic blocker (SDK flags exist in 16.0), decoded blockers for the rows that stay",
+  "version": "0.7.9+306.5d92cb5"
  },
  "0.7.9+307.8372845": {
   "date": "2026-10-31T18:14:05Z",
