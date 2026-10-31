@@ -1,12 +1,4 @@
 {
- "0.7.9+228.004fd24": {
-  "date": "2026-10-24T07:53:21Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+228.004fd24_iphoneos-arm64.deb",
-  "run": 228,
-  "sha": "004fd24e6b77652ed0ccc8c66dbed42f46e1504b",
-  "subject": "DELTA-SWEEP-0.7.9: all 1466 logic-changed SpringBoard methods listed with addresses; first verdicts (ported / irrelevant / excluded), triage in progress",
-  "version": "0.7.9+228.004fd24"
- },
  "0.7.9+229.7197fbc": {
   "date": "2026-10-24T08:00:41Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+229.7197fbc_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4ea593aec8a95a847350b2345999b7cb96a23e3f",
   "subject": "REVIEW-DISPLAY-0.7.9: differential review of the display side hooks (table per hook, defects D1..D4, answers to the keyboard / drag / lock / daemon / token questions)",
   "version": "0.7.9+294.4ea593a"
+ },
+ "0.7.9+296.675c7f9": {
+  "date": "2026-10-31T10:25:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+296.675c7f9_iphoneos-arm64.deb",
+  "run": 296,
+  "sha": "675c7f90c01f92f27412b9a00b7921fed62b2ded",
+  "subject": "Backport162UIK K1: no software keyboard for text entry on the external display (16.2 softwareKeyboardAllowedForActiveKeyboardSceneDelegate + ChamoisExternalSWKeyboard preference NO, gates in _showKeyboardIgnoringPolicyDelegate: / _shouldMinimizeForHardwareKeyboard / _showsScribbleIconsInAssistantView / _isShowKeyboardButtonVisible, 16.2 visualMode table, keyboardScreen / textEntryFocusOnExternalDisplay / _windowHostingScene:didMoveFromScreen:toScreen:); switch uik_keyboard; spec K1",
+  "version": "0.7.9+296.675c7f9"
  }
 }
