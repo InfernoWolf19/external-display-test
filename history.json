@@ -1,12 +1,4 @@
 {
- "0.7.9+247.aeac0c2": {
-  "date": "2026-10-24T23:12:34Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+247.aeac0c2_iphoneos-arm64.deb",
-  "run": 247,
-  "sha": "aeac0c2dd89d56fb848dec55321dcb2277d12da3",
-  "subject": "Fix CI: P5 probe read the window bounds through a selector the file does not declare; message it with an explicit CGRect return cast",
-  "version": "0.7.9+247.aeac0c2"
- },
  "0.7.9+248.7e3599c": {
   "date": "2026-10-24T23:16:22Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+248.7e3599c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "837284577e484aa8b42a78e7f4e26f603cf468f4",
   "subject": "DELTA-SWEEP: pass 2 shas, summary, note on the red run 290",
   "version": "0.7.9+307.8372845"
+ },
+ "0.7.9+308.5681d4b": {
+  "date": "2026-10-31T18:30:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+308.5681d4b_iphoneos-arm64.deb",
+  "run": 308,
+  "sha": "5681d4b191fd45eb6253a48c40564a41e1b33755",
+  "subject": "Y24Drag: drop session tracking of the switcher follows 16.2 (point inside the view inset by 0.5, strip hit only while the strips are unoccluded, content drag over a full screen container, y24_droptrack); DELTA-SWEEP row",
+  "version": "0.7.9+308.5681d4b"
  }
 }
