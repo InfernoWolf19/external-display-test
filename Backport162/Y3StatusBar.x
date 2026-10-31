@@ -57,8 +57,13 @@ static id Y3_Active(id self, SEL _cmd) {
 static id Y3_CtlFor(id coord, id scene) {
     if (!BP_OnName("y3_scenectl") || !scene) return nil;
     id ctl = BPX_Obj1(coord, "switcherControllerForWindowScene:", scene);
-    if (BP_LogEnabled() && ctl && ctl != BPX_Obj0(coord, "_activeDisplaySwitcherController"))
-        BPY_LOG(@"[y3] %@ for the scene %p runs with its own controller %p (the active display's differs)", @"coordinator query", (__bridge void *)scene, (__bridge void *)ctl);
+    if (BP_LogEnabled() && ctl && ctl != BPX_Obj0(coord, "_activeDisplaySwitcherController")) {
+        static void *lastScene, *lastCtl;                                   // these queries run on every status bar layout pass: one line per change of the pair, not one per query
+        if (lastScene != (__bridge void *)scene || lastCtl != (__bridge void *)ctl) {
+            lastScene = (__bridge void *)scene; lastCtl = (__bridge void *)ctl;
+            BPY_LOG(@"[y3] coordinator queries for the scene %p run with its own controller %p (the active display's differs)", (__bridge void *)scene, (__bridge void *)ctl);
+        }
+    }
     return ctl;
 }
 #define Y3_BEGIN(SCENE) \
@@ -122,7 +127,10 @@ static void Y3_Neighbor(id self, SEL _cmd, BOOL requireActive, long long env, BO
 
 // -[SBMainDisplayLayoutState interfaceOrientationForLayoutRole:]: Stage Manager asks the state's own orientation (see 2.)
 static long long Y3_RoleOrient(id self, SEL _cmd, long long role) {
-    if (tY3Layout == (__bridge void *)self) return BPX_LL0(self, "interfaceOrientation");
+    if (tY3Layout == (__bridge void *)self) {
+        tY3Layout = NULL;                       // one shot: the 16.0 body asks exactly once, before the frame query (16.2 0x1c76ced60); later asks of the frame code on the same state keep the per role answer
+        return BPX_LL0(self, "interfaceOrientation");
+    }
     return gY3OrigRoleOrient ? ((long long (*)(id, SEL, long long))gY3OrigRoleOrient)(self, _cmd, role) : 0;
 }
 
