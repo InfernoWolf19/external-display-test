@@ -272,25 +272,30 @@ static long long PS_LSForElement(id self, SEL _cmd, id element) {
     return ((long long (*)(id, SEL, id))sLSOrientForElement)(self, _cmd, element);
 }
 
-// Sanity gate of the chamois substitution (found while reading the u6 device logs): the 16.2 rule "[layoutState interfaceOrientation] replaces the per-element orientation" is only right when the layout state carries the
-// orientation of ITS display. Layout states made by the 16.0 flows (the external display's states, the ancillary requests of a cross-display drop) were all logged as UIInterfaceOrientationPortrait, also for the 2560x1440 monitor, and
-// the 16.0 traits code (the 16.2 SBSwitcherTraitsAssistant is not ported) never publishes the monitor's orientation into them. A portrait reference frame on a landscape display rotates the scene frame while the container
-// (and its shadow) is laid out in the display's own orientation. So the substitution is used only when the orientation is valid and agrees with the shape of the switcher window (landscape orientation <=> wider than tall);
-// otherwise the per-element 16.0 orientation stays, with one log line per combination.
+// Gate of the chamois substitution. 16.2 has NO gate: with Stage Manager the orientation of the layout state ([layoutState interfaceOrientation]) always replaces the per-element one, and
+// -coordinateSpaceForInterfaceOrientation:withReferenceCoordinateSpace:inOrientation: rotates between that orientation and the orientation of the switcher WINDOW. An external display is
+// Portrait in 16.2 whatever its canvas shape (UIScreen -_connectScreen sets Portrait, the landscape bounds are never swapped, ORIENTATION-0.7.9 section 2.1), so a Portrait layout state next
+// to a 2560x1440 window is the normal 16.2 state and must be substituted: the earlier gate "orientation must agree with the window SHAPE" (a 0.7.9 guess made from logs before that was
+// understood) rejected it and fell back to the per-element 16.0 orientation (landscape from the traits participant) = a window rotated by 90 degrees on the monitor.
+// Now only an INVALID orientation (not 1..4: a layout state that was never given one) is refused. A difference between the state orientation and the window orientation is logged once per
+// combination (it is the rotation in flight on the iPad, or the monitor). The old shape rule remains available as an opt-in for an A/B test: file Backport162.on.p1_orientshape.
 static BOOL PS_LayoutOrientationUsable(id switcher, id state) {
     long long o = PS_L0(state, "interfaceOrientation");
-    CGRect b = PS_R0(PS_S0(switcher, "switcherWindow"), "bounds");
+    id win = PS_S0(switcher, "switcherWindow");
+    CGRect b = PS_R0(win, "bounds");
     BOOL ok = (o >= 1 && o <= 4);
-    BOOL landscape = (o == 3 || o == 4), wide = b.size.width > b.size.height;
-    if (ok && b.size.width > 0 && b.size.height > 0) ok = (landscape == wide);
-    if (!ok) {
+    BOOL shapeRule = BP_OptInName("p1_orientshape");
+    if (ok && shapeRule && b.size.width > 0 && b.size.height > 0) ok = ((o == 3 || o == 4) == (b.size.width > b.size.height));
+    long long wo = PS_L0(win, "interfaceOrientation");
+    if (!ok || (wo != o && BP_LogEnabled())) {
         static NSMutableSet *seen;
         static dispatch_once_t once;
         dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
-        NSString *key = [NSString stringWithFormat:@"%lld|%d", o, (int)wide];
+        NSString *key = [NSString stringWithFormat:@"%lld|%lld|%d|%d", o, wo, (int)(b.size.width > b.size.height), (int)ok];
         BOOL fresh;
         @synchronized (seen) { fresh = ![seen containsObject:key]; if (fresh) [seen addObject:key]; }
-        if (fresh) BP_Log(@"p1sw: orient: layout state orientation %lld contradicts the switcher window shape %.0fx%.0f, the per-element orientation (16.0) is used for the coordinate space / scene frame", o, b.size.width, b.size.height);
+        if (fresh) BP_Log(@"p1sw: orient: layout state orientation %lld, switcher window orientation %lld shape %.0fx%.0f -> %@", o, wo, b.size.width, b.size.height,
+                          ok ? @"layout state orientation used (16.2 rotates between the two)" : @"REFUSED (invalid, or the p1_orientshape rule), the per-element orientation (16.0) is used for the coordinate space / scene frame");
     }
     return ok;
 }
