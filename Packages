@@ -24,6 +24,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 295, commit c514d25: Z2OrientTraits: external display orientation follows 16.2 (Portrait main-like screen, valid scene orientation never rewritten, unset -> 1, refresh on change; invalid container orientation guarded); ORIENTATION-0.7.9: corrected section 2, delegate and dock section, acceptance checklist with verified / open status, NEEDS EDIT P1SW.m
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+295.c514d25
+Installed-Size: 4512
+Filename: debs/com.infernowolf19.backport162_0.7.9+295.c514d25_iphoneos-arm64.deb
+Size: 1453404
+MD5sum: 88a202fe7b2abd92539f64caed6901b1
+SHA1: 752a29d8c71ee223ea335f972bb52cedac2f2d83
+SHA256: fbcc3dec8e2fe94b8c06d45f6fb083e7b4af5aedfa41d20128777428e55c8594
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 294, commit 4ea593a: REVIEW-DISPLAY-0.7.9: differential review of the display side hooks (table per hook, defects D1..D4, answers to the keyboard / drag / lock / daemon / token questions)
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1295,25 +1317,3 @@ Size: 1159248
 MD5sum: b784ea7bb60d690b6353c39182834a52
 SHA1: 0269eeb1e17b4ff0aadca6611eac9f84ded0d2a7
 SHA256: 1bad321a50121acf894cfc640d0c578c0a41591c57c31646be9c4de1d3538cad
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 229, commit 7197fbc: clonemirror: the reply was read from the wrong buffer (explains 'reply id 0 instead of 6004840'): read it from the receive buffer, truthful >>> / <<< lines, bounded look-up retry, daemon logs the reply it sent
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Recommends: preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+229.7197fbc
-Installed-Size: 3632
-Filename: debs/com.infernowolf19.backport162_0.7.9+229.7197fbc_iphoneos-arm64.deb
-Size: 1152134
-MD5sum: 6d94fd409b99018c8e87b63ff711a3d4
-SHA1: 9508b4305fb56c761e5936a7402ee1c859fdb804
-SHA256: 6a9823371e07f69cfc424b19128e43522513ed3bfc4b1f3edca8ffb9571f83ce

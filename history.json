@@ -1,12 +1,4 @@
 {
- "0.7.9+229.7197fbc": {
-  "date": "2026-10-24T08:00:41Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+229.7197fbc_iphoneos-arm64.deb",
-  "run": 229,
-  "sha": "7197fbce7be3e17d83a9379121d0e4f5ee5d2a5a",
-  "subject": "clonemirror: the reply was read from the wrong buffer (explains 'reply id 0 instead of 6004840'): read it from the receive buffer, truthful >>> / <<< lines, bounded look-up retry, daemon logs the reply it sent",
-  "version": "0.7.9+229.7197fbc"
- },
  "0.7.9+230.09f6a30": {
   "date": "2026-10-24T08:04:10Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+230.09f6a30_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "4ea593aec8a95a847350b2345999b7cb96a23e3f",
   "subject": "REVIEW-DISPLAY-0.7.9: differential review of the display side hooks (table per hook, defects D1..D4, answers to the keyboard / drag / lock / daemon / token questions)",
   "version": "0.7.9+294.4ea593a"
+ },
+ "0.7.9+295.c514d25": {
+  "date": "2026-10-31T10:26:01Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+295.c514d25_iphoneos-arm64.deb",
+  "run": 295,
+  "sha": "c514d2525d21bd02d24244b08d3722c51dceb37f",
+  "subject": "Z2OrientTraits: external display orientation follows 16.2 (Portrait main-like screen, valid scene orientation never rewritten, unset -> 1, refresh on change; invalid container orientation guarded); ORIENTATION-0.7.9: corrected section 2, delegate and dock section, acceptance checklist with verified / open status, NEEDS EDIT P1SW.m",
+  "version": "0.7.9+295.c514d25"
  },
  "0.7.9+296.675c7f9": {
   "date": "2026-10-31T10:25:47Z",
