@@ -1,12 +1,4 @@
 {
- "0.7.9+237.90e7140": {
-  "date": "2026-10-24T18:11:51Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+237.90e7140_iphoneos-arm64.deb",
-  "run": 237,
-  "sha": "90e7140e81b3e6a61254f0461f17e36d62846fef",
-  "subject": "blank: external cover sheet like 16.2 (screen on first when the cover sheet goes away, presentation manager dismissal observer, invalidate), a debug line at every step of lock / backlight / blanking; lock chain and blank semantics written up",
-  "version": "0.7.9+237.90e7140"
- },
  "0.7.9+238.6b2770b": {
   "date": "2026-10-24T18:13:29Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+238.6b2770b_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "25197c1055aaa01f356169e2a5512137ee8d92f7",
   "subject": "ORIENTATION-0.7.9: arbiter actuation flags are ON on stock 20A8372 (device FeatureFlags + adoption defaults), no flag hook; DELTA-SWEEP: 50 orientation rows decided (delegate, dock, view stack, live overlay); Z2OrientTraits logs a GUARD if the actuation flag is off",
   "version": "0.7.9+302.25197c1"
+ },
+ "0.7.9+303.953596a": {
+  "date": "2026-10-31T10:37:21Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+303.953596a_iphoneos-arm64.deb",
+  "run": 303,
+  "sha": "953596ab2c401982c8e66769e200a4590cba224f",
+  "subject": "Y16Contingency: Command Tab dealloc hook takes self unretained",
+  "version": "0.7.9+303.953596a"
  },
  "0.7.9+304.7915bb5": {
   "date": "2026-10-31T10:37:04Z",

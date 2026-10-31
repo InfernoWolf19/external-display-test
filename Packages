@@ -24,6 +24,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 303, commit 953596a: Y16Contingency: Command Tab dealloc hook takes self unretained
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+303.953596a
+Installed-Size: 4548
+Filename: debs/com.infernowolf19.backport162_0.7.9+303.953596a_iphoneos-arm64.deb
+Size: 1472354
+MD5sum: a40f2ca6b010fd7660823b050b44c617
+SHA1: 77d12bb9e8ba601d67eee3e2667de52a866d81c7
+SHA256: eb1e729664ec80dde9b6974de94f7468943b2d9ffe08bce6ed4205db29db7606
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 302, commit 25197c1: ORIENTATION-0.7.9: arbiter actuation flags are ON on stock 20A8372 (device FeatureFlags + adoption defaults), no flag hook; DELTA-SWEEP: 50 orientation rows decided (delegate, dock, view stack, live overlay); Z2OrientTraits logs a GUARD if the actuation flag is off
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1295,25 +1317,3 @@ Size: 1246122
 MD5sum: cf2c750c43a397a0f8634eb574f19497
 SHA1: a7c53117376b945fe9be877d5b8f15be7170206d
 SHA256: 46104c353ac87c379aa99cadc4e00bdba125d27cce1401280659b8dc74decebe
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 237, commit 90e7140: blank: external cover sheet like 16.2 (screen on first when the cover sheet goes away, presentation manager dismissal observer, invalidate), a debug line at every step of lock / backlight / blanking; lock chain and blank semantics written up
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Recommends: preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+237.90e7140
-Installed-Size: 3872
-Filename: debs/com.infernowolf19.backport162_0.7.9+237.90e7140_iphoneos-arm64.deb
-Size: 1246132
-MD5sum: c4249ac32dc2339005b6494eea7cd691
-SHA1: 970f92783003da59b32dcd57982c461ce534b847
-SHA256: 33b14df7c8434b3de5f5589c48c007cedb81b192e2326f57bf677d1c37090eb3
