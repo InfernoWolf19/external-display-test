@@ -12,12 +12,12 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 
 | verdict | rows |
 |---|---|
-| PORTED already | 452 |
-| PORTED NOW | 109 |
-| EQUIVALENT | 339 |
+| PORTED already | 453 |
+| PORTED NOW | 117 |
+| EQUIVALENT | 376 |
 | IRRELEVANT | 311 |
 | EXCLUDED | 117 |
-| NOT PORTED | 133 |
+| NOT PORTED | 87 |
 | OPEN | 4 |
 | CANNOT | 1 |
 | **total** | **1466** |
@@ -538,7 +538,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBFluidSwitcherPanGestureRecognizer | `-touchesBegan:withEvent:` | 0x1c61b130c | 0x1c763f01c | EQUIVALENT: 16.2 also stores the initial touch location in touchesBegan (16.0 stores it on the first touchesMoved); the initial leaf app layout is G1D.x |
 | SBFluidSwitcherPanGestureRecognizer | `-reset` | 0x1c61b1600 | 0x1c763f334 | PORTED already: G1D.x (setInitialTouchLeafAppLayout:) |
 | SBFluidSwitcherPanGestureRecognizer | `-.cxx_destruct` | 0x1c61b1728 | 0x1c763f48c | EXCLUDED: ivar teardown only (.cxx_destruct) |
-| SBFluidSwitcherRootSwitcherModifier | `-handleGestureEvent:` | 0x1c61e7a88 | 0x1c7676094 | NOT PORTED: root modifier of the non Stage Manager switcher: gesture child level 3 instead of 2 and the floor update for a window drag event; the Stage Manager root (SBContinuousExposeRootSwitcherModifier, G1B.x / G1C.x) has its own gesture routing (G1C.x:5316) |
+| SBFluidSwitcherRootSwitcherModifier | `-handleGestureEvent:` | 0x1c61e7a88 | 0x1c7676094 | PORTED already: G1C.x (SBContinuousExposeRootSwitcherModifier handleGestureEvent: appends _updateFloorModifierWithGestureEvent: for phases != 1 of a Continuous Expose window drag, exactly the added 16.2 branch 0x1c76761dc..); the gesture child level 2 -> 3 is the uniform +1 shift of every root level >= 2 in 16.2 (LowEnd 0, ReduceMotion 1, NEW level 2 = SBContinuousExposeRootSwitcherModifier transitions, then 3 scroll/removal/insertion/swipe/highlight/gesture/focus, 4 shelf, 6 floor, 7 multitasking; 16.0 had floor 5, multitasking 6): an order preserving renumbering, unobservable |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-prepareForReuse` | 0x1c6106378 | 0x1c758c730 | NOT PORTED: removes one more accessory subview that exists only in 16.2 |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-layoutSubviews` | 0x1c61065c0 | 0x1c758c9c4 | NOT PORTED: pixel alignment: 16.2 uses the view's trait collection display scale where 16.0 uses [UIScreen mainScreen].scale; differs only for an icon overlay on a display whose scale is not the iPad's (zoom of an icon on the monitor) |
 | SBFluidSwitcherSpaceOverlayAccessoryView | `-pointInside:withEvent:` | 0x1c61068b4 | 0x1c758cc98 | EQUIVALENT: 16.2 adds a nil check of the content view before reading its alpha |
@@ -668,15 +668,15 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBGestureRootSwitcherModifier | `-handleEvent:` | 0x1c60565c0 | 0x1c74d3724 | EQUIVALENT: private accessor rename (_gestureModifier in 16.0, gestureModifier in 16.2), same object |
 | SBGridSwipeUpGestureSwitcherModifier | `-initWithGestureID:` | 0x1c64260d0 | 0x1c78d5e88 | PORTED already: 16.2 address cited in G1C.x |
 | SBGridSwipeUpGestureSwitcherModifier | `-handleGestureEvent:` | 0x1c64265e0 | 0x1c78d63b0 | PORTED already: 16.2 address cited in G1C.x |
-| SBGridSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c640b234 | 0x1c78b8620 | NOT PORTED: non Stage Manager grid switcher: 16.2 builds its tap request with requestForTapAppLayoutEvent: (activating item + pointer source); the Stage Manager switcher (BP162AppSwitcherContinuousExposeSwitcherModifier, G1C.x) no longer uses the grid modifier and handles taps itself |
+| SBGridSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c640b234 | 0x1c78b8620 | PORTED NOW: Y22Modifiers.x y17_gridtap (requestForTapAppLayoutEvent: request) [sha pending] |
 | SBHistorianSwitcherModifier | `-_querySnapshotFromModifier:` | 0x1c64b9b98 | 0x1c7973fb8 | IRRELEVANT: debug query description of the historian |
 | SBHomeGestureRootSwitcherModifier | `-gestureChildModifierForGestureEvent:activeTransitionModifier:` | 0x1c643c05c | 0x1c78edb44 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureRootSwitcherModifier | `-transitionChildModifierForMainTransitionEvent:activeGestureModifier:` | 0x1c643c20c | 0x1c78edd24 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureSwitcherModifier | `-didMoveToParentModifier:` | 0x1c6038bac | 0x1c74b4138 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureSwitcherModifier | `-appLayoutsToCacheSnapshots` | 0x1c603c58c | 0x1c74b7b80 | PORTED already: 16.2 address cited in G1C.x |
 | SBHomeGestureSwitcherModifier | `-appLayoutsToCacheFullsizeSnapshots` | 0x1c603c6bc | 0x1c74b7c54 | PORTED already: 16.2 address cited in G1C.x |
-| SBHomeGestureToHomeSwitcherModifier | `-frameForIndex:` | 0x1c5f44db8 | 0x1c73b941c | NOT PORTED: card fly-in on returning home (new ivar _showingOrAnimatingCardsForFlyIn, offscreen card scale): 16.2 animation of the cards of the home gesture; no Stage Manager window involved |
-| SBHomeGestureToHomeSwitcherModifier | `-scaleForIndex:` | 0x1c5f44df8 | 0x1c73b947c | NOT PORTED: card fly-in on returning home (new ivar _showingOrAnimatingCardsForFlyIn, offscreen card scale): 16.2 animation of the cards of the home gesture; no Stage Manager window involved |
+| SBHomeGestureToHomeSwitcherModifier | `-frameForIndex:` | 0x1c5f44db8 | 0x1c73b941c | PORTED NOW: Y22Modifiers.x y17_homeflyin (fly-in offset only while _showingOrAnimatingCardsForFlyIn) [sha pending] |
+| SBHomeGestureToHomeSwitcherModifier | `-scaleForIndex:` | 0x1c5f44df8 | 0x1c73b947c | PORTED NOW: Y22Modifiers.x y17_homeflyin (offscreenCardScaleForFlyIn only while _showingOrAnimatingCardsForFlyIn, else super) [sha pending] |
 | SBHomeGestureToSwitcherSwitcherModifier | `-transitionWillBegin` | 0x1c6498dd8 | 0x1c794f6fc | PORTED already: hook in G1D.x:2386 |
 | SBHomeGestureToSwitcherSwitcherModifier | `-_appLayoutToScrollToDuringTransition` | 0x1c6499a54 | 0x1c795038c | PORTED already: 16.2 address cited in P1SW.m |
 | SBInlineAppExposeContinuousExposeSwitcherModifier | `-handleTransitionEvent:` | 0x1c61f81fc | 0x1c76868e0 | PORTED already: 16.2 address cited in G1C.x |
@@ -948,11 +948,11 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBWindowDeleteSwitcherModifier | `-transitionWillBegin` | 0x1c6435954 | 0x1c78e6c8c | PORTED already: hook in G1B.x:1689 |
 | SBWindowDeleteSwitcherModifier | `-scaleForIndex:` | 0x1c6436218 | 0x1c78e7bf8 | PORTED already: hook in G1B.x:1722 |
 | SBWindowDragGestureWorkspaceTransaction | `-_beginWithGesture:` | 0x1c5eca434 | 0x1c733da30 | PORTED already: hook in G1D.x:1889 |
-| SBWindowDragTransitionSwitcherModifier | `-shouldUseAnchorPointToPinLayoutRolesToSpace:` | 0x1c64b4e74 | 0x1c796e3b4 | NOT PORTED: Center Window drag transition: 16.2 drops the override (always the super answer); 16.0 answers YES for layouts that contain an item of its dragged layout; only Center Window drags, not Stage Manager windows (those use the G1C window drag modifier) |
+| SBWindowDragTransitionSwitcherModifier | `-shouldUseAnchorPointToPinLayoutRolesToSpace:` | 0x1c64b4e74 | 0x1c796e3b4 | PORTED NOW: Y22Modifiers.x y17_windragpin (the override is gone in 16.2: super answer) [sha pending] |
 | _SBDisplayItemFixedAspectGrid | `-_buildFixedGridWithScreenScale:` | 0x1c6469854 | 0x1c791ed14 | PORTED already: hook in G3B.x:1724 |
 | _SBDisplayItemFlexibleGrid | `-_buildGridWithScreenScale:` | 0x1c6468f0c | 0x1c791e5d4 | PORTED already: hook in G2.x:1720 |
 | _SBDisplayItemFlexibleGrid | `-_gridWidthsForSafeWidth:minimumWidth:` | 0x1c64691b4 | 0x1c791e630 | EQUIVALENT: 16.2 adds a division by zero guard and a log line; the widths computed are the same for non zero input |
-| _SBFullScreenAppFloorSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6148ef4 | 0x1c75cc850 | NOT PORTED: pointer tap on the full screen floor: 16.2 builds the request with requestForTapAppLayoutEvent: and, for a pointer tap (source 1) outside Stage Manager, performs it directly; G1C.x patches the Stage Manager full screen modifier (G1C_FS_*) that sits above this floor and answers taps first |
+| _SBFullScreenAppFloorSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6148ef4 | 0x1c75cc850 | PORTED NOW: Y22Modifiers.x y17_floortap (tap request incl. the pointer tap of the Stage Manager off center leaf case) [sha pending] |
 | _SBFullScreenAppFloorSwitcherModifier | `-isItemResizingAllowedForLayoutRole:inAppLayout:` | 0x1c6149450 | 0x1c75cce18 | EQUIVALENT: 16.2 drops the override: the Stage Manager answer comes from SBFullScreenContinuousExposeSwitcherModifier (G1C.x) / the super class chain (G2B.m:2567 adds the floor constants) |
 | _SBPIPEndStashTabSuppressionGestureManager | `-_addSystemRecognizers` | 0x1c635d6c0 | 0x1c7340510 | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
 | _SBPIPEndStashTabSuppressionGestureManager | `-_removeGestureRecognizers` | 0x1c635d908 | 0x1c7340728 | PORTED already: G3B.x BPPIPEndStashTabSuppressionManager (one manager per window scene bound to that scene's gesture manager) |
@@ -1555,6 +1555,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | Y17Snapshot.x | y17_snapscale, y17_snapentity, y17_snapreload | pending |
 | Y18IndirectPan.x | y17_indirectpan, y17_pancancel | pending |
 | Y19PanDelegates.x | y17_indirectgate, y17_dockfolder, y17_dockclip | pending |
+| Y22Modifiers.x | y17_gridtap, y17_floortap, y17_homeflyin, y17_windragpin | pending |
 | Y21Modifiers.x | y17_centerwindow, y17_resizestrip, y17_splitbounds | pending |
 | Y20Kbd.x | y17_kbdshortcuts | pending |
 

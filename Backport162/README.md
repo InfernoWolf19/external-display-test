@@ -322,6 +322,10 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_centerwindow | (Y21Modifiers.x) declining / committing a center window under Stage Manager animates the window from its own frame and corner radii (16.2 clone of the Delete modifier) |
 | y17_resizestrip | (Y21Modifiers.x) resizing a stage window hides the strip only when one window alone reaches the threshold width (16.2 per item rule, 16.0 used the width of all windows together) |
 | y17_splitbounds | (Y21Modifiers.x) split item frames under Stage Manager use the bounding box of the overlapping model for every layout environment |
+| y17_gridtap | (Y22Modifiers.x) clicking a card in the Exposé grid builds its transition from the tap event (tapped item, pointer source) |
+| y17_floortap | (Y22Modifiers.x) tap on the floor layout of a full screen app builds its transition from the tap event, pointer tap on a center window leaf |
+| y17_homeflyin | (Y22Modifiers.x) going home by gesture: the card fly-in position and scale apply only while cards fly in (16.2), not always |
+| y17_windragpin | (Y22Modifiers.x) center window drag transition no longer pins layouts of the dragged layout to the space (16.2) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
