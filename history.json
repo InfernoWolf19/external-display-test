@@ -1,12 +1,4 @@
 {
- "0.7.9+234.11803ed": {
-  "date": "2026-10-24T18:02:24Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+234.11803ed_iphoneos-arm64.deb",
-  "run": 234,
-  "sha": "11803ed6caa84b474a1ffd203cf788ad08fb1a0f",
-  "subject": "FINDINGS-SLOWTOUCH-0.7.9: slow touch after hours without external display: log audit, ranked hypotheses, always-on diagnostics plan, user test order",
-  "version": "0.7.9+234.11803ed"
- },
  "0.7.9+235.19f760d": {
   "date": "2026-10-24T18:04:24Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+235.19f760d_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "cd5cd7c5640f6068602dbaadb64134203415da35",
   "subject": "REVIEW-CORE2-0.7.9: second differential review of the core files (P1Drag, P1VC, P1SW, G1/G2 deltas), six defects fixed, end broadcast / ToApps take-over / container hook order answers, interface expectations towards the orientation work",
   "version": "0.7.9+299.cd5cd7c"
+ },
+ "0.7.9+300.0cc95e4": {
+  "date": "2026-10-31T10:31:26Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+300.0cc95e4_iphoneos-arm64.deb",
+  "run": 300,
+  "sha": "0cc95e40d99b0acc14774484db957c2f26ecebd5",
+  "subject": "Y21Modifiers: Center Window decline / commit follow the 16.2 clone of the delete modifier (y17_centerwindow), resize gesture hides the strip per item (y17_resizestrip), split item frames use the overlapping model bounding box (y17_splitbounds); DELTA-SWEEP rows",
+  "version": "0.7.9+300.0cc95e4"
  },
  "0.7.9+301.4aa044b": {
   "date": "2026-10-31T10:31:13Z",
