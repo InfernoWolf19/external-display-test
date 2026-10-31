@@ -319,6 +319,9 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_dockfolder | (Y19PanDelegates.x) an open folder in the floating dock no longer keeps the dock open during App Expose or a tap outside (16.2 removed that rule) |
 | y17_dockclip | (Y19PanDelegates.x) the floating dock window does not clip its content to its bounds (16.2) |
 | y17_kbdshortcuts | (Y20Kbd.x) keyboard shortcut availability (menu / Command-hold overlay) follows the complete 16.2 decision tree of the Stage Manager switcher: same-app window navigation, zoom (action 17), no actions 21 / 22 |
+| y17_centerwindow | (Y21Modifiers.x) declining / committing a center window under Stage Manager animates the window from its own frame and corner radii (16.2 clone of the Delete modifier) |
+| y17_resizestrip | (Y21Modifiers.x) resizing a stage window hides the strip only when one window alone reaches the threshold width (16.2 per item rule, 16.0 used the width of all windows together) |
+| y17_splitbounds | (Y21Modifiers.x) split item frames under Stage Manager use the bounding box of the overlapping model for every layout environment |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder

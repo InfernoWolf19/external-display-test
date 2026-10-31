@@ -13,12 +13,12 @@ Progress log of the backlog sweep (generated from the scratchpad data; the table
 | verdict | rows |
 |---|---|
 | PORTED already | 452 |
-| PORTED NOW | 105 |
+| PORTED NOW | 109 |
 | EQUIVALENT | 339 |
 | IRRELEVANT | 311 |
 | EXCLUDED | 117 |
 | NOT PORTED | 133 |
-| OPEN | 8 |
+| OPEN | 4 |
 | CANNOT | 1 |
 | **total** | **1466** |
 
@@ -694,7 +694,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBItemResizeGestureSwitcherModifier | `-handleGestureEvent:` | 0x1c622bcd8 | 0x1c76be31c | PORTED already: hook in G3B.x:1670 |
 | SBItemResizeGestureSwitcherModifier | `-_responseForGestureUpdateAtGestureEnd:` | 0x1c622bf98 | 0x1c76be610 | PORTED already: hook in G3B.x:1677 |
 | SBItemResizeGestureSwitcherModifier | `-_responseForSceneSizeUpdateToSize:center:sceneUpdatesOnly:` | 0x1c622c5dc | 0x1c76bed98 | PORTED already: hook in G1C.x:5546, G3B.x:1684 |
-| SBItemResizeGestureSwitcherModifier | `-_anyItemExceedsWidthThresholdToHideStrip` | 0x1c622d588 | 0x1c76bfd40 | OPEN: 16.2 0x1c76bfd40 answers !model.isContinuousExposeStripVisible (SBChamoisOverlappingModel 0x1c797a558: NO item of the model is at least widthThresholdToHideStrip wide, per item); 16.0 compares the bounding box of the model with the threshold. Differs for a stage of two windows that are each narrower than the threshold but together wider; touches the resize corner (regression guard), needs the core agent and a device |
+| SBItemResizeGestureSwitcherModifier | `-_anyItemExceedsWidthThresholdToHideStrip` | 0x1c622d588 | 0x1c76bfd40 | PORTED NOW: Y21Modifiers.x y17_resizestrip (per item width rule of SBChamoisOverlappingModel isContinuousExposeStripVisible 0x1c797a558 instead of the bounding box) [sha pending] |
 | SBMainSwitcherControllerCoordinator | `-_init` | 0x1c6235168 | 0x1c76c7c20 | EQUIVALENT: ivar bookkeeping only: 16.2 adds _draggingAppLayouts (ported as an associated object, G1D.x kDragging) and moves the Stage Manager first-use education observer from the view controller to the coordinator (16.0 SBFluidSwitcherViewController already owns _chamoisWindowingUIEverEnabledObserver); the hidden UIWindow that forced windowSceneDidConnect: is gone because the scene manager connects scenes itself |
 | SBMainSwitcherControllerCoordinator | `-dealloc` | 0x1c6235544 | 0x1c76c8124 | PORTED already: hook in G3B.x:1274 |
 | SBMainSwitcherControllerCoordinator | `-windowSceneDidConnect:` | 0x1c6235828 | 0x1c76c8410 | PORTED already: hook in G1D.x:431 |
@@ -855,7 +855,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBShelfExpansionSwitcherModifier | `-scaleForIndex:` | 0x1c605bdec | 0x1c74db034 | NOT PORTED: app shelf (non Stage Manager multitasking): 16.2 clamps the presentation value to 0...1 before the same interpolation; no effect inside the 0...1 range the shelf animates in |
 | SBShelfLiveContentOverlayCoordinator | `-_addOverlaysIfNeededForTransitionContext:` | 0x1c64cf838 | 0x1c798ac94 | NOT PORTED: Shelf live content overlay, not Stage Manager |
 | SBSlideOverPeekSwitcherModifier | `-handleTapAppLayoutEvent:` | 0x1c6159544 | 0x1c75dda00 | PORTED NOW: Y11Modifiers.x y11_tapreq [sha 80a95ef] |
-| SBSplitDisplayItemSwitcherModifier | `-frameForLayoutRole:inAppLayout:withBounds:` | 0x1c60b9374 | 0x1c753da84 | OPEN: 16.2 under Stage Manager uses the bounding box of the overlapping model of the wrapped layout as the bounds of the super frame for every environment (16.0 only for environment 3); decoded, not ported: reached only from the split view side item transitions G1B.x:2509, needs a device to judge |
+| SBSplitDisplayItemSwitcherModifier | `-frameForLayoutRole:inAppLayout:withBounds:` | 0x1c60b9374 | 0x1c753da84 | PORTED NOW: Y21Modifiers.x y17_splitbounds (bounding box of the overlapping model of the wrapped layout for every environment under Stage Manager) [sha pending] |
 | SBSpotlightCrossblurToFullscreenSwitcherModifier | `-frameForIndex:` | 0x1c5ed32d8 | 0x1c734746c | PORTED NOW: Y8Layout.x y8_spotlight (Stage Manager: the opened window's own frame, other windows of the stage stay visible) [sha 4e79217] |
 | SBSpotlightCrossblurToFullscreenSwitcherModifier | `-visibleAppLayouts` | 0x1c5ed33f8 | 0x1c7347aac | PORTED NOW: Y8Layout.x y8_spotlight (Stage Manager: the opened window's own frame, other windows of the stage stay visible) [sha 4e79217] |
 | SBSwitcherChamoisLayoutAttributes | `-isEqual:` | 0x1c6414a48 | 0x1c78c3384 | PORTED already: hook in G2.x:1376 |
@@ -943,8 +943,8 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBViewMorphAnimator | `-_updateParameters` | 0x1c61f2ca8 | 0x1c76812dc | EQUIVALENT: 16.2 asks the target data source sourceContentFrameForAnimator: and renames the app layout frame to the content container frame; the 16.0 data sources do not implement the new selector, the 16.0 computation is unchanged |
 | SBViewMorphAnimator | `-_source:finalCenterWithFinalScale:contentFrame:targetFinalFrame:` | 0x1c61f3afc | 0x1c7681f9c | PORTED already: 16.2 address cited in G1D.x |
 | SBViewMorphAnimator | `-_checkAnimationsDependencies:` | 0x1c61f4fbc | 0x1c7683580 | PORTED already: hook in G1D.x:2148 |
-| SBWindowCommitSwitcherModifier | `-transitionWillBegin` | 0x1c626aadc | 0x1c770222c | OPEN: Center Window commit: same change set as SBWindowDeclineSwitcherModifier (see there); G1B.x G1B_WD_* is the template |
-| SBWindowDeclineSwitcherModifier | `-transitionWillBegin` | 0x1c606b4d8 | 0x1c74ed85c | OPEN: Center Window decline: 16.2 transitionWillBegin handles the no-full-screen case (center layout index, inserted at 0 when missing) and stores _initialCornerRadii, plus six new queries (appLayoutContainingAppLayout:, titleAndIconOpacityForIndex:, cornerRadiiForIndex:, adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:, isLayoutRoleMatchMovedToScene:inAppLayout:, visibleAppLayouts); same shape as SBWindowDeleteSwitcherModifier which G1B.x G1B_WD_* already ports; not duplicated for Decline / Commit yet |
+| SBWindowCommitSwitcherModifier | `-transitionWillBegin` | 0x1c626aadc | 0x1c770222c | PORTED NOW: Y21Modifiers.x y17_centerwindow (same code as the G1B.x Delete port: Decline / Commit / Delete are clones in 16.2) [sha pending] |
+| SBWindowDeclineSwitcherModifier | `-transitionWillBegin` | 0x1c606b4d8 | 0x1c74ed85c | PORTED NOW: Y21Modifiers.x y17_centerwindow (same code as the G1B.x Delete port: Decline / Commit / Delete are clones in 16.2) [sha pending] |
 | SBWindowDeleteSwitcherModifier | `-transitionWillBegin` | 0x1c6435954 | 0x1c78e6c8c | PORTED already: hook in G1B.x:1689 |
 | SBWindowDeleteSwitcherModifier | `-scaleForIndex:` | 0x1c6436218 | 0x1c78e7bf8 | PORTED already: hook in G1B.x:1722 |
 | SBWindowDragGestureWorkspaceTransaction | `-_beginWithGesture:` | 0x1c5eca434 | 0x1c733da30 | PORTED already: hook in G1D.x:1889 |
@@ -1555,6 +1555,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | Y17Snapshot.x | y17_snapscale, y17_snapentity, y17_snapreload | pending |
 | Y18IndirectPan.x | y17_indirectpan, y17_pancancel | pending |
 | Y19PanDelegates.x | y17_indirectgate, y17_dockfolder, y17_dockclip | pending |
+| Y21Modifiers.x | y17_centerwindow, y17_resizestrip, y17_splitbounds | pending |
 | Y20Kbd.x | y17_kbdshortcuts | pending |
 
 ## Cross references and edits in other files

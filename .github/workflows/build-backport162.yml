@@ -22,7 +22,7 @@ jobs:
         working-directory: Backport162
         run: |
           # compile every source file on its own so one run lists the compile errors of ALL files (the normal build stops at the first failing file)
-          for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x X6InCall.x X5Recording.x X3Mode.x BPCrash.m RPT.x Y1Workspace.x P1Drag.m P1VC.m P1SW.m Y2Gestures.x Z1Diag.x Y3StatusBar.x Y4Home.x Y5Apps.x Y6Portal.x Y7Requests.x Y8Layout.x Y9Misc.x Y10Pip.x Y11Modifiers.x Y12Dock.x Y13Fluid.x Y14Open.x Y15InCall.x Y16Contingency.x Y17Snapshot.x Z2OrientTraits.m Z2OrientDelegate.m Y18IndirectPan.x Y19PanDelegates.x Y20Kbd.x; do
+          for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x X6InCall.x X5Recording.x X3Mode.x BPCrash.m RPT.x Y1Workspace.x P1Drag.m P1VC.m P1SW.m Y2Gestures.x Z1Diag.x Y3StatusBar.x Y4Home.x Y5Apps.x Y6Portal.x Y7Requests.x Y8Layout.x Y9Misc.x Y10Pip.x Y11Modifiers.x Y12Dock.x Y13Fluid.x Y14Open.x Y15InCall.x Y16Contingency.x Y17Snapshot.x Z2OrientTraits.m Z2OrientDelegate.m Y18IndirectPan.x Y19PanDelegates.x Y20Kbd.x Y21Modifiers.x; do
             rm -rf .theos
             echo "=== $f"
             make all FINALPACKAGE=1 ARCHS=arm64e Backport162_FILES="$f" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true
