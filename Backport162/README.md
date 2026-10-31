@@ -336,6 +336,13 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y24_classicmode | (Y26Classic.x) the classic mode (iPhone window size row) of iPhone-only apps follows the 16.2 decision tree for the screen / home button (12.9 inch iPad Pro: apps supporting the 4.7 / 5.5 inch launch sizes get the larger rows) |
 | y24_topaffordance | (Y27Views.x) the Stage Manager window title dots follow 16.2 (alpha from presence only, no inset offset, menu dismissed when hidden, pointer interaction toggled without animation flag) |
 | y24_overlayscale | (Y27Views.x) the icon zoom overlay footer is aligned at the display scale of its own display (monitor) instead of the iPad scale |
+| y24_kbgrabber | (Y28Keyboard.x) the home grabber on the software keyboard takes its scene from the keyboard owner window (monitor aware) and is always-portrait only on the main display |
+| y24_blurraster | (Y29Blur.x) the cross blur container of the switcher is not rasterized (16.2 shouldRasterize = NO) |
+| y24_blurroot | (Y29Blur.x) the root content blur animation is skipped when there is nothing to blur |
+| y24_snapstretch | (Y30Snapshot.x) switcher snapshots of classic apps: non uniform stretch mode and sizeToFit of the snapshot image view follow 16.2 |
+| y24_centerpage | (Y31Misc.x) the centre window presentation uses critically damped animation settings (16.2) |
+| y24_minviable | (Y31Misc.x) the minimum viable switcher reads the environment mode of its own display |
+| y24_classicsb | (Y31Misc.x) the status bar frame inside the classic jail of an iPhone-only app is computed on every display |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
