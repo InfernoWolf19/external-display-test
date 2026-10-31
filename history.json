@@ -1,12 +1,4 @@
 {
- "0.7.9+238.6b2770b": {
-  "date": "2026-10-24T18:13:29Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+238.6b2770b_iphoneos-arm64.deb",
-  "run": 238,
-  "sha": "6b2770bf1f1c59f183c12403ec38ddbad91eafd6",
-  "subject": "FINDINGS-DRAG-LOOP-0.7.9: no runaway loop (input-driven load), crash = stock SBSceneHandle assertion, dropped window lands in no layout, patch proposals P0-P7",
-  "version": "0.7.9+238.6b2770b"
- },
  "0.7.9+239.ae4adf4": {
   "date": "2026-10-24T18:14:55Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+239.ae4adf4_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "7915bb5edde9dfc010109b2d41c2303badfdf2c0",
   "subject": "REVIEW-Y-0.7.9: differential review of the Y1..Y16 hooks (table per hook, answers to the y5 / y8 / y10 / y13 / y16 / y6 questions, defects D1..D7)",
   "version": "0.7.9+304.7915bb5"
+ },
+ "0.7.9+305.4b72fbf": {
+  "date": "2026-10-31T10:38:01Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+305.4b72fbf_iphoneos-arm64.deb",
+  "run": 305,
+  "sha": "4b72fbf37d9a03f443b6537b984830f00cf0930e",
+  "subject": "Y22Modifiers: Expose grid / floor taps build their request from the tap event (y17_gridtap, y17_floortap), home gesture fly-in only while cards fly in (y17_homeflyin), no window drag pin override (y17_windragpin); DELTA-SWEEP rows, root modifier level shift documented",
+  "version": "0.7.9+305.4b72fbf"
  }
 }
