@@ -404,7 +404,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | SBDeckSwitcherViewController | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` | 0x1c6328aec | 0x1c77c99cc | NOT PORTED: the card deck switcher (not Stage Manager): 16.2 pauses the app suggestion model's updates while the deck is not shown (disable / enableListeningForUpdatesForReason:); the suggestions model of the deck only |
 | SBDeckSwitcherViewController | `-.cxx_destruct` | 0x1c6328ee4 | 0x1c77c9f14 | EXCLUDED: ivar teardown only (.cxx_destruct) |
 | SBDeviceApplicationSceneClassicAccessoryView | `-_rotateApplicationScene:` | 0x1c60e9b10 | 0x1c756e464 | EQUIVALENT: the preference is toggled through the scene handle's accessor instead of the application's; same value |
-| SBDeviceApplicationSceneClassicWrapperView | `+shouldUseWrapperViewForSceneHandle:` | 0x1c642041c | 0x1c78cfbac | PORTED NOW: Y31Misc.x y24_wrapperview (a hosted secure app never gets the wrapper, 16.2 0x1c78cfbe8) [sha pending] |
+| SBDeviceApplicationSceneClassicWrapperView | `+shouldUseWrapperViewForSceneHandle:` | 0x1c642041c | 0x1c78cfbac | PORTED NOW: Y31Misc.x y24_wrapperview (a hosted secure app never gets the wrapper, 16.2 0x1c78cfbe8) [sha e91ef7f] |
 | SBDeviceApplicationSceneClassicWrapperView | `-initWithSceneHandle:` | 0x1c64204b8 | 0x1c78cfc5c | NOT PORTED (pass 3: the old EQUIVALENT claim was wrong, decoded 0x1c78cfc5c): 16.2 adds, after creating the host positioning view, setMinificationFilter: / setMagnificationFilter: on its layer and (when the filter constant test passes, 0x1c78cfcc8..) an observer of [[SBAppSwitcherDomain rootSettings] chamoisSettings] rasterizeScaledApps plus an observeDefault:onQueue:withBlock: on the app switcher defaults that re-applies the rasterization of scaled classic apps; presentation quality of iPhone-only apps scaled in a window.  No missing symbol: work remaining (not started, size ~150 instructions plus the defaults key) |
 | SBDeviceApplicationSceneClassicWrapperView | `-layoutSubviews` | 0x1c64207e0 | 0x1c78d0208 | NOT PORTED (pass 3: the old EQUIVALENT claim was wrong, decoded 0x1c78d0208 vs 0x1c64207e0, 115 -> 130 lines): 16.2 positions the host with setFrame: + setCenter: + setTransform: (UIRectGetCenter) and derives the layout orientation from [[[sceneHandle sceneIfExists] settings] interfaceOrientation] combined with [application classicAppPhoneAppRunningOnPad] (csel) before the BSSizeSwap / scale factor part; the 16.0 part with classicAppNonFullScreenWithHomeAffordance / classicAppZoomedInOrRequiresHiDPI is unchanged.  No missing symbol: work remaining |
 | SBDeviceApplicationSceneClassicWrapperView | `-.cxx_destruct` | 0x1c64210ec | 0x1c78d0e30 | EXCLUDED: ivar teardown only (.cxx_destruct) |
@@ -1566,7 +1566,7 @@ Per family: F1: CANNOT 1, EQUIVALENT 53, EXCLUDED 18, IRRELEVANT 12, NOT PORTED 
 | Y28Keyboard.x | y24_kbgrabber | 50bd5e8 |
 | Y29Blur.x | y24_blurraster, y24_blurroot | 50bd5e8 |
 | Y30Snapshot.x | y24_snapstretch | 50bd5e8 |
-| Y31Misc.x | y24_centerpage, y24_minviable, y24_classicsb (50bd5e8); y24_shelfscale (96a92ad); y24_wrapperview (see Pass 3) | 50bd5e8 / 96a92ad |
+| Y31Misc.x | y24_centerpage, y24_minviable, y24_classicsb (50bd5e8); y24_shelfscale (96a92ad); y24_wrapperview (e91ef7f) | 50bd5e8 / 96a92ad |
 | Y32Proto.x | y24_protoextras | 96a92ad |
 
 ## Cross references and edits in other files
@@ -1615,7 +1615,7 @@ Method note: the 16.2 classic mode tree (`-[SBApplication _classicModeFromSuppor
 | SBSwitcherSnapshotImageView (2), SBAppSwitcherReusableSnapshotView _snapshotImageFrameForCacheEntry: | y24_snapstretch | Y30Snapshot.x | 50bd5e8 |
 | SBCenterWindowPagePresentationSwitcherModifier init (+ new animationAttributesForLayoutElement:), SBMinimumViableSwitcherTableViewController isWindowVisible, SBUIController statusBarFrame... (classic jail) | y24_centerpage, y24_minviable, y24_classicsb | Y31Misc.x | 50bd5e8 |
 | SBShelfExpansionSwitcherModifier scaleForIndex:, SBDisplayItemLayoutAttributes protobuf (2) | y24_shelfscale, y24_protoextras | Y31Misc.x / Y32Proto.x | 96a92ad |
-| SBDeviceApplicationSceneClassicWrapperView +shouldUseWrapperViewForSceneHandle: | y24_wrapperview | Y31Misc.x | see the row |
+| SBDeviceApplicationSceneClassicWrapperView +shouldUseWrapperViewForSceneHandle: | y24_wrapperview | Y31Misc.x | e91ef7f |
 
 ### Findings that correct earlier text
 * `SpringBoard -languageChanged`, `SBHomeHardwareButtonActions -performSinglePressUpActionsWithSourceType:`, `SBRecentAppLayouts -_validateAndUpdateRecents:`, `SBMainWorkspace -transactionDidComplete:`, SBMinimumViableSwitcher `-clickReceivedForHomeGrabberView:`, SBSwitcherShelfViewController (2), SBApplication(Classic_Private) `+_niceScreenTypeForClassicType:...`, SBFluidSwitcherSpaceOverlayAccessoryView `-prepareForReuse`, SBFluidSwitcherViewController `-_orderedViewsForLayoutElement:...`: decoded, EQUIVALENT with the reasons in their rows (log only reads, the shim is the active controller, the re-insertion loop is dead on a Stage Manager device, ...).
