@@ -328,6 +328,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y17_windragpin | (Y22Modifiers.x) center window drag transition no longer pins layouts of the dragged layout to the space (16.2) |
 | y17_applibrary | (Y23Home.x) the App Library of a window scene on the monitor gets its own expanded category pod layout instead of changing the iPad one |
 | y17_sbrecording | (Y23Home.x) the status bar of the monitor updates the recording indicator of its own scene |
+| y24_droptrack | (Y24Drag.x) the drop target tracking of a drag over the switcher follows 16.2: point inside the view only, Stage Manager strip hit only while the strips are unoccluded, content drag over a full screen window accepted when the window container fills the view |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
