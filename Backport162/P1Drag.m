@@ -37,12 +37,24 @@
 
 // Non-silent helper gate: a selector missing on a NON-NIL receiver is logged once per selector + class ("treated as NO" / nil / 0), so a wrong receiver can never hide behind a silent default.
 void P1_NoteMissing(id o, SEL x) {
-    static NSMutableSet *seen;
+    // Called on EVERY missing-selector helper call, also from the 120 Hz drag path for the documented absences: the (selector, class) pair is looked up in a lock free table of
+    // pointers first, no string is built for a pair that was already reported (the old code formatted a key string and took a lock per call).
+    static struct { SEL s; Class c; } tab[256];
+    static int count;
+    Class k = object_getClass(o);
+    int n = __atomic_load_n(&count, __ATOMIC_ACQUIRE);
+    for (int i = 0; i < n; i++) if (tab[i].s == x && tab[i].c == k) return;
+    static NSObject *lock;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
-    NSString *key = [NSString stringWithFormat:@"%@|%@", NSStringFromSelector(x), NSStringFromClass(object_getClass(o))];
-    @synchronized (seen) { if ([seen containsObject:key]) return; [seen addObject:key]; }
-    BP_Log(@"p1: selector %@ missing on %@, treated as NO / nil / 0", NSStringFromSelector(x), NSStringFromClass(object_getClass(o)));
+    dispatch_once(&once, ^{ lock = [NSObject new]; });
+    @synchronized (lock) {
+        n = __atomic_load_n(&count, __ATOMIC_ACQUIRE);
+        for (int i = 0; i < n; i++) if (tab[i].s == x && tab[i].c == k) return;
+        if (n >= 256) return;                                   // table full: reported pairs stay reported, further new pairs are not logged
+        tab[n].s = x; tab[n].c = k;
+        __atomic_store_n(&count, n + 1, __ATOMIC_RELEASE);
+    }
+    BP_Log(@"p1: selector %@ missing on %@, treated as NO / nil / 0", NSStringFromSelector(x), NSStringFromClass(k));
 }
 static inline BOOL P1_Resp(id o, SEL x) {
     if (!o) return NO;
@@ -451,7 +463,12 @@ static void P1_Perform(id self, SEL _cmd, id txn, void (^completion)(void)) {
 // The 16.0 body still runs after this pre-step (scenes that were taken are no longer in the other manager's list, so it finds nothing to do twice).
 static IMP sOrigToAppsPerform;
 static void P1_ToAppsPerform(id self, SEL _cmd, id txn, void (^completion)(void)) {
-    if (BP_OnName("p1_toappstake") && txn) {
+    // 16.2 0x1c72b0504 (and 16.0 0x1c5e3e10c): the whole take-over block is skipped for an ANCILLARY layout transaction (`[self ancillaryLayoutTransactions] containsObject:txn`): the ancillary
+    // request of the display that loses a window lists the windows that REMAIN there, which must never be moved to another scene manager. The pre-step runs for every SBToAppsWorkspaceTransaction
+    // (also launches, app exits, cover sheet unlocks); the identifier match only finds a scene when a window of the same identifier lives in ANOTHER display's scene manager.
+    id ancTxns = txn ? P1_S0(self, "ancillaryLayoutTransactions") : nil;
+    BOOL ancillary = [ancTxns respondsToSelector:@selector(containsObject:)] && [ancTxns containsObject:txn];
+    if (BP_OnName("p1_toappstake") && txn && !ancillary) {
         id entities = P1_S0(P1_S0(txn, "transitionRequest"), "toApplicationSceneEntities");
         id scene = P1_SceneForDisplay(P1_S0(txn, "displayIdentity"));
         id sm = P1_S0(scene, "sceneManager");
@@ -504,7 +521,8 @@ void P1_EndBroadcastEnd(id txn) {
     if (![objc_getAssociatedObject(txn, &kP1FinishHeld) boolValue]) return;
     objc_setAssociatedObject(txn, &kP1FinishHeld, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     id coord = P1_CoordinatorOf(P1_S0(P1_S0(txn, "switcherViewController"), "switcherController"));
-    BOOL stillActive = objc_getAssociatedObject(coord, &kP1CoordTxn) == txn;
+    // "still the running transaction": the coordinator's slot (p1_share) or, with p1_share off (the coordinator then never learns the transaction), the gesture manager of its own display
+    BOOL stillActive = objc_getAssociatedObject(coord, &kP1CoordTxn) == txn || P1_S0(P1_S0(P1_S0(P1_S0(txn, "switcherViewController"), "switcherController"), "gestureManager"), "activeGestureTransaction") == txn;
     if (stillActive && !P1_S0(txn, "animationController") && !P1_Ivar(txn, "_finalRootTransaction") && !P1_B0(txn, "isInterrupted")) {
         if (BP_LogEnabled()) BP_Log(@"p1: txn %p: end broadcast returned, finishing the held transaction", (__bridge void *)txn);
         P1_VL(txn, "finishWithCompletionType:", 1);
@@ -699,6 +717,9 @@ static void P1_HandleComplete(id self, SEL _cmd, id request, id manager) {
     if (tCompTxn == self && BP_OnName("p1_reentry")) { BP_Log(@"p1: re-entrant complete refused (txn %p), the outer completion is still running", (__bridge void *)self); return; }
     id prev = tCompTxn;
     tCompTxn = self;
+    // an update that was queued by the re-entrancy guard belongs to the gesture BEFORE this complete: replaying it after the complete would feed a stale update to a transaction that is finishing
+    objc_setAssociatedObject(self, &kP1PendReq, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kP1PendMgr, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     P1_HandleCompleteBody(self, _cmd, request, manager);
     tCompTxn = prev;
 }

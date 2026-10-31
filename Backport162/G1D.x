@@ -943,7 +943,7 @@ static __thread BOOL tInUpdateLayoutResponse;
 // The 16.0 SBGrabberTongue already speaks the same delegate protocol (same init, same install / pull / present callbacks); it only lacks the `name` and `screenEdge`
 // accessors.  The system gesture type 0x37 is unused in 16.0 (16.2 inserted it, which shifts every later type by one), and the 16.0 type tables answer for 0x37 like
 // for the hover gesture 0x33 on the main display after the one-line hook below.
-static char kG1DStripTongue, kG1DTongueName;
+static char kG1DStripTongue, kG1DTongueName, kG1DFailReqDone;
 enum { G1DStripTongueGestureType = 0x37, G1DStripIndirectGestureType = 0x34, G1DStripRevealFluidGestureType = 0xb };
 
 static id G1D_GMWeak(id gm, const char *name) {
@@ -1236,7 +1236,12 @@ static void G1D_GM_Update(id gm, BOOL enabled) {
         SEL inst = NSSelectorFromString(@"installInView:withColorStyle:");
         if ([tongue respondsToSelector:inst]) ((void (*)(id, SEL, id, long long))objc_msgSend)(tongue, inst, G1B_Send0(vc, NSSelectorFromString(@"view")), 0);
         id indirect = G1B_Send0(tongue, NSSelectorFromString(@"indirectEdgePullGestureRecognizer"));
-        if (overflow && indirect) G1B_SendV1(overflow, NSSelectorFromString(@"requireGestureRecognizerToFail:"), indirect);
+        // The tongue and its recognizers survive a disable / enable cycle (_configureChamoisGestureRecognizersIfNeeded returns early while the live resize recognizer exists), so the same
+        // pair would get the failure requirement again on every Stage Manager toggle: UIKit keeps one dependency edge per call (FINDINGS-SLOWTOUCH S1). Once per (overflow, indirect) pair.
+        if (overflow && indirect && objc_getAssociatedObject(overflow, &kG1DFailReqDone) != indirect) {
+            G1B_SendV1(overflow, NSSelectorFromString(@"requireGestureRecognizerToFail:"), indirect);
+            objc_setAssociatedObject(overflow, &kG1DFailReqDone, indirect, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     } else if (liveView) {
         void (^unreg)(id) = ^(id gr) { if (gr && [sgm respondsToSelector:rem]) ((void (*)(id, SEL, id))objc_msgSend)(sgm, rem, gr); };
         if (!G1B_SendB0(sc, NSSelectorFromString(@"isChamoisWindowingUIEnabled"))) unreg(live);
