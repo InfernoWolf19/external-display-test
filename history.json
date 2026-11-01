@@ -1,12 +1,4 @@
 {
- "0.7.9+278.d336e87": {
-  "date": "2026-10-27T16:37:31Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+278.d336e87_iphoneos-arm64.deb",
-  "run": 278,
-  "sha": "d336e87e7a3ae6dff3a06c087d01ee2755772255",
-  "subject": "Y17Snapshot: switcher snapshot cache looks up snapshots at the scale of its own display (y17_snapscale), no scene entity without a handle provider (y17_snapentity), synchronous style reload (y17_snapreload); DELTA-SWEEP: snapshot cache rows decided",
-  "version": "0.7.9+278.d336e87"
- },
  "0.7.9+279.7e26771": {
   "date": "2026-10-27T16:38:51Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+279.7e26771_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "5889d17ae8fbdb4baac7b2d9e1112e0f283978a8",
   "subject": "Y36Preflight: port the 16.2 privacy preflight gate (PrivacyDisclosureCore re-implemented: PDCPreflightManager / ConsentStore / RequestHandle / AlertPresenter; SBPrivacyPreflightController + SBApplicationPrivacyPreflightController; SBApplicationSceneUpdateTransaction preflight, delegate and _isReadyToLaunch; SBToAppsWorkspaceTransaction -_willBegin prelaunch skip 0x1c729b83c; contingency plan removal leg; FrontBoard FBApplicationUpdateScenesTransaction launch scheduling 0x1a3665490; native consent alert instead of the absent PDUIApp)",
   "version": "0.7.9+339.5889d17"
+ },
+ "0.7.9+340.020d89a": {
+  "date": "2026-11-01T19:48:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+340.020d89a_iphoneos-arm64.deb",
+  "run": 340,
+  "sha": "020d89aa88499aaf1c7c42040da51b014f72bd91",
+  "subject": "tools/a2c: stack argument image, class ivar remap (self immediates -> IVOFF), direct selectors / C strings, CFString and class pointers through the GOT, trace comparison harness (tracecmp.py: Unicorn vs lifted C on the same modelled environment) and method diff tool (mdiff.py)",
+  "version": "0.7.9+340.020d89a"
  }
 }
