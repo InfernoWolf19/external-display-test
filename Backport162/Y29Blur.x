@@ -51,8 +51,11 @@ static void Y29_BlurContainer(id self, SEL _cmd, id container, id params, long l
     }
 }
 typedef BOOL (*Y29_ZeroFn)(double);
+// OPT-IN since the cards regression report (tiny / zoomed / rectangular cards that flip ~0.4 s after the grid settles, build a905444 vs c8bf6ae): the 16.0 body, even with a zero radius and no
+// filters, completes through an (empty) sb_animateWithSettings animation, i.e. AFTER the animation duration; this early out completes it at once (16.2 callers do not wait for it), so the layout
+// update group finishes while the cards are still animating and the "settled" work (live content -> snapshot swap, container reconfiguration) runs mid animation. Backport162.on.y24_blurroot restores it.
 static void Y29_ApplyRoot(id self, SEL _cmd, void (^completion)(BOOL, BOOL)) {
-    if (BP_OnName("y24_blurroot")) {
+    if (BP_OptInName("y24_blurroot")) {
         static Y29_ZeroFn isZero; static dispatch_once_t once;
         dispatch_once(&once, ^{ isZero = (Y29_ZeroFn)dlsym(RTLD_DEFAULT, "BSFloatIsZero"); if (!isZero) BP_Anomaly("blurroot", @"[y29] GUARD(blurroot) BSFloatIsZero does not resolve: not applied"); });
         Ivar mi = BP_IvarLookup(object_getClass(self), "_rootModifier");
