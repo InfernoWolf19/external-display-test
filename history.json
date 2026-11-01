@@ -1,12 +1,4 @@
 {
- "0.7.9+272.940d7db": {
-  "date": "2026-10-25T20:37:23Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+272.940d7db_iphoneos-arm64.deb",
-  "run": 272,
-  "sha": "940d7dbb6fd903f374386ad119a10632fb5807b0",
-  "subject": "Y16Contingency: a crashed / exited Stage Manager window no longer sends the whole stage home (y16_stagefail), Command-Tab overlay dismissed when its display goes away (y16_cmdtab), finger corner swipes do not start the corner gesture under Stage Manager (y16_shotcorner), snapshot orientation from the window content orientation (y16_snaporient); DELTA-SWEEP: all remaining rows triaged",
-  "version": "0.7.9+272.940d7db"
- },
  "0.7.9+273.b23ddb4": {
   "date": "2026-10-25T20:44:07Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+273.b23ddb4_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "eeae30267740b45042ab00e3fe691d01707794b8",
   "subject": "BP_LogLine: a fresh Backport162.log (rotation / removal) starts with a recap of the ANOMALY lines this process already wrote, so one log file always carries them",
   "version": "0.7.9+333.eeae302"
+ },
+ "0.7.9+334.2363e6c": {
+  "date": "2026-11-01T09:19:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+334.2363e6c_iphoneos-arm64.deb",
+  "run": 334,
+  "sha": "2363e6cec5cb3a5a689d26acbf3c019bebf1d91b",
+  "subject": "Y29Blur: y24_blurroot is opt-in again: its early out completes the layout update group before the 16.0 body would (after the animation duration), cards were reconfigured mid animation (tiny / zoomed cards flipping ~0.4 s after the grid settled, a905444 vs c8bf6ae)",
+  "version": "0.7.9+334.2363e6c"
  }
 }
