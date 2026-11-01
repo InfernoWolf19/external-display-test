@@ -1,12 +1,4 @@
 {
- "0.7.9+258.eb694cd": {
-  "date": "2026-10-24T23:44:18Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+258.eb694cd_iphoneos-arm64.deb",
-  "run": 258,
-  "sha": "eb694cd5704f8a64fab959008d36230cd8030ef6",
-  "subject": "Y5Apps: status bar goes back into the reuse pool it came from (window dragged between displays), pool target screen, classic (iPhone-only) launch size table on every display (switches y5_sbpool, y5_classicsize); DELTA-SWEEP status bar / app verdicts",
-  "version": "0.7.9+258.eb694cd"
- },
  "0.7.9+259.7dd10ca": {
   "date": "2026-10-25T15:03:57Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+259.7dd10ca_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "9c9f21afff6cccd3d5ee74e4d1bd60b8f22e86f3",
   "subject": "Y30Snapshot: -setImage: and the non stretch -layoutSubviews run the 16.0 bodies unchanged (identical to the 16.2 result, disassembled); only the stretch mode is re-implemented",
   "version": "0.7.9+318.9c9f21a"
+ },
+ "0.7.9+319.0efa07d": {
+  "date": "2026-11-01T01:00:01Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+319.0efa07d_iphoneos-arm64.deb",
+  "run": 319,
+  "sha": "0efa07d085333fc8368afeb2a497091192077fc6",
+  "subject": "G1C: the cross display window drag reads the dragging / proposed layouts as any collection (the coordinator answers an NSCountedSet, the VC an NSMutableSet; the NSArray only check rejected them and every drag to the other display fell back to the default window size instead of the source window's size, 16.2 0x1c74f406c); debug line per dragged-in window",
+  "version": "0.7.9+319.0efa07d"
  }
 }
