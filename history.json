@@ -1,12 +1,4 @@
 {
- "0.7.9+255.678d17d": {
-  "date": "2026-10-24T23:32:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+255.678d17d_iphoneos-arm64.deb",
-  "run": 255,
-  "sha": "678d17d584296e3630e58a1cf0b9d94635c31a88",
-  "subject": "Docs: REVIEW-PLUMBING rows and GAPS pointer updated for the display leftovers (items 1 to 8)",
-  "version": "0.7.9+255.678d17d"
- },
  "0.7.9+256.3a899d0": {
   "date": "2026-10-24T23:33:00Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+256.3a899d0_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "6ce66cd60a7599ee48ec235934c2d59eb20a25d4",
   "subject": "DELTA-SWEEP: sha of the wrapper view row",
   "version": "0.7.9+314.6ce66cd"
+ },
+ "0.7.9+315.b6d6599": {
+  "date": "2026-11-01T00:07:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+315.b6d6599_iphoneos-arm64.deb",
+  "run": 315,
+  "sha": "b6d6599c434c3824ed639d9d0369ac2c8cb17a6f",
+  "subject": "Y28Keyboard: constructor no longer messages +[SBSceneManagerCoordinator mainDisplaySceneManager] (reached the coordinator singleton while SpringBoard was loading images); the scene manager class is looked up by name",
+  "version": "0.7.9+315.b6d6599"
  },
  "0.7.9+316.a905444": {
   "date": "2026-11-01T00:04:48Z",
