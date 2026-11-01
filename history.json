@@ -1,12 +1,4 @@
 {
- "0.7.9+264.d586333": {
-  "date": "2026-10-25T15:26:13Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+264.d586333_iphoneos-arm64.deb",
-  "run": 264,
-  "sha": "d5863336ad571e782915674856a11cd08df8fec2",
-  "subject": "G3B: -[SBWindowScene medusaHostedKeyboardWindowController] (16.2 0x1c77f80e4) answers the per-scene hosted keyboard window controller, read by P1VC.m (switch kbmedusa)",
-  "version": "0.7.9+264.d586333"
- },
  "0.7.9+265.0e17444": {
   "date": "2026-10-25T15:41:25Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+265.0e17444_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "8becfffe5ddf67ef8f536ca81e9e665066e65faa",
   "subject": "Audit class D: every thread-local armed override (62 wrappers: Y3 active controller, Y2, Y10..Y17, Y25, Y31, X2/X5/X7/X9, G1D, G3B, G4B focus lock, P1 re-entrancy depth, ...) is restored in @finally, so an exception of the stock body cannot leave it armed",
   "version": "0.7.9+324.8becfff"
+ },
+ "0.7.9+326.b6b4928": {
+  "date": "2026-11-01T08:23:05Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+326.b6b4928_iphoneos-arm64.deb",
+  "run": 326,
+  "sha": "b6b4928470b35222fd17a003e90d6b6c7eca43c5",
+  "subject": "Fix the build of 911693f: Group4Connect.m has its own standalone infrastructure and does not see BP.h, its two ivar reads stay raw class_getInstanceVariable",
+  "version": "0.7.9+326.b6b4928"
  }
 }
