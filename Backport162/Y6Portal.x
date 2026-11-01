@@ -164,9 +164,9 @@ static void Y6_Remove(id self, SEL _cmd, id layout, BOOL animated) {
             id vc = BPX_Obj0(overlay, "contentViewController");
             if (vc) {
                 BPX_SetObj1(vc, "willMoveToParentViewController:", nil);
-                BPY_SEND(void, (BOOL, BOOL), vc, "bs_beginAppearanceTransition:animated:", NO, NO);
+                (void)BPY_SEND(BOOL, (BOOL, BOOL), vc, "bs_beginAppearanceTransition:animated:", NO, NO);       // returns BOOL (16.0 dump)
                 BPY_SEND(void, (), vc, "removeFromParentViewController");
-                BPY_SEND(void, (), vc, "bs_endAppearanceTransition");
+                (void)BPY_SEND(BOOL, (), vc, "bs_endAppearanceTransition");
             }
             BPY_SEND(void, (), overlay, "invalidate");
         }

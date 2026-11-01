@@ -45,16 +45,16 @@ static id Y15_Config(id session, BOOL viaHandle) {
 }
 
 // -[SBInCallPresentationSession _performBannerToFullScreenPresentationTransitionAnimated:analyticsSource:completion:]
-static void Y15_Full(id self, SEL _cmd, BOOL animated, long long source, id completion) {
+static void Y15_Full(id self, SEL _cmd, BOOL animated, id source, id completion) {      // audit class E: analyticsSource: is an id (16.0 dump), it was typed long long
     id saved = tY15Config;
     tY15Config = Y15_Config(self, YES);
-    @try { if (gY15OrigFull) ((void (*)(id, SEL, BOOL, long long, id))gY15OrigFull)(self, _cmd, animated, source, completion); } @finally { tY15Config = saved; }
+    @try { if (gY15OrigFull) ((void (*)(id, SEL, BOOL, id, id))gY15OrigFull)(self, _cmd, animated, source, completion); } @finally { tY15Config = saved; }
 }
 // -[SBInCallPresentationSession _performSwitcherDismissalTransitionAnimated:shouldDestroyScene:analyticsSource:completion:]
-static void Y15_Dismiss(id self, SEL _cmd, BOOL animated, BOOL destroy, long long source, id completion) {
+static void Y15_Dismiss(id self, SEL _cmd, BOOL animated, BOOL destroy, id source, id completion) {
     id saved = tY15Config;
     tY15Config = Y15_Config(self, NO);
-    @try { if (gY15OrigDismiss) ((void (*)(id, SEL, BOOL, BOOL, long long, id))gY15OrigDismiss)(self, _cmd, animated, destroy, source, completion); } @finally { tY15Config = saved; }
+    @try { if (gY15OrigDismiss) ((void (*)(id, SEL, BOOL, BOOL, id, id))gY15OrigDismiss)(self, _cmd, animated, destroy, source, completion); } @finally { tY15Config = saved; }
 }
 // -[SBMainWorkspace requestTransitionWithOptions:builder:validator:]
 static BOOL Y15_Request(id self, SEL _cmd, unsigned long long options, id builder, id validator) {
@@ -67,10 +67,10 @@ static BOOL Y15_Request(id self, SEL _cmd, unsigned long long options, id builde
     return gY15OrigReq ? ((BOOL (*)(id, SEL, unsigned long long, id, id))gY15OrigReq)(self, _cmd, options, builder, validator) : NO;
 }
 // -[SBInCallPresentationSession _performBannerPresentationTransitionWithAnalyticsSource:completion:]
-static void Y15_Banner(id self, SEL _cmd, long long source, id completion) {
+static void Y15_Banner(id self, SEL _cmd, id source, id completion) {
     id saved = tY15BannerSession;
     tY15BannerSession = BP_OnName("y15_bannerscene") ? self : nil;
-    @try { if (gY15OrigBanner) ((void (*)(id, SEL, long long, id))gY15OrigBanner)(self, _cmd, source, completion); } @finally { tY15BannerSession = saved; }
+    @try { if (gY15OrigBanner) ((void (*)(id, SEL, id, id))gY15OrigBanner)(self, _cmd, source, completion); } @finally { tY15BannerSession = saved; }
 }
 // -[SBInCallPresentationSession _presentedBannerBoundsInWindowScene:]
 static Y15Rect Y15_Bounds(id self, SEL _cmd, id scene) {

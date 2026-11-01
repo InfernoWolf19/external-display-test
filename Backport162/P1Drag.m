@@ -270,8 +270,7 @@ static void P1_HomeRequirements(id layoutState) {
     SEL note = sel_registerName("noteInterfaceOrientationChanged:logMessage:");
     if ([app respondsToSelector:note]) ((void (*)(id, SEL, long long, id))objc_msgSend)(app, note, P1_L0(layoutState, "interfaceOrientation"), @"SBFluidSwitcherGestureWorkspaceTransaction running animation to home screen");
     id ui = P1_S0((id)NSClassFromString(@"SBUIController"), "sharedInstance");
-    id assertion = P1_S1(ui, "beginRequiringContentForReason:", @"SBUIHomeScreenActiveContentRequirementReason");
-    (void)assertion;                                                            // 16.2 does not keep it either: it is invalidated when released
+    P1_V1(ui, "beginRequiringContentForReason:", @"SBUIHomeScreenActiveContentRequirementReason");      // audit class E: the method returns void (it was sent through the id returning helper: ARC retained the stale x0); 16.2 does not keep an assertion either
 }
 static void P1_UpdateMain(id self, SEL _cmd, id requests) {
     id first = nil;

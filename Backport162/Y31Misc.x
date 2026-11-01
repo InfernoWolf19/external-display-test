@@ -115,14 +115,15 @@ static BOOL Y31_IsMainRoot(id self, SEL _cmd) {
     if (tY31Identity && tY31Identity == (__bridge void *)self) { tY31Identity = NULL; return YES; }
     return gY31OrigMainRoot ? ((BOOL (*)(id, SEL))gY31OrigMainRoot)(self, _cmd) : NO;
 }
-static CGRect Y31_StatusFrame(id cls, SEL _cmd, id handle, id config, long long orientation, id request, CGRect bounds, id space) {
+// audit class E: `inReferenceSpace:` is a BOOL in 16.0 (dump), it was typed id (a flag forwarded in w7 as a pointer: any ARC retain of it would crash)
+static CGRect Y31_StatusFrame(id cls, SEL _cmd, id handle, id config, long long orientation, id request, CGRect bounds, BOOL space) {
     void *prev = tY31Identity;
     if (BP_OnName("y24_classicsb") && gY31OrigMainRoot) {
         id identity = Y17_Obj0("classicsb", config, "identity");
         if (identity) tY31Identity = (__bridge void *)identity;
     }
     CGRect r = {0};
-    @try { r = gY31OrigStatusFrame ? ((CGRect (*)(id, SEL, id, id, long long, id, CGRect, id))gY31OrigStatusFrame)(cls, _cmd, handle, config, orientation, request, bounds, space) : CGRectZero; } @finally { tY31Identity = prev; }
+    @try { r = gY31OrigStatusFrame ? ((CGRect (*)(id, SEL, id, id, long long, id, CGRect, BOOL))gY31OrigStatusFrame)(cls, _cmd, handle, config, orientation, request, bounds, space) : CGRectZero; } @finally { tY31Identity = prev; }
     return r;
 }
 
