@@ -106,7 +106,7 @@ __attribute__((constructor)) static void Y26_Setup(void) {
         gY26Lt = (Y26_SizeCmpFn)dlsym(RTLD_DEFAULT, "BSSizeLessThanSize");
         Class app = NSClassFromString(@"SBApplication");
         if (!gY26DeviceClass || !gY26HomeButton || !gY26ScreenType || !gY26Round || !gY26Eq || !gY26Ge || !gY26Lt || !app || !class_getInstanceMethod(app, sel_registerName("_classicModeFromSupportedTypes"))) {
-            BP_Log(@"[y26] GUARD(classicmode) not installed: SBFEffectiveDeviceClass %p HomeButtonType %p SBHScreenTypeForCurrentDevice %p BSSizeRoundForScale %p Eq %p Ge %p Lt %p SBApplication %p",
+            BP_Anomaly("classicmode", @"[y26] GUARD(classicmode) not installed: SBFEffectiveDeviceClass %p HomeButtonType %p SBHScreenTypeForCurrentDevice %p BSSizeRoundForScale %p Eq %p Ge %p Lt %p SBApplication %p",
                    (void *)gY26DeviceClass, (void *)gY26HomeButton, (void *)gY26ScreenType, (void *)gY26Round, (void *)gY26Eq, (void *)gY26Ge, (void *)gY26Lt, (__bridge void *)app);
             return;
         }

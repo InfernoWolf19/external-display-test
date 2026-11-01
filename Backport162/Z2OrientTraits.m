@@ -36,7 +36,7 @@ static void Z2O_NoteMissing(id o, SEL s, const char *who) {
         if ([gZ2OMissing containsObject:key]) return;
         [gZ2OMissing addObject:key];
     }
-    BP_Log(@"z2o: GUARD selector missing: -[%s %s] (needed by %s), answering nil / 0 / NO", class_getName(object_getClass(o)), sel_getName(s), who);
+    BP_Anomaly("guard-z2orienttraits", @"z2o: GUARD selector missing: -[%s %s] (needed by %s), answering nil / 0 / NO", class_getName(object_getClass(o)), sel_getName(s), who);
 }
 static BOOL Z2O_Has(id o, const char *sel, const char *who) {
     if (!o) return NO;
@@ -64,7 +64,7 @@ static Ivar Z2O_Iv(id o, const char *name) {
         if ([seen containsObject:key]) return NULL;
         [seen addObject:key];
     }
-    BP_Log(@"z2o: GUARD ivar missing: %s.%s", class_getName(object_getClass(o)), name);
+    BP_Anomaly("guard-z2orienttraits", @"z2o: GUARD ivar missing: %s.%s", class_getName(object_getClass(o)), name);
     return NULL;
 }
 static id Z2O_IvObj(id o, const char *name) { Ivar v = Z2O_Iv(o, name); return (v && o) ? object_getIvar(o, v) : nil; }
@@ -153,7 +153,7 @@ static BOOL Z2O_FlowReady(id sw) {
                    sel_registerName("_updateParticipantsAndPoliciesWithSwitcherPolicy:nonPrimaryOverlayPolicy:primaryOverlayPolicy:"),
                    sel_registerName("_updateAppTransitionContext:withOrientationActuationContext:accountForSceneState:"), sel_registerName("_currentElementsOrientationsForLayoutState:") };
     for (size_t i = 0; i < sizeof sels / sizeof sels[0]; i++) if (![sw respondsToSelector:sels[i]]) { Z2O_NoteMissing(sw, sels[i], "switcherOrientation flow"); return NO; }
-    if (!NSClassFromString(@"SBSwitcherLayoutTransitionNotes") || !NSClassFromString(@"SBAnimationUtilities")) { BP_Log(@"z2o: GUARD class missing for the traits flow"); return NO; }
+    if (!NSClassFromString(@"SBSwitcherLayoutTransitionNotes") || !NSClassFromString(@"SBAnimationUtilities")) { BP_Anomaly("guard-z2orienttraits", @"z2o: GUARD class missing for the traits flow"); return NO; }
     return YES;
 }
 
@@ -167,7 +167,7 @@ static long long Z2O_GuardExternal(id sw, long long o, id request) {
     BPY_LOG(@"z2o: ext display state orientation: participant %lld, scene orientation %lld, canvas shape %d, 16.2 value %lld%@ request %@", o, sceneOri, shape, real, (Z2O_ValidOri(o) && o != sceneOri && Z2O_ValidOri(sceneOri)) ? @" (DIFFERS from the scene)" : @"", Z2O_Obj0(request, "eventLabel", "z2o guard"));
     if (Z2O_ValidOri(o)) return o;
     if (!BP_OnName("or_extreal")) { BP_Log(@"z2o: ext display orientation %lld is not valid (guard switch or_extreal is off, kept)", o); return o; }
-    BP_Log(@"z2o: GUARD(or_extreal) external display layout state orientation %lld is not valid (scene orientation %lld): using %lld", o, sceneOri, real);
+    BP_Anomaly("or_extreal", @"z2o: GUARD(or_extreal) external display layout state orientation %lld is not valid (scene orientation %lld): using %lld", o, sceneOri, real);
     return real;
 }
 
@@ -183,7 +183,7 @@ static void Z2O_LogRotationMachinery(void) {
         BOOL actOn = act ? act() : NO, pmOn = pm ? pm() : NO;
         BP_Log(@"z2o: 16.0 rotation machinery: TraitsArbiterActuationEnabled=%@ PostModernRotationEnabled=%@ (role actuation function %@; 16.2 has no flags; the stock 20A8372 SpringBoard.plist ships both ON, ORIENTATION-0.7.9 2.5)",
                act ? (actOn ? @"YES" : @"NO") : @"(symbol not found)", pm ? (pmOn ? @"YES" : @"NO") : @"(symbol not found)", forRole ? @"present" : @"not found");
-        if (act && !actOn) BP_Log(@"z2o: GUARD the traits arbiter orientation actuation flag is OFF on this device although the stock plist ships it ON: the legacy rotation path is live and the 16.2 flow of this file does not drive rotation");
+        if (act && !actOn) BP_Anomaly("guard-z2orienttraits", @"z2o: GUARD the traits arbiter orientation actuation flag is OFF on this device although the stock plist ships it ON: the legacy rotation path is live and the 16.2 flow of this file does not drive rotation");
     });
 }
 
@@ -308,7 +308,7 @@ static id Z2O_ExtInputs(id self, SEL _cmd) {
     Class idiomC = NSClassFromString(@"SBFTraitsArbitrationInterfaceIdiomInputs"), oriC = NSClassFromString(@"SBFTraitsArbitrationDeviceOrientationInputs"), inC = NSClassFromString(@"SBFTraitsArbitrationInputs");
     SEL si = sel_registerName("initWithIsPad:"), so = sel_registerName("initWithCurrentDeviceOrientation:nonFlatDeviceOrientation:"), sa = sel_registerName("initWithInterfaceIdiomInputs:deviceOrientationInputs:keyboardInputs:");
     if (!idiomC || !oriC || !inC || ![idiomC instancesRespondToSelector:si] || ![oriC instancesRespondToSelector:so] || ![inC instancesRespondToSelector:sa]) {
-        BP_Log(@"z2o: GUARD(or_extinputs) arbiter input classes / init selectors missing, the 16.0 cached input is used");
+        BP_Anomaly("or_extinputs", @"z2o: GUARD(or_extinputs) arbiter input classes / init selectors missing, the 16.0 cached input is used");
         return sInputs ? ((id (*)(id, SEL))sInputs)(self, _cmd) : cached;
     }
     BOOL isPad = Z2O_LL0((id)[UIDevice currentDevice], "userInterfaceIdiom", "z2o inputs") == 1;
@@ -325,7 +325,7 @@ static IMP Z2O_Replace(const char *cls, const char *sel, IMP imp) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
     SEL s = sel_registerName(sel);
     Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m) { BP_Log(@"z2o: GUARD -[%s %s] not found, not replaced", cls, sel); return NULL; }
+    if (!m) { BP_Anomaly("guard-z2orienttraits", @"z2o: GUARD -[%s %s] not found, not replaced", cls, sel); return NULL; }
     IMP prev = method_getImplementation(m);
     class_replaceMethod(c, s, imp, method_getTypeEncoding(m));
     return prev;

@@ -1463,7 +1463,7 @@ static void G1B_BuildFullScreenToStrip(void) {
 - (void)handleWithReason:(id)reason {
     id me = (id)self;      // SBChainableModifierEvent is only forward-declared in this file
     if ([me respondsToSelector:@selector(isHandled)] && ((BOOL (*)(id, SEL))objc_msgSend)(me, @selector(isHandled))) {
-        if (BP_LogEnabled()) BP_Log(@"GUARD event %@ already handled, ignoring second handleWithReason:%@ (a handler is missing its 16.2 isHandled gate)", NSStringFromClass(object_getClass(me)), reason);
+        BP_Anomaly("guard-g1b", @"GUARD event %@ already handled, ignoring second handleWithReason:%@ (a handler is missing its 16.2 isHandled gate)", NSStringFromClass(object_getClass(me)), reason);
         return;
     }
     %orig;
@@ -1806,7 +1806,7 @@ static void G1B_BuildWindowDelete(void) {
         Ivar ov = class_getInstanceVariable(object_getClass(me), "_visibleOverlayAccessoryViews");
         id ovd = ov ? BP_ObjIvar(me, ov) : nil;
         if (layout && ov && [ovd isKindOfClass:[NSDictionary class]] && ![(NSDictionary *)ovd objectForKey:layout]) {
-            if (BP_LogEnabled()) BP_Log(@"GUARD icon overlay response for an app layout without overlay accessory view ignored: %@", layout);
+            BP_Anomaly("guard-g1b", @"GUARD icon overlay response for an app layout without overlay accessory view ignored: %@", layout);
             return;
         }
     }

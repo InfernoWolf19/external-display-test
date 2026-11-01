@@ -90,7 +90,7 @@ static void Y27_Layout(id self, SEL _cmd) {
     if (gY27OrigLayout) ((void (*)(id, SEL))gY27OrigLayout)(self, _cmd);
     if (!BP_OnName("y24_overlayscale")) return;
     static Y27_IntegralFn integral; static dispatch_once_t once;
-    dispatch_once(&once, ^{ integral = (Y27_IntegralFn)dlsym(RTLD_DEFAULT, "UIRectIntegralWithScale"); if (!integral) BP_Log(@"[y27] GUARD(overlayscale) UIRectIntegralWithScale does not resolve: the iPad scale stays"); });
+    dispatch_once(&once, ^{ integral = (Y27_IntegralFn)dlsym(RTLD_DEFAULT, "UIRectIntegralWithScale"); if (!integral) BP_Anomaly("overlayscale", @"[y27] GUARD(overlayscale) UIRectIntegralWithScale does not resolve: the iPad scale stays"); });
     if (!integral) return;
     id footer = Y27_Ivar(self, "_footerView");
     if (!footer) return;
@@ -129,10 +129,10 @@ __attribute__((constructor)) static void Y27_Setup(void) {
             gY27OrigSetHidden = BPX_Replace(ta, "setHidden:forReason:animated:", (IMP)Y27_SetHidden);
             gY27OrigPointer = BPX_Replace(ta, "_setSystemPointerInteractionEnabled:", (IMP)Y27_SetPointer);
             n++;
-        } else BP_Log(@"[y27] GUARD(topaffordance) SBTopAffordanceViewController or one of its methods missing: not installed");
+        } else BP_Anomaly("topaffordance", @"[y27] GUARD(topaffordance) SBTopAffordanceViewController or one of its methods missing: not installed");
         Class ov = NSClassFromString(@"SBFluidSwitcherSpaceOverlayAccessoryView");
         if (ov && class_getInstanceMethod(ov, sel_registerName("layoutSubviews"))) { gY27OrigLayout = BPX_Replace(ov, "layoutSubviews", (IMP)Y27_Layout); n++; }
-        else BP_Log(@"[y27] GUARD(overlayscale) SBFluidSwitcherSpaceOverlayAccessoryView layoutSubviews missing: not installed");
+        else BP_Anomaly("overlayscale", @"[y27] GUARD(overlayscale) SBFluidSwitcherSpaceOverlayAccessoryView layoutSubviews missing: not installed");
         BP_Log(@"[y27] installed %d group(s) (switches y24_topaffordance, y24_overlayscale)", n);
     }
 }

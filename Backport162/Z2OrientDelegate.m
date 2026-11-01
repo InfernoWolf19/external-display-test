@@ -21,12 +21,12 @@ static unsigned long long Z2OD_Sanitize(id self, SEL _cmd, unsigned long long ma
     if (!BP_OnName("or_delegate")) return ((unsigned long long (*)(id, SEL, unsigned long long, id))sSanitize)(self, _cmd, mask, application);
     static BOOL warned;
     if (!BP_OnName("g3b_guide") || !NSClassFromString(@"BPG3BTraitsGuide")) {
-        if (!warned) { warned = YES; BP_Log(@"z2o: GUARD(or_delegate) the traits guide (g3b_guide / BPG3BTraitsGuide) is not active: the 16.0 phone-on-pad mask restriction stays"); }
+        if (!warned) { warned = YES; BP_Anomaly("or_delegate", @"z2o: GUARD(or_delegate) the traits guide (g3b_guide / BPG3BTraitsGuide) is not active: the 16.0 phone-on-pad mask restriction stays"); }
         return ((unsigned long long (*)(id, SEL, unsigned long long, id))sSanitize)(self, _cmd, mask, application);
     }
     SEL up = sel_registerName("_isAllowedToHavePortraitUpsideDown"), legal = sel_registerName("_allLegalOrientations");
     if (![self respondsToSelector:up] || ![self respondsToSelector:legal]) {
-        if (!warned) { warned = YES; BP_Log(@"z2o: GUARD(or_delegate) %s / %s missing on %s, the 16.0 body runs", sel_getName(up), sel_getName(legal), class_getName(object_getClass(self))); }
+        if (!warned) { warned = YES; BP_Anomaly("or_delegate", @"z2o: GUARD(or_delegate) %s / %s missing on %s, the 16.0 body runs", sel_getName(up), sel_getName(legal), class_getName(object_getClass(self))); }
         return ((unsigned long long (*)(id, SEL, unsigned long long, id))sSanitize)(self, _cmd, mask, application);
     }
     // 16.2 0x1c7773aac: if (mask == 4 && !allowedToHavePortraitUpsideDown) return 2; return mask & legalOrientations
@@ -52,7 +52,7 @@ __attribute__((constructor)) static void Z2OD_Setup(void) {
         if (m) {
             sSanitize = method_getImplementation(m);
             class_replaceMethod(c, s, (IMP)Z2OD_Sanitize, method_getTypeEncoding(m));
-        } else BP_Log(@"z2o: GUARD SBTraitsSceneParticipantDelegate -_sanitizedMask:forApplication: not found, not replaced");
+        } else BP_Anomaly("guard-z2orientdelegate", @"z2o: GUARD SBTraitsSceneParticipantDelegate -_sanitizedMask:forApplication: not found, not replaced");
         Class dock = NSClassFromString(@"SBFloatingDockRootViewController");
         SEL ds = sel_registerName("supportedInterfaceOrientations");
         Method dm = dock ? class_getInstanceMethod(dock, ds) : NULL;
@@ -61,7 +61,7 @@ __attribute__((constructor)) static void Z2OD_Setup(void) {
             sDockSupported = method_getImplementation(dm);
             sDockSuper = method_getImplementation(sm);
             class_replaceMethod(dock, ds, (IMP)Z2OD_DockSupported, method_getTypeEncoding(dm));
-        } else BP_Log(@"z2o: GUARD SBFloatingDockRootViewController -supportedInterfaceOrientations has no own implementation (dock %d, method %d, super %d), not replaced", dock != Nil, dm != NULL, sm != NULL);
+        } else BP_Anomaly("guard-z2orientdelegate", @"z2o: GUARD SBFloatingDockRootViewController -supportedInterfaceOrientations has no own implementation (dock %d, method %d, super %d), not replaced", dock != Nil, dm != NULL, sm != NULL);
         BP_Log(@"z2o: delegate installed sanitizedMask=%d dockSupported=%d (switches or_delegate, or_dock)", sSanitize != NULL, sDockSupported != NULL);
     }
 }

@@ -69,12 +69,12 @@ static struct {
 static ptrdiff_t Y18_Off(Class c, const char *name, char enc) {
     Ivar iv = class_getInstanceVariable(c, name);
     const char *e = iv ? ivar_getTypeEncoding(iv) : NULL;
-    if (!iv || !e || e[0] != enc) { BP_Log(@"[y18] GUARD(indirectpan) ivar %s missing or of another type (%s) on SBIndirectPanGestureRecognizer: 16.0 recognizer stays", name, e ? e : "none"); return -1; }
+    if (!iv || !e || e[0] != enc) { BP_Anomaly("indirectpan", @"[y18] GUARD(indirectpan) ivar %s missing or of another type (%s) on SBIndirectPanGestureRecognizer: 16.0 recognizer stays", name, e ? e : "none"); return -1; }
     return ivar_getOffset(iv);
 }
 static Ivar Y18_ObjIvar(Class c, const char *name) {
     Ivar iv = class_getInstanceVariable(c, name);
-    if (!BP_IvarIsObj(iv)) { BP_Log(@"[y18] GUARD(indirectpan) object ivar %s missing on SBIndirectPanGestureRecognizer: 16.0 recognizer stays", name); return NULL; }
+    if (!BP_IvarIsObj(iv)) { BP_Anomaly("indirectpan", @"[y18] GUARD(indirectpan) object ivar %s missing on SBIndirectPanGestureRecognizer: 16.0 recognizer stays", name); return NULL; }
     return iv;
 }
 
@@ -196,7 +196,7 @@ static void Y18_Moved(id self, SEL _cmd, id touches, id event) {
         // guard: 16.2 bails here and waits for the next -_hoverEntered:; recapture when this event is the one moving hover touch
         id one = ([touches count] == 1) ? [touches anyObject] : nil;
         if (one && BPX_LL0(one, "phase") == 6) {
-            BP_Log(@"[y18] GUARD(indirectpan) hoverMoved without a captured touch: capturing it (the work of hoverEntered)");
+            BP_Anomaly("indirectpan", @"[y18] GUARD(indirectpan) hoverMoved without a captured touch: capturing it (the work of hoverEntered)");
             Y18_Capture(self, touches, event);
             Y18_SetUpTimers(self, event);
             touch = Y18_Obj(self, gIv.touch);
@@ -313,12 +313,12 @@ __attribute__((constructor)) static void Y18_Setup(void) {
     if (!BPY_BuildOK()) return;
     @autoreleasepool {
         Class c = NSClassFromString(@"SBIndirectPanGestureRecognizer");
-        if (!c) { BP_Log(@"[y18] GUARD(indirectpan) SBIndirectPanGestureRecognizer missing: nothing installed"); return; }
+        if (!c) { BP_Anomaly("indirectpan", @"[y18] GUARD(indirectpan) SBIndirectPanGestureRecognizer missing: nothing installed"); return; }
         const char *need[] = { "_hoverEntered:withEvent:", "_hoverMoved:withEvent:", "_hoverExited:withEvent:", "_hoverCancelled:withEvent:", "_resetTranslationState", "_pointerModelLocation",
             "_edgeForPointerModelLocation:inView:inset:", "_updateTranslationWithPointerEventAttributes:activeEdge:", "updateTouchHistoryWithTouches:", "translationInView:",
             "_hasTranslationReachedThreshold:withTranslation:forEdge:", "setPausedUntilTouchedUpOrMovedAwayFromEdge:", "_mouseIdleTimerFired:", "_trackpadIdleTimerFired:", "containerView" };
         for (size_t i = 0; i < sizeof need / sizeof need[0]; i++) {
-            if (!class_getInstanceMethod(c, sel_registerName(need[i]))) { BP_Log(@"[y18] GUARD(indirectpan) method %s missing on SBIndirectPanGestureRecognizer: 16.0 recognizer stays", need[i]); return; }
+            if (!class_getInstanceMethod(c, sel_registerName(need[i]))) { BP_Anomaly("indirectpan", @"[y18] GUARD(indirectpan) method %s missing on SBIndirectPanGestureRecognizer: 16.0 recognizer stays", need[i]); return; }
         }
         gY18HIDChildren = (void *(*)(void *))dlsym(RTLD_DEFAULT, "IOHIDEventGetChildren");
         gY18HIDType = (int (*)(void *))dlsym(RTLD_DEFAULT, "IOHIDEventGetType");
@@ -327,7 +327,7 @@ __attribute__((constructor)) static void Y18_Setup(void) {
         gY18CancelDisplay = (void (*)(id))dlsym(RTLD_DEFAULT, "BKSHIDServicesCancelTouchesOnDisplay");
         gY18CancelMain = (void (*)(void))dlsym(RTLD_DEFAULT, "BKSHIDServicesCancelTouchesOnMainDisplay");
         if (!gY18HIDChildren || !gY18HIDType || !gY18PtrAttrs || !gY18Now || !gY18CancelMain) {
-            BP_Log(@"[y18] GUARD(indirectpan) C symbols missing (IOHIDEventGetChildren %p, IOHIDEventGetType %p, BKSHIDEventGetPointerAttributes %p, BSContinuousMachTimeNow %p, CancelTouchesOnMainDisplay %p): 16.0 recognizer stays",
+            BP_Anomaly("indirectpan", @"[y18] GUARD(indirectpan) C symbols missing (IOHIDEventGetChildren %p, IOHIDEventGetType %p, BKSHIDEventGetPointerAttributes %p, BSContinuousMachTimeNow %p, CancelTouchesOnMainDisplay %p): 16.0 recognizer stays",
                    (void *)gY18HIDChildren, (void *)gY18HIDType, (void *)gY18PtrAttrs, (void *)gY18Now, (void *)gY18CancelMain);
             return;
         }

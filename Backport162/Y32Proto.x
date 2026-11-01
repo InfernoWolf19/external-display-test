@@ -59,7 +59,7 @@ static void Y32_Write(id self, SEL _cmd, id writer) {
     if (!e) return;
     static Y32_WriteDoubleFn wd; static Y32_WriteInt32Fn wi; static dispatch_once_t once;
     dispatch_once(&once, ^{ wd = (Y32_WriteDoubleFn)dlsym(RTLD_DEFAULT, "PBDataWriterWriteDoubleField"); wi = (Y32_WriteInt32Fn)dlsym(RTLD_DEFAULT, "PBDataWriterWriteInt32Field");
-        if (!wd || !wi) BP_Log(@"[y32] GUARD(protoextras) PBDataWriterWriteDoubleField / Int32Field do not resolve: the extra fields are not written"); });
+        if (!wd || !wi) BP_Anomaly("protoextras", @"[y32] GUARD(protoextras) PBDataWriterWriteDoubleField / Int32Field do not resolve: the extra fields are not written"); });
     if (!wd || !wi) return;
     wd(writer, Y32_Num(e, @"rw"), 0x15);
     wd(writer, Y32_Num(e, @"rh"), 0x16);
@@ -132,7 +132,7 @@ __attribute__((constructor)) static void Y32_Setup(void) {
         Class meta = attr ? object_getClass((id)attr) : Nil;
         if (!attr || !pb || !class_getInstanceMethod(attr, sel_registerName("protobufRepresentation")) || !class_getInstanceMethod(meta, sel_registerName("layoutAttributesWithProtobufRepresentation:")) ||
             !class_getInstanceMethod(pb, sel_registerName("writeTo:")) || !class_getInstanceMethod(pb, sel_registerName("readFrom:"))) {
-            BP_Log(@"[y32] GUARD(protoextras) SBDisplayItemLayoutAttributes / SBPBDisplayItemLayoutAttributes protobuf methods missing: not installed");
+            BP_Anomaly("protoextras", @"[y32] GUARD(protoextras) SBDisplayItemLayoutAttributes / SBPBDisplayItemLayoutAttributes protobuf methods missing: not installed");
             return;
         }
         gY32OrigRep = BPX_Replace(attr, "protobufRepresentation", (IMP)Y32_Rep);

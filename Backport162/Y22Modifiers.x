@@ -50,7 +50,7 @@ static id Y22_GridTap(id self, SEL _cmd, id event) {
     id req = Y22_TapRequest(NSClassFromString(@"SBSwitcherTransitionRequest"), event);
     id resp = Y22_Transition(req);
     if (!resp) {
-        BP_Log(@"[y22] GUARD(gridtap) no tap request / transition response: the 16.0 body runs");
+        BP_Anomaly("gridtap", @"[y22] GUARD(gridtap) no tap request / transition response: the 16.0 body runs");
         return gY22OrigGrid ? ((id (*)(id, SEL, id))gY22OrigGrid)(self, _cmd, event) : r;
     }
     BPY_LOG(@"[y22] grid tap on %@: request %@", BPX_Obj0(event, "appLayout"), req);
@@ -76,7 +76,7 @@ static id Y22_FloorTap(id self, SEL _cmd, id event) {
         return resp ? G1B_AppendTo(resp, r) : r;
     }
     id req = Y22_TapRequest(NSClassFromString(@"SBMutableSwitcherTransitionRequest"), event);
-    if (!req) { BP_Log(@"[y22] GUARD(floortap) no mutable tap request: the 16.0 body runs"); return gY22OrigFloor ? ((id (*)(id, SEL, id))gY22OrigFloor)(self, _cmd, event) : r; }
+    if (!req) { BP_Anomaly("floortap", @"[y22] GUARD(floortap) no mutable tap request: the 16.0 body runs"); return gY22OrigFloor ? ((id (*)(id, SEL, id))gY22OrigFloor)(self, _cmd, event) : r; }
     id primary = BPY_SEND(id, (long long), leaf, "itemForLayoutRole:", 1LL);
     id kept = BPX_Obj1(layout, "appLayoutWithItemsPassingTest:", (id)^BOOL(id item) { return ![item isEqual:primary]; });
     BPX_SetObj1(req, "setAppLayout:", kept);
@@ -121,17 +121,17 @@ __attribute__((constructor)) static void Y22_Setup(void) {
         int n = 0;
         Class gc = NSClassFromString(@"SBGridSwitcherModifier"), fc = NSClassFromString(@"_SBFullScreenAppFloorSwitcherModifier"), hc = NSClassFromString(@"SBHomeGestureToHomeSwitcherModifier"), wc = NSClassFromString(@"SBWindowDragTransitionSwitcherModifier");
         if (gc && class_getInstanceMethod(gc, sel_registerName("handleTapAppLayoutEvent:"))) { gY22GridSuper = class_getSuperclass(gc); gY22OrigGrid = BPX_Replace(gc, "handleTapAppLayoutEvent:", (IMP)Y22_GridTap); n++; }
-        else BP_Log(@"[y22] GUARD(gridtap) SBGridSwitcherModifier handleTapAppLayoutEvent: missing: not installed");
+        else BP_Anomaly("gridtap", @"[y22] GUARD(gridtap) SBGridSwitcherModifier handleTapAppLayoutEvent: missing: not installed");
         if (fc && class_getInstanceMethod(fc, sel_registerName("handleTapAppLayoutEvent:")) && class_getInstanceVariable(fc, "_activeAppLayout")) { gY22FloorSuper = class_getSuperclass(fc); gY22OrigFloor = BPX_Replace(fc, "handleTapAppLayoutEvent:", (IMP)Y22_FloorTap); n++; }
-        else BP_Log(@"[y22] GUARD(floortap) _SBFullScreenAppFloorSwitcherModifier handleTapAppLayoutEvent: or _activeAppLayout missing: not installed");
+        else BP_Anomaly("floortap", @"[y22] GUARD(floortap) _SBFullScreenAppFloorSwitcherModifier handleTapAppLayoutEvent: or _activeAppLayout missing: not installed");
         if (hc && class_getInstanceMethod(hc, sel_registerName("frameForIndex:")) && class_getInstanceMethod(hc, sel_registerName("scaleForIndex:"))) {
             gY22HomeSuper = class_getSuperclass(hc);
             gY22OrigHomeFrame = BPX_Replace(hc, "frameForIndex:", (IMP)Y22_HomeFrame);
             gY22OrigHomeScale = BPX_Replace(hc, "scaleForIndex:", (IMP)Y22_HomeScale);
             n++;
-        } else BP_Log(@"[y22] GUARD(homeflyin) SBHomeGestureToHomeSwitcherModifier frameForIndex: / scaleForIndex: missing: not installed");
+        } else BP_Anomaly("homeflyin", @"[y22] GUARD(homeflyin) SBHomeGestureToHomeSwitcherModifier frameForIndex: / scaleForIndex: missing: not installed");
         if (wc && class_getInstanceMethod(wc, sel_registerName("shouldUseAnchorPointToPinLayoutRolesToSpace:"))) { gY22PinSuper = class_getSuperclass(wc); gY22OrigPin = BPX_Replace(wc, "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)Y22_Pin); n++; }
-        else BP_Log(@"[y22] GUARD(windragpin) SBWindowDragTransitionSwitcherModifier shouldUseAnchorPointToPinLayoutRolesToSpace: missing: not installed");
+        else BP_Anomaly("windragpin", @"[y22] GUARD(windragpin) SBWindowDragTransitionSwitcherModifier shouldUseAnchorPointToPinLayoutRolesToSpace: missing: not installed");
         BP_Log(@"[y22] installed %d of 4 (switches y17_gridtap, y17_floortap, y17_homeflyin, y17_windragpin)", n);
     }
 }

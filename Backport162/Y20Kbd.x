@@ -132,9 +132,9 @@ __attribute__((constructor)) static void Y20_Setup(void) {
         Class vc = NSClassFromString(@"SBFluidSwitcherViewController");
         const char *need[] = { "rootModifier", "switcherController", "numberOfVisibleAppLayoutsForBundleIdentifier:", "isChamoisWindowingUIEnabled", "_keyboardFocusableLiveAppLayoutsMatchingFocusedApp:foundAtIndex:",
             "appLayouts", "appLayoutContainsAnUnoccludedMaximizedDisplayItem:" };
-        if (!vc || !class_getInstanceMethod(vc, sel_registerName("canPerformKeyboardShortcutAction:forBundleIdentifier:"))) { BP_Log(@"[y20] GUARD(kbdshortcuts) canPerformKeyboardShortcutAction:forBundleIdentifier: missing: not installed"); return; }
+        if (!vc || !class_getInstanceMethod(vc, sel_registerName("canPerformKeyboardShortcutAction:forBundleIdentifier:"))) { BP_Anomaly("kbdshortcuts", @"[y20] GUARD(kbdshortcuts) canPerformKeyboardShortcutAction:forBundleIdentifier: missing: not installed"); return; }
         for (size_t i = 0; i < sizeof need / sizeof need[0]; i++)
-            if (!class_getInstanceMethod(vc, sel_registerName(need[i]))) { BP_Log(@"[y20] GUARD(kbdshortcuts) SBFluidSwitcherViewController %s missing: not installed", need[i]); return; }
+            if (!class_getInstanceMethod(vc, sel_registerName(need[i]))) { BP_Anomaly("kbdshortcuts", @"[y20] GUARD(kbdshortcuts) SBFluidSwitcherViewController %s missing: not installed", need[i]); return; }
         gY20Orig = BPX_Replace(vc, "canPerformKeyboardShortcutAction:forBundleIdentifier:", (IMP)Y20_Can);
         BP_Log(@"[y20] installed (switch y17_kbdshortcuts; previous implementation %p is used only with the switch off)", (void *)gY20Orig);
     }

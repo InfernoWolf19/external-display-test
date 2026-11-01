@@ -39,7 +39,7 @@ static id Y30_ObjIvar(id o, const char *name) {
 typedef BOOL (*Y30_MGFn)(const void *);
 static BOOL Y30_NonUniform(id view, id app) {
     static Y30_MGFn mg; static dispatch_once_t once;
-    dispatch_once(&once, ^{ mg = (Y30_MGFn)dlsym(RTLD_DEFAULT, "MGIsDeviceOfType"); if (!mg) BP_Log(@"[y30] GUARD(snapstretch) MGIsDeviceOfType does not resolve: the non uniform scaling is never applied"); });
+    dispatch_once(&once, ^{ mg = (Y30_MGFn)dlsym(RTLD_DEFAULT, "MGIsDeviceOfType"); if (!mg) BP_Anomaly("snapstretch", @"[y30] GUARD(snapstretch) MGIsDeviceOfType does not resolve: the non uniform scaling is never applied"); });
     if (!mg) return NO;
     static const unsigned char devA[20] = { 0xd3, 0xb5, 0xff, 0xca, 0x33, 0xe4, 0x60, 0x44, 0x60, 0x65, 0x5a, 0xdf, 0xd7, 0x7f, 0xdf, 0xa4, 0x75, 0x7e, 0x7e, 0x93 };
     static const unsigned char devB[20] = { 0x96, 0xc2, 0x6a, 0xe5, 0x14, 0x3d, 0x44, 0x62, 0xc0, 0x91, 0x51, 0xca, 0x85, 0xb7, 0x95, 0x7d, 0x74, 0x8d, 0x1c, 0xc8 };
@@ -113,12 +113,12 @@ __attribute__((constructor)) static void Y30_Setup(void) {
         int n = 0;
         Class rv = NSClassFromString(@"SBAppSwitcherReusableSnapshotView");
         if (rv && class_getInstanceMethod(rv, sel_registerName("_snapshotImageFrameForCacheEntry:"))) { gY30OrigFrame = BPX_Replace(rv, "_snapshotImageFrameForCacheEntry:", (IMP)Y30_ImageFrame); n++; }
-        else BP_Log(@"[y30] GUARD(snapstretch) SBAppSwitcherReusableSnapshotView _snapshotImageFrameForCacheEntry: missing: not installed");
+        else BP_Anomaly("snapstretch", @"[y30] GUARD(snapstretch) SBAppSwitcherReusableSnapshotView _snapshotImageFrameForCacheEntry: missing: not installed");
         Class iv = NSClassFromString(@"SBSwitcherSnapshotImageView");
         if (iv && class_getInstanceMethod(iv, sel_registerName("setImage:")) && class_getInstanceMethod(iv, sel_registerName("layoutSubviews"))) {
             gY30OrigSetImage = BPX_Replace(iv, "setImage:", (IMP)Y30_SetImage);
             gY30OrigLayout = BPX_Replace(iv, "layoutSubviews", (IMP)Y30_Layout); n++;
-        } else BP_Log(@"[y30] GUARD(snapstretch) SBSwitcherSnapshotImageView setImage: / layoutSubviews missing: not installed");
+        } else BP_Anomaly("snapstretch", @"[y30] GUARD(snapstretch) SBSwitcherSnapshotImageView setImage: / layoutSubviews missing: not installed");
         BP_Log(@"[y30] installed %d group(s) (switch y24_snapstretch)", n);
     }
 }

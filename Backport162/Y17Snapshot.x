@@ -50,7 +50,7 @@ static void Y17_Load(id self, SEL _cmd, id request, id item, id layout) {
             tY17Scale = s;
             BPY_LOG(@"[y17s] snapshot scale %.2f for %@ (display identity %@)", s, item, identity);
         } else {
-            BP_Log(@"[y17s] GUARD(snapscale) no display scale for the cache of %@ (identity %@): the 16.0 main configuration scale stays", item, identity);
+            BP_Anomaly("snapscale", @"[y17s] GUARD(snapscale) no display scale for the cache of %@ (identity %@): the 16.0 main configuration scale stays", item, identity);
         }
     }
     if (gY17OrigLoad) ((void (*)(id, SEL, id, id, id))gY17OrigLoad)(self, _cmd, request, item, layout);
@@ -89,7 +89,7 @@ static void Y17_Reload(id self, SEL _cmd, long long style) {
         dispatch_sync((dispatch_queue_t)q, ^{});
         BPY_LOG(@"[y17s] reloadSnapshotsForInterfaceStyleChange:%lld drained the control queue (16.2: dispatch_sync)", style);
     } else {
-        BP_Log(@"[y17s] GUARD(snapreload) _controlQueue ivar missing on the snapshot cache: asynchronous reload of 16.0 stays");
+        BP_Anomaly("snapreload", @"[y17s] GUARD(snapreload) _controlQueue ivar missing on the snapshot cache: asynchronous reload of 16.0 stays");
     }
 }
 
@@ -103,15 +103,15 @@ __attribute__((constructor)) static void Y17S_Setup(void) {
             gY17OrigBest = BPX_Replace(app, best, (IMP)Y17_Best);
             gY17OrigLoad = BPX_Replace(cc, "_loadSnapshotForRequest:withDisplayItem:inAppLayout:", (IMP)Y17_Load);
             n++;
-        } else BP_Log(@"[y17s] GUARD(snapscale) SBApplication bestSnapshot... or the cache load method is missing: y17_snapscale not installed");
+        } else BP_Anomaly("snapscale", @"[y17s] GUARD(snapscale) SBApplication bestSnapshot... or the cache load method is missing: y17_snapscale not installed");
         if (cc && class_getInstanceMethod(cc, sel_registerName("_representedApplicationSceneEntityForDisplayItem:"))) {
             gY17OrigRep = BPX_Replace(cc, "_representedApplicationSceneEntityForDisplayItem:", (IMP)Y17_Rep);
             n++;
-        } else BP_Log(@"[y17s] GUARD(snapentity) _representedApplicationSceneEntityForDisplayItem: missing: y17_snapentity not installed");
+        } else BP_Anomaly("snapentity", @"[y17s] GUARD(snapentity) _representedApplicationSceneEntityForDisplayItem: missing: y17_snapentity not installed");
         if (cc && class_getInstanceMethod(cc, sel_registerName("reloadSnapshotsForInterfaceStyleChange:"))) {
             gY17OrigReload = BPX_Replace(cc, "reloadSnapshotsForInterfaceStyleChange:", (IMP)Y17_Reload);
             n++;
-        } else BP_Log(@"[y17s] GUARD(snapreload) reloadSnapshotsForInterfaceStyleChange: missing: y17_snapreload not installed");
+        } else BP_Anomaly("snapreload", @"[y17s] GUARD(snapreload) reloadSnapshotsForInterfaceStyleChange: missing: y17_snapreload not installed");
         BP_Log(@"[y17s] installed %d of 3 (switches y17_snapscale, y17_snapentity, y17_snapreload)", n);
     }
 }

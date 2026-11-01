@@ -182,7 +182,7 @@ __attribute__((constructor)) static void Y24Drag_Setup(void) {
         for (size_t i = 0; i < sizeof vcSels / sizeof vcSels[0]; i++) if (!fluid || !class_getInstanceMethod(fluid, sel_registerName(vcSels[i]))) [missing addObject:[NSString stringWithFormat:@"-[SBFluidSwitcherViewController %s]", vcSels[i]]];
         if (!Y24_GetDragItem()) [missing addObject:@"SBApplicationDropSessionGetDragItem"];
         if (!dlsym(RTLD_DEFAULT, "NCUserNotificationDragPrivateTypeIdentifier")) [missing addObject:@"NCUserNotificationDragPrivateTypeIdentifier"];
-        if (missing.count) { BP_Log(@"[y24] GUARD(droptrack) not installed, missing: %@ (the 16.0 body keeps running)", missing); return; }
+        if (missing.count) { BP_Anomaly("droptrack", @"[y24] GUARD(droptrack) not installed, missing: %@ (the 16.0 body keeps running)", missing); return; }
         gY24OrigTrack = BPX_Replace(meta, "_shouldTrackLocationOfDropSession:forSwitcherController:isCurrentlyTracking:", (IMP)Y24_Track);
         BP_Log(@"[y24] installed y24_droptrack (orig %p)", (void *)gY24OrigTrack);
     }

@@ -54,7 +54,7 @@ typedef BOOL (*Y29_ZeroFn)(double);
 static void Y29_ApplyRoot(id self, SEL _cmd, void (^completion)(BOOL, BOOL)) {
     if (BP_OnName("y24_blurroot")) {
         static Y29_ZeroFn isZero; static dispatch_once_t once;
-        dispatch_once(&once, ^{ isZero = (Y29_ZeroFn)dlsym(RTLD_DEFAULT, "BSFloatIsZero"); if (!isZero) BP_Log(@"[y29] GUARD(blurroot) BSFloatIsZero does not resolve: not applied"); });
+        dispatch_once(&once, ^{ isZero = (Y29_ZeroFn)dlsym(RTLD_DEFAULT, "BSFloatIsZero"); if (!isZero) BP_Anomaly("blurroot", @"[y29] GUARD(blurroot) BSFloatIsZero does not resolve: not applied"); });
         Ivar mi = class_getInstanceVariable(object_getClass(self), "_rootModifier");
         Ivar ci = class_getInstanceVariable(object_getClass(self), "_contentView");
         id modifier = BP_ObjIvar(self, mi), content = BP_ObjIvar(self, ci);
@@ -85,11 +85,11 @@ __attribute__((constructor)) static void Y29_Setup(void) {
             gY29OrigCross = BPX_Replace(meta, "defaultCrossblurBlurParameters", (IMP)Y29_DefaultCrossblur);
             gY29OrigBlur = BPX_Replace(vc, "_blurItemContainer:blurParameters:withAnimationUpdateMode:", (IMP)Y29_BlurContainer);
             n++;
-        } else BP_Log(@"[y29] GUARD(blurraster) SBBlurItemContainerParameters / SBFluidSwitcherViewController blur selectors missing: not installed");
+        } else BP_Anomaly("blurraster", @"[y29] GUARD(blurraster) SBBlurItemContainerParameters / SBFluidSwitcherViewController blur selectors missing: not installed");
         if (vc && class_getInstanceMethod(vc, sel_registerName("_applyRootContentViewBlurRadiusWithCompletion:"))) {
             gY29OrigRoot = BPX_Replace(vc, "_applyRootContentViewBlurRadiusWithCompletion:", (IMP)Y29_ApplyRoot);
             n++;
-        } else BP_Log(@"[y29] GUARD(blurroot) -_applyRootContentViewBlurRadiusWithCompletion: missing: not installed");
+        } else BP_Anomaly("blurroot", @"[y29] GUARD(blurroot) -_applyRootContentViewBlurRadiusWithCompletion: missing: not installed");
         BP_Log(@"[y29] installed %d group(s) (switches y24_blurraster, y24_blurroot)", n);
     }
 }

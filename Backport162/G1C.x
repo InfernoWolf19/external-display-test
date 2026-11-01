@@ -428,7 +428,7 @@ void G1C_FinishStaleGestureChildren(void) {
     for (id root in [gGestureRoots allObjects]) {
         id stale = G1C_GR_GM(root);
         if (!stale) continue;
-        if (BP_LogEnabled()) BP_Log(@"GUARD(end) gesture root %@: the gesture transaction ended and its 'Gesture' child %@ is still active (no transition reached this display) -> finishing and removing it", G1C_DbgCls(root), G1C_DbgCls(stale));
+        BP_Anomaly("end", @"GUARD(end) gesture root %@: the gesture transaction ended and its 'Gesture' child %@ is still active (no transition reached this display) -> finishing and removing it", G1C_DbgCls(root), G1C_DbgCls(stale));
         if (G1C_Resp(stale, @selector(setState:))) G1B_SendVLL(stale, @selector(setState:), 1);
         if (G1C_Resp(root, @selector(removeChildModifier:))) G1B_SendV1(root, @selector(removeChildModifier:), stale);
     }
@@ -439,7 +439,7 @@ static void G1C_GR_Guard(id self, id event) {
     if (!G1C_Resp(event, @selector(gestureType)) || !G1C_Resp(self, @selector(gestureType)) || G1B_SendLL0(event, @selector(gestureType)) != G1B_SendLL0(self, @selector(gestureType))) return;
     id stale = G1C_GR_GM(self);
     if (!stale) return;
-    if (BP_LogEnabled()) BP_Log(@"GUARD gesture root %@: a new gesture began while the previous 'Gesture' child %@ was still active (its gesture never produced a transition) -> finishing and removing it", G1C_DbgCls(self), G1C_DbgCls(stale));
+    BP_Anomaly("guard-g1c", @"GUARD gesture root %@: a new gesture began while the previous 'Gesture' child %@ was still active (its gesture never produced a transition) -> finishing and removing it", G1C_DbgCls(self), G1C_DbgCls(stale));
     if (G1C_Resp(stale, @selector(setState:))) G1B_SendVLL(stale, @selector(setState:), 1);
     if (G1C_Resp(self, @selector(removeChildModifier:))) G1B_SendV1(self, @selector(removeChildModifier:), stale);
 }
@@ -947,7 +947,7 @@ static int G1C_Ids16CallerKind(void *ra0) {
     NSArray *strip = G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInStripFromPreviousIdentifiersInStrip:"), prevStrip, nil, NO);
     NSArray *sw = strip ? G1C_AskRootIds(root, sel_registerName("adjustedContinuousExposeIdentifiersInSwitcherFromPreviousIdentifiersInSwitcher:identifiersInStrip:"), prevSw, strip, YES) : nil;
     if (!strip || !sw) {                                               // last-line guard: the root's query chain always ends in G2's BP_G2_Adjusted*Ids now
-        if (BP_LogEnabled()) BP_Log(@"GUARD identifiers update: the root modifier did not answer the adjusted identifier queries -> stock update");
+        BP_Anomaly("guard-g1c", @"GUARD identifiers update: the root modifier did not answer the adjusted identifier queries -> stock update");
         %orig;
         return;
     }
@@ -1196,7 +1196,7 @@ static id G1C_Rv_HandleTimer(id self, SEL _cmd, id event) {
         NSString *mine = G1C_RevealReason(self);
         BOOL ended = [G1B_GET(self, kG1CRevealEnded) boolValue];
         if ([reason isEqualToString:mine]) {
-            if (BP_LogEnabled() && G1B_SendLL0(self, @selector(state)) != 1) BP_Log(@"GUARD strip reveal gesture: no transition began within 2 s of the gesture end -> completing the gesture modifier %p (16.2 has no such timeout), reason %@, gesture ended %d", (__bridge void *)self, reason, (int)ended);
+            if (G1B_SendLL0(self, @selector(state)) != 1) BP_Anomaly("guard-g1c", @"GUARD strip reveal gesture: no transition began within 2 s of the gesture end -> completing the gesture modifier %p (16.2 has no such timeout), reason %@, gesture ended %d", (__bridge void *)self, reason, (int)ended);
             G1B_SendVLL(self, @selector(setState:), 1);
         } else if (BP_LogEnabled()) {
             BP_Log(@"g1c: strip reveal modifier %p (reason %@, gesture ended %d, state %lld) ignores the completion timer %@ of an earlier gesture", (__bridge void *)self, mine, (int)ended, G1B_SendLL0(self, @selector(state)), reason);
@@ -1236,7 +1236,7 @@ void G1C_RevealRecognizerEvent(id mgr, id gr) {
         if (![t respondsToSelector:gtSel]) { P1_NoteMissing(t, gtSel); return; }
         if (((long long (*)(id, SEL))objc_msgSend)(t, gtSel) != 0xb) return;            // not a strip reveal transaction (another gesture owns the manager now)
         Ivar done = class_getInstanceVariable(object_getClass(t), "_completedGestureWithTransitionRequest");
-        if (!done) { if (BP_LogEnabled()) BP_Log(@"GUARD(reveal txn) %p: ivar _completedGestureWithTransitionRequest missing on %@, watchdog does nothing", (__bridge void *)t, G1C_DbgCls(t)); return; }
+        if (!done) { BP_Anomaly("guard-g1c", @"GUARD(reveal txn) %p: ivar _completedGestureWithTransitionRequest missing on %@, watchdog does nothing", (__bridge void *)t, G1C_DbgCls(t)); return; }
         if (G1C_IvarBool(t, "_completedGestureWithTransitionRequest")) {
             if (BP_LogEnabled()) BP_Log(@"g1c: strip reveal transaction %p got its complete but is still running 3 s after the recognizer ended (animation / layout transaction in flight), watchdog leaves it", (__bridge void *)t);
             return;
@@ -1246,10 +1246,10 @@ void G1C_RevealRecognizerEvent(id mgr, id gr) {
         id initial = (gG1CRevealInitialMgr == m) ? gG1CRevealInitial : nil;
         id resp = initial ? G1C_NewPerformActivate(initial, YES) : nil;
         if (!vc || ![vc respondsToSelector:perf] || !resp) {
-            if (BP_LogEnabled()) BP_Log(@"GUARD(reveal txn) %p: still open 3 s after the recognizer ended and no complete was made, but it cannot be completed (view controller %@, initial layout %@, response %@)", (__bridge void *)t, G1C_DbgCls(vc), G1C_DbgLayout(initial), G1C_DbgCls(resp));
+            BP_Anomaly("guard-g1c", @"GUARD(reveal txn) %p: still open 3 s after the recognizer ended and no complete was made, but it cannot be completed (view controller %@, initial layout %@, response %@)", (__bridge void *)t, G1C_DbgCls(vc), G1C_DbgLayout(initial), G1C_DbgCls(resp));
             return;
         }
-        BP_Log(@"GUARD(reveal txn) %p: the strip reveal gesture ended 3 s ago and its transaction never received a complete (no modifier saw the end) -> completing it with a request that activates %@ (16.2 has no such watchdog)", (__bridge void *)t, G1C_DbgLayout(initial));
+        BP_Anomaly("guard-g1c", @"GUARD(reveal txn) %p: the strip reveal gesture ended 3 s ago and its transaction never received a complete (no modifier saw the end) -> completing it with a request that activates %@ (16.2 has no such watchdog)", (__bridge void *)t, G1C_DbgLayout(initial));
         ((void (*)(id, SEL, id))objc_msgSend)(vc, perf, resp);
     });
 }
@@ -2808,14 +2808,14 @@ static BOOL G1C_Wdd_RoleValid(long long r) { return (unsigned long long)(r - 1) 
 static id G1C_Wdd_OverlapModel(id self, id layout, id attrs, CGRect cb) {
     id calc = G1B_Send0(self, @selector(displayItemLayoutAttributesCalculator));
     SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:");
-    if (!calc || ![calc respondsToSelector:om]) { if (BP_LogEnabled()) BP_Log(@"GUARD WindowDragDestination: calculator lacks the overlapping-model query"); return nil; }
+    if (!calc || ![calc respondsToSelector:om]) { BP_Anomaly("guard-g1c", @"GUARD WindowDragDestination: calculator lacks the overlapping-model query"); return nil; }
     return ((id (*)(id, SEL, id, long long, id, double, double, CGRect, BOOL, BOOL))objc_msgSend)(calc, om, layout, G1B_SendLL0(self, @selector(switcherInterfaceOrientation)), attrs,
         G1B_Dbl0(self, @selector(floatingDockHeight)), G1B_Dbl0(self, @selector(screenScale)), cb, G1B_SendB0(self, @selector(prefersStripHidden)), G1B_SendB0(self, @selector(prefersDockHidden)));
 }
 static id G1C_Wdd_ByDragging(id self, id item, id layout, id attrs, CGRect cb) {
     id calc = G1B_Send0(self, @selector(displayItemLayoutAttributesCalculator));
     SEL ds = NSSelectorFromString(@"appLayoutByDraggingItem:inAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:");
-    if (!calc || ![calc respondsToSelector:ds]) { if (BP_LogEnabled()) BP_Log(@"GUARD WindowDragDestination: calculator lacks appLayoutByDraggingItem:..."); return layout; }
+    if (!calc || ![calc respondsToSelector:ds]) { BP_Anomaly("guard-g1c", @"GUARD WindowDragDestination: calculator lacks appLayoutByDraggingItem:..."); return layout; }
     return ((id (*)(id, SEL, id, id, long long, id, double, double, id, CGRect, BOOL, BOOL))objc_msgSend)(calc, ds, item, layout, G1B_SendLL0(self, @selector(switcherInterfaceOrientation)), attrs,
         G1B_Dbl0(self, @selector(floatingDockHeight)), G1B_Dbl0(self, @selector(screenScale)), G1C_IvarObj(self, "_initialOverlappingModel"), cb,
         G1B_SendB0(self, @selector(prefersStripHidden)), G1B_SendB0(self, @selector(prefersDockHidden)));
@@ -2876,7 +2876,7 @@ static CGRect G1C_Wdd_Frame(id self, SEL _cmd) {
             f = ((CGRect (*)(id, SEL, long long, id, CGRect, long long, id, double, double, BOOL, BOOL, BOOL))objc_msgSend)(calc, fs, G1C_SendLLId(layout, @selector(layoutRoleForItem:), sel), layout, cb,
                 G1B_SendLL0(self, @selector(switcherInterfaceOrientation)), attrs, G1B_Dbl0(self, @selector(floatingDockHeight)), G1B_Dbl0(self, @selector(screenScale)), YES,
                 G1B_SendB0(self, @selector(prefersStripHidden)), G1B_SendB0(self, @selector(prefersDockHidden)));
-        else if (BP_LogEnabled()) BP_Log(@"GUARD WindowDragDestination._frameForSelectedDisplayItem: calculator lacks frameForLayoutRole:...");
+        else BP_Anomaly("guard-g1c", @"GUARD WindowDragDestination._frameForSelectedDisplayItem: calculator lacks frameForLayoutRole:...");
         size = f.size;
     }
     id delegate = G1B_Send0(self, @selector(destinationDelegate));
@@ -5218,7 +5218,7 @@ static NSArray *G1C_FilterIds(NSArray *src, NSArray *notIn, NSString *skip) {
         id c = G1B_Send1(self, @selector(appLayoutContainingAppLayout:), layout);
         if (c) contained = c;
     } @catch (NSException *e) {
-        if (BP_LogEnabled()) BP_Log(@"GUARD overlappingModelForAppLayout: no implementor for appLayoutContainingAppLayout: (%@) -> unmapped layout", e.reason);
+        BP_Anomaly("guard-g1c", @"GUARD overlappingModelForAppLayout: no implementor for appLayoutContainingAppLayout: (%@) -> unmapped layout", e.reason);
     }
     return %orig(contained);
 }
@@ -5832,7 +5832,7 @@ static id G1C_HGR_TransitionChild(id self, SEL _cmd, id event, id gestureMod) {
     if (!reduce) {
         Class hs = NSClassFromString(@"SBHomeGestureSwitcherModifier");
         if (!gestureMod || !hs || ![gestureMod isKindOfClass:hs]) {                  // 16.2 NSAssert (SBHomeGestureRootSwitcherModifier.m line 0x5f): "the gesture modifier should be an instance of SBHomeGestureSwitcherModifier"
-            if (BP_LogEnabled()) BP_Log(@"GUARD home gesture root: gesture modifier %@ is not an SBHomeGestureSwitcherModifier (16.2 asserts)", G1C_DbgCls(gestureMod));
+            BP_Anomaly("guard-g1c", @"GUARD home gesture root: gesture modifier %@ is not an SBHomeGestureSwitcherModifier (16.2 asserts)", G1C_DbgCls(gestureMod));
             return nil;
         }
         flyIn = G1B_SendB0(gestureMod, @selector(isShowingOrAnimatingCardsForFlyIn)) ? !chamois : NO;
@@ -6525,12 +6525,12 @@ static void G1C_InstallRouting(void) {
         }
         static unsigned long n;
         n++;
-        BP_Log(@"GUARD(floor) #%lu: floorModifierForTransitionEvent: answered nil (stock assertion 'A floor modifier is required'): event phase=%lld animated=%d modes %lld->%lld gesture=%d toAL=%@ toAppExpose=%@ current floor=%@ multitaskingModifier=%@ root=%@ -> %@ (%@)",
+        BP_Anomaly("floor", @"GUARD(floor) #%lu: floorModifierForTransitionEvent: answered nil (stock assertion 'A floor modifier is required'): event phase=%lld animated=%d modes %lld->%lld gesture=%d toAL=%@ toAppExpose=%@ current floor=%@ multitaskingModifier=%@ root=%@ -> %@ (%@)",
                n, G1C_Resp(event, @selector(phase)) ? G1B_SendLL0(event, @selector(phase)) : -1LL, (int)(G1C_Resp(event, @selector(isAnimated)) && G1B_SendB0(event, @selector(isAnimated))),
                G1C_Resp(event, @selector(fromEnvironmentMode)) ? G1B_SendLL0(event, @selector(fromEnvironmentMode)) : -1LL, mode,
                (int)(G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated))), G1C_DbgLayout(toAL),
                G1C_Resp(event, @selector(toAppExposeBundleID)) ? G1B_Send0(event, @selector(toAppExposeBundleID)) : nil, G1C_DbgCls(cur), G1C_DbgCls(mt), G1C_DbgCls(self), G1C_DbgCls(floor), how);
-        if (!floor) { BP_Log(@"GUARD(floor): no floor could be built, the update is skipped (the root keeps what it has)"); return; }
+        if (!floor) { BP_Anomaly("floor", @"GUARD(floor): no floor could be built, the update is skipped (the root keeps what it has)"); return; }
     }
     G1B_SendV1(self, up, floor);
 }

@@ -91,15 +91,15 @@ __attribute__((constructor)) static void Y19_Setup(void) {
         int n = 0;
         Class pan = NSClassFromString(@"SBIndirectPanGestureRecognizer"), dock = NSClassFromString(@"SBFloatingDockController"), cc = NSClassFromString(@"SBControlCenterController");
         if (pan && class_getInstanceMethod(pan, sel_registerName("_shouldReceiveEvent:"))) { gY19OrigRecvEvent = BPX_Replace(pan, "_shouldReceiveEvent:", (IMP)Y19_RecvEvent); n++; }
-        else BP_Log(@"[y19] GUARD(indirectgate) SBIndirectPanGestureRecognizer _shouldReceiveEvent: missing: type filter not installed");
+        else BP_Anomaly("indirectgate", @"[y19] GUARD(indirectgate) SBIndirectPanGestureRecognizer _shouldReceiveEvent: missing: type filter not installed");
         if (dock && class_getInstanceMethod(dock, sel_registerName("gestureRecognizer:shouldReceiveTouch:"))) { gY19OrigDockTouch = BPX_Replace(dock, "gestureRecognizer:shouldReceiveTouch:", (IMP)Y19_DockTouch); n++; }
-        else BP_Log(@"[y19] GUARD(indirectgate) SBFloatingDockController gestureRecognizer:shouldReceiveTouch: missing");
+        else BP_Anomaly("indirectgate", @"[y19] GUARD(indirectgate) SBFloatingDockController gestureRecognizer:shouldReceiveTouch: missing");
         if (cc && class_getInstanceMethod(cc, sel_registerName("gestureRecognizer:shouldReceiveTouch:"))) { gY19OrigCCTouch = BPX_Replace(cc, "gestureRecognizer:shouldReceiveTouch:", (IMP)Y19_CCTouch); n++; }
-        else BP_Log(@"[y19] GUARD(indirectgate) SBControlCenterController gestureRecognizer:shouldReceiveTouch: missing");
+        else BP_Anomaly("indirectgate", @"[y19] GUARD(indirectgate) SBControlCenterController gestureRecognizer:shouldReceiveTouch: missing");
         if (dock && class_getInstanceMethod(dock, sel_registerName("requireFloatingDockOverFolder"))) { gY19OrigFolder = BPX_Replace(dock, "requireFloatingDockOverFolder", (IMP)Y19_Folder); n++; }
-        else BP_Log(@"[y19] GUARD(dockfolder) SBFloatingDockController requireFloatingDockOverFolder missing: nothing to neutralise");
+        else BP_Anomaly("dockfolder", @"[y19] GUARD(dockfolder) SBFloatingDockController requireFloatingDockOverFolder missing: nothing to neutralise");
         if (dock && class_getInstanceMethod(dock, sel_registerName("floatingDockWindow"))) { gY19OrigDockWindow = BPX_Replace(dock, "floatingDockWindow", (IMP)Y19_DockWindow); n++; }
-        else BP_Log(@"[y19] GUARD(dockclip) SBFloatingDockController floatingDockWindow missing");
+        else BP_Anomaly("dockclip", @"[y19] GUARD(dockclip) SBFloatingDockController floatingDockWindow missing");
         BP_Log(@"[y19] installed %d of 5 (switches y17_indirectgate, y17_dockfolder, y17_dockclip)", n);
     }
 }

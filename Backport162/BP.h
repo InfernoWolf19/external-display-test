@@ -26,6 +26,10 @@ BOOL BP_On(int feature);
 BOOL BP_OnName(const char *name);       // default-on switch by name: not killed and no Backport162.off.<name>
 BOOL BP_OptInName(const char *name);    // opt-in switch by name: BP_OnName(name) and Backport162.on.<name> exists
 void BP_Log(NSString *fmt, ...) NS_FORMAT_FUNCTION(1, 2);
+// Always-on anomaly channel: appends `ANOMALY <tag>: <message>` to Backport162.log even without Backport162.debug. For a ported body whose assumption failed and that silently
+// answers the stock / default value: a missing selector / class / ivar, a value of an unexpected type, a fallback to the 16.0 answer where 16.2 has none.  De-duplicated per
+// (tag, message), at most 8 formats per (tag, format string), 40 lines per tag and 300 per process, so it is safe on hot paths (nothing is formatted once a condition is known).
+void BP_Anomaly(const char *tag, NSString *fmt, ...) NS_FORMAT_FUNCTION(2, 3);
 BOOL BP_LogEnabled(void);               // cheap test (cached one second): lets callers skip building log arguments
 
 // Object ivar access that cannot mistake a scalar ivar for an object (object_getIvar on a BOOL / NSInteger / struct-sized ivar returns the raw bits as an

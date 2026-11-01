@@ -2522,7 +2522,7 @@ static void G4B_SGProbe(id handle, id tracked, id destroyed) {
     if (tracked != destroyed) {
         G4B_SGProbe(self, tracked, destroyed);
         if (BP_OnName("y1_scenedestroyguard")) {
-            BP_Log(@"GUARD scene handle %p tracks scene [%@], destroy of scene [%@] ignored (stock would assert at SBSceneHandle.m:0x120 and clear the tracked scene); display of destroyed scene %@",
+            BP_Anomaly("guard-g4b", @"GUARD scene handle %p tracks scene [%@], destroy of scene [%@] ignored (stock would assert at SBSceneHandle.m:0x120 and clear the tracked scene); display of destroyed scene %@",
                    (__bridge void *)self, G4B_SGDesc(tracked), G4B_SGDesc(destroyed), G4B_SGDisplay(destroyed));
             return;
         }

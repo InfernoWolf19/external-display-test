@@ -102,7 +102,7 @@ static BOOL Y25_ChamoisAvailable(void) {
     dispatch_once(&once, ^{
         fn = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "SBFIsChamoisWindowingUIAvailable");
         if (!fn) fn = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "SBFFeatureFlagsIsChamoisWindowingUIEnabled");
-        if (!fn) BP_Log(@"[y25] GUARD(gmbanner) neither SBFIsChamoisWindowingUIAvailable nor SBFFeatureFlagsIsChamoisWindowingUIEnabled resolves: Stage Manager taken as available");
+        if (!fn) BP_Anomaly("gmbanner", @"[y25] GUARD(gmbanner) neither SBFIsChamoisWindowingUIAvailable nor SBFFeatureFlagsIsChamoisWindowingUIEnabled resolves: Stage Manager taken as available");
     });
     return fn ? fn() : YES;
 }
@@ -158,17 +158,17 @@ __attribute__((constructor)) static void Y25_Setup(void) {
         Class hb = NSClassFromString(@"SBHomeHardwareButton");
         if (hb && class_getInstanceMethod(hb, sel_registerName("_acceleratedSinglePressRecognizerShouldBegin"))) {
             gY25OrigBtn = BPX_Replace(hb, "_acceleratedSinglePressRecognizerShouldBegin", (IMP)Y25_BtnBegin); n++;
-        } else BP_Log(@"[y25] GUARD(homebutton) SBHomeHardwareButton _acceleratedSinglePressRecognizerShouldBegin missing: not installed");
+        } else BP_Anomaly("homebutton", @"[y25] GUARD(homebutton) SBHomeHardwareButton _acceleratedSinglePressRecognizerShouldBegin missing: not installed");
         Class rq = NSClassFromString(@"SBMainWorkspaceTransitionRequest");
         if (rq && class_getInstanceMethod(rq, sel_registerName("copyMainWorkspaceTransitionRequest"))) {
             gY25OrigCopy = BPX_Replace(rq, "copyMainWorkspaceTransitionRequest", (IMP)Y25_CopyRequest); n++;
-        } else BP_Log(@"[y25] GUARD(retainssiri) SBMainWorkspaceTransitionRequest copyMainWorkspaceTransitionRequest missing: not installed");
+        } else BP_Anomaly("retainssiri", @"[y25] GUARD(retainssiri) SBMainWorkspaceTransitionRequest copyMainWorkspaceTransitionRequest missing: not installed");
         Class base = NSClassFromString(@"SBWorkspaceTransitionRequest");
         Class st = NSClassFromString(@"SBSuspendedWorkspaceTransaction");
         if (base && st && class_getInstanceMethod(base, sel_registerName("displayIdentity")) && class_getInstanceMethod(st, sel_registerName("_childTransactionDidComplete:")) && class_getInstanceMethod(st, sel_registerName("transitionRequest"))) {
             gY25OrigIdent = BPX_Replace(base, "displayIdentity", (IMP)Y25_Identity);
             gY25OrigChild = BPX_Replace(st, "_childTransactionDidComplete:", (IMP)Y25_ChildDone); n++;
-        } else BP_Log(@"[y25] GUARD(suspendedctx) SBWorkspaceTransitionRequest displayIdentity or SBSuspendedWorkspaceTransaction _childTransactionDidComplete: / transitionRequest missing: not installed");
+        } else BP_Anomaly("suspendedctx", @"[y25] GUARD(suspendedctx) SBWorkspaceTransitionRequest displayIdentity or SBSuspendedWorkspaceTransaction _childTransactionDidComplete: / transitionRequest missing: not installed");
         Class gm = NSClassFromString(@"SBFluidSwitcherGestureManager");
         Class bmc = NSClassFromString(@"SBBannerManager");
         if (gm && bmc && class_getInstanceMethod(bmc, sel_registerName("addTransitionObserver:")) && class_getInstanceMethod(bmc, sel_registerName("removeTransitionObserver:")) &&
@@ -179,7 +179,7 @@ __attribute__((constructor)) static void Y25_Setup(void) {
             gY25OrigInit = BPX_Replace(gm, "initWithSwitcherController:delegate:", (IMP)Y25_InitGM);
             gY25OrigInval = BPX_Replace(gm, "invalidate", (IMP)Y25_InvalidateGM);
             gY25OrigTap = BPX_Replace(gm, "_shouldTapToBringItemContainerForward:receiveTouch:", (IMP)Y25_TapForward); n++;
-        } else BP_Log(@"[y25] GUARD(gmbanner) SBFluidSwitcherGestureManager / SBBannerManager selectors missing: not installed");
+        } else BP_Anomaly("gmbanner", @"[y25] GUARD(gmbanner) SBFluidSwitcherGestureManager / SBBannerManager selectors missing: not installed");
         BP_Log(@"[y25] installed %d group(s) (switches y24_homebutton, y24_retainssiri, y24_suspendedctx, y24_gmbanner)", n);
     }
 }

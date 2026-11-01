@@ -135,17 +135,17 @@ __attribute__((constructor)) static void Y31_Setup(void) {
         Method ownM = cw ? class_getInstanceMethod(cw, aa) : NULL, supM = cw ? class_getInstanceMethod(class_getSuperclass(cw), aa) : NULL;
         if (cw && supM && (!ownM || ownM == supM)) {                       // 16.0: only inherited
             class_addMethod(cw, aa, (IMP)Y31_CenterAttrs, "@24@0:8@16"); n++;
-        } else BP_Log(@"[y31] GUARD(centerpage) SBCenterWindowPagePresentationSwitcherModifier missing or already has animationAttributesForLayoutElement: (%p): not added", (__bridge void *)cw);
+        } else BP_Anomaly("centerpage", @"[y31] GUARD(centerpage) SBCenterWindowPagePresentationSwitcherModifier missing or already has animationAttributesForLayoutElement: (%p): not added", (__bridge void *)cw);
         Class sh = NSClassFromString(@"SBShelfExpansionSwitcherModifier");
         if (sh && class_getInstanceMethod(sh, sel_registerName("scaleForIndex:")) && class_getInstanceMethod(sh, sel_registerName("_presentationValueForIndex:"))) { gY31OrigShelfScale = BPX_Replace(sh, "scaleForIndex:", (IMP)Y31_ShelfScale); n++; }
-        else BP_Log(@"[y31] GUARD(shelfscale) SBShelfExpansionSwitcherModifier scaleForIndex: / _presentationValueForIndex: missing: not installed");
+        else BP_Anomaly("shelfscale", @"[y31] GUARD(shelfscale) SBShelfExpansionSwitcherModifier scaleForIndex: / _presentationValueForIndex: missing: not installed");
         Class wv = NSClassFromString(@"SBDeviceApplicationSceneClassicWrapperView");
         Class wvMeta = wv ? object_getClass((id)wv) : Nil;
         if (wvMeta && class_getInstanceMethod(wvMeta, sel_registerName("shouldUseWrapperViewForSceneHandle:"))) { gY31OrigWrapperUse = BPX_Replace(wvMeta, "shouldUseWrapperViewForSceneHandle:", (IMP)Y31_UseWrapper); n++; }
-        else BP_Log(@"[y31] GUARD(wrapperview) +SBDeviceApplicationSceneClassicWrapperView shouldUseWrapperViewForSceneHandle: missing: not installed");
+        else BP_Anomaly("wrapperview", @"[y31] GUARD(wrapperview) +SBDeviceApplicationSceneClassicWrapperView shouldUseWrapperViewForSceneHandle: missing: not installed");
         Class mv = NSClassFromString(@"SBMinimumViableSwitcherTableViewController");
         if (mv && class_getInstanceMethod(mv, sel_registerName("isWindowVisible"))) { gY31OrigWindowVisible = BPX_Replace(mv, "isWindowVisible", (IMP)Y31_WindowVisible); n++; }
-        else BP_Log(@"[y31] GUARD(minviable) SBMinimumViableSwitcherTableViewController isWindowVisible missing: not installed");
+        else BP_Anomaly("minviable", @"[y31] GUARD(minviable) SBMinimumViableSwitcherTableViewController isWindowVisible missing: not installed");
         Class ui = NSClassFromString(@"SBUIController");
         Class idc = NSClassFromString(@"FBSDisplayIdentity");
         SEL sf = sel_registerName("statusBarFrameForDeviceApplicationSceneHandle:displayConfiguration:interfaceOrientation:statusBarStyleRequest:withinBounds:inReferenceSpace:");
@@ -154,7 +154,7 @@ __attribute__((constructor)) static void Y31_Setup(void) {
             gY31OrigMainRoot = BPX_Replace(idc, "isMainRootDisplay", (IMP)Y31_IsMainRoot);
             gY31OrigStatusFrame = BPX_Replace(meta, "statusBarFrameForDeviceApplicationSceneHandle:displayConfiguration:interfaceOrientation:statusBarStyleRequest:withinBounds:inReferenceSpace:", (IMP)Y31_StatusFrame);
             n++;
-        } else BP_Log(@"[y31] GUARD(classicsb) SBUIController statusBarFrame... or FBSDisplayIdentity isMainRootDisplay missing: not installed");
+        } else BP_Anomaly("classicsb", @"[y31] GUARD(classicsb) SBUIController statusBarFrame... or FBSDisplayIdentity isMainRootDisplay missing: not installed");
         BP_Log(@"[y31] installed %d group(s) (switches y24_centerpage, y24_minviable, y24_classicsb)", n);
     }
 }

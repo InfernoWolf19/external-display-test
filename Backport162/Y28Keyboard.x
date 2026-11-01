@@ -90,7 +90,7 @@ __attribute__((constructor)) static void Y28_Setup(void) {
         Class mgrClass = NSClassFromString(@"SBMainDisplaySceneManager");
         if (!c || !mgrClass || !class_getInstanceMethod(c, sel_registerName("_getHomeGrabberContainingView:isAlwaysPortrait:")) || !class_getInstanceMethod(c, sel_registerName("_updateHomeAffordance")) ||
             !class_getInstanceMethod(mgrClass, sel_registerName("addObserver:"))) {
-            BP_Log(@"[y28] GUARD(kbgrabber) SBKeyboardHomeAffordanceController (%p) / SBMainDisplaySceneManager (%p) or their selectors missing: not installed", (__bridge void *)c, (__bridge void *)mgrClass);
+            BP_Anomaly("kbgrabber", @"[y28] GUARD(kbgrabber) SBKeyboardHomeAffordanceController (%p) / SBMainDisplaySceneManager (%p) or their selectors missing: not installed", (__bridge void *)c, (__bridge void *)mgrClass);
             return;
         }
         gY28OrigGet = BPX_Replace(c, "_getHomeGrabberContainingView:isAlwaysPortrait:", (IMP)Y28_Get);

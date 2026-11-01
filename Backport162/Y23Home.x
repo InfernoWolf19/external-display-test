@@ -41,15 +41,15 @@ static id Y23_ProviderForScene(id self, SEL _cmd, id scene) {
     id locs[7];
     for (int i = 0; i < 7; i++) {
         locs[i] = Y23_Location(names[i]);
-        if (!locs[i]) { BP_Log(@"[y23] GUARD(applibrary) icon location symbol %s not found: the 16.0 provider builder runs", names[i]); goto fallback; }
+        if (!locs[i]) { BP_Anomaly("applibrary", @"[y23] GUARD(applibrary) icon location symbol %s not found: the 16.0 provider builder runs", names[i]); goto fallback; }
     }
     {
         Class grid = NSClassFromString(@"SBIconListGridLayout");
         id base = BPX_Obj1(provider, "layoutForIconLocation:", locs[3]);
-        if (!grid || ![base isKindOfClass:grid]) { BP_Log(@"[y23] GUARD(applibrary) expanded pod layout %@ is not an SBIconListGridLayout: the 16.0 provider builder runs", base); goto fallback; }
+        if (!grid || ![base isKindOfClass:grid]) { BP_Anomaly("applibrary", @"[y23] GUARD(applibrary) expanded pod layout %@ is not an SBIconListGridLayout: the 16.0 provider builder runs", base); goto fallback; }
         id cfg = [BPX_Obj0(base, "layoutConfiguration") copy];
         if (!cfg || !BPY_Responds(cfg, "landscapeLayoutInsets") || !BPY_Responds(cfg, "portraitLayoutInsets") || !BPY_Responds(cfg, "setPortraitLayoutInsets:") ||
-            ![grid instancesRespondToSelector:sel_registerName("initWithLayoutConfiguration:")]) { BP_Log(@"[y23] GUARD(applibrary) layout configuration %@ lacks the insets API: the 16.0 provider builder runs", cfg); goto fallback; }
+            ![grid instancesRespondToSelector:sel_registerName("initWithLayoutConfiguration:")]) { BP_Anomaly("applibrary", @"[y23] GUARD(applibrary) layout configuration %@ lacks the insets API: the 16.0 provider builder runs", cfg); goto fallback; }
         Y23Insets land = ((Y23Insets (*)(id, SEL))objc_msgSend)(cfg, sel_registerName("landscapeLayoutInsets"));
         Y23Insets port = ((Y23Insets (*)(id, SEL))objc_msgSend)(cfg, sel_registerName("portraitLayoutInsets"));
         port.left = land.left + land.left;
@@ -59,12 +59,12 @@ static id Y23_ProviderForScene(id self, SEL _cmd, id scene) {
         NSMutableDictionary *layouts = [NSMutableDictionary dictionaryWithCapacity:7];
         for (int i = 0; i < 7; i++) {
             id l = (i == 3) ? fresh : BPX_Obj1(provider, "layoutForIconLocation:", locs[i]);
-            if (!l) { BP_Log(@"[y23] GUARD(applibrary) no layout for %s: the 16.0 provider builder runs", names[i]); goto fallback; }
+            if (!l) { BP_Anomaly("applibrary", @"[y23] GUARD(applibrary) no layout for %s: the 16.0 provider builder runs", names[i]); goto fallback; }
             layouts[locs[i]] = l;
         }
         Class pc = object_getClass(provider);
         SEL ini = sel_registerName("initWithListLayouts:");
-        if (!pc || ![pc instancesRespondToSelector:ini]) { BP_Log(@"[y23] GUARD(applibrary) provider class %@ has no initWithListLayouts:", pc); goto fallback; }
+        if (!pc || ![pc instancesRespondToSelector:ini]) { BP_Anomaly("applibrary", @"[y23] GUARD(applibrary) provider class %@ has no initWithListLayouts:", pc); goto fallback; }
         id result = ((__attribute__((ns_returns_retained)) id (*)(__attribute__((ns_consumed)) id, SEL, id))objc_msgSend)([pc alloc], ini, layouts);
         BPY_LOG(@"[y23] app library provider for the scene %@: private expanded pod layout, side insets %.1f / %.1f (the shared layout is not touched)", scene, port.left, port.right);
         return result;
@@ -110,13 +110,13 @@ __attribute__((constructor)) static void Y23_Setup(void) {
         if (c && class_getInstanceMethod(c, sel_registerName("_appLibraryListLayoutProviderForWindowScene:"))) {
             gY23Orig = BPX_Replace(c, "_appLibraryListLayoutProviderForWindowScene:", (IMP)Y23_ProviderForScene);
             n++;
-        } else BP_Log(@"[y23] GUARD(applibrary) SBIconController _appLibraryListLayoutProviderForWindowScene: missing: not installed");
+        } else BP_Anomaly("applibrary", @"[y23] GUARD(applibrary) SBIconController _appLibraryListLayoutProviderForWindowScene: missing: not installed");
         Class sb = NSClassFromString(@"SBMainDisplaySceneLayoutStatusBarView");
         if (sb && class_getInstanceMethod(sb, sel_registerName("_applyStatusBarAlpha:toSceneWithIdentifier:")) && class_getInstanceMethod(sb, sel_registerName("_applyStatusBarHidden:withAnimation:toSceneWithIdentifier:"))) {
             gY23OrigAlpha = BPX_Replace(sb, "_applyStatusBarAlpha:toSceneWithIdentifier:", (IMP)Y23_Alpha);
             gY23OrigHidden = BPX_Replace(sb, "_applyStatusBarHidden:withAnimation:toSceneWithIdentifier:", (IMP)Y23_Hidden);
             n++;
-        } else BP_Log(@"[y23] GUARD(sbrecording) SBMainDisplaySceneLayoutStatusBarView apply methods missing: not installed");
+        } else BP_Anomaly("sbrecording", @"[y23] GUARD(sbrecording) SBMainDisplaySceneLayoutStatusBarView apply methods missing: not installed");
         BP_Log(@"[y23] installed %d group(s) (switches y17_applibrary, y17_sbrecording)", n);
     }
 }

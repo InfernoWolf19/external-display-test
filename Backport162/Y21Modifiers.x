@@ -117,7 +117,7 @@ static id Y21_WillBegin(id me, SEL _cmd, IMP orig) {
     Class oc = NSClassFromString(@"SBOverrideAppLayoutsSwitcherModifier");
     SEL oi = @selector(initWithAppLayouts:);
     if (idx == NSNotFound || !oc || ![oc instancesRespondToSelector:oi] || ![me respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)]) {
-        BP_Log(@"[y21] GUARD(centerwindow) %@ transitionWillBegin: no subject layout (full %@, from %@, center %@): super response only", NSStringFromClass(object_getClass(me)), full, from, center);
+        BP_Anomaly("centerwindow", @"[y21] GUARD(centerwindow) %@ transitionWillBegin: no subject layout (full %@, from %@, center %@): super response only", NSStringFromClass(object_getClass(me)), full, from, center);
         return r;
     }
     id override = G1B_INIT(id)([oc alloc], oi, layouts);
@@ -157,7 +157,7 @@ static BOOL Y21_AnyExceeds(id self, SEL _cmd) {
     BOOL strip = BPX_Bool0(self, "prefersStripHidden"), dockH = BPX_Bool0(self, "prefersDockHidden");
     id model = (calc && layout) ? ((id (*)(id, SEL, id, long long, id, double, double, Y21Rect, BOOL, BOOL))objc_msgSend)(calc, sel_registerName("overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:"), layout, ori, attrs, dock, scale, bounds, strip, dockH) : nil;
     if (!model || !BPY_Responds(model, "sizeForItem:")) {
-        BP_Log(@"[y21] GUARD(resizestrip) no overlapping model (calc %@, layout %@): the 16.0 bounding box rule stays", calc, layout);
+        BP_Anomaly("resizestrip", @"[y21] GUARD(resizestrip) no overlapping model (calc %@, layout %@): the 16.0 bounding box rule stays", calc, layout);
         return gY21OrigResize ? ((BOOL (*)(id, SEL))gY21OrigResize)(self, _cmd) : NO;
     }
     BOOL any = NO;
@@ -182,7 +182,7 @@ static Y21Rect Y21_SplitFrame(id self, SEL _cmd, long long role, id layout, Y21R
     id wrapped = G1B_HasSuper(gY21SplitSuper, ac) ? G1B_SUPER(id, gY21SplitSuper, self, ac, (struct objc_super *, SEL, id), layout) : nil;
     id model = (wrapped && BPY_Responds(self, "overlappingModelForAppLayout:")) ? BPX_Obj1(self, "overlappingModelForAppLayout:", wrapped) : nil;
     if (!model || !BPY_Responds(model, "boundingBox")) {
-        BP_Log(@"[y21] GUARD(splitbounds) no wrapped layout / overlapping model (wrapped %@): the 16.0 body runs", wrapped);
+        BP_Anomaly("splitbounds", @"[y21] GUARD(splitbounds) no wrapped layout / overlapping model (wrapped %@): the 16.0 body runs", wrapped);
         return orig ? orig(self, _cmd, role, layout, bounds) : bounds;
     }
     Y21Rect box = ((Y21Rect (*)(id, SEL))objc_msgSend)(model, sel_registerName("boundingBox"));
@@ -212,18 +212,18 @@ __attribute__((constructor)) static void Y21_Setup(void) {
             gY21OrigDecline = BPX_Replace(dc, "transitionWillBegin", (IMP)Y21_DeclineBegin);
             gY21OrigCommit = BPX_Replace(cm, "transitionWillBegin", (IMP)Y21_CommitBegin);
             n++;
-        } else BP_Log(@"[y21] GUARD(centerwindow) SBWindowDecline/CommitSwitcherModifier missing or with different super classes: not installed");
+        } else BP_Anomaly("centerwindow", @"[y21] GUARD(centerwindow) SBWindowDecline/CommitSwitcherModifier missing or with different super classes: not installed");
         Class rs = NSClassFromString(@"SBItemResizeGestureSwitcherModifier");
         if (rs && class_getInstanceMethod(rs, sel_registerName("_anyItemExceedsWidthThresholdToHideStrip")) && class_getInstanceVariable(rs, "_currentAppLayout")) {
             gY21OrigResize = BPX_Replace(rs, "_anyItemExceedsWidthThresholdToHideStrip", (IMP)Y21_AnyExceeds);
             n++;
-        } else BP_Log(@"[y21] GUARD(resizestrip) SBItemResizeGestureSwitcherModifier _anyItemExceedsWidthThresholdToHideStrip or _currentAppLayout missing: not installed");
+        } else BP_Anomaly("resizestrip", @"[y21] GUARD(resizestrip) SBItemResizeGestureSwitcherModifier _anyItemExceedsWidthThresholdToHideStrip or _currentAppLayout missing: not installed");
         Class sp = NSClassFromString(@"SBSplitDisplayItemSwitcherModifier");
         if (sp && class_getInstanceMethod(sp, sel_registerName("frameForLayoutRole:inAppLayout:withBounds:"))) {
             gY21SplitSuper = class_getSuperclass(sp);
             gY21OrigSplit = BPX_Replace(sp, "frameForLayoutRole:inAppLayout:withBounds:", (IMP)Y21_SplitFrame);
             n++;
-        } else BP_Log(@"[y21] GUARD(splitbounds) SBSplitDisplayItemSwitcherModifier frameForLayoutRole:inAppLayout:withBounds: missing: not installed");
+        } else BP_Anomaly("splitbounds", @"[y21] GUARD(splitbounds) SBSplitDisplayItemSwitcherModifier frameForLayoutRole:inAppLayout:withBounds: missing: not installed");
         BP_Log(@"[y21] installed %d group(s) (switches y17_centerwindow, y17_resizestrip, y17_splitbounds)", n);
     }
 }

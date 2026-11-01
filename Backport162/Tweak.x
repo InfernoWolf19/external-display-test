@@ -181,12 +181,7 @@ BOOL BP_LogEnabled(void) { return BP_Logging(); }
 static int gLogFd = -1;
 static ino_t gLogIno;
 static uint64_t gLogNextCheck;
-void BP_Log(NSString *fmt, ...) {
-    if (!BP_Logging()) return;
-    va_list ap;
-    va_start(ap, fmt);
-    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
-    va_end(ap);
+static void BP_LogLine(NSString *msg) {                                 // unconditional: BP_Log (debug only) and BP_Anomaly (always) both end here
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     struct tm tmv;
@@ -209,6 +204,80 @@ void BP_Log(NSString *fmt, ...) {
     }
     if (gLogFd >= 0 && u) (void)!write(gLogFd, u, strlen(u));
     pthread_mutex_unlock(&gMu);
+}
+void BP_Log(NSString *fmt, ...) {
+    if (!BP_Logging()) return;
+    va_list ap;
+    va_start(ap, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    BP_LogLine(msg);
+}
+
+// ---------------------------------------------------------------- always-on anomaly channel (specs/AUDIT-SILENT-FALLBACKS-0.7.9.md)
+// A ported body whose assumption failed (selector / class / ivar missing, a value of another type, a fallback to the stock 16.0 answer where 16.2 has none) calls
+// BP_Anomaly once per distinct condition; the line `ANOMALY <tag>: <message>` goes to Backport162.log WITHOUT Backport162.debug.  Bounded by construction:
+//   * 300 lines per process lifetime (one last "cap reached" line), at most 40 per tag;
+//   * a (tag, format string) pair is formatted at most 8 times (the first check is two table probes under a spin lock, no allocation), a (tag, message) pair is written once;
+// so a hot path that hits the same anomaly every frame costs a handful of microseconds once and ~nothing afterwards.
+enum { kAnomalyCap = 300, kAnomalyPerTag = 40, kAnomalyPerFmt = 8, kAnomalySlots = 2048, kAnomalyTags = 64 };
+typedef struct { uint64_t key; uint32_t count; } BPAnomalySite;
+static BPAnomalySite gAnomalySites[kAnomalySlots];             // (tag hash ^ format pointer) -> times formatted
+static uint64_t gAnomalySeen[kAnomalySlots];                   // hash of tag + message of the lines written
+static struct { uint64_t key; uint32_t count; } gAnomalyTagCount[kAnomalyTags];
+static int gAnomalyLines;
+static pthread_mutex_t gAnomalyMu = PTHREAD_MUTEX_INITIALIZER;
+static uint64_t BP_Fnv(const void *p, size_t n, uint64_t h) {
+    const unsigned char *b = (const unsigned char *)p;
+    for (size_t i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ull; }
+    return h;
+}
+void BP_Anomaly(const char *tag, NSString *fmt, ...) {
+    if (!tag || __atomic_load_n(&gAnomalyLines, __ATOMIC_RELAXED) >= kAnomalyCap) return;
+    uint64_t th = BP_Fnv(tag, strlen(tag), 14695981039346656037ull) | 1;
+    uint64_t sk = (th ^ ((uint64_t)(uintptr_t)(__bridge void *)fmt * 0x9e3779b97f4a7c15ull)) | 1;
+    pthread_mutex_lock(&gAnomalyMu);
+    BPAnomalySite *site = NULL;
+    for (int k = 0; k < 16 && !site; k++) {
+        BPAnomalySite *e = &gAnomalySites[(sk + (uint64_t)k) % kAnomalySlots];
+        if (e->key == sk) site = e;
+        else if (e->key == 0) { e->key = sk; site = e; }
+    }
+    BOOL format = site && site->count < kAnomalyPerFmt;
+    if (site) site->count++;
+    pthread_mutex_unlock(&gAnomalyMu);
+    if (!format) return;
+    va_list ap;
+    va_start(ap, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    const char *mu = msg.UTF8String ?: "";
+    uint64_t mh = BP_Fnv(mu, strlen(mu), th) | 1;
+    BOOL write = NO, capLine = NO;
+    pthread_mutex_lock(&gAnomalyMu);
+    if (gAnomalyLines < kAnomalyCap) {
+        BOOL dup = NO;
+        for (int k = 0; k < 16 && !dup; k++) {
+            uint64_t *e = &gAnomalySeen[(mh + (uint64_t)k) % kAnomalySlots];
+            if (*e == mh) dup = YES;
+            else if (*e == 0) { *e = mh; break; }
+        }
+        uint32_t *tc = NULL;
+        for (int k = 0; k < 8 && !tc; k++) {
+            int i = (int)((th + (uint64_t)k) % kAnomalyTags);
+            if (gAnomalyTagCount[i].key == th) tc = &gAnomalyTagCount[i].count;
+            else if (gAnomalyTagCount[i].key == 0) { gAnomalyTagCount[i].key = th; tc = &gAnomalyTagCount[i].count; }
+        }
+        if (!dup && (!tc || *tc < kAnomalyPerTag)) {
+            if (tc) (*tc)++;
+            gAnomalyLines++;
+            write = YES;
+            capLine = gAnomalyLines >= kAnomalyCap;
+        }
+    }
+    pthread_mutex_unlock(&gAnomalyMu);
+    if (write) BP_LogLine([NSString stringWithFormat:@"ANOMALY %s: %@", tag, msg]);
+    if (capLine) BP_LogLine(@"ANOMALY (cap): 300 anomaly lines written by this process, further anomalies are not logged");
 }
 
 static BOOL BP_BuildMatches(void) {
