@@ -180,6 +180,8 @@ BOOL BP_LogEnabled(void) { return BP_Logging(); }
 // another process, e.g. Send logs) runs at most once a second; one write(2) per line, so nothing is buffered and a crash loses no line.  File name and line format are unchanged.
 static int gLogFd = -1;
 static ino_t gLogIno;
+static NSMutableArray<NSString *> *gAnomalyRecap;              // every ANOMALY line this process wrote (<= 300): repeated at the top of a rotated / recreated log, so a Backport162.log alone always carries them
+static pthread_mutex_t gAnomalyMu = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t gLogNextCheck;
 static void BP_LogLine(NSString *msg) {                                 // unconditional: BP_Log (debug only) and BP_Anomaly (always) both end here
     struct timespec ts;
@@ -200,7 +202,19 @@ static void BP_LogLine(NSString *msg) {                                 // uncon
     if (gLogFd < 0) {
         gLogFd = open(gLogPath, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
         struct stat fs;
-        if (gLogFd >= 0 && fstat(gLogFd, &fs) == 0) gLogIno = fs.st_ino;
+        if (gLogFd >= 0 && fstat(gLogFd, &fs) == 0) {
+            gLogIno = fs.st_ino;
+            if (fs.st_size == 0) {          // a fresh file (rotation / removed): carry the anomalies of this process over, they are the first thing a bug report needs
+                pthread_mutex_lock(&gAnomalyMu);
+                NSArray<NSString *> *recap = gAnomalyRecap.count ? [gAnomalyRecap copy] : nil;
+                pthread_mutex_unlock(&gAnomalyMu);
+                if (recap) {
+                    NSString *hdr = [NSString stringWithFormat:@"ANOMALY recap: %lu line(s) written earlier by this process, repeated because the log was rotated\n%@\n", (unsigned long)recap.count, [recap componentsJoinedByString:@"\n"]];
+                    const char *h = hdr.UTF8String;
+                    if (h) (void)!write(gLogFd, h, strlen(h));
+                }
+            }
+        }
     }
     if (gLogFd >= 0 && u) (void)!write(gLogFd, u, strlen(u));
     pthread_mutex_unlock(&gMu);
@@ -226,7 +240,6 @@ static BPAnomalySite gAnomalySites[kAnomalySlots];             // (tag hash ^ fo
 static uint64_t gAnomalySeen[kAnomalySlots];                   // hash of tag + message of the lines written
 static struct { uint64_t key; uint32_t count; } gAnomalyTagCount[kAnomalyTags];
 static int gAnomalyLines;
-static pthread_mutex_t gAnomalyMu = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t BP_Fnv(const void *p, size_t n, uint64_t h) {
     const unsigned char *b = (const unsigned char *)p;
     for (size_t i = 0; i < n; i++) { h ^= b[i]; h *= 1099511628211ull; }
@@ -276,7 +289,14 @@ void BP_Anomaly(const char *tag, NSString *fmt, ...) {
         }
     }
     pthread_mutex_unlock(&gAnomalyMu);
-    if (write) BP_LogLine([NSString stringWithFormat:@"ANOMALY %s: %@", tag, msg]);
+    if (write) {
+        NSString *al = [NSString stringWithFormat:@"ANOMALY %s: %@", tag, msg];
+        BP_LogLine(al);
+        pthread_mutex_lock(&gAnomalyMu);
+        if (!gAnomalyRecap) gAnomalyRecap = [NSMutableArray array];
+        if (gAnomalyRecap.count < kAnomalyCap) [gAnomalyRecap addObject:al];
+        pthread_mutex_unlock(&gAnomalyMu);
+    }
     if (capLine) BP_LogLine(@"ANOMALY (cap): 300 anomaly lines written by this process, further anomalies are not logged");
 }
 
