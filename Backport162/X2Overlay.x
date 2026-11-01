@@ -110,8 +110,7 @@ static IMP gX2OrigBegin;
 static void X2_Begin(id self, SEL _cmd, id validator, id handler) {
     void *prev = gX2InBegin;
     gX2InBegin = (__bridge void *)self;
-    if (gX2OrigBegin) ((void (*)(id, SEL, id, id))gX2OrigBegin)(self, _cmd, validator, handler);
-    gX2InBegin = prev;
+    @try { if (gX2OrigBegin) ((void (*)(id, SEL, id, id))gX2OrigBegin)(self, _cmd, validator, handler); } @finally { gX2InBegin = prev; }
 }
 
 static IMP gX2OrigRequest3;
@@ -150,8 +149,8 @@ static BOOL X2_Exec(id self, SEL _cmd, id request) {
         id ctx = BPX_Obj0(request, "transientOverlayContext");
         if (BPX_Bool0(ctx, "shouldPreserveAppSwitcher")) gX2ExecRequest = (__bridge void *)request;
     }
-    BOOL r = gX2OrigExec ? ((BOOL (*)(id, SEL, id))gX2OrigExec)(self, _cmd, request) : NO;
-    gX2ExecRequest = prev;
+    BOOL r = NO;
+    @try { r = gX2OrigExec ? ((BOOL (*)(id, SEL, id))gX2OrigExec)(self, _cmd, request) : NO; } @finally { gX2ExecRequest = prev; }
     return r;
 }
 

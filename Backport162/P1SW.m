@@ -270,8 +270,8 @@ static id PS_CreateSettings(id self, SEL _cmd, id context, id entity) {
     id prevState = tOrientState, prevId = tOrientId;
     tOrientState = PS_S0(context, "layoutState");
     tOrientId = PS_S0(self, "sceneIdentifier");
-    id r = ((id (*)(id, SEL, id, id))sCreateSettings)(self, _cmd, context, entity);
-    tOrientState = prevState; tOrientId = prevId;
+    id r = nil;
+    @try { r = ((id (*)(id, SEL, id, id))sCreateSettings)(self, _cmd, context, entity); } @finally { tOrientState = prevState; tOrientId = prevId; }
     return r;
 }
 static long long PS_LSForElement(id self, SEL _cmd, id element) {
@@ -338,8 +338,8 @@ static CGRect PS_SceneFrame(id self, SEL _cmd, id entity, id state) {
     if (!BP_OnName("p1_orient") || !PS_B0(self, "isChamoisWindowingUIEnabled") || !PS_LayoutOrientationUsable(self, state)) return ((Orig)sSceneFrame)(self, _cmd, entity, state);
     id prevSelf = tFrameSelf; long long prevO = tFrameOrient;
     tFrameSelf = self; tFrameOrient = PS_L0(state, "interfaceOrientation");
-    CGRect r = ((Orig)sSceneFrame)(self, _cmd, entity, state);
-    tFrameSelf = prevSelf; tFrameOrient = prevO;
+    CGRect r = {0};
+    @try { r = ((Orig)sSceneFrame)(self, _cmd, entity, state); } @finally { tFrameSelf = prevSelf; tFrameOrient = prevO; }
     return r;
 }
 static long long PS_SceneHandleOrient(id self, SEL _cmd, id handle) {

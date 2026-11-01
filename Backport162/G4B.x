@@ -450,8 +450,7 @@ static void G4B_InvalidateCloneRequest(G4BCloneRequest *req) {   // block 0x18e4
 // put on the SBDisplayAssertion.updateWithPreferences: call it ends with (hook below).
 - (void)_updateDisplayAssertion {
     tG4BMirroredUpdate++;
-    %orig;
-    tG4BMirroredUpdate--;
+    @try { %orig; } @finally { tG4BMirroredUpdate--; }
 }
 %end
 
@@ -2037,12 +2036,15 @@ static id G4B_hook_policy(id self, SEL cmd, id target) {
     gG4BFL.kfc = self; gG4BFL.appScene = appScene; gG4BFL.active = active; gG4BFL.stealWindow = stealWindow; gG4BFL.armed = YES;
     BOOL yes = YES;
     if (stealWindow) memcpy((char *)(__bridge void *)self + ivar_getOffset(addIv), &yes, 1);   // the 16.0 body then takes the window of orderedContext.lastObject
-    id r = gG4BOrigPolicy(self, cmd, target);
+    id r = nil;
+    @try { r = gG4BOrigPolicy(self, cmd, target); }
+    @finally {          // audit class D: the armed context and the patched ivar are restored even when the policy body raises
+        if (stealWindow) memcpy((char *)(__bridge void *)self + ivar_getOffset(addIv), &adding, 1);
+        gG4BFL = saved;
+    }
     if (stealWindow) {
-        memcpy((char *)(__bridge void *)self + ivar_getOffset(addIv), &adding, 1);
         BP_Log(@"focuslock: stealing window %p is on the active display %p while the focused app is on another display: preferred SpringBoard focus window scene = the active scene", (__bridge void *)stealWindow, (__bridge void *)active);
     }
-    gG4BFL = saved;
     return r;
 }
 
@@ -2364,8 +2366,8 @@ static BOOL G4B_SiriExceptionApplies(id request, id session, NSString **why) {
         tG4BSiriState = apply ? 1 : 2;
         BP_Log(@"siri exception: request %p asks to dismiss Siri; %@ -> %s", (__bridge void *)request, why ?: @"?", apply ? "Siri is NOT dismissed (16.2 behaviour)" : "Siri is dismissed (unchanged)");
     }
-    BOOL r = %orig;
-    tG4BSiriState = prev;
+    BOOL r = NO;
+    @try { r = %orig; } @finally { tG4BSiriState = prev; }
     return r;
 }
 %end
@@ -2443,8 +2445,7 @@ static void G4B_FluidTeardown(id vc) {
 - (void)windowSceneDidDisconnect:(id)scene {
     __unsafe_unretained id prev = tG4BDiscScene;
     tG4BDiscScene = BP_OnName("discextras") ? scene : nil;
-    %orig;
-    tG4BDiscScene = prev;
+    @try { %orig; } @finally { tG4BDiscScene = prev; }
 }
 %end
 

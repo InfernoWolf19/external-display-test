@@ -501,14 +501,12 @@ static __thread int gTxnFwdDepth;
 static void G1C_Txn_Update(id self, SEL _cmd, id req, id mgr) {
     if (gTxnFwdDepth > 0 || !G1C_ON() || ![self respondsToSelector:@selector(updateGestureWithTransitionRequest:)]) return;
     gTxnFwdDepth++;
-    G1B_SendV1(self, @selector(updateGestureWithTransitionRequest:), req);
-    gTxnFwdDepth--;
+    @try { G1B_SendV1(self, @selector(updateGestureWithTransitionRequest:), req); } @finally { gTxnFwdDepth--; }
 }
 static void G1C_Txn_Complete(id self, SEL _cmd, id req, id mgr) {
     if (gTxnFwdDepth > 0 || !G1C_ON() || ![self respondsToSelector:@selector(completeGestureWithTransitionRequest:)]) return;
     gTxnFwdDepth++;
-    G1B_SendV1(self, @selector(completeGestureWithTransitionRequest:), req);
-    gTxnFwdDepth--;
+    @try { G1B_SendV1(self, @selector(completeGestureWithTransitionRequest:), req); } @finally { gTxnFwdDepth--; }
 }
 static void G1C_BuildTransactions(void) {
     Class base = NSClassFromString(@"SBFluidSwitcherGestureWorkspaceTransaction");

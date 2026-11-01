@@ -181,8 +181,7 @@ static void Y6_AlwaysUpdate(id self, SEL _cmd) {
     void *prev = tY6AlwaysScene;
     id scene = BP_OnName("y6_alwayslive") ? BPX_Obj0(self, "_sbWindowScene") : nil;
     tY6AlwaysScene = scene ? (__bridge void *)scene : NULL;
-    if (gY6AlwaysUpdate) ((void (*)(id, SEL))gY6AlwaysUpdate)(self, _cmd);
-    tY6AlwaysScene = prev;
+    @try { if (gY6AlwaysUpdate) ((void (*)(id, SEL))gY6AlwaysUpdate)(self, _cmd); } @finally { tY6AlwaysScene = prev; }
 }
 // -[SBFullScreenAlwaysLiveLiveContentOverlay initWithSceneHandle:referenceSize:containerOrientation:]
 static id Y6_AlwaysInit(id self, SEL _cmd, id handle, Y6Size size, long long orientation) {

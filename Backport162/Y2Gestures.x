@@ -80,36 +80,31 @@ static void Y2_TAMenuIn(id self, SEL _cmd, id dots) {
     id mgr = Y2_ON() ? Y2_SceneTUI(Y2_TAScene(self)) : nil;
     void *prev = tY2TUI;
     if (mgr) tY2TUI = (__bridge void *)mgr;
-    if (gY2OrigTAMenuIn) ((void (*)(id, SEL, id))gY2OrigTAMenuIn)(self, _cmd, dots);
-    tY2TUI = prev;
+    @try { if (gY2OrigTAMenuIn) ((void (*)(id, SEL, id))gY2OrigTAMenuIn)(self, _cmd, dots); } @finally { tY2TUI = prev; }
 }
 static void Y2_TAMenuOut(id self, SEL _cmd, id dots) {
     id mgr = Y2_ON() ? Y2_SceneTUI(Y2_TAScene(self)) : nil;
     void *prev = tY2TUI;
     if (mgr) tY2TUI = (__bridge void *)mgr;
-    if (gY2OrigTAMenuOut) ((void (*)(id, SEL, id))gY2OrigTAMenuOut)(self, _cmd, dots);
-    tY2TUI = prev;
+    @try { if (gY2OrigTAMenuOut) ((void (*)(id, SEL, id))gY2OrigTAMenuOut)(self, _cmd, dots); } @finally { tY2TUI = prev; }
 }
 static void Y2_TAMode(id self, SEL _cmd, long long mode, BOOL animated) {
     id mgr = Y2_ON() ? Y2_SceneTUI(Y2_TAScene(self)) : nil;
     void *prev = tY2TUI;
     if (mgr) tY2TUI = (__bridge void *)mgr;
-    if (gY2OrigTAMode) ((void (*)(id, SEL, long long, BOOL))gY2OrigTAMode)(self, _cmd, mode, animated);
-    tY2TUI = prev;
+    @try { if (gY2OrigTAMode) ((void (*)(id, SEL, long long, BOOL))gY2OrigTAMode)(self, _cmd, mode, animated); } @finally { tY2TUI = prev; }
 }
 static void Y2_ShelfIn(id self, SEL _cmd, BOOL animated) {
     id mgr = Y2_ON() ? Y2_SceneTUI(Y2_ShelfScene(self)) : nil;
     void *prev = tY2TUI;
     if (mgr) tY2TUI = (__bridge void *)mgr;
-    if (gY2OrigShelfIn) ((void (*)(id, SEL, BOOL))gY2OrigShelfIn)(self, _cmd, animated);
-    tY2TUI = prev;
+    @try { if (gY2OrigShelfIn) ((void (*)(id, SEL, BOOL))gY2OrigShelfIn)(self, _cmd, animated); } @finally { tY2TUI = prev; }
 }
 static void Y2_ShelfOut(id self, SEL _cmd, BOOL animated) {
     id mgr = Y2_ON() ? Y2_SceneTUI(Y2_ShelfScene(self)) : nil;
     void *prev = tY2TUI;
     if (mgr) tY2TUI = (__bridge void *)mgr;
-    if (gY2OrigShelfOut) ((void (*)(id, SEL, BOOL))gY2OrigShelfOut)(self, _cmd, animated);
-    tY2TUI = prev;
+    @try { if (gY2OrigShelfOut) ((void (*)(id, SEL, BOOL))gY2OrigShelfOut)(self, _cmd, animated); } @finally { tY2TUI = prev; }
 }
 
 // ---- (c) the top affordance's presence controller (tap to unhide) follows its scene

@@ -49,8 +49,8 @@ static BOOL Y25_BtnBegin(id self, SEL _cmd) {
     if (!BP_OnName("y24_homebutton")) return gY25OrigBtn ? ((BOOL (*)(id, SEL))gY25OrigBtn)(self, _cmd) : NO;
     id ctl = Y25_MainSceneController("homebutton");
     void *prev = Y3_PushActive(ctl);
-    BOOL r = gY25OrigBtn ? ((BOOL (*)(id, SEL))gY25OrigBtn)(self, _cmd) : NO;
-    Y3_PopActive(prev);
+    BOOL r = NO;
+    @try { r = gY25OrigBtn ? ((BOOL (*)(id, SEL))gY25OrigBtn)(self, _cmd) : NO; } @finally { Y3_PopActive(prev); }
     BPY_LOG(@"[y25] accelerated home press: environment mode read from the main display controller %p -> begin %d", (__bridge void *)ctl, (int)r);
     return r;
 }
@@ -91,8 +91,7 @@ static void Y25_ChildDone(id self, SEL _cmd, id child) {
     if (ident && BPY_Responds(ident, "isMainDisplay") && !BPY_SEND(BOOL, (), ident, "isMainDisplay")) arm = YES;
     void *prevReq = tY25Req; BOOL prevArmed = tY25Armed;
     if (arm) { tY25Req = (__bridge void *)req; tY25Armed = YES; BPY_LOG(@"[y25] suspended launch of a non main display: the transition context is built (16.2)"); }
-    if (gY25OrigChild) ((void (*)(id, SEL, id))gY25OrigChild)(self, _cmd, child);
-    tY25Req = prevReq; tY25Armed = prevArmed;
+    @try { if (gY25OrigChild) ((void (*)(id, SEL, id))gY25OrigChild)(self, _cmd, child); } @finally { tY25Req = prevReq; tY25Armed = prevArmed; }
 }
 
 // ---- y24_gmbanner ----

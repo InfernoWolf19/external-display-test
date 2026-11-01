@@ -436,8 +436,7 @@ static void BPPTR_DisplayChanged(id controller, id before, id after) {
     }
     BPPTR_Log(@"displayAttached: nil system pointer scene, no system portal source collection (16.1 cbz)");
     gBPPTRNoPortal++;
-    %orig;
-    gBPPTRNoPortal--;
+    @try { %orig; } @finally { gBPPTRNoPortal--; }
 }
 %end
 

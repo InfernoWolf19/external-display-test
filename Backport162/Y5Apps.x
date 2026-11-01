@@ -56,8 +56,7 @@ static void Y5_RemoveSB(id self, SEL _cmd) {
         tY5Pool = (__bridge void *)pool;
         if (BP_LogEnabled() && pool != Y5_PoolOf(self)) BPY_LOG(@"[y5] status bar of %p recycled into the pool it came from (%p), not the current scene's", (__bridge void *)self, (__bridge void *)pool);
     }
-    if (gY5Remove) ((void (*)(id, SEL))gY5Remove)(self, _cmd);
-    tY5Pool = prev;
+    @try { if (gY5Remove) ((void (*)(id, SEL))gY5Remove)(self, _cmd); } @finally { tY5Pool = prev; }
     if (w) objc_setAssociatedObject(self, kY5Pool, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 // -[SBStatusBarReusePool recycleStatusBar:]

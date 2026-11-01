@@ -44,6 +44,9 @@ static IMP gY3OrigActive, gY3OrigRoleOrient;
 static IMP gY3OrigInApp, gY3OrigAvoid1, gY3OrigAvoid2, gY3OrigInsets, gY3OrigLead, gY3OrigTrail, gY3OrigOverlay, gY3OrigActions, gY3OrigShortcut, gY3OrigNeighbor, gY3OrigContainer;
 
 // shared with Y9Misc.x: run a call with the coordinator's active display controller answering `ctl` (nil = unchanged); the previous value is returned for Y3_PopActive
+// Audit class D (specs/AUDIT-SILENT-FALLBACKS-0.7.9.md): tY3Active is an UNRETAINED, unkeyed override of a coordinator query, so a leak (an exception raised by the stock body and caught
+// further up, e.g. by the G1B add window net) would answer a stale / dead controller for every later call on this thread.  Every wrapper restores it in @finally (Y3_BEGIN / Y3_END below,
+// Y3_WITH_ACTIVE for the Push / Pop users in other files); the result variable is declared BEFORE Y3_BEGIN.
 void *Y3_PushActive(id ctl) { void *p = tY3Active; if (ctl) tY3Active = (__bridge void *)ctl; return p; }
 void Y3_PopActive(void *prev) { tY3Active = prev; }
 
@@ -69,43 +72,47 @@ static id Y3_CtlFor(id coord, id scene) {
 #define Y3_BEGIN(SCENE) \
     id y3ctl = Y3_CtlFor(self, (SCENE)); \
     void *y3prev = tY3Active; \
-    if (y3ctl) tY3Active = (__bridge void *)y3ctl;
-#define Y3_END tY3Active = y3prev;
+    if (y3ctl) tY3Active = (__bridge void *)y3ctl; \
+    @try {
+#define Y3_END } @finally { tY3Active = y3prev; }
 
 static BOOL Y3_InApp(id self, SEL _cmd, id scene) {
+    BOOL r = NO;
     Y3_BEGIN(scene)
-    BOOL r = gY3OrigInApp ? ((BOOL (*)(id, SEL, id))gY3OrigInApp)(self, _cmd, scene) : NO;
+    r = gY3OrigInApp ? ((BOOL (*)(id, SEL, id))gY3OrigInApp)(self, _cmd, scene) : NO;
     Y3_END
     return r;
 }
 static Y3Quad Y3_Avoid1(id self, SEL _cmd, long long role, id scene) {
-    Y3_BEGIN(scene)
     Y3Quad r = {0, 0, 0, 0};
+    Y3_BEGIN(scene)
     if (gY3OrigAvoid1) r = ((Y3Quad (*)(id, SEL, long long, id))gY3OrigAvoid1)(self, _cmd, role, scene);
     Y3_END
     return r;
 }
 static Y3Quad Y3_Avoid2(id self, SEL _cmd, long long role, id state, id scene) {
-    Y3_BEGIN(scene)
-    void *prevLayout = tY3Layout;
-    if (state && BP_OnName("y3_avoidorient") && BPX_Bool0(BPX_Obj1(self, "switcherControllerForWindowScene:", scene), "isChamoisWindowingUIEnabled")) tY3Layout = (__bridge void *)state;
     Y3Quad r = {0, 0, 0, 0};
-    if (gY3OrigAvoid2) r = ((Y3Quad (*)(id, SEL, long long, id, id))gY3OrigAvoid2)(self, _cmd, role, state, scene);
-    tY3Layout = prevLayout;
+    void *prevLayout = tY3Layout;
+    Y3_BEGIN(scene)
+    if (state && BP_OnName("y3_avoidorient") && BPX_Bool0(BPX_Obj1(self, "switcherControllerForWindowScene:", scene), "isChamoisWindowingUIEnabled")) tY3Layout = (__bridge void *)state;
+    @try {
+        if (gY3OrigAvoid2) r = ((Y3Quad (*)(id, SEL, long long, id, id))gY3OrigAvoid2)(self, _cmd, role, state, scene);
+    } @finally { tY3Layout = prevLayout; }
     Y3_END
     return r;
 }
 static Y3Quad Y3_Insets(id self, SEL _cmd, id scene) {
-    Y3_BEGIN(scene)
     Y3Quad r = {0, 0, 0, 0};
+    Y3_BEGIN(scene)
     if (gY3OrigInsets) r = ((Y3Quad (*)(id, SEL, id))gY3OrigInsets)(self, _cmd, scene);
     Y3_END
     return r;
 }
 #define Y3_ID_WRAP(NAME, ORIG) \
 static id NAME(id self, SEL _cmd, id scene) { \
+    id r = nil; \
     Y3_BEGIN(scene) \
-    id r = ORIG ? ((id (*)(id, SEL, id))ORIG)(self, _cmd, scene) : nil; \
+    r = ORIG ? ((id (*)(id, SEL, id))ORIG)(self, _cmd, scene) : nil; \
     Y3_END \
     return r; \
 }

@@ -47,8 +47,7 @@ static void Y4_Uninstall(id self, SEL _cmd, id mgr, id icon, id location) {
     void *prev = tY4PrefScene;
     id scene = BP_OnName("y4_alertscene") ? BPX_Obj0(self, "_sbWindowScene") : nil;
     tY4PrefScene = scene ? (__bridge void *)scene : NULL;
-    if (gY4OrigUninstall) ((void (*)(id, SEL, id, id, id))gY4OrigUninstall)(self, _cmd, mgr, icon, location);
-    tY4PrefScene = prev;
+    @try { if (gY4OrigUninstall) ((void (*)(id, SEL, id, id, id))gY4OrigUninstall)(self, _cmd, mgr, icon, location); } @finally { tY4PrefScene = prev; }
 }
 static id Y4_ApplyPref(id item) {
     void *p = tY4PrefScene;

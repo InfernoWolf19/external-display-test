@@ -193,8 +193,7 @@ static BOOL Y16_OvKb(id self, SEL _cmd, id presenter) {
 static void Y16_OvDis(id self, SEL _cmd, id presenter, id vc, BOOL top) {
     id ctl = BP_OnName("y16_overlaydismiss") ? BPX_Obj0(BPX_Obj0(presenter, "windowScene"), "switcherController") : nil;
     void *prev = ctl ? Y3_PushActive(ctl) : NULL;
-    if (gY16OvDis) ((void (*)(id, SEL, id, id, BOOL))gY16OvDis)(self, _cmd, presenter, vc, top);
-    if (ctl) Y3_PopActive(prev);
+    @try { if (gY16OvDis) ((void (*)(id, SEL, id, id, BOOL))gY16OvDis)(self, _cmd, presenter, vc, top); } @finally { if (ctl) Y3_PopActive(prev); }
 }
 
 __attribute__((constructor)) static void Y16_Setup(void) {

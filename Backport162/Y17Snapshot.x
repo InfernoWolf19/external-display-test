@@ -53,9 +53,7 @@ static void Y17_Load(id self, SEL _cmd, id request, id item, id layout) {
             BP_Anomaly("snapscale", @"[y17s] GUARD(snapscale) no display scale for the cache of %@ (identity %@): the 16.0 main configuration scale stays", item, identity);
         }
     }
-    if (gY17OrigLoad) ((void (*)(id, SEL, id, id, id))gY17OrigLoad)(self, _cmd, request, item, layout);
-    tY17ScaleOn = saved;
-    tY17Scale = savedScale;
+    @try { if (gY17OrigLoad) ((void (*)(id, SEL, id, id, id))gY17OrigLoad)(self, _cmd, request, item, layout); } @finally { tY17ScaleOn = saved; tY17Scale = savedScale; }
 }
 
 // -[SBApplication bestSnapshotWithImageName:sceneHandle:variantID:scale:referenceSize:requireExactSize:contentTypeMask:statusBarStateMask:launchingOrientation:contentOverridesContext:userInterfaceStyle:displayEdgeInfo:]

@@ -45,8 +45,7 @@ static void Y7_Configure(id self, SEL _cmd, id wreq, id req, id label) {
     long long prev = tY7Policy;
     tY7Policy = (BP_OnName("y7_inspolicy") && BPY_Responds(req, "entityInsertionPolicy")) ? BPX_LL0(req, "entityInsertionPolicy") : 0;
     if (tY7Policy) BPY_LOG(@"[y7] request %p carries the entity insertion policy %lld", (__bridge void *)req, tY7Policy);
-    if (gY7OrigConfigure) ((void (*)(id, SEL, id, id, id))gY7OrigConfigure)(self, _cmd, wreq, req, label);
-    tY7Policy = prev;
+    @try { if (gY7OrigConfigure) ((void (*)(id, SEL, id, id, id))gY7OrigConfigure)(self, _cmd, wreq, req, label); } @finally { tY7Policy = prev; }
 }
 // -[SBWorkspaceApplicationSceneTransitionContext setEntities:withPolicy:centerEntity:floatingEntity:]
 static void Y7_SetEntities(id self, SEL _cmd, id entities, long long policy, id center, id floating) {

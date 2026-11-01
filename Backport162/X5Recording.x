@@ -69,8 +69,7 @@ static id X5_ForMainDisplay(id self, SEL _cmd) {
 static void X5_StatusBarCfg(id self, SEL _cmd) {
     void *prev = gX5Scene;
     if (X5_ON()) gX5Scene = (__bridge void *)BPX_Obj0(self, "_sbWindowScene");
-    if (gX5OrigStatusBarCfg) ((void (*)(id, SEL))gX5OrigStatusBarCfg)(self, _cmd);
-    gX5Scene = prev;
+    @try { if (gX5OrigStatusBarCfg) ((void (*)(id, SEL))gX5OrigStatusBarCfg)(self, _cmd); } @finally { gX5Scene = prev; }
 }
 
 void X5_Setup(void) {

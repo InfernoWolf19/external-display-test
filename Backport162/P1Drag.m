@@ -642,6 +642,7 @@ static void P1_HandleUpdate(id self, SEL _cmd, id request, id manager) {
     }
     id prevTxn = tUpdTxn;
     tUpdDepth++; tUpdTxn = self;
+    @try {              // audit class D: an exception of the body must not leave the depth raised (every later update of the transaction would be refused as re-entrant)
     P1_HandleUpdateBody(self, _cmd, request, manager);
     for (int i = 0; i < P1_MAXREPLAY; i++) {
         id pr = objc_getAssociatedObject(self, &kP1PendReq), pm = objc_getAssociatedObject(self, &kP1PendMgr);
@@ -655,7 +656,7 @@ static void P1_HandleUpdate(id self, SEL _cmd, id request, id manager) {
         objc_setAssociatedObject(self, &kP1PendReq, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(self, &kP1PendMgr, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    tUpdDepth--; tUpdTxn = prevTxn;
+    } @finally { tUpdDepth--; tUpdTxn = prevTxn; }
 }
 static void P1_HandleUpdateBody(id self, SEL _cmd, id request, id manager) {
     id sc = P1_S0(manager, "switcherController");
@@ -720,8 +721,7 @@ static void P1_HandleComplete(id self, SEL _cmd, id request, id manager) {
     // an update that was queued by the re-entrancy guard belongs to the gesture BEFORE this complete: replaying it after the complete would feed a stale update to a transaction that is finishing
     objc_setAssociatedObject(self, &kP1PendReq, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, &kP1PendMgr, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    P1_HandleCompleteBody(self, _cmd, request, manager);
-    tCompTxn = prev;
+    @try { P1_HandleCompleteBody(self, _cmd, request, manager); } @finally { tCompTxn = prev; }
 }
 static void P1_HandleCompleteBody(id self, SEL _cmd, id request, id manager) {
     id appLayout = P1_S0(request, "appLayout");
@@ -841,8 +841,7 @@ static void P1_Digitizer(id self, SEL _cmd) {
 static void P1_Begin(id self, SEL _cmd, id gesture) {
     id sb = tBeginTxn, sr = tInterruptReq;
     tBeginTxn = self; tInterruptReq = nil;
-    ((void (*)(id, SEL, id))sOrigBegin)(self, _cmd, gesture);
-    tBeginTxn = sb; tInterruptReq = sr;
+    @try { ((void (*)(id, SEL, id))sOrigBegin)(self, _cmd, gesture); } @finally { tBeginTxn = sb; tInterruptReq = sr; }
 }
 static void P1_WillInterrupt(id self, SEL _cmd, id reason) {
     ((void (*)(id, SEL, id))sOrigWillInterrupt)(self, _cmd, reason);
@@ -919,8 +918,7 @@ static void P1_CoordSetActive(id self, SEL _cmd, id txn) {
     P1_V1(txn, "addObserver:", self);
     tBroadcast++;
     NSUInteger n = 0;
-    for (id sc in P1_AllControllers(self)) { P1_V1(P1_S0(sc, "gestureManager"), "setActiveGestureTransaction:", txn); n++; }
-    tBroadcast--;
+    @try { for (id sc in P1_AllControllers(self)) { P1_V1(P1_S0(sc, "gestureManager"), "setActiveGestureTransaction:", txn); n++; } } @finally { tBroadcast--; }
     if (BP_LogEnabled()) BP_Log(@"p1: coordinator %@ gesture transaction %p to %lu gesture manager(s)", txn ? @"hands out" : @"clears the", (__bridge void *)(txn ?: old), (unsigned long)n);
     if (!txn && old) {
         // FINDINGS-DRAG-LOOP P4: one run loop turn after the shared transaction ended (all transition events delivered) a gesture root that still holds its 'Gesture' child is stale

@@ -45,8 +45,7 @@ static BOOL X9_ChamoisAvailable(void) {
 
 static void X9_Configure(id self, SEL _cmd) {
     gX9InConfigure++;
-    if (gX9OrigConfigure) ((void (*)(id, SEL))gX9OrigConfigure)(self, _cmd);
-    gX9InConfigure--;
+    @try { if (gX9OrigConfigure) ((void (*)(id, SEL))gX9OrigConfigure)(self, _cmd); } @finally { gX9InConfigure--; }
 }
 
 // -[BKSMousePointerService requestGlobalMouseEventsForDisplay:targetContextID:options:] 16.0 0x18e204d9c

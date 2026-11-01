@@ -91,8 +91,8 @@ static BOOL Y10_AutoPIP(id self, SEL _cmd, id req, id *outEntity, long long *out
     id sCtx = tY10Ctx, sCand = tY10Cand; BOOL sArm = tY10Armed;
     tY10Ctx = arm ? ctx : nil; tY10Cand = arm ? cand : nil; tY10Armed = arm;
     if (arm) BPY_LOG(@"[y10] auto PiP, Stage Manager: candidate %@ among %lu previous entities", cand, (unsigned long)[BPX_Obj0(ctx, "previousEntities") count]);
-    BOOL r = gY10OrigAuto ? ((BOOL (*)(id, SEL, id, id *, long long *, long long *, long long))gY10OrigAuto)(self, _cmd, req, outEntity, outMode, outStyle, reason) : NO;
-    tY10Ctx = sCtx; tY10Cand = sCand; tY10Armed = sArm;
+    BOOL r = NO;
+    @try { r = gY10OrigAuto ? ((BOOL (*)(id, SEL, id, id *, long long *, long long *, long long))gY10OrigAuto)(self, _cmd, req, outEntity, outMode, outStyle, reason) : NO; } @finally { tY10Ctx = sCtx; tY10Cand = sCand; tY10Armed = sArm; }
     return r;
 }
 // -[SBWorkspaceApplicationSceneTransitionContext previousApplicationSceneEntityForLayoutRole:]
@@ -117,8 +117,8 @@ static Y10Rect Y10_Frame(id self, SEL _cmd, unsigned long long i) {
 static id Y10_Acquire(id self, SEL _cmd, id scene, long long reason, id ident, id modes) {
     id saved = tY10StashScene;
     tY10StashScene = BP_OnName("y10_stashscene") ? scene : nil;
-    id r = gY10OrigAcquire ? ((id (*)(id, SEL, id, long long, id, id))gY10OrigAcquire)(self, _cmd, scene, reason, ident, modes) : nil;
-    tY10StashScene = saved;
+    id r = nil;
+    @try { r = gY10OrigAcquire ? ((id (*)(id, SEL, id, long long, id, id))gY10OrigAcquire)(self, _cmd, scene, reason, ident, modes) : nil; } @finally { tY10StashScene = saved; }
     return r;
 }
 // -[SBPIPEnvironmentDependentOverrideAssertion initWithReason:identifier:invalidationBlock:]
@@ -134,8 +134,8 @@ static id Y10_Init(id self, SEL _cmd, long long reason, id ident, id block) {
         if (sc) { prev = Y3_PushActive(sc); pushed = YES; }
         BPY_LOG(@"[y10] stash assertion %p is bound to the layout transitions of scene %@", (__bridge void *)self, scene);
     }
-    id r = gY10OrigInit ? ((id (*)(id, SEL, long long, id, id))gY10OrigInit)(self, _cmd, reason, ident, block) : nil;
-    if (pushed) Y3_PopActive(prev);
+    id r = nil;
+    @try { r = gY10OrigInit ? ((id (*)(id, SEL, long long, id, id))gY10OrigInit)(self, _cmd, reason, ident, block) : nil; } @finally { if (pushed) Y3_PopActive(prev); }
     return r;
 }
 // -[SBPIPEnvironmentDependentOverrideAssertion _layoutCoordinator]

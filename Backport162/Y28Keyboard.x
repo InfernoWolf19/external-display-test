@@ -74,8 +74,7 @@ static void Y28_AddObserver(id mgr, SEL _cmd, id observer) {
 static void Y28_Update(id self, SEL _cmd) {
     void *prev = tY28Self;
     tY28Self = (__bridge void *)self;
-    if (gY28OrigUpdate) ((void (*)(id, SEL))gY28OrigUpdate)(self, _cmd);
-    tY28Self = prev;
+    @try { if (gY28OrigUpdate) ((void (*)(id, SEL))gY28OrigUpdate)(self, _cmd); } @finally { tY28Self = prev; }
 }
 static void Y28_UsingChanged(id self, SEL _cmd) {
     if (BPY_Responds(self, "_updateHomeAffordance")) BPY_SEND(void, (), self, "_updateHomeAffordance");

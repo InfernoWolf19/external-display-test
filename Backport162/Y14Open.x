@@ -39,8 +39,7 @@ static void Y14_OpenURLCore(id self, SEL _cmd, id url, id app, BOOL animating, i
     BOOL sArm = tY14Armed; id sApp = tY14App, sURL = tY14URL;
     tY14Armed = BP_OnName("y14_openurl") && app && settings;
     tY14App = app; tY14URL = url;
-    if (gY14OrigOpen) ((void (*)(id, SEL, id, id, BOOL, id, id, id))gY14OrigOpen)(self, _cmd, url, app, animating, settings, origin, result);
-    tY14Armed = sArm; tY14App = sApp; tY14URL = sURL;
+    @try { if (gY14OrigOpen) ((void (*)(id, SEL, id, id, BOOL, id, id, id))gY14OrigOpen)(self, _cmd, url, app, animating, settings, origin, result); } @finally { tY14Armed = sArm; tY14App = sApp; tY14URL = sURL; }
 }
 // -[SBMainWorkspace requestTransitionWithBuilder:]
 static BOOL Y14_RequestWithBuilder(id self, SEL _cmd, id builder) {

@@ -104,8 +104,8 @@ static BOOL Y31_WindowVisible(id self, SEL _cmd) {
     if (!BP_OnName("y24_minviable")) return gY31OrigWindowVisible ? ((BOOL (*)(id, SEL))gY31OrigWindowVisible)(self, _cmd) : NO;
     id ctl = Y17_Obj0("minviable", Y17_Obj0("minviable", self, "_sbWindowScene"), "switcherController");
     void *prev = Y3_PushActive(ctl);
-    BOOL r = gY31OrigWindowVisible ? ((BOOL (*)(id, SEL))gY31OrigWindowVisible)(self, _cmd) : NO;
-    Y3_PopActive(prev);
+    BOOL r = NO;
+    @try { r = gY31OrigWindowVisible ? ((BOOL (*)(id, SEL))gY31OrigWindowVisible)(self, _cmd) : NO; } @finally { Y3_PopActive(prev); }
     return r;
 }
 
@@ -121,8 +121,8 @@ static CGRect Y31_StatusFrame(id cls, SEL _cmd, id handle, id config, long long 
         id identity = Y17_Obj0("classicsb", config, "identity");
         if (identity) tY31Identity = (__bridge void *)identity;
     }
-    CGRect r = gY31OrigStatusFrame ? ((CGRect (*)(id, SEL, id, id, long long, id, CGRect, id))gY31OrigStatusFrame)(cls, _cmd, handle, config, orientation, request, bounds, space) : CGRectZero;
-    tY31Identity = prev;
+    CGRect r = {0};
+    @try { r = gY31OrigStatusFrame ? ((CGRect (*)(id, SEL, id, id, long long, id, CGRect, id))gY31OrigStatusFrame)(cls, _cmd, handle, config, orientation, request, bounds, space) : CGRectZero; } @finally { tY31Identity = prev; }
     return r;
 }
 

@@ -272,8 +272,7 @@ static __thread BOOL gBPG3BInBuildMenu;
 %hook SpringBoard
 - (void)buildMenuWithBuilder:(id)builder {
     gBPG3BInBuildMenu = BP_G3B_On("g3b_menu");
-    %orig;
-    gBPG3BInBuildMenu = NO;
+    @try { %orig; } @finally { gBPG3BInBuildMenu = NO; }
 }
 %end
 
@@ -1045,8 +1044,7 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
     tBPKbWhy = "main display scene manager _updateMedusaHostedKeyboardWindow";
     [c updateMedusaHostedKeyboardWindow];
     tBPKbWhy = "fan-out of the main display update";
-    BPKB_FanOut(ws, nil);
-    tBPKbWhy = NULL;
+    @try { BPKB_FanOut(ws, nil); } @finally { tBPKbWhy = NULL; }
 }
 - (void)_updateMedusaHostedKeyboardWindowForScene:(id)scene isForeground:(BOOL *)fg {
     if (!BP_G3B_On("g3b_kbwindow")) {
@@ -1070,8 +1068,7 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
     tBPKbWhy = "main display scene manager _updateMedusaHostedKeyboardWindowForScene:";
     [c updateMedusaHostedKeyboardWindowForScene:scene isForeground:fg];
     tBPKbWhy = "fan-out of the main display ForScene update";
-    BPKB_FanOut(ws, scene);
-    tBPKbWhy = NULL;
+    @try { BPKB_FanOut(ws, scene); } @finally { tBPKbWhy = NULL; }
 }
 - (id)_medusaHostedKeyboardWindow {
     if (!BP_G3B_On("g3b_kbwindow")) return %orig;
@@ -1099,8 +1096,7 @@ static void BPKB_FanOut(id exceptWindowScene, id kbScene) {          // update t
     %orig;
     if (!BP_G3B_On("g3b_kbwindow")) return;
     tBPKbWhy = "external display scene manager _updateMedusaHostedKeyboardWindow";
-    [BPKB_ControllerForWindowScene(BPKB_MainWindowScene(self)) updateMedusaHostedKeyboardWindow];
-    tBPKbWhy = NULL;
+    @try { [BPKB_ControllerForWindowScene(BPKB_MainWindowScene(self)) updateMedusaHostedKeyboardWindow]; } @finally { tBPKbWhy = NULL; }
 }
 %end
 
@@ -1227,8 +1223,8 @@ static __thread __unsafe_unretained id gBPG3BSwitcherOverride;
     id sc = BP_G3B_Send0(scene, NSSelectorFromString(@"switcherController"));
     id prev = gBPG3BSwitcherOverride;
     gBPG3BSwitcherOverride = sc;
-    BOOL r = %orig;
-    gBPG3BSwitcherOverride = prev;
+    BOOL r = NO;
+    @try { r = %orig; } @finally { gBPG3BSwitcherOverride = prev; }
     return r;
 }
 %end
@@ -1659,8 +1655,7 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     CGSize orig = *p;
     *p = CGSizeMake(orig.height, orig.width);
     tBPOrthMerge++;
-    ((void (*)(id, SEL, double))objc_msgSend)(grid, build, scale);
-    tBPOrthMerge--;
+    @try { ((void (*)(id, SEL, double))objc_msgSend)(grid, build, scale); } @finally { tBPOrthMerge--; }
     *p = orig;
     NSArray *w1 = [BP_ObjIvar(grid, wi) copy], *h1 = [BP_ObjIvar(grid, hi) copy];
     if (!BP_KIND("g3b-grid", w1, NSArray) || w1.count != h1.count) { BP_SetObjIvar(grid, wi, w0); BP_SetObjIvar(grid, hi, h0); return; }
@@ -1709,23 +1704,23 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
 - (id)handleGestureEvent:(id)event {
     BOOL orth = BPG3BO_ItemAllowsOrthogonal(self, BPG3BO_ModifierItem(self));
     if (orth) tBPOrthDepth++;
-    id r = %orig;
-    if (orth) tBPOrthDepth--;
+    id r = nil;
+    @try { r = %orig; } @finally { if (orth) tBPOrthDepth--; }
     return r;
 }
 - (id)_responseForGestureUpdateAtGestureEnd:(BOOL)end {
     BOOL orth = BPG3BO_ItemAllowsOrthogonal(self, BPG3BO_ModifierItem(self));
     if (orth) tBPOrthDepth++;
-    id r = %orig;
-    if (orth) tBPOrthDepth--;
+    id r = nil;
+    @try { r = %orig; } @finally { if (orth) tBPOrthDepth--; }
     return r;
 }
 - (id)_responseForSceneSizeUpdateToSize:(CGSize)size center:(CGPoint)center sceneUpdatesOnly:(BOOL)only {
     id item = BPG3BO_ModifierItem(self);
     BOOL orth = BPG3BO_ItemAllowsOrthogonal(self, item);
     if (orth) tBPOrthDepth++;
-    id resp = %orig;
-    if (orth) tBPOrthDepth--;
+    id resp = nil;
+    @try { resp = %orig; } @finally { if (orth) tBPOrthDepth--; }
     Class rc = NSClassFromString(@"SBSetInterfaceOrientationFromUserResizingEventResponse");     // defined by group1b
     if (!orth || !resp || !rc) return resp;
     long long o = size.width > size.height ? 3 : 1;                                                // UIInterfaceOrientationLandscapeRight : Portrait
@@ -1748,8 +1743,8 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     if (!oc) { oc = [NSMutableDictionary new]; objc_setAssociatedObject(self, &kBPG3BOrthCache, oc, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
     BP_SetObjIvar(self, iv, oc);
     tBPOrthBuild++;
-    id g = %orig;
-    tBPOrthBuild--;
+    id g = nil;
+    @try { g = %orig; } @finally { tBPOrthBuild--; }
     BP_SetObjIvar(self, iv, saved);
     return g;
 }

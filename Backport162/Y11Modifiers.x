@@ -150,8 +150,8 @@ static id Y11_ReqActivating(id cls, SEL _cmd, id layout) {
 static id Y11_HandleTap(IMP orig, id self, SEL _cmd, id event) {
     id saved = tY11Tap;
     tY11Tap = event;
-    id r = orig ? ((id (*)(id, SEL, id))orig)(self, _cmd, event) : nil;
-    tY11Tap = saved;
+    id r = nil;
+    @try { r = orig ? ((id (*)(id, SEL, id))orig)(self, _cmd, event) : nil; } @finally { tY11Tap = saved; }
     return r;
 }
 static id Y11_ShelfTap(id self, SEL _cmd, id e) { return Y11_HandleTap(gY11OrigShelf, self, _cmd, e); }

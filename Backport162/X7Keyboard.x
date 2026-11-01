@@ -203,8 +203,7 @@ static void X7_MgrSet(id self, SEL _cmd, BOOL suppressed, id reason, id predicat
     SEL old = sel_registerName("_setKeyboardSuppressed:forReason:withPredicate:");
     void *prevId = gX7KbIdentity; int prevArm = gX7KbIdentityArmed;
     if (suppressed && identity) { gX7KbIdentity = (__bridge void *)identity; gX7KbIdentityArmed = 1; }
-    ((void (*)(id, SEL, BOOL, id, id))objc_msgSend)(self, old, suppressed, reason, predicate);
-    gX7KbIdentity = prevId; gX7KbIdentityArmed = prevArm;
+    @try { ((void (*)(id, SEL, BOOL, id, id))objc_msgSend)(self, old, suppressed, reason, predicate); } @finally { gX7KbIdentity = prevId; gX7KbIdentityArmed = prevArm; }
 }
 // 0x1c75376dc
 static void X7_MgrStart(id self, SEL _cmd, id reason, id predicate, id identity) { X7_MgrSet(self, NULL, YES, reason, predicate, identity); }

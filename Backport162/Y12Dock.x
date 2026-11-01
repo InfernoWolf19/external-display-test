@@ -36,16 +36,15 @@ static void Y12_SetProgress(id self, SEL _cmd, double progress, BOOL animated, B
     void *prev = NULL;
     id sc = BP_OnName("y12_dockmode") ? Y12_SceneController(BPX_Obj0(self, "floatingDockViewController")) : nil;
     if (sc) prev = Y3_PushActive(sc);
-    if (gY12OrigProgress) ((void (*)(id, SEL, double, BOOL, BOOL, id))gY12OrigProgress)(self, _cmd, progress, animated, interactive, completion);
-    if (sc) Y3_PopActive(prev);
+    @try { if (gY12OrigProgress) ((void (*)(id, SEL, double, BOOL, BOOL, id))gY12OrigProgress)(self, _cmd, progress, animated, interactive, completion); } @finally { if (sc) Y3_PopActive(prev); }
 }
 // -[SBFloatingDockRootViewController isFloatingDockViewControllerPresentedOverApplication:]
 static BOOL Y12_Over(id self, SEL _cmd, id dockVC) {
     void *prev = NULL;
     id sc = BP_OnName("y12_dockmode") ? Y12_SceneController(dockVC) : nil;
     if (sc) prev = Y3_PushActive(sc);
-    BOOL r = gY12OrigOver ? ((BOOL (*)(id, SEL, id))gY12OrigOver)(self, _cmd, dockVC) : NO;
-    if (sc) Y3_PopActive(prev);
+    BOOL r = NO;
+    @try { r = gY12OrigOver ? ((BOOL (*)(id, SEL, id))gY12OrigOver)(self, _cmd, dockVC) : NO; } @finally { if (sc) Y3_PopActive(prev); }
     return r;
 }
 // -[SBFloatingDockWindow isContentHidden]

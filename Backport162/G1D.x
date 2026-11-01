@@ -438,8 +438,7 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
     }
     id saved = tConnecting;
     tConnecting = self;
-    %orig;
-    tConnecting = saved;
+    @try { %orig; } @finally { tConnecting = saved; }
 }
 
 // ---- 16.2 -_configureRequest:forSwitcherTransitionRequest:withEventLabel: (0x1c76d174c; 16.0 0x1c623e164) ----
@@ -462,8 +461,7 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
         conv = G1D_MsgLL(layout, NSSelectorFromString(@"appLayoutByModifyingEnvironment:"), 1);
     id savedReq = tCfgReq, savedLayout = tCfgLayout;
     tCfgReq = req; tCfgLayout = conv;
-    %orig;
-    tCfgReq = savedReq; tCfgLayout = savedLayout;
+    @try { %orig; } @finally { tCfgReq = savedReq; tCfgLayout = savedLayout; }
     // ---- activating display item ----
     SEL getAct = NSSelectorFromString(@"activatingDisplayItem");
     id act = [req respondsToSelector:getAct] ? G1B_Send0(req, getAct) : nil;
@@ -519,9 +517,9 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
             if (sc) [owners setObject:sc forKey:l];
         }
     }
-    id r = %orig;
+    id r = nil;
+    @try { r = %orig; } @finally { tRRSelf = sRRSelf; tRRLayouts = sRRLayouts; tRRIdx = sIdx; }
     if (r && owners) objc_setAssociatedObject(r, &kRemovalOwners, owners, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    tRRSelf = sRRSelf; tRRLayouts = sRRLayouts; tRRIdx = sIdx;
     if (BP_LogEnabled()) BP_Log(@"g1d: model removal results for %lu layout(s), reason %lld: %@", (unsigned long)ls.count, reason, G1D_TraceResp(r));
     return r;
 }
@@ -719,8 +717,7 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
     SEL mode = NSSelectorFromString(@"unlockedEnvironmentMode");
     BOOL part = !failed && !interrupted && G1B_SendLL0(from, mode) == 1 && G1B_SendLL0(to, mode) == 3;
     tEndSelf = part ? (id)self : nil; tEndTo = part ? to : nil;
-    %orig;
-    tEndSelf = sSelf; tEndTo = sTo;
+    @try { %orig; } @finally { tEndSelf = sSelf; tEndTo = sTo; }
 }
 - (void)_addAppLayoutToFront:(id)layout {
     if (tEndSelf == (id)self && tEndTo && layout && G1D_ON("g1d_model")) {
@@ -755,8 +752,7 @@ static id G1D_OwnerSceneHandle(id sc, id item) {                              //
 - (void)setChamoisWindowingUIEnabled:(BOOL)enabled {
     id saved = tSetChamoisSC;
     tSetChamoisSC = (G1B_SendB0((id)self, NSSelectorFromString(@"isChamoisWindowingUIEnabled")) != enabled) ? (id)self : nil;
-    %orig;
-    tSetChamoisSC = saved;
+    @try { %orig; } @finally { tSetChamoisSC = saved; }
 }
 %end
 
@@ -824,8 +820,7 @@ static void G1D_VC_HandleGesture(id vc, NSString *oldName, id manager, id gestur
     id adjusted = [vc respondsToSelector:adj] ? ((id (*)(id, SEL, id, id))objc_msgSend)(vc, adj, ev, manager) : ev;
     id sg = tAdjGesture, se = tAdjEvent;
     tAdjGesture = (adjusted && adjusted != ev) ? gesture : nil; tAdjEvent = adjusted;
-    ((void (*)(id, SEL, id))objc_msgSend)(vc, old, gesture);
-    tAdjGesture = sg; tAdjEvent = se;
+    @try { ((void (*)(id, SEL, id))objc_msgSend)(vc, old, gesture); } @finally { tAdjGesture = sg; tAdjEvent = se; }
 }
 // 16.2 -_adjustedGestureEventForGestureEvent:fromGestureManager: 0x1c745f2fc
 static id G1D_VC_Adjusted(id self, SEL _cmd, id event, id manager) {
@@ -907,8 +902,7 @@ static __thread BOOL tInUpdateLayoutResponse;
     }
     BOOL saved = tInUpdateLayoutResponse;
     tInUpdateLayoutResponse = YES;
-    %orig;
-    tInUpdateLayoutResponse = saved;
+    @try { %orig; } @finally { tInUpdateLayoutResponse = saved; }
 }
 - (void)_performWithFixedUpdateMode:(long long)mode usingBlock:(id)block {
     if (mode == 0 && tInUpdateLayoutResponse && block) {
@@ -1971,8 +1965,7 @@ static void G1D_InstallPIPAnimatorProperties(void) {
     if (pc && [response isKindOfClass:pc] && G1D_ON("g1d_pip")) {
         id saved = tPipResponse;
         tPipResponse = response;
-        %orig;
-        tPipResponse = saved;
+        @try { %orig; } @finally { tPipResponse = saved; }
         return;
     }
     %orig;
@@ -1997,8 +1990,7 @@ static void G1D_InstallPIPAnimatorProperties(void) {
     tPipSetupRole = [appLayout respondsToSelector:lri] ? ((long long (*)(id, SEL, id))objc_msgSend)(appLayout, lri, item) : 0;
     tPipSetupBox = [response respondsToSelector:bb] ? ((CGRect (*)(id, SEL))objc_msgSend)(response, bb) : CGRectZero;
     tPipSetupOn = YES;
-    %orig;
-    tPipSetupLayout = savedLayout; tPipSetupRole = savedRole; tPipSetupBox = savedBox; tPipSetupOn = savedOn;
+    @try { %orig; } @finally { tPipSetupLayout = savedLayout; tPipSetupRole = savedRole; tPipSetupBox = savedBox; tPipSetupOn = savedOn; }
 }
 %end
 
@@ -2193,8 +2185,7 @@ static __thread __unsafe_unretained id tPipRestoreEntity;
 - (void)restoreContentViewController:(id)contentViewController appSceneEntity:(id)entity morphAnimatorConfigurationBlock:(id)configBlock completion:(id)completion {
     id saved = tPipRestoreEntity;
     tPipRestoreEntity = G1D_ON("g1d_piprestore") ? entity : nil;
-    %orig;
-    tPipRestoreEntity = saved;
+    @try { %orig; } @finally { tPipRestoreEntity = saved; }
 }
 - (void)keyboardFocusController:(id)controller externalSceneDidAcquireFocus:(id)scene {
     if (!G1D_ON("g1d_pipkeyboard") || !class_getInstanceVariable(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged")) {
@@ -2220,8 +2211,8 @@ static __thread __unsafe_unretained id tOverlayInsetsSC;
 - (UIEdgeInsets)_updatePictureInPictureOverlayInsetsOnWindowScene:(id)scene withCurrentLayoutState:(BOOL)current shouldUpdate:(BOOL)update {
     id saved = tOverlayInsetsSC;
     tOverlayInsetsSC = G1D_ON("g1d_pipinsets") ? G1B_Send0(scene, NSSelectorFromString(@"switcherController")) : nil;
-    UIEdgeInsets r = %orig;
-    tOverlayInsetsSC = saved;
+    UIEdgeInsets r = {0};
+    @try { r = %orig; } @finally { tOverlayInsetsSC = saved; }
     return r;
 }
 %end
@@ -2552,8 +2543,7 @@ static BOOL G1D_SGM_PiPAllows(id sgm, CGPoint loc) {
     id sO = tExecOwner, sL = tExecLayout;
     tExecOwner = [(NSMapTable *)objc_getAssociatedObject(self, &kRemovalOwners) objectForKey:layout];
     tExecLayout = layout;
-    %orig;
-    tExecOwner = sO; tExecLayout = sL;
+    @try { %orig; } @finally { tExecOwner = sO; tExecLayout = sL; }
 }
 %end
 %hook SBFluidSwitcherViewController

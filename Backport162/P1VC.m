@@ -166,8 +166,7 @@ static __thread __unsafe_unretained id tNoTail;
 static void PV_IconVis(id self, SEL _cmd, id response) {
     if (!PV_On("p1_vcmisc")) { ((void (*)(id, SEL, id))sIconVis)(self, _cmd, response); return; }
     id save = tNoTail; tNoTail = self;
-    ((void (*)(id, SEL, id))sIconVis)(self, _cmd, response);
-    tNoTail = save;
+    @try { ((void (*)(id, SEL, id))sIconVis)(self, _cmd, response); } @finally { tNoTail = save; }
 }
 static BOOL PV_MatchMove(id self, SEL _cmd) {
     if (tNoTail == self) return YES;
