@@ -61,7 +61,7 @@ static BOOL Y16_Windowed(id ident) {
 // -[SBMainWorkspaceLayoutStateContingencyPlan transitionContextForLayoutContext:failedEntities:]
 static id Y16_Plan(id self, SEL _cmd, id layoutContext, id failed) {
     id (*call)(id, SEL, id, id) = (id (*)(id, SEL, id, id))gY16Orig;
-    if (!BP_OnName("y16_stagefail") || !layoutContext || ![failed isKindOfClass:[NSSet class]]) return call ? call(self, _cmd, layoutContext, failed) : nil;
+    if (!BP_OnName("y16_stagefail") || !layoutContext || !BP_KIND("y16-plan", failed, NSSet)) return call ? call(self, _cmd, layoutContext, failed) : nil;
     id state = BPX_Obj0(layoutContext, "layoutState");
     id ident = BPX_Obj0(layoutContext, "displayIdentity");
     NSMutableSet *ids = [NSMutableSet set];

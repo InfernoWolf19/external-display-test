@@ -40,3 +40,16 @@ static inline BOOL BP_IvarIsObj(Ivar iv) {
 }
 static inline id BP_ObjIvar(id o, Ivar iv) { return (o && BP_IvarIsObj(iv)) ? object_getIvar(o, iv) : nil; }
 static inline void BP_SetObjIvar(id o, Ivar iv, id v) { if (o && BP_IvarIsObj(iv)) object_setIvar(o, iv, v); }
+
+// Type gate that is never silent: YES when `v` is an instance of `Cls`; a NON-nil value of another class (the 16.2 contract returned a collection of another kind than the port assumed, the
+// NSArray-only gate that dropped the dragged layouts of 0efa07d was exactly that) is announced once through BP_Anomaly before the caller takes its default path.  nil is a legitimate "absent".
+#define BP_KIND(tag, v, Cls) ({ id _bp_v = (v); BOOL _bp_ok = [_bp_v isKindOfClass:[Cls class]]; \
+    if (!_bp_ok && _bp_v) BP_Anomaly(tag, @"%s is a %@, expected %s: the default path is taken", #v, NSStringFromClass(object_getClass(_bp_v)), #Cls); _bp_ok; })
+// Any collection as an NSArray (NSArray, NSOrderedSet, NSSet / NSMutableSet / NSCountedSet in unspecified order); nil for anything else.
+static inline NSArray *BP_AsArray(id o) {
+    if ([o isKindOfClass:[NSArray class]]) return o;
+    if ([o isKindOfClass:[NSOrderedSet class]]) return [(NSOrderedSet *)o array];
+    if ([o isKindOfClass:[NSSet class]]) return [(NSSet *)o allObjects];
+    return nil;
+}
+

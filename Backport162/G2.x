@@ -522,7 +522,7 @@ static BOOL imp_isItemCoveredByFullyOccludedPeekingItem(id self, SEL _cmd, id it
 }
 static BOOL imp_isContinuousExposeStripVisible(id self, SEL _cmd) {
     NSArray *items = BP_G2_Obj(self, @selector(items));
-    if (![items isKindOfClass:[NSArray class]]) return YES;
+    if (!BP_KIND("g2-strip", items, NSArray)) { if (!items) BP_Anomaly("g2-strip", @"isContinuousExposeStripVisible: the overlapping model has no items (answers YES like the 16.0 default)"); return YES; }
     double thr = BP_G2_Extras(self)->widthThresholdToHideStrip;
     SEL szSel = @selector(sizeForItem:);
     if (![self respondsToSelector:szSel]) return YES;
@@ -1706,7 +1706,7 @@ static void BP_G2_ApplyDefaultSize(id settings, id attrs, CGRect b, CGRect nb, l
 static void BP_G2_AdoptAttributeGrid(id grid) {
     id attrs = BP_G2_GetIvarObj(grid, "_chamoisLayoutAttributes");
     NSArray *w = BP_G2_Obj(attrs, sel_registerName("gridWidths")), *h = BP_G2_Obj(attrs, sel_registerName("gridHeights"));
-    if (![w isKindOfClass:[NSArray class]] || ![h isKindOfClass:[NSArray class]] || w.count == 0 || h.count == 0) return;
+    if (!BP_KIND("g2-grid", w, NSArray) || !BP_KIND("g2-grid", h, NSArray) || w.count == 0 || h.count == 0) return;
     Class k = object_getClass(grid);
     Ivar wi = class_getInstanceVariable(k, "_widths"), hi = class_getInstanceVariable(k, "_heights");
     const char *we = wi ? ivar_getTypeEncoding(wi) : NULL, *he = hi ? ivar_getTypeEncoding(hi) : NULL;

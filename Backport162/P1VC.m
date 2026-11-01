@@ -187,7 +187,7 @@ static void PV_HomePointer(id self, SEL _cmd) {
 static id PV_LeafInOverlays(id self, SEL _cmd, long long role) {
     if (!PV_On("p1_vcmisc")) return ((id (*)(id, SEL, long long))sLeaf)(self, _cmd, role);
     NSDictionary *overlays = PV_Ivar(self, "_liveContentOverlays");
-    if (![overlays isKindOfClass:[NSDictionary class]]) return nil;
+    if (!BP_KIND("p1-overlays", overlays, NSDictionary)) return nil;
     if ([overlays count] == 1) return [[overlays allKeys] firstObject];
     NSDictionary *adjustedMap = PV_Ivar(self, "_leafAppLayoutsToAdjustedAppLayouts");
     SEL lfr = sel_registerName("leafAppLayoutForRole:");

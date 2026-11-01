@@ -1380,7 +1380,7 @@ static char kBPG3BGuideKey;
     id sc = self.switcher;
     NSDictionary *parts = BP_G3B_Ivar(sc, "_traitsParticipantsByElementIdentifier");
     NSDictionary *dels = BP_G3B_Ivar(sc, "_traitsDelegateByParticipant");
-    if (![parts isKindOfClass:[NSDictionary class]] || ![dels isKindOfClass:[NSDictionary class]]) return;
+    if (!BP_KIND("g3b-traits", parts, NSDictionary) || !BP_KIND("g3b-traits", dels, NSDictionary)) return;
     [self.assoc removeAllObjects];
     for (id p in [parts allValues]) {
         id del = [dels objectForKey:p];
@@ -1654,7 +1654,7 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     SEL build = BPS("_buildFixedGridWithScreenScale:");
     if (!fs || !wi || !hi || ![grid respondsToSelector:build]) return;
     NSArray *w0 = [BP_ObjIvar(grid, wi) copy], *h0 = [BP_ObjIvar(grid, hi) copy];
-    if (![w0 isKindOfClass:[NSArray class]] || w0.count == 0 || w0.count != h0.count) return;
+    if (!BP_KIND("g3b-grid", w0, NSArray) || w0.count == 0 || w0.count != h0.count) return;
     CGSize *p = (CGSize *)((char *)(__bridge void *)grid + ivar_getOffset(fs));
     CGSize orig = *p;
     *p = CGSizeMake(orig.height, orig.width);
@@ -1663,7 +1663,7 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
     tBPOrthMerge--;
     *p = orig;
     NSArray *w1 = [BP_ObjIvar(grid, wi) copy], *h1 = [BP_ObjIvar(grid, hi) copy];
-    if (![w1 isKindOfClass:[NSArray class]] || w1.count != h1.count) { BP_SetObjIvar(grid, wi, w0); BP_SetObjIvar(grid, hi, h0); return; }
+    if (!BP_KIND("g3b-grid", w1, NSArray) || w1.count != h1.count) { BP_SetObjIvar(grid, wi, w0); BP_SetObjIvar(grid, hi, h0); return; }
     // 16.2 _buildFixedGridWithScreenScale: (0x1c791ed14) runs the per-orientation loop for the fixed size and, when supportsOrthogonalSizes, for the transposed
     // size; every candidate size is appended to ONE array (block 0x1c791f5b8, no de-duplication) which is sorted with the global comparator block 0x1c791f640:
     // BSCompareFloats(area(a), area(b)), i.e. ascending by width*height; then widths and heights are split into the two NSNumber arrays.

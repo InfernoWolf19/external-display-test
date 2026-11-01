@@ -1568,7 +1568,7 @@ static void G4B_UnsuppressLockForContainer(id vc, id container) {      // 16.2 d
 - (void)clientWithSceneIdentifier:(NSString *)sid suppressPreferredPointerLockStatusUpdated:(BOOL)suppress {     // 0x1c7451f0c
     id overlay = [self respondsToSelector:@selector(liveOverlayForSceneIdentifier:)] ? G4B_Obj1(self, @selector(liveOverlayForSceneIdentifier:), sid) : nil;
     NSDictionary *live = G4B_Ivar(self, "_liveContentOverlays");
-    if (!overlay || ![live isKindOfClass:[NSDictionary class]]) return;
+    if (!overlay || !BP_KIND("g4b-overlays", live, NSDictionary)) return;
     for (id appLayout in [live allKeysForObject:overlay]) {
         id c = [self respondsToSelector:@selector(_itemContainerForAppLayoutIfExists:)] ? G4B_Obj1(self, @selector(_itemContainerForAppLayoutIfExists:), appLayout) : nil;
         if ([c respondsToSelector:@selector(setPreferredPointerLockStatusSuppressed:)]) ((void (*)(id, SEL, BOOL))objc_msgSend)(c, @selector(setPreferredPointerLockStatusSuppressed:), suppress);
@@ -1980,7 +1980,7 @@ static NSMutableArray *G4B_LockOrder(id kfc) {
 static NSSet *G4B_HeldLockReasons(id kfc) {
     id la = G4B_Ivar(kfc, "_springBoardFocusLockAssertions");
     id s = G4B_Obj(la, @selector(reasons));
-    return [s isKindOfClass:[NSSet class]] ? s : nil;
+    return BP_KIND("g4b-locks", s, NSSet) ? s : nil;
 }
 // the 16.2 state handler of the lock assertion (block 0x1c77c1e04) drops the map entries of released reasons
 static void G4B_PruneLocks(id kfc) {
@@ -2130,7 +2130,7 @@ static void G4B_InstallFocusDirect(void) {
 // armed only inside the policy hook above, on the two assertions of the focus controller
 - (id)reasons {
     id r = %orig;
-    if (!gG4BFL.armed || !gG4BFL.kfc || self != G4B_Ivar(gG4BFL.kfc, "_springBoardFocusLockAssertions") || ![r isKindOfClass:[NSSet class]]) return r;
+    if (!gG4BFL.armed || !gG4BFL.kfc || self != G4B_Ivar(gG4BFL.kfc, "_springBoardFocusLockAssertions") || !BP_KIND("g4b-locks", r, NSSet)) return r;
     NSMapTable *m = G4B_LockMap(gG4BFL.kfc, NO);
     NSMutableSet *out = [NSMutableSet set];
     for (id reason in r) {

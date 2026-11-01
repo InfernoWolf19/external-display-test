@@ -313,7 +313,7 @@ static void P1_StartScene(id self, SEL _cmd, id upd, id ident) {
     if ([self respondsToSelector:add]) ((void (*)(id, SEL, id, long long))objc_msgSend)(self, add, upd, 0);
     id vc = P1_S0(self, "switcherViewController");
     id overlays = P1_S0(vc, "liveContentOverlays");
-    if (![overlays isKindOfClass:[NSDictionary class]]) return;
+    if (!BP_KIND("p1-overlays", overlays, NSDictionary)) return;
     for (id key in [(NSDictionary *)overlays allKeys]) {
         if (P1_L0(key, "type") != 0) continue;
         SEL ifr = sel_registerName("itemForLayoutRole:");
@@ -1017,7 +1017,7 @@ static void P1_VCAsync(id self, SEL _cmd) {
     id sc = P1_S0(self, "switcherController");
     id dragging = P1_S0(P1_CoordinatorOf(sc), "draggingAppLayouts");
     id overlays = P1_Ivar(self, "_liveContentOverlays");
-    if (![overlays isKindOfClass:[NSDictionary class]]) return;
+    if (!BP_KIND("p1-overlays", overlays, NSDictionary)) return;
     id adjustedMap = P1_Ivar(self, "_leafAppLayoutsToAdjustedAppLayouts");
     id root = P1_Ivar(self, "_rootModifier");
     BOOL disabled = P1_IvarB(self, "_asyncRenderingDisabled");

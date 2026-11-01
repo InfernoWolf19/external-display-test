@@ -870,7 +870,7 @@ static id G1C_NewSlideModifier(NSString *ident, NSArray *prevSw, NSArray *prevSt
 static NSArray *G1C_AskRootIds(id root, SEL sel, id a, id b, BOOL two) {
     if (!root || ![root respondsToSelector:sel]) return nil;
     id r = two ? ((id (*)(id, SEL, id, id))objc_msgSend)(root, sel, a, b) : ((id (*)(id, SEL, id))objc_msgSend)(root, sel, a);
-    return [r isKindOfClass:[NSArray class]] ? r : nil;
+    return BP_KIND("g1c-rootids", r, NSArray) ? r : nil;
 }
 // H2 (specs/CORE-LEFTOVERS-0.7.9.md section 4, REVIEW-CORE H2): the two inline calls of the 16.0 -performTransitionWithContext:animated:completion: blocks, 16.0 20A8372 unslid addresses
 //   (A) ___82-[SBFluidSwitcherViewController performTransitionWithContext:animated:completion:]_block_invoke   0x1c5fc4fc0 (181 insns): animated transition, right after the begin event is dispatched:
@@ -1041,7 +1041,7 @@ static int G1C_Ids16CallerKind(void *ra0) {
     if (G1C_ON() && [event respondsToSelector:@selector(appLayoutsWithRemovalContexts)]) {
         id front = G1C_IvarObj(self, "_appLayoutToOrderFront");
         id removed = G1B_Send0(event, @selector(appLayoutsWithRemovalContexts));
-        if (front && [removed isKindOfClass:[NSArray class]] && [removed containsObject:front]) {
+        if (front && BP_KIND("g1c-removal", removed, NSArray) && [removed containsObject:front]) {
             Ivar iv = class_getInstanceVariable(object_getClass(self), "_appLayoutToOrderFront");
             if (iv) BP_SetObjIvar(self, iv, nil);
         }
@@ -1535,7 +1535,7 @@ static id G1C_S2A_GroupLayouts(id self, SEL _cmd, id ident) {
     id r = G1B_SUPER(id, gS2ABase, self, _cmd, (struct objc_super *, SEL, id), ident);
     SEL stageSel = NSSelectorFromString(@"appLayoutOnContinuousExposeStage");
     id stage = [self respondsToSelector:stageSel] ? G1B_Send0(self, stageSel) : nil;
-    if (G1C_S2A_Dir(self, 0) != 0 || !stage || ![r isKindOfClass:[NSArray class]]) return r;
+    if (G1C_S2A_Dir(self, 0) != 0 || !stage || !BP_KIND("g1c-s2a", r, NSArray)) return r;
     id sid = [stage respondsToSelector:@selector(continuousExposeIdentifier)] ? G1B_Send0(stage, @selector(continuousExposeIdentifier)) : nil;
     if (!(sid == ident || (sid && [sid isEqual:ident]))) return r;
     NSMutableArray *out = [NSMutableArray array];
@@ -1814,7 +1814,7 @@ static long long G1C_PC_Cfg(id s, SEL c) { return gPeekContentCfgOff < 0 ? 0 : *
 static id G1C_PC_Adjusted(id self, SEL _cmd, id layouts) {                  // peeked layout first, then the rest (blocks 0x1c78e5cc0 / 0x1c78e5cd8)
     id r = G1B_SUPER(id, gPeekSuper, self, _cmd, (struct objc_super *, SEL, id), layouts);
     id mine = G1B_GET(self, kPkcLayout);
-    if (![r isKindOfClass:[NSArray class]] || !mine) return r;
+    if (!BP_KIND("g1c-peekadj", r, NSArray) || !mine) return r;
     NSMutableArray *a = [NSMutableArray array], *b = [NSMutableArray array];
     for (id l in (NSArray *)r) [([mine isEqual:l] ? a : b) addObject:l];
     return [a arrayByAddingObjectsFromArray:b];
@@ -1969,7 +1969,7 @@ static id G1C_PK_GroupLayouts(id self, SEL _cmd, id ident) {                // b
     id r = G1B_SUPER(id, gPeekSuper, self, _cmd, (struct objc_super *, SEL, id), ident);
     id mine = G1B_GET(self, kPkLayout);
     id myId = [mine respondsToSelector:@selector(continuousExposeIdentifier)] ? G1B_Send0(mine, @selector(continuousExposeIdentifier)) : nil;
-    if (!(myId == ident || (myId && [myId isEqual:ident])) || ![r isKindOfClass:[NSArray class]]) return r;
+    if (!(myId == ident || (myId && [myId isEqual:ident])) || !BP_KIND("g1c-peekgroup", r, NSArray)) return r;
     NSMutableArray *out = [NSMutableArray array];
     for (id l in (NSArray *)r) if (!G1C_PT_Any(l, mine)) [out addObject:l];
     return out;
@@ -2400,7 +2400,7 @@ static id G1C_Wdc_Item(id s, SEL c) { return G1B_GET(s, kWdcItem); }
 static id G1C_Wdc_Adjusted(id self, SEL _cmd, id layouts) {                      // layouts containing the dragged item first (0x1c762a510)
     id r = G1B_SUPER(id, gWdContentSuper, self, _cmd, (struct objc_super *, SEL, id), layouts);
     id item = G1B_GET(self, kWdcItem);
-    if (![r isKindOfClass:[NSArray class]] || !item) return r;
+    if (!BP_KIND("g1c-wdcadj", r, NSArray) || !item) return r;
     NSMutableArray *a = [NSMutableArray array], *b = [NSMutableArray array];
     for (id l in (NSArray *)r) [([l respondsToSelector:@selector(containsItem:)] && G1B_SendB1(l, @selector(containsItem:), item) ? a : b) addObject:l];
     return [a arrayByAddingObjectsFromArray:b];
@@ -3992,7 +3992,7 @@ static double G1C_FS_RoleScale(id self, SEL _cmd, long long role, id layout) {  
 }
 static id G1C_FS_Visible(id self, SEL _cmd) {                                           // 0x1c75c34c0
     id sup = G1B_SUPER(id, gFsSuper, self, _cmd, (struct objc_super *, SEL));
-    NSSet *set = [sup isKindOfClass:[NSSet class]] ? sup : [NSSet set];
+    NSSet *set = BP_KIND("g1c-fsvisible", sup, NSSet) ? sup : [NSSet set];
     id fs = G1C_FS_Layout(self);
     return fs ? [set setByAddingObject:fs] : set;
 }
@@ -4655,15 +4655,33 @@ static BOOL G1C_As_Frame(id self, unsigned long long i, BOOL scaled, BOOL scroll
     *out = f;
     return YES;
 }
+// Card path contract (specs/AUDIT-SILENT-FALLBACKS-0.7.9.md section F): the 16.2 pile layout answers UNSCALED window frames + scaleForIndex (frames / roles / scales / snapshot scale of one
+// calculation); the 16.0 [super] answers frames whose size is the SCALED card (_scaledCardSize) with a scale of about 1 and bounds derived role frames.  16.2 has NO fallback: a layout
+// that is answered by [super] while piles are on is a mixed contract (the caller scales a frame that is already scaled: a tiny card), so every such fallback announces itself once.
+static void G1C_As_Fell(id self, const char *what, id layout) {
+    if (!G1C_PilesOn()) return;
+    NSDictionary *c = G1B_GET(self, kAsCalc);                                   // the cached calculation (no rebuild: for a detached copy that would throw once more per call)
+    NSString *why = !c ? @"no pile calculation (detached switcher copy, or a protocol query threw)" : !layout ? @"no app layout at the index" : !c[@"frames"][layout] ? @"the layout is not in the pile frames" : @"the overlapping model / item of the role is missing";
+    static uintptr_t seen[128];                                                    // (what, why, class) already announced: this runs per frame on a detached copy
+    uintptr_t key = ((uintptr_t)what ^ ((uintptr_t)(__bridge void *)why * 31) ^ ((uintptr_t)(__bridge void *)object_getClass(self) * 131)) | 1;
+    for (int k = 0; k < 128; k++) {
+        uintptr_t cur = __atomic_load_n(&seen[k], __ATOMIC_RELAXED);
+        if (cur == key) return;
+        if (cur == 0) { uintptr_t z = 0; if (__atomic_compare_exchange_n(&seen[k], &z, key, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) break; if (z == key) return; }
+    }
+    BP_Anomaly("g1c-piles", @"%s answered by the 16.0 body (SCALED frame contract) while piles are on: %@ [%@]", what, why, G1C_DbgCls(self));
+}
 static CGRect G1C_As_FrameForIndex(id self, SEL _cmd, unsigned long long i) {            // 0x1c780fe78: withScaleApplied:NO scrollOffsetApplied:YES
     CGRect f;
     if (G1C_As_Frame(self, i, NO, YES, &f)) return f;
+    G1C_As_Fell(self, "frameForIndex:", G1C_As_LayoutAt(self, i));
     return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
 static double G1C_As_ScaleForIndex(id self, SEL _cmd, unsigned long long i) {            // 0x1c780ff80
     NSDictionary *c = G1C_PilesOn() ? G1C_As_Calc(self) : nil;
     id l = c ? G1C_As_LayoutAt(self, i) : nil;
     NSNumber *v = l ? c[@"scales"][l] : nil;
+    if (!v) G1C_As_Fell(self, "scaleForIndex:", G1C_As_LayoutAt(self, i));
     return v ? v.doubleValue : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
 // 16.2 has no override: the DefaultImplementations answer (0.5, 0.5). The 16.0 override returns a pile-stack anchor (0.0 for a single window) and its
@@ -4671,6 +4689,7 @@ static double G1C_As_ScaleForIndex(id self, SEL _cmd, unsigned long long i) {   
 static CGPoint G1C_As_Anchor(id self, SEL _cmd, unsigned long long i) {
     CGRect f;
     if (G1C_As_Frame(self, i, NO, NO, &f)) return CGPointMake(0.5, 0.5);
+    G1C_As_Fell(self, "anchorPointForIndex:", G1C_As_LayoutAt(self, i));
     return G1B_SUPER(CGPoint, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
 }
 // 16.2 0x1c780fe84: a window sits at compactedCenterForItem - compactedBoundingBox.origin with sizeForItem (the card canvas is the compacted bounding box);
@@ -4690,6 +4709,7 @@ static CGRect G1C_As_FrameForRole(id self, SEL _cmd, long long role, id layout, 
             if (seen.count > 400) [seen removeAllObjects];
             if (![seen containsObject:key]) { [seen addObject:key]; BP_Log(@"[g1c] frameForLayoutRole falls back to the 16.0 body (bounds derived): %@, role %lld, layout %p, bounds %.1fx%.1f", why, role, (__bridge void *)layout, bounds.size.width, bounds.size.height); }
         }
+        G1C_As_Fell(self, "frameForLayoutRole:inAppLayout:withBounds:", layout);
         return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, long long, id, CGRect), role, layout, bounds);
     }
     CGPoint ctr = ((CGPoint (*)(id, SEL, id))objc_msgSend)(model, cc, item);
@@ -4713,7 +4733,7 @@ static CGSize G1C_As_ContentSize(id self, SEL _cmd) {                           
 // clamped to [0, contentWidth - viewWidth]; y is always 0.
 static CGPoint G1C_As_ContentOffsetForIndex(id self, SEL _cmd, unsigned long long i, long long align) {
     CGRect f;
-    if (!G1C_As_Frame(self, i, YES, NO, &f)) return G1B_SUPER(CGPoint, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long, long long), i, align);
+    if (!G1C_As_Frame(self, i, YES, NO, &f)) { G1C_As_Fell(self, "contentOffsetForIndex:alignment:", G1C_As_LayoutAt(self, i)); return G1B_SUPER(CGPoint, gAsParent, self, _cmd, (struct objc_super *, SEL, unsigned long long, long long), i, align); }
     BOOL rtl = G1C_Resp(self, @selector(isRTLEnabled)) && G1B_SendB0(self, @selector(isRTLEnabled));
     double hEdge = G1B_Dbl0(G1B_Send0(self, @selector(chamoisLayoutAttributes)), NSSelectorFromString(@"switcherHorizontalEdgeSpacing"));
     double vbW = G1C_SendRect0(self, @selector(switcherViewBounds)).size.width, off = 0.0;
@@ -4959,11 +4979,18 @@ static double G1C_As_CardScale(id self) {                                       
     CGRect b = G1C_SendRect0(self, @selector(containerViewBounds));
     return b.size.height == 0 ? 1.0 : h / b.size.height;
 }
+// The two card scale answers follow the SAME predicate as the frames (a pile calculation exists): "can answer containerViewBounds" (G1C_As_Usable) is true for a modifier whose pile
+// calculation threw on another query, which gave 16.2 card scales on top of 16.0 SCALED frames (a card scaled twice).
+static BOOL G1C_As_PileMode(id self) { return G1C_PilesOn() && G1C_As_Usable(self) && G1C_As_Calc(self) != nil; }
 static double G1C_As_DefaultCardScale(id self, SEL _cmd) {
-    if (!G1C_PilesOn() || !G1C_As_Usable(self)) return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL));
+    if (!G1C_As_PileMode(self)) { if (G1C_PilesOn() && G1C_As_Usable(self)) G1C_As_Fell(self, "_defaultCardScale", nil); return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL)); }
     return G1C_As_CardScale(self);
 }
-static double G1C_As_SnapshotScale(id self, SEL _cmd, id layout) { return (G1C_PilesOn() && G1C_As_Usable(self)) ? G1C_As_CardScale(self) : G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, id), layout); }
+static double G1C_As_SnapshotScale(id self, SEL _cmd, id layout) {
+    if (G1C_As_PileMode(self)) return G1C_As_CardScale(self);
+    if (G1C_PilesOn() && G1C_As_Usable(self)) G1C_As_Fell(self, "snapshotScaleForAppLayout:", layout);
+    return G1B_SUPER(double, gAsParent, self, _cmd, (struct objc_super *, SEL, id), layout);
+}
 
 // --- behaviour (only on the full class; the floor class below has the layout overrides and nothing else) ---
 static id G1C_As_Init(id self, SEL _cmd) {

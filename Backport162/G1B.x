@@ -359,7 +359,7 @@ static unsigned long long G1B_RT_FaithfulLast(id rt, id child, NSArray *all) {
     G1B_RT_SetCurrent(rt, child);
     NSArray *mine = G1B_Send0(rt, @selector(appLayouts));
     G1B_RT_SetCurrent(rt, old);
-    id last = [mine isKindOfClass:[NSArray class]] ? mine.lastObject : nil;
+    id last = BP_KIND("g1b-rt", mine, NSArray) ? mine.lastObject : nil;
     if (!last) return kRtNotFound;
     NSUInteger i = [all indexOfObject:last];
     return i == NSNotFound ? kRtNotFound : (unsigned long long)i;
@@ -400,7 +400,7 @@ static unsigned long long G1B_RT_GuardLastIndex(id rt, id modifier) {
     SEL ap = @selector(appLayouts), fs = @selector(routingModifier:filteredAppLayouts:forModifier:);
     if (!G1B_HasSuper(gRtSuper, ap) || ![del respondsToSelector:fs]) return kRtNotFound;
     NSArray *all = G1B_SUPER(id, gRtSuper, rt, ap, (struct objc_super *, SEL));
-    if (![all isKindOfClass:[NSArray class]]) return kRtNotFound;
+    if (!BP_KIND("g1b-rt", all, NSArray)) return kRtNotFound;
     if (G1B_RT_StockCoversAll(rt, all)) {                               // stock answer (this child owns nothing) is complete: keep it
         if (BP_LogEnabled()) G1B_RT_GuardLog(0, object_getClass(modifier), (__bridge const void *)all, 0, ^NSString *{
             return [NSString stringWithFormat:@"g1b: routing162: %@ owns no index (its last layout is a half that is not in the %lu layout context list, the unsplit merged stage); another child already covers the last index, stock answer kept",
@@ -411,11 +411,11 @@ static unsigned long long G1B_RT_GuardLastIndex(id rt, id modifier) {
     G1B_RT_SetCurrent(rt, modifier);                                   // [modifier appLayouts] reaches the routing modifier with _currentModifier == modifier (what stock does through RouteToModifier)
     NSArray *mine = G1B_Send0(rt, ap);
     G1B_RT_SetCurrent(rt, old);
-    id last = [mine isKindOfClass:[NSArray class]] ? mine.lastObject : nil;
+    id last = BP_KIND("g1b-rt", mine, NSArray) ? mine.lastObject : nil;
     if (!last) return kRtNotFound;                                      // owns nothing: NSNotFound is the faithful answer
     for (NSUInteger i = all.count; i-- > 0;) {
         NSArray *cut = ((NSArray *(*)(id, SEL, id, NSArray *, id))objc_msgSend)(del, fs, rt, @[ all[i] ], modifier);
-        if ([cut isKindOfClass:[NSArray class]] && cut.lastObject == last) {
+        if (BP_KIND("g1b-rt", cut, NSArray) && cut.lastObject == last) {
             if (BP_LogEnabled()) G1B_RT_GuardLog(1, object_getClass(modifier), (__bridge const void *)all, i, ^NSString *{
                 return [NSString stringWithFormat:@"g1b: routing162 guard: last layout of %@ is not in the context list (%lu layouts) and no other child covers the last index, taken from layout %lu: %@", NSStringFromClass(object_getClass(modifier)), (unsigned long)all.count, (unsigned long)i, all[i]]; });
             return i;
@@ -1502,7 +1502,7 @@ static __thread __unsafe_unretained id tAWLayout;           // N: the app layout
 static BOOL G1B_AW_Contains(id coord, id layout) {
     Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
     id arr = BP_ObjIvar(coord, iv);
-    return [arr isKindOfClass:[NSArray class]] && [arr containsObject:layout];
+    return BP_KIND("g1b-aw", arr, NSArray) && [arr containsObject:layout];
 }
 
 // N exactly as the stock code computes it, nil when the assertion path is not taken (interrupted, not mode 3, no app layout, no elements).
@@ -1777,7 +1777,7 @@ static void G1B_BuildWindowDelete(void) {
     Class bp = NSClassFromString(@"SBBlurItemContainerParameters");
     SEL un = NSSelectorFromString(@"_unblurItemContainer:blurParameters:withAnimationUpdateMode:");
     SEL dp = NSSelectorFromString(@"defaultCrossblurBlurParameters");
-    if ([recycled isKindOfClass:[NSArray class]] && [recycled containsObject:c] && bp && [bp respondsToSelector:dp] && [me respondsToSelector:un])
+    if (BP_KIND("g1b-recycle", recycled, NSArray) && [recycled containsObject:c] && bp && [bp respondsToSelector:dp] && [me respondsToSelector:un])
         ((void (*)(id, SEL, id, id, long long))objc_msgSend)(me, un, c, G1B_Send0((id)bp, dp), 2);
     return r;
 }
@@ -1805,7 +1805,7 @@ static void G1B_BuildWindowDelete(void) {
         // guard did up to 0.7.3) rejected every legitimate icon overlay of a multi-window stage (going home with 2+ windows).  The guard now tests the same dictionary as the assertion.
         Ivar ov = class_getInstanceVariable(object_getClass(me), "_visibleOverlayAccessoryViews");
         id ovd = ov ? BP_ObjIvar(me, ov) : nil;
-        if (layout && ov && [ovd isKindOfClass:[NSDictionary class]] && ![(NSDictionary *)ovd objectForKey:layout]) {
+        if (layout && ov && BP_KIND("g1b-icon", ovd, NSDictionary) && ![(NSDictionary *)ovd objectForKey:layout]) {
             BP_Anomaly("guard-g1b", @"GUARD icon overlay response for an app layout without overlay accessory view ignored: %@", layout);
             return;
         }
