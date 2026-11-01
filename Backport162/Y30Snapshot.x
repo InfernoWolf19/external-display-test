@@ -70,14 +70,14 @@ static CGRect Y30_ImageFrame(id self, SEL _cmd, id entry) {
     return gY30OrigFrame ? ((CGRect (*)(id, SEL, id))gY30OrigFrame)(self, _cmd, entry) : CGRectZero;
 }
 
+// 16.2 -setImage: also sends sizeToFit to the image view; 16.0 -layoutSubviews sizes it to fit (non stretch) right after the -setNeedsLayout of 16.0 -setImage:, so the final state is the same.
+// Kept as 16.0 plain (no extra sizeToFit with the previous layout's transform still on the image view): only the stretch mode below differs from 16.0.
 static void Y30_SetImage(id self, SEL _cmd, id image) {
     if (gY30OrigSetImage) ((void (*)(id, SEL, id))gY30OrigSetImage)(self, _cmd, image);
-    if (!BP_OnName("y24_snapstretch")) return;
-    id imageView = Y30_ObjIvar(self, "_imageView");
-    if (BPY_Responds(imageView, "sizeToFit")) BPY_SEND(void, (), imageView, "sizeToFit");
 }
 static void Y30_Layout(id self, SEL _cmd) {
-    if (!BP_OnName("y24_snapstretch")) { if (gY30OrigLayout) ((void (*)(id, SEL))gY30OrigLayout)(self, _cmd); return; }
+    // the 16.0 body IS the 16.2 body unless the stretch flag is set (disassembled: 16.0 0x1c5e33de8 / 16.2 0x1c72a6254), so only that case is re-implemented
+    if (!BP_OnName("y24_snapstretch") || !Y30_BoolIvar(self, "_stretchToFillBounds")) { if (gY30OrigLayout) ((void (*)(id, SEL))gY30OrigLayout)(self, _cmd); return; }
     id container = Y30_ObjIvar(self, "_scalingView");
     id imageView = Y30_ObjIvar(self, "_imageView");
     if (!container || !imageView || !BPY_Responds(self, "scalingTransform") || !BPY_Responds(self, "_updateCornerRadius")) {
