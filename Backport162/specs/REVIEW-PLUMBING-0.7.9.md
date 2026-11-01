@@ -69,7 +69,7 @@ Status: PORTED = 16.2 logic reproduced from the disassembly; DEVIATION = deliber
 | status bar `options:` + per-display frontmost status bar | PORTED | G3B.x | |
 | user-resize orientation chain, orthogonal grids, SBSwitcherTraitsAssistant guide | PORTED, UNSURE | G3B.x | `SBFluidSwitcherPortaledSceneLiveContentOverlay` has no creator (`_updatePortaledSceneLiveContentOverlays` 0x1c74ce070, cross-display window drag): NOT |
 | AX / Eyedropper / Moments traits roles | PORTED for AX only; Eyedropper / Moments skipped; default ON although spec and code comments say opt-in | G3B.x g3b_axroles | see open defects |
-| privacy preflight gate | CANNOT (PrivacyDisclosureCore absent); log of the decision only (`g3b_preflightlog`, default on) | G3B.x | |
+| privacy preflight gate | PORTED (pass 4): PrivacyDisclosureCore re-implemented, SB controllers, scene update transaction + FrontBoard launch scheduling, native consent alert; specs/DELTA-SWEEP-0.7.9.md Pass 4 section 2 | Y36Preflight.x | the older log hook `g3b_preflightlog` of G3B.x stays (diagnostic) |
 | per-scene `SBLockedPointerManager`, `_UIPointerUnlockAction`, suppress-preferred-status | PORTED, UNSURE | G4B.x lockedptr2 | `initWithSceneManager:` of an external manager is safe: `_layoutStateTransitionCoordinator` is defined on the `SBSceneManager` base (nil for the external manager, `addObserver:nil` is a no-op) |
 
 ### 3.3 Pointer
