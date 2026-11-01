@@ -53,6 +53,14 @@ class Ctx:
         off = addr - pg
         assert off + n <= 0x1000
         return d[off:off + n]
+    def cstring(s, addr):
+        out = b''
+        while len(out) < 512:
+            pg = addr & ~0xfff; n = min(0x1000 - (addr - pg), 64)
+            chunk = s.read(addr, n); z = chunk.find(b'\0')
+            if z >= 0: out += chunk[:z]; return out.decode('utf8', 'replace')
+            out += chunk; addr += n
+        return out.decode('utf8', 'replace')
     def stubname(s, t):
         """name of a call target: 'msgSend:sel' / symbol / ''"""
         k = 'stub%s:%x' % (s.ver, t)
@@ -64,21 +72,37 @@ class Ctx:
         if len(ins) >= 2 and ins[0].mnemonic == 'adrp' and ins[1].mnemonic == 'ldr' and ins[1].op_str.startswith('x1,'):
             m1 = re.match(r'x1, #(0x[0-9a-f]+)', ins[0].op_str)  # adrp x1, #page
             pg = int(ins[0].op_str.split('#')[1], 16)
-            m2 = re.search(r'#(0x[0-9a-f]+)\]', ins[1].op_str)
-            ref = pg + (int(m2.group(1), 16) if m2 else 0)
+            m2 = re.search(r'#(0x[0-9a-f]+|\d+)\]', ins[1].op_str)
+            ref = pg + (int(m2.group(1), 0) if m2 else 0)
             r = 'msgSend:' + s.sel(ref)
         elif len(ins) >= 3 and ins[0].mnemonic == 'adrp' and ins[0].op_str.startswith('x16') and ins[1].mnemonic == 'add':
-            pg = int(ins[0].op_str.split('#')[1], 16); o = int(ins[1].op_str.split('#')[-1], 16)
+            pg = int(ins[0].op_str.split('#')[1], 16); o = int(ins[1].op_str.split('#')[-1], 0)
             r = s.a2s(pg + o)
         if not r: r = s.a2s(t)
         memo[k] = r; return r
+
+_IVT = {}
+def ivar_tables(ver):
+    if ver in _IVT: return _IVT[ver]
+    fn = S + ('sb160n_objc.txt' if ver == '160' else 'sb162_objc.txt')
+    tab = {}; cur = None
+    for l in open(fn, errors='replace'):
+        m = re.match(r'@interface (\w+)(?: \((\w+)\))? *(?::\s*(\w+))?', l)
+        if m and l.rstrip().endswith('{') or (m and '{ //' in l):
+            cur = m.group(1); tab.setdefault(cur, {'super': m.group(3), 'iv': []}); continue
+        if cur:
+            if l.startswith('}'): cur = None; continue
+            m2 = re.match(r'\s+(.+?)\b(\w+);\s*//\s*\+0x([0-9a-f]+)\s+0x([0-9a-f]+)', l)
+            if m2: tab[cur]['iv'].append((m2.group(2), int(m2.group(4), 16), int(m2.group(3), 16)))
+    _IVT[ver] = tab; return tab
 
 def rname(n):
     n = {'fp': 'x29', 'lr': 'x30'}.get(n, n)
     return n
 
 class Lift:
-    def __init__(s, ver, start, end, cname, sig, retk, kinds):
+    def __init__(s, ver, start, end, cname, sig, retk, kinds, cls=None):
+        s.cls = cls
         s.ctx = Ctx(ver); s.ver = ver; s.start = start; s.end = end; s.cname = cname
         s.sig = sig; s.retk = retk; s.kinds = kinds
         code = dump(ver, start & ~0xfff, ((end - (start & ~0xfff)) + 0xfff) & ~0xfff)
@@ -86,7 +110,7 @@ class Lift:
         s.ins = list(md.disasm(code[start & 0xfff:(start & 0xfff) + (end - start)], start))
         assert len(s.ins) * 4 == end - start, (len(s.ins), (end - start) // 4)
         s.cval = {}   # reg -> const address
-        s.baked = set()
+        s.baked = set(); s.kinds_at = {}
         s.out = []
         s.globals = {}   # addr -> description
         s.stats = {'warn': []}
@@ -166,6 +190,7 @@ class Lift:
     def classify(s, addr):
         c = s.ctx
         sym, sec = c.a2s2(addr)
+        if sym.startswith('_OBJC_IVAR_$_'): sym = sym[1:]
         if sym.startswith('OBJC_IVAR_$_'): return ('ivar', sym[len('OBJC_IVAR_$_'):])
         if sym.startswith('_ptr._OBJC_CLASS_$_') and 'classrefs' in sec: return ('cls', sym[len('_ptr._OBJC_CLASS_$_'):])
         if 'selrefs' in sec:
@@ -188,7 +213,7 @@ class Lift:
         n = len(ins); idxof = {i.address: k for k, i in enumerate(ins)}
         # ---- flow analysis of the constant registers (adrp / add / table pointers), meet = intersection
         saved = (dict(s.sels), dict(s.cls), dict(s.ivs), dict(s.fns), dict(s.strs), list(s.stats['warn']))
-        states = {0: ({}, set())}
+        states = {0: ({'x0': ('self', s.cls)} if s.cls else {}, set())}
         work = [0]
         s.dry = True
         def succs(k, i):
@@ -282,7 +307,7 @@ class Lift:
             d = nm(ops[0])
             if s.fp_is(d): raise Exception('fp add/sub')
             a = s.rd(i, ops[1]); b = s.rd(i, ops[2])
-            if ops[1].type == A.ARM64_OP_REG and mn in ('add',) and ops[2].type == A.ARM64_OP_IMM and nm(ops[1]) in s.cval and d[0] == 'x':
+            if ops[1].type == A.ARM64_OP_REG and mn in ('add',) and ops[2].type == A.ARM64_OP_IMM and isinstance(s.cval.get(nm(ops[1])), int) and d[0] == 'x':
                 bk = nm(ops[1]) in s.baked
                 s.cval[d] = s.cval[nm(ops[1])] + ops[2].imm
                 if bk: s.baked.add(d)
@@ -294,6 +319,17 @@ class Lift:
                 k = s.classify(cvalres)
                 if k[0] == 'cfstr':
                     E('X[%d] = (uint64_t)CFSTR_(%s_strs, %d); /* @"%s" */' % (int(d[1:]), s.cname, s.intern(s.strs, k[1]), k[1])); return
+                sym_, sec_ = s.ctx.a2s2(cvalres)
+                if not sec_ and sym_ in ('?', ''):
+                    lit0 = s.ctx.cstring(cvalres)
+                    if lit0 and all(32 <= ord(ch) < 127 for ch in lit0):
+                        sec_ = '__TEXT.__objc_methname' if (d == 'x1' and re.match(r'^[A-Za-z_][A-Za-z0-9_:]*$', lit0)) else '__TEXT.__cstring'
+                if 'methname' in sec_:
+                    nmx = s.ctx.cstring(cvalres)
+                    E('X[%d] = (uint64_t)SEL(%s_sels, %d); /* direct selector %s */' % (int(d[1:]), s.cname, s.intern(s.sels, nmx), nmx)); s.cval[d] = ('sel', nmx); return
+                if 'cstring' in sec_:
+                    lit = s.ctx.cstring(cvalres)
+                    E('X[%d] = (uint64_t)(uintptr_t)%s;' % (int(d[1:]), json.dumps(lit))); return
             if mn in ('add', 'sub'):
                 E(s.wr(i, d, '(%s) %s (%s)' % (a, '+' if mn == 'add' else '-', b)))
             else:
@@ -442,11 +478,24 @@ class Lift:
         else:
             ea = '(%s) + (%d)' % (s.rdreg(base), disp)
         const_addr = None
-        if base in s.cval and not m.mem.index:
+        selfcls = None; eas = None
+        if isinstance(s.cval.get(base), int) and not m.mem.index:
             const_addr = s.cval[base] + disp
+        if isinstance(s.cval.get(base), tuple) and s.cval[base][0] == 'self' and not m.mem.index and not post:
+            selfcls = s.cval[base][1]
         if post:
             ea = '%s' % s.rdreg(base)
-            const_addr = s.cval.get(base)
+            const_addr = s.cval.get(base) if isinstance(s.cval.get(base), int) else None
+        if selfcls:
+            ivs = s.ivmap(selfcls, disp, sz)
+            if ivs:
+                ea = '(%s) + IVOFF(%s_ivs, %d) + (%d)' % (s.rdreg(base), s.cname, s.intern(s.ivs, ivs[0]), ivs[1])
+            if pair:
+                eas = []
+                for j in range(2):
+                    iv2 = s.ivmap(selfcls, disp + j * sz, sz)
+                    if iv2: eas.append('(%s) + IVOFF(%s_ivs, %d) + (%d)' % (s.rdreg(base), s.cname, s.intern(s.ivs, iv2[0]), iv2[1]))
+                    else: eas.append('(%s) + (%d)' % (s.rdreg(base), disp + j * sz))
         if wb and not post:
             E('X[%d] = (uint64_t)(%s);' % (int(base[1:]) if base != 'sp' else 31, ea)); ea = s.rdreg(base)
         elif not wb: pass
@@ -467,7 +516,7 @@ class Lift:
             if k[0] == 'cls':
                 E('X[%d] = (uint64_t)CLS(%s_cls, %d);' % (int(r0[1:]), s.cname, s.intern(s.cls, k[1]))); return
             if k[0] == 'sel':
-                E('X[%d] = (uint64_t)SEL(%s_sels, %d);' % (int(r0[1:]), s.cname, s.intern(s.sels, k[1]))); return
+                E('X[%d] = (uint64_t)SEL(%s_sels, %d);' % (int(r0[1:]), s.cname, s.intern(s.sels, k[1]))); s.cval[r0] = ('sel', k[1]); s.baked.discard(r0); return
             if k[0] == 'cfstr':
                 E('X[%d] = (uint64_t)CFSTR_(%s_strs, %d);' % (int(r0[1:]), s.cname, s.intern(s.strs, k[1]))); return
             if k[0] == 'data':
@@ -484,6 +533,11 @@ class Lift:
                     if tsym == '___stack_chk_guard':
                         E('X[%d] = (uint64_t)(uintptr_t)&lift_guard_cell;' % int(r0[1:])); s.kill(r0); return
                     tsec = s.ctx.a2s2(tgt)[1] if tsym else ''
+                    if 0x180000000 <= tgt < 0x200000000 and 'cfstring' in s.ctx.a2s2(tgt)[1]:
+                        txt = s.ctx.cfstr(tgt)
+                        E('X[%d] = (uint64_t)CFSTR_(%s_strs, %d); /* @"%s" */' % (int(r0[1:]), s.cname, s.intern(s.strs, txt), txt)); s.kill(r0); return
+                    if tsym.startswith('_OBJC_CLASS_$_'):
+                        E('X[%d] = (uint64_t)CLS(%s_cls, %d);' % (int(r0[1:]), s.cname, s.intern(s.cls, tsym[len('_OBJC_CLASS_$_'):]))); s.kill(r0); return
                     if tsym and ('__TEXT' in tsec or '__const' in tsec or 'cstring' in tsec):
                         s.cval[r0] = tgt; s.baked.add(r0)
                         E('X[%d] = 0x%xull; /* address of %s (immutable table, loads from it are baked) */' % (int(r0[1:]), tgt, tsym)); return
@@ -496,7 +550,7 @@ class Lift:
         if pair:
             for j, r in enumerate(regs):
                 off = j * sz
-                a = '(%s) + %d' % (ea, off)
+                a = eas[j] if eas else '(%s) + %d' % (ea, off)
                 if load and const_addr is not None and base in s.baked and sz in (4, 8):
                     bv = int.from_bytes(s.ctx.read(const_addr + off, sz), 'little')
                     if r[0] in 'xw': E(s.wr(i, r, '0x%xull' % bv) + ' /* baked const @%x */' % (const_addr + off)); s.kill(r)
@@ -543,6 +597,14 @@ class Lift:
             E('X[%d] = (uint64_t)(%s) + (%d);' % (int(base[1:]) if base != 'sp' else 31, s.rdreg(base), postimm))
             s.kill(base)
 
+    def ivmap(s, cls, off, size):
+        """(Class.ivar, delta) when `off` lies inside an ivar of cls (or of an SB superclass) in this build's table, None otherwise"""
+        tab = ivar_tables(s.ver); c = cls; seen = 0
+        while c and c in tab and seen < 16:
+            for name, o, sz in tab[c]['iv']:
+                if o <= off < o + max(sz, 1): return ('%s.%s' % (c, name), off - o)
+            c = tab[c]['super']; seen += 1
+        return None
     def kill(s, r):
         s.cval.pop(r, None); s.baked.discard(r)
     def intern(s, d, name):
@@ -691,7 +753,10 @@ class Lift:
         nm = s.ctx.stubname(t)
         if not nm: s.stats['warn'].append('unresolved call %x -> %x' % (i.address, t)); nm = 'UNRESOLVED_%x' % t
         # registers clobbered
+        x1tag = s.cval.get('x1')
         for rr in range(0, 18): s.kill('x%d' % rr)
+        if nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel' and x1tag[1].startswith('init') and s.cls:
+            s.cval['x0'] = ('self', s.cls)
         if nm.startswith('msgSend:'):
             sel = nm[8:]
             kind = s.callkind(idx, nm)
@@ -720,7 +785,7 @@ class Lift:
         kind = s.callkind(idx, nm)
         k = s.intern(s.fns, nm)
         E('CALLFN(%s_fns, %d, %s);' % (s.cname, k, kind)); s.note_call(i, nm, kind)
-    def note_call(s, i, nm, kind): pass
+    def note_call(s, i, nm, kind): s.kinds_at[i.address] = kind
     def tailcall(s, i, t):
         nm = s.ctx.stubname(t)
         s.emit('/* tail call %s */' % nm)
@@ -761,6 +826,7 @@ class Lift:
         fn.append('    memset(X, 0, sizeof X); memset(VR, 0, sizeof VR);')
         fn.append('    X[31] = (uint64_t)(uintptr_t)(stk_ + 0x800);')
         for p in pre: fn.append('    ' + p)
+        fn.append('    LIFT_ENTRY(); LIFT_STKINIT(stk_);')
         fn.append(body)
         fn.append('Lret:')
         fn.append('    ' + ret)
@@ -775,7 +841,8 @@ def main():
     if '--kinds' in a:
         for kv in a[a.index('--kinds') + 1].split(','):
             k, v = kv.split('='); kinds['msgSend:' + k if not k.startswith('_') and ':' not in k[:1] and not k.startswith('fn:') else k] = v
-    L = Lift(ver, st, en, cname, sig, retk, kinds)
+    cls = a[a.index('--cls') + 1] if '--cls' in a else None
+    L = Lift(ver, st, en, cname, sig, retk, kinds, cls)
     head, fn = L.generate()
     save_memo()
     print(head); print(fn)

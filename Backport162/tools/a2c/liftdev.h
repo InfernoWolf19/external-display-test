@@ -27,6 +27,8 @@ extern void lift_objc_storeStrong(void **, void *) __asm__("_objc_storeStrong");
 extern void lift_objc_enumerationMutation(void *) __asm__("_objc_enumerationMutation");
 extern void lift_stack_chk_fail(void) __asm__("___stack_chk_fail");
 
+#define LIFT_ENTRY() ((void)0)
+#define LIFT_STKINIT(p) ((void)0)
 #define SEL(t, i) lift_sel_registerName((t)[i])
 #define CLS(t, i) lift_objc_getClass((t)[i])
 static inline void *lift_gsym(const char *n) { if (*n == '_') n++; return dlsym(RTLD_DEFAULT, n); }
@@ -52,8 +54,12 @@ static inline const char *lift_preflight(const char *const *fns, int nf, const c
 #define LIFT_PREFLIGHT(f, c, i) lift_preflight((f), (int)(sizeof(f) / sizeof((f)[0])), (c), (int)(sizeof(c) / sizeof((c)[0])), (i), (int)(sizeof(i) / sizeof((i)[0])))
 
 // typed calls: ints x0..x7, doubles d0..d7 (VR[n][0] is the low half of vn)
-#define LIFT_ARGS X[0], X[1], X[2], X[3], X[4], X[5], X[6], X[7], FD(VR[0][0]), FD(VR[1][0]), FD(VR[2][0]), FD(VR[3][0]), FD(VR[4][0]), FD(VR[5][0]), FD(VR[6][0]), FD(VR[7][0])
-#define LIFT_PARAMS uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double
+// the 12 words at sp are passed as stack arguments: the memory image the machine code built at [sp, #0 ..] IS the stack argument area of the callee (Darwin packs small arguments, the image keeps that packing)
+#define LIFT_STK(k) LD64(X[31] + 8 * (k))
+#define LIFT_ARGS X[0], X[1], X[2], X[3], X[4], X[5], X[6], X[7], FD(VR[0][0]), FD(VR[1][0]), FD(VR[2][0]), FD(VR[3][0]), FD(VR[4][0]), FD(VR[5][0]), FD(VR[6][0]), FD(VR[7][0]), \
+    LIFT_STK(0), LIFT_STK(1), LIFT_STK(2), LIFT_STK(3), LIFT_STK(4), LIFT_STK(5), LIFT_STK(6), LIFT_STK(7), LIFT_STK(8), LIFT_STK(9), LIFT_STK(10), LIFT_STK(11)
+#define LIFT_PARAMS uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double, \
+    uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t
 #define LIFT_CALL_x(fn) do { X[0] = ((uint64_t (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); } while (0)
 #define LIFT_CALL_v(fn) do { ((void (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); } while (0)
 #define LIFT_CALL_d(fn) do { double r_ = ((double (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); VR[0][0] = DB(r_); VR[0][1] = 0; } while (0)
