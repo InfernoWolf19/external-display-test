@@ -1,12 +1,4 @@
 {
- "0.7.9+270.92b55af": {
-  "date": "2026-10-25T20:29:20Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+270.92b55af_iphoneos-arm64.deb",
-  "run": 270,
-  "sha": "92b55af07440f7f0947f12f4b7a0610481b0c633",
-  "subject": "p1_orient: the layout state orientation replaces the per-element one only when it agrees with the switcher window shape (all logged layout states say Portrait, also for the landscape monitor); drag failure analysis and shadow reasoning written up",
-  "version": "0.7.9+270.92b55af"
- },
  "0.7.9+271.e105de9": {
   "date": "2026-10-25T20:35:31Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+271.e105de9_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "6a9d71e011987751b1b45b59b1bec3fe2f9a5933",
   "subject": "Y33HomeDiag: debug only log of what the switcher content controller delegate applies to the home screen (alpha, scale, backdrop blur type / progress, dimming, wallpaper scale, with mode) to find why the icons stay hidden ~0.7 s after a settled dismiss; no behaviour change",
   "version": "0.7.9+331.6a9d71e"
+ },
+ "0.7.9+332.3c57645": {
+  "date": "2026-11-01T09:02:25Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+332.3c57645_iphoneos-arm64.deb",
+  "run": 332,
+  "sha": "3c5764517c4e287f04bfe783e24ecdda292325b9",
+  "subject": "G2B: every fallback of _layoutAppLayout:roleMask:completion: to the 16.0 body is announced once per reason (ANOMALY g2b-layout, always on): in the last device log the 16.2 container configuration (card debug line) never ran",
+  "version": "0.7.9+332.3c57645"
  }
 }
