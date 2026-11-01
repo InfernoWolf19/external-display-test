@@ -1177,6 +1177,14 @@ static BOOL BP2B_LayerHasModifier(id layer, NSArray<NSString *> *keyPaths) {
     return NO;
 }
 
+// bool query with an index argument; a missing selector is announced (BP_SelMiss) and answers NO
+static BOOL BP2B_BoolIdx(id o, SEL s, NSUInteger i) {
+    if (!o) return NO;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2b", o, s); return NO; }
+    return ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(o, s, i);
+}
+static CGPoint BP2B_PointValue(id v) { return [v respondsToSelector:@selector(CGPointValue)] ? [v CGPointValue] : CGPointZero; }
+
 static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long long roleMask, id completion) {
     typedef void (*Orig)(id, SEL, id, unsigned long long, id);
     // every fallback to the 16.0 body is announced once per reason (ANOMALY g2b-layout, always on): the 16.2 container configuration below is what the pile floor's answers (unscaled frames + card scale) are written for
@@ -1186,12 +1194,9 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
     if (!root || !BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled"))) BP2B_FALLBACK(!root ? "no _rootModifier" : "classic switcher (isChamoisWindowingUIEnabled NO)");         // classic switcher: 16.0 code unchanged
     NSArray *aps = BP2B_Obj(vc, sel_registerName("appLayouts"));
     NSUInteger idx = aps ? [aps indexOfObject:appLayout] : NSNotFound;
+    // 16.2 0x1c74436d0: shouldPerformRotationAnimationForOrientationChange is read once, after the queries by index.  There is no fallback for the pin / rotation cases any more:
+    // the in-flight adoption (162 0x1c7443dd0..0x1c74442e0) is ported below, so the pinned case (the NORMAL case: both defaults answer YES) runs the 16.2 body.
     BOOL rotationAnim = BP2B_Bool(root, sel_registerName("shouldPerformRotationAnimationForOrientationChange"));
-    if (idx != NSNotFound) {
-        if (rotationAnim) BP2B_FALLBACK("rotation animation for an orientation change");
-        SEL pinS = sel_registerName("shouldPinLayoutRolesToSpace:");
-        if ([root respondsToSelector:pinS] && ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(root, pinS, idx)) BP2B_FALLBACK("shouldPinLayoutRolesToSpace: YES for this index");
-    }
     Class group = NSClassFromString(@"SBC2GroupCompletion");
     SEL performS = sel_registerName("perform:finalCompletion:options:delegate:");
     if (!group || !class_getClassMethod(group, performS)) BP2B_FALLBACK("SBC2GroupCompletion perform:finalCompletion:options:delegate: missing");
@@ -1202,6 +1207,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
     NSDictionary *liveOverlays = BP2B_IvarObj(vc, "_liveContentOverlays");
     NSDictionary *overlayViews = BP2B_IvarObj(vc, "_visibleOverlayAccessoryViews");
     NSDictionary *underlayViews = BP2B_IvarObj(vc, "_visibleUnderlayAccessoryViews");
+    NSDictionary *titleControllers = BP2B_IvarObj(vc, "_appLayoutToTitleItemController");
     Class uiViewClass = [UIView class];
     (void)uiViewClass;
 
@@ -1294,14 +1300,85 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             double roleScale = BP2B_S2(double, root, "scaleForLayoutRole:inAppLayout:", (long long)(role), (id)(appLayout));
             CGRect clip = BP2B_S4(CGRect, root, "clippingFrameForLayoutRole:inAppLayout:atIndex:withBounds:", (long long)(role), (id)(appLayout), (NSUInteger)(idx), (CGRect)(BP2B_RectWithSize(bw, bh)));
             lastR = R;
-            // position math (the A region): pin == NO on this path, so the anchor applied is the index anchor and no compensation translation exists
-            double dx = 0.5 - anchor.x, dy = 0.5 - anchor.y;
+            // ---- position maths (162 0x1c7443a54..0x1c7443c4c) -------------------------------------------------------------------------
+            // pin = shouldPinLayoutRolesToSpace:(idx); useAnchor = pin ? shouldUseAnchorPointToPinLayoutRolesToSpace:(idx) : NO (both default to YES in
+            // -[SBDefaultImplementationsSwitcherModifier ...], so "pinned, anchor applied" is the NORMAL case)
+            BOOL pin = BP2B_BoolIdx(root, sel_registerName("shouldPinLayoutRolesToSpace:"), idx);
+            BOOL useAnchor = pin ? BP2B_BoolIdx(root, sel_registerName("shouldUseAnchorPointToPinLayoutRolesToSpace:"), idx) : NO;
+            BOOL pinNoAnchor = pin && !useAnchor;                                                // w22
+            double nax = (anchor.x * bw - R.origin.x) / R.size.width;                            // d11: the index anchor normalised to the role frame
+            double nay = (anchor.y * bh - R.origin.y) / R.size.height;                           // d10
+            double dx = useAnchor ? 0.5 - nax : 0.5 - anchor.x, dy = useAnchor ? 0.5 - nay : 0.5 - anchor.y;
+            CGPoint anchorApplied = useAnchor ? CGPointMake(nax, nay) : anchor;                  // [sp,#0x330] / [sp,#0x328]
             double X = (baseX + R.origin.x) - R.size.width * dx;
             double Y = (baseY + R.origin.y) - R.size.height * dy;
-            X += S * (1.0 - roleScale) * (R.size.width * dx);                                    // chamois term (isChamoisWindowingUIEnabled == YES here)
-            Y += S * (1.0 - roleScale) * (R.size.height * dy);
+            if (BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled"))) {                // chamois term (the cmp w0,#0; fcsel ..eq selects the plain value when NO)
+                X += S * (1.0 - roleScale) * (R.size.width * dx);
+                Y += S * (1.0 - roleScale) * (R.size.height * dy);
+            }
             double layerScale = S * roleScale;                                                   // [sp,#0x2f8]
-            CGPoint anchorApplied = anchor;
+            double compX = 0.0, compY = 0.0;                                                     // [sp,#0x310] / [sp,#0x2c0]: only when pin && !useAnchor
+            if (pinNoAnchor) {
+                double f = 1.0 - (BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled")) ? S : layerScale);
+                compX = (R.size.width * (nax - anchorApplied.x)) * f;
+                compY = (R.size.height * (nay - anchorApplied.y)) * f;
+            }
+            // position update mode: a changed anchor with mode 4 (162 0x1c7443c74..0x1c7443cd0): 4, or 5 when a position animation already runs on the layer
+            CALayer *cLayer = BP2B_Obj(c, @selector(layer));
+            long long posModeAdj = positionMode;
+            {
+                CGPoint cur = cLayer ? cLayer.anchorPoint : CGPointZero;
+                BOOL same = (cur.y == anchorApplied.y) && (cur.x == anchorApplied.x);           // fcmp d11,d9; fccmp d8,d13 (exact)
+                if (!same && positionMode == 4) posModeAdj = 4 + (BP2B_LayerHasModifier(cLayer, @[@"position"]) ? 1 : 0);   // block 0x1e18eb1e0
+            }
+            // scale update mode (162 0x1c7443d0c..0x1c7443db4): the transform animation takes the position mode when the layer already shows the scale but not the compensation
+            long long scaleModeEff = scaleMode;
+            {
+                BOOL hasXform = BP2B_LayerHasModifier(cLayer, @[@"transform"]);                 // block 0x1e18eb200
+                CATransform3D t = cLayer ? cLayer.transform : CATransform3DIdentity;
+                if (!cLayer) memset(&t, 0, sizeof t);                                            // the nil layer branch zero fills
+                if (pinNoAnchor && !hasXform && BP2B_FEq(t.m11, S) && BP2B_FEq(t.m22, S) && !BP2B_FEq(compX, t.m41)) scaleModeEff = posModeAdj;
+            }
+            // ---- in-flight adoption (162 0x1c7443dd0..0x1c74442e0): only when the anchor is applied through the layer (useAnchor) or for a rotation animation,
+            // and the layer anchor really changes: the layer keeps its VISIBLE (presentation) position by moving the position by the anchor delta ------------
+            BOOL adopted = NO;
+            if ((useAnchor || rotationAnim) && cLayer) {
+                CGPoint ca = cLayer.anchorPoint;
+                if (!(BP2B_FEq(ca.x, anchorApplied.x) && BP2B_FEq(ca.y, anchorApplied.y))) {
+                    adopted = YES;
+                    CGPoint pos = cLayer.position;                                               // d15 / d13
+                    CGSize bsz = cLayer.bounds.size;                                             // d12 / d11
+                    CGPoint anc = ca;                                                            // d8 / d14
+                    CATransform3D tr = cLayer.transform;
+                    for (id m in BP2B_Obj(cLayer, sel_registerName("presentationModifiers")) ?: @[]) {
+                        NSString *kp = BP2B_Obj(m, sel_registerName("keyPath"));
+                        id val = BP2B_Obj(m, sel_registerName("value"));
+                        if ([kp isEqual:@"position"]) pos = BP2B_PointValue(val);
+                        else if ([kp isEqual:@"bounds"]) { if ([val respondsToSelector:@selector(CGRectValue)]) bsz = [val CGRectValue].size; else bsz = CGSizeZero; }
+                        else if ([kp isEqual:@"anchorPoint"]) anc = BP2B_PointValue(val);
+                        else if ([kp isEqual:@"transform"]) { if (val && [val respondsToSelector:@selector(CATransform3DValue)]) tr = [val CATransform3DValue]; else memset(&tr, 0, sizeof tr); }
+                    }
+                    double txAdopted = useAnchor ? 0.0 : tr.m41;                                 // [sp,#0x2d8]
+                    long long am;                                                                // [sp,#0x348] -> x19
+                    if (posModeAdj == 1 || posModeAdj == 2) am = 2;
+                    else {
+                        BOOL found = BP2B_LayerHasModifier(cLayer, @[@"position", @"bounds", @"transform"]);
+                        am = found ? posModeAdj : ((posModeAdj == 2 || pin) ? 2 : posModeAdj);
+                    }
+                    double wS = bsz.width * tr.m11, hS = bsz.height * tr.m22;
+                    CGPoint newPos = CGPointMake(anchorApplied.x * wS + (pos.x - anc.x * wS + tr.m41),   // note: tx is added, ty is not (160 / 162 alike)
+                                                 anchorApplied.y * hS + (pos.y - anc.y * hS));
+                    CGPoint appliedA = anchorApplied;
+                    void (^adopt)(void) = ^{
+                        [(CALayer *)BP2B_Obj(c, @selector(layer)) setAnchorPoint:appliedA];
+                        BP2B_S1(void, c, "setCenter:", (CGPoint)(newPos));
+                        [(CALayer *)BP2B_Obj(c, @selector(layer)) setValue:@(txAdopted) forKey:@"transform.translation.x"];
+                    };
+                    BP2B_Animate(positionSettings, am, ^{
+                        if (rotationAnim) [UIView performWithoutAnimation:adopt]; else adopt();
+                    }, nil);
+                }
+            }
             // cornerRadii / maskedCorners / blur / drag per role
             BP2BRadii rr = BP2B_S3(BP2BRadii, root, "cornerRadiiForLayoutRole:inAppLayout:withCornerRadii:", (long long)(role), (id)(appLayout), (BP2BRadii)(radii));
             unsigned long long mc = BP2B_S3(unsigned long long, root, "maskedCornersForLayoutRole:inAppLayout:withMaskedCorners:", (long long)(role), (id)(appLayout), (unsigned long long)(maskedCorners));
@@ -1316,6 +1393,14 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             BOOL tether = BP2B_S1(BOOL, root, "shouldTetherItemsAndAccessoriesInAppLayout:", (id)(appLayout));
             double pageAnchorX = tether ? ((bw * 0.5) - R.origin.x) / R.size.width : 0.5;        // [sp,#0x278]
             id live = liveOverlays[leaf];
+            if (BP_LogEnabled()) {       // diagnostic (Backport162.debug): the position branch taken for this card (pin / anchor / rotation / adoption), logged when it changes
+                static NSMutableDictionary *lastPos;
+                if (!lastPos) lastPos = [NSMutableDictionary dictionary];
+                NSString *pl = [NSString stringWithFormat:@"idx %lu role %lld pin %d useAnchor %d rot %d adopted %d anchor %.3f,%.3f applied %.3f,%.3f xy %.1f,%.1f layerScale %.4f comp %.2f,%.2f modes pos %lld->%lld scale %lld->%lld", (unsigned long)idx, role, (int)pin, (int)useAnchor, (int)rotationAnim, (int)adopted, anchor.x, anchor.y, anchorApplied.x, anchorApplied.y, X, Y, layerScale, compX, compY, positionMode, posModeAdj, scaleMode, scaleModeEff];
+                NSNumber *pk = @((unsigned long long)(__bridge void *)leaf);
+                if (lastPos.count > 200) [lastPos removeAllObjects];
+                if (![lastPos[pk] isEqualToString:pl]) { lastPos[pk] = pl; BP_Log(@"[g2b] pos %p %@", (__bridge void *)leaf, pl); }
+            }
             // progress properties: only when the size / centre really change
             id resizeProp = nil, repositionProp = nil;
             CGRect cb = BP2B_Rect(c, @selector(bounds));
@@ -1356,8 +1441,8 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             }
             // ---- "center" ----
             BP2BDone mkCenter = make(@"center");
-            BP2B_Animate(positionSettings, positionMode, ^{
-                [(CALayer *)BP2B_Obj(c, @selector(layer)) setAnchorPoint:anchorApplied];
+            BP2B_Animate(positionSettings, posModeAdj, ^{                                        // block _10 162 0x1c7445f68: the anchor is set here only when neither the pinned anchor nor a rotation animation applied it (adoption above)
+                if (!useAnchor && !rotationAnim) [(CALayer *)BP2B_Obj(c, @selector(layer)) setAnchorPoint:anchorApplied];
                 BP2B_S1(void, c, "setCenter:", (CGPoint)(newC));
                 BP2B_SetProp(repositionProp, 1.0);
             }, BP2B_CompletionFor(repositionProp, mkCenter));
@@ -1420,11 +1505,11 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                 });
             }
             // ---- "transform and content page view scale" ----
-            BP2B_Animate(scaleSettings, scaleMode, ^{
+            BP2B_Animate(scaleSettings, scaleModeEff, ^{                                         // block _23 162 0x1c7446500
                 CALayer *l = BP2B_Obj(c, @selector(layer));
                 [l setValue:@(layerScale) forKeyPath:@"transform.scale"];
-                [l setValue:@(0.0) forKeyPath:@"transform.translation.x"];                         // compensation X (0 on this path)
-                [l setValue:@(0.0) forKeyPath:@"transform.translation.y"];
+                [l setValue:@(compX) forKeyPath:@"transform.translation.x"];                       // compensation (pin && !useAnchor), else 0
+                [l setValue:@(compY) forKeyPath:@"transform.translation.y"];
                 [l setValue:@(perspective) forKeyPath:@"transform.rotation.y"];
                 [l setValue:@(rotation) forKeyPath:@"transform.rotation.z"];
                 BP2B_S1(void, c, "setContentPageViewScale:", (double)(pageScale));
@@ -1441,6 +1526,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
         });
         if (roleMask == 0 || anyRole) {                                                            // 162 0x1c74452e0..0x1c74452e8: the constant at 0x1c7a933c8 is 0 (read from the cache)
             id overlay = overlayViews[appLayout], underlay = underlayViews[appLayout];
+            id titleController = titleControllers[appLayout];                                      // 162 0x1c7445360: third lookup, ivar _appLayoutToTitleItemController
             double accScale = S;
             if ([root respondsToSelector:sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:")]) {
                 accScale = ((double (*)(id, SEL, double, id))objc_msgSend)(root, sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:"), S, appLayout);
@@ -1450,8 +1536,16 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             double accPageScale = pageScale;
             if (fabs(S) >= 1e-9) accPageScale = pageScale * (accScale / S);                    // 162 NEW: scale ratio (0x1c7445454..0x1c7445478)
             lastAdjScale = accScale; accessoriesRan = YES;
+            // position mode of the accessories (162 0x1c744537c..0x1c74453ec): the OVERLAY layer's anchor against the index anchor, base mode 4 -> 4 / 5
+            long long accPosMode = positionMode;
+            {
+                CALayer *ol = overlay ? BP2B_Obj(overlay, @selector(layer)) : nil;
+                CGPoint oa = ol ? ol.anchorPoint : CGPointZero;
+                BOOL same = (oa.y == anchor.y) && (oa.x == anchor.x);
+                if (!same && positionMode == 4) accPosMode = 4 + (BP2B_LayerHasModifier(ol, @[@"position"]) ? 1 : 0);        // block 0x1e18eb240
+            }
             BP2BDone m1 = make(@"accessory center");
-            BP2B_Animate(positionSettings, positionMode, ^{
+            BP2B_Animate(positionSettings, accPosMode, ^{
                 for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) {
                     if (v == (id)[NSNull null]) continue;
                     [(CALayer *)BP2B_Obj(v, @selector(layer)) setAnchorPoint:adjA];
@@ -1463,8 +1557,8 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                 for (id v in @[overlay ?: [NSNull null], underlay ?: [NSNull null]]) if (v != (id)[NSNull null]) BP2B_S1(void, v, "setCornerRadius:", (double)(minRadius));
             }, (void (^)(BOOL, BOOL))make(@"accessory corner radius"));
             BP2B_Animate(layoutSettings, layoutMode, ^{
+                if (titleController) BP2B_S1(void, titleController, "setMultiWindowIndicatorRoleMask:", (unsigned long long)(multiMask));   // 162 0x1c74468b0: capture +0x20 = _appLayoutToTitleItemController[appLayout] (160 0x1c5fcda34 alike), NOT the overlay
                 if (overlay) {
-                    BP2B_S1(void, overlay, "setMultiWindowIndicatorRoleMask:", (unsigned long long)(multiMask));
                     BP2B_S1(void, overlay, "setBounds:", (CGRect)(BP2B_RectWithSize(adjF.size.width, adjF.size.height)));
                     BP2B_S1(void, overlay, "setContentViewOffset:", (CGPoint)(accOffset));
                     BP2B_Void0(overlay, @selector(layoutIfNeeded));
@@ -1491,7 +1585,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                     [l setValue:@(accScale) forKeyPath:@"transform.scale"];
                     [l setValue:@(rotation) forKeyPath:@"transform.rotation.z"];
                     if (v == overlay) {
-                        BP2B_S1(void, v, "setIconAlignment:", (unsigned long long)((unsigned long long)(!perspectiveIsZero ? 0 : 1)));   // UNSURE polarity of [sp,#4]^1
+                        BP2B_S1(void, v, "setIconAlignment:", (unsigned long long)((unsigned long long)(perspectiveIsZero ? 0 : 1)));   // 162 0x1c74457d8 (eor w24,w8,#1 with w8 = BSFloatIsZero(perspective)) -> capture +0x48
                         BP2B_S1(void, v, "setUniqueIconsOnly:", (BOOL)(YES));
                         BP2B_S1(void, v, "setFooterStyle:", (unsigned long long)(BP2B_S0(unsigned long long, vc, "_itemContainerFooterStyle")));
                         id hg = BP2B_Obj(v, sel_registerName("homeGrabberView"));
