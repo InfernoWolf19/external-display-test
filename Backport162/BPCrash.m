@@ -1,7 +1,7 @@
 // BPCrash.m - built-in crash recorder.
 // ReportCrash does not always write a SpringBoard .ips on a jailbroken device, so the tweak records its own crash report:
 // <jbroot>/tmp/Backport162.crash (appended, trimmed at launch when larger than 256 KiB). It holds the signal, fault address, the
-// registers x0-x8, and a frame-pointer backtrace as "image+0xOFFSET (symbol+off)". Offsets of Backport162.dylib can be resolved against
+// registers x0-x8, and a frame-pointer backtrace as "image+0xOFFSET (symbol+off)". Offsets of Backport162Core.dylib (the tweak; Backport162.dylib is only the boot guard loader) can be resolved against
 // the CI build of the same commit (llvm-objdump --arch=arm64e). Uncaught Objective-C exceptions are recorded with name, reason and stack.
 #import <Foundation/Foundation.h>
 #include <signal.h>

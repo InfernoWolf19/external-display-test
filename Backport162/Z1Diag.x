@@ -181,7 +181,7 @@ static void Z1_BuildHeader(void) {
         const char *name = _dyld_get_image_name(i);
         if (!name) continue;
         const char *b = Z1_BaseName(name);
-        BOOL want = (i == 0) || strcmp(b, "UIKitCore") == 0 || strcmp(b, "SpringBoard") == 0 || strcmp(b, "BackBoardServices") == 0 || strcmp(b, "Backport162.dylib") == 0;
+        BOOL want = (i == 0) || strcmp(b, "UIKitCore") == 0 || strcmp(b, "SpringBoard") == 0 || strcmp(b, "BackBoardServices") == 0 || strcmp(b, "Backport162Core.dylib") == 0 || strcmp(b, "Backport162.dylib") == 0;   // the tweak is Backport162Core.dylib since the boot guard; Backport162.dylib is the loader
         if (!want) continue;
         Z1_Cat(gZ1Hdr, sizeof gZ1Hdr, &off, "image %s%s hdr=0x%llx slide=0x%llx path=%s\n", i == 0 ? "(main) " : "", b,
                (unsigned long long)(uintptr_t)_dyld_get_image_header(i), (unsigned long long)(uintptr_t)_dyld_get_image_vmaddr_slide(i), name);

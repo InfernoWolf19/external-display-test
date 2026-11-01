@@ -25,10 +25,10 @@ jobs:
           for f in Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x X6InCall.x X5Recording.x X3Mode.x BPCrash.m RPT.x Y1Workspace.x P1Drag.m P1VC.m P1SW.m Y2Gestures.x Z1Diag.x Y3StatusBar.x Y4Home.x Y5Apps.x Y6Portal.x Y7Requests.x Y8Layout.x Y9Misc.x Y10Pip.x Y11Modifiers.x Y12Dock.x Y13Fluid.x Y14Open.x Y15InCall.x Y16Contingency.x Y17Snapshot.x Z2OrientTraits.m Z2OrientDelegate.m Y18IndirectPan.x Y19PanDelegates.x Y20Kbd.x Y21Modifiers.x Y22Modifiers.x Y23Home.x Y24Drag.x Y25Workspace.x Y26Classic.x Y27Views.x Y28Keyboard.x Y29Blur.x Y30Snapshot.x Y31Misc.x Y32Proto.x; do
             rm -rf .theos
             echo "=== $f"
-            make all FINALPACKAGE=1 ARCHS=arm64e Backport162_FILES="$f" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true
+            make all FINALPACKAGE=1 ARCHS=arm64e TWEAK_NAME=Backport162Core Backport162Core_FILES="$f" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error" | grep -v "undefined symbol\|ld: " | head -60 || true
           done
-          # the separate dylibs (SMT.x, SPK.c, UIK.m) have their own flags and are not part of Backport162_FILES: build each one by itself (TWEAK_NAME on the command line replaces the Makefile list)
-          for t in Backport162SMT Backport162SPK Backport162UIK; do
+          # the boot guard loader (Backport162 = BPGuard.c) and the separate dylibs (SMT.x, SPK.c, UIK.m) have their own flags and are not part of Backport162Core_FILES: build each one by itself (TWEAK_NAME on the command line replaces the Makefile list)
+          for t in Backport162 Backport162SMT Backport162SPK Backport162UIK; do
             rm -rf .theos
             echo "=== $t"
             make all FINALPACKAGE=1 ARCHS=arm64e TWEAK_NAME="$t" BP_SKIP_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: " | head -60 || true
@@ -39,6 +39,52 @@ jobs:
           make all FINALPACKAGE=1 ARCHS=arm64e BP_ONLY_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: |framework not found" | head -60 || true
           rm -rf .theos
           make package FINALPACKAGE=1
+      - name: Verify the boot guard packaging (specs/BOOTGUARD-0.7.9.md)
+        working-directory: Backport162
+        run: |
+          set -u
+          DEB=$(ls packages/*.deb)
+          X="$RUNNER_TEMP/bpguard-deb"
+          rm -rf "$X"; mkdir -p "$X"
+          dpkg-deb -x "$DEB" "$X"
+          TI="$X/var/jb/Library/MobileSubstrate/DynamicLibraries"
+          CORE="$X/var/jb/usr/lib/Backport162/Backport162Core.dylib"
+          fail=0
+          bad() { echo "::error::boot guard: $*"; fail=1; }
+          # 1. the loader is the SpringBoard-filtered dylib, and the only one with that name
+          [ -f "$TI/Backport162.dylib" ] || bad "TweakInject has no Backport162.dylib (the loader)"
+          [ -f "$TI/Backport162.plist" ] || bad "the loader has no filter plist (Backport162.plist): nothing would load the tweak"
+          if [ -f "$TI/Backport162.plist" ]; then
+            grep -q 'com.apple.springboard' "$TI/Backport162.plist" || bad "Backport162.plist does not filter com.apple.springboard"
+          fi
+          # 2. the core exists, outside TweakInject, and has no filter plist anywhere in the package
+          [ -f "$CORE" ] || bad "Backport162Core.dylib is missing at /var/jb/usr/lib/Backport162/"
+          if ls "$TI"/Backport162Core.* >/dev/null 2>&1; then bad "Backport162Core has files in TweakInject: $(ls "$TI" | grep Backport162Core | tr '\n' ' ')"; fi
+          if find "$X" -name 'Backport162Core.plist' | grep -q .; then bad "Backport162Core.plist is in the package: $(find "$X" -name 'Backport162Core.plist' | tr '\n' ' ')"; fi
+          # 3. the loader links system libraries only (no tweak code, no CydiaSubstrate, no libroot, no frameworks outside /System/Library)
+          for arch in arm64 arm64e; do
+            lipo -archs "$TI/Backport162.dylib" | tr ' ' '\n' | grep -qx "$arch" || bad "the loader has no $arch slice"
+            echo "== otool -arch $arch -L Backport162.dylib"
+            otool -arch "$arch" -L "$TI/Backport162.dylib" | tee "$RUNNER_TEMP/loader-$arch.txt"
+            # lines 2.. are "<tab>path (compatibility version ..., current version ...)"; line 1 is the file name; the install name (LC_ID_DYLIB) is not listed by -L for a dylib except as first dependency line
+            deps=$(tail -n +2 "$RUNNER_TEMP/loader-$arch.txt" | sed -E 's/^[[:space:]]+//; s/ \(compatibility.*$//' | grep -v '^@rpath/Backport162.dylib$' | grep -v '^$' || true)
+            [ -n "$deps" ] || bad "otool -L printed no dependencies for the loader ($arch)"
+            echo "$deps" | grep -q '^/usr/lib/libSystem' || bad "the loader ($arch) does not link libSystem?"
+            offending=$(echo "$deps" | grep -v -E '^(/usr/lib/|/System/Library/)' || true)
+            [ -z "$offending" ] || bad "the loader ($arch) links non-system libraries: $offending"
+            for l in libobjc CydiaSubstrate libroot libsubstrate ellekit Foundation UIKit CoreFoundation; do
+              if echo "$deps" | grep -q "$l"; then bad "the loader ($arch) links $l (it must be libSystem only)"; fi
+            done
+          done
+          # 4. the loader names the real core path, and postinst clears stale state
+          strings -a "$TI/Backport162.dylib" | grep -q 'Backport162Core.dylib' || bad "the loader does not mention Backport162Core.dylib"
+          dpkg-deb -e "$DEB" "$X/DEBIAN"
+          grep -q 'Backport162.booting' "$X/DEBIAN/postinst" || bad "postinst does not delete Backport162.booting"
+          grep -q 'Backport162.tripped' "$X/DEBIAN/postinst" || bad "postinst does not delete Backport162.tripped"
+          # 5. host test of the state machine (first launch, crash before the clear -> tripped, retry, clean, noguard, off.all, dlopen failure)
+          clang -Wall -Wextra -Werror -DBPGUARD_TEST -o "$RUNNER_TEMP/bpguard_test" tools/bpguard_test.c && BPGUARD_TEST_ROOT="$RUNNER_TEMP/bpguard-hostroot" "$RUNNER_TEMP/bpguard_test" || bad "tools/bpguard_test.c failed"
+          [ "$fail" = 0 ] || exit 1
+          echo "boot guard packaging OK"
       - name: Identify the build
         id: info
         working-directory: Backport162

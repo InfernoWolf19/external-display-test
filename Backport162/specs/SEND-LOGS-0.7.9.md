@@ -13,7 +13,7 @@ Everything below comes from reading code and documentation; nothing was run on a
 ## 2. Architecture
 
 ```
-Settings (Preferences.app, sandboxed)                SpringBoard (unsandboxed, RPT.x in Backport162.dylib)
+Settings (Preferences.app, sandboxed)                SpringBoard (unsandboxed, RPT.x in Backport162Core.dylib)
  Backport162Prefs.bundle  (UI only)                   RPT_Setup(): notify_register_dispatch(request) on the main queue
    "Send logs now" ----- Darwin notification ------>   main queue: atomic flag test, hop to a private serial queue
         .report.request                                job: collect -> assemble -> gzip -> write local file -> upload (NSURLSession)

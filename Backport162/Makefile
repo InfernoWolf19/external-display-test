@@ -5,13 +5,24 @@ INSTALL_TARGET_PROCESSES = SpringBoard
 
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = Backport162 Backport162AV Backport162BBD Backport162PTR Backport162SMT Backport162SPK Backport162UIK
+TWEAK_NAME = Backport162 Backport162Core Backport162AV Backport162BBD Backport162PTR Backport162SMT Backport162SPK Backport162UIK
 
-Backport162_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x X6InCall.x X5Recording.x X3Mode.x BPCrash.m RPT.x Y1Workspace.x P1Drag.m Y2Gestures.x Z1Diag.x P1VC.m P1SW.m Y3StatusBar.x Y4Home.x Y5Apps.x Y6Portal.x Y7Requests.x Y8Layout.x Y9Misc.x Y10Pip.x Y11Modifiers.x Y12Dock.x Y13Fluid.x Y14Open.x Y15InCall.x Y16Contingency.x Y17Snapshot.x Z2OrientTraits.m Z2OrientDelegate.m Y18IndirectPan.x Y19PanDelegates.x Y20Kbd.x Y21Modifiers.x Y22Modifiers.x Y23Home.x Y24Drag.x Y25Workspace.x Y26Classic.x Y27Views.x Y28Keyboard.x Y29Blur.x Y30Snapshot.x Y31Misc.x Y32Proto.x
-Backport162_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
-Backport162_FRAMEWORKS = Foundation CoreGraphics UIKit QuartzCore
+# BOOT GUARD (BPGuard.c, specs/BOOTGUARD-0.7.9.md). "Backport162" is now ONLY the tiny loader: pure C on libSystem, it is the one dylib with the SpringBoard filter plist
+# (Backport162.plist, installed as <jbroot>/Library/MobileSubstrate/DynamicLibraries/Backport162.dylib). It dlopen()s the real tweak, "Backport162Core" (everything that used to be
+# Backport162.dylib), from <jbroot>/usr/lib/Backport162/Backport162Core.dylib unless the previous SpringBoard launch never finished booting. The core has NO filter plist in
+# DynamicLibraries (Backport162Core.plist is a placeholder Theos insists on; it names no process and is removed from the package after staging, see after-stage below).
+# Do not add frameworks / libraries / ObjC to the loader: CI fails the build when it links anything but /usr/lib and /System/Library.
+Backport162_FILES = BPGuard.c
+Backport162_CFLAGS = -Wall -Wextra -Werror
+
+
+Backport162Core_FILES = Tweak.x Group4Connect.m Group4Focus.x G1B.x G1C.x G1D.x PIPStop.x G2C.x G2D.x G2E.x G2F.x G2G.x G2.x G2B.m G3.x G3B.x G3C.x G4B.x EDE.x G2I.x G2H.x X2Overlay.x X9Pin.x X7Keyboard.x X6InCall.x X5Recording.x X3Mode.x BPCrash.m RPT.x Y1Workspace.x P1Drag.m Y2Gestures.x Z1Diag.x P1VC.m P1SW.m Y3StatusBar.x Y4Home.x Y5Apps.x Y6Portal.x Y7Requests.x Y8Layout.x Y9Misc.x Y10Pip.x Y11Modifiers.x Y12Dock.x Y13Fluid.x Y14Open.x Y15InCall.x Y16Contingency.x Y17Snapshot.x Z2OrientTraits.m Z2OrientDelegate.m Y18IndirectPan.x Y19PanDelegates.x Y20Kbd.x Y21Modifiers.x Y22Modifiers.x Y23Home.x Y24Drag.x Y25Workspace.x Y26Classic.x Y27Views.x Y28Keyboard.x Y29Blur.x Y30Snapshot.x Y31Misc.x Y32Proto.x
+Backport162Core_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
+Backport162Core_FRAMEWORKS = Foundation CoreGraphics UIKit QuartzCore
 # RPT.x (Send logs, SpringBoard half) gzips the report with zlib
-Backport162_LIBRARIES = z
+Backport162Core_LIBRARIES = z
+# The real tweak (was Backport162.dylib): installed OUTSIDE the injector's directory, loaded only by the loader above.
+Backport162Core_INSTALL_PATH = /usr/lib/Backport162
 
 Backport162AV_FILES = AV.x
 Backport162AV_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -ferror-limit=0
@@ -49,6 +60,10 @@ Backport162UIK_FRAMEWORKS = Foundation UIKit
 ifneq ($(BP_ONLY_PREFS),1)
 include $(THEOS_MAKE_PATH)/tweak.mk
 endif
+
+# Theos copies Backport162Core.plist next to the core dylib; nothing reads it there, but the core is meant to have no filter plist at all, so drop it from the staging directory.
+after-stage::
+	$(ECHO_NOTHING)rm -f "$(THEOS_STAGING_DIR)/usr/lib/Backport162/Backport162Core.plist"$(ECHO_END)
 
 # Settings pane "Backport162" (PreferenceLoader bundle; Send logs / Share last report; UI only, the work is RPT.x in SpringBoard; specs/SEND-LOGS-0.7.9.md).
 # Loaded into Preferences.app only when the pane is opened. The Preferences framework is private: it is linked when the SDK has it, otherwise dyld resolves PSListController at run time

@@ -8,6 +8,9 @@
 # This script must never fail: a non-zero exit would abort the installation.
 case "$1" in
 configure)
+    # Boot guard (specs/BOOTGUARD-0.7.9.md): every install / update starts clean. A leftover Backport162.booting would make the first launch after the install skip the
+    # tweak, a leftover Backport162.tripped would show an old trip. (Backport162.noguard / .off.all are the user's own switches: never touched.)
+    rm -f /var/jb/tmp/Backport162.booting /var/jb/tmp/Backport162.tripped 2>/dev/null || true
     fd="${SILEO%% *}"
     case "$fd" in
     ''|*[!0-9]*) ;;

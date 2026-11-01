@@ -243,6 +243,21 @@ Runs inside apps (filter `com.apple.UIKit`, build 20A8372, not SpringBoard); pla
 - `Backport162.off` disables everything; `Backport162.off.<feature>` disables one feature (names in the tables above). Hook behaviour is checked at most once a second, no respring needed; `nilock` and `directhook` are installed at launch, so those two need a respring after creating their `.off` file.
 - `Backport162.debug` turns logging on (`Backport162.log`, rotated at 256 KiB). Logging is off by default.
 - The tweak does nothing on any build other than 20A8372.
+
+### Boot guard (BPGuard.c, specs/BOOTGUARD-0.7.9.md)
+
+The SpringBoard filter plist belongs to a tiny loader (`Backport162.dylib`, pure C on libSystem); the tweak itself is `Backport162Core.dylib` in `/var/jb/usr/lib/Backport162/` (no filter plist, nothing but the loader loads it). If a SpringBoard launch loaded the tweak and never reached "finished booting" (crash, hang, watchdog kill, forced reboot within the first 45 s of the main run loop), the NEXT SpringBoard launch does not load the tweak (stock SpringBoard, which boots), says so in `Backport162.log` (always, without `Backport162.debug`), and the launch after that tries again. Files under `/var/jb/tmp/`:
+
+| file | meaning | who creates it |
+|---|---|---|
+| `Backport162.booting` | marker: the tweak was loaded and SpringBoard has not yet been up for 45 s. Left behind by a crash / hang = the next launch skips the tweak once | loader (removed ~45 s after the main run loop starts; also removed by postinst) |
+| `Backport162.tripped` | the guard skipped a launch (timestamp + what the marker said); informational, delete it whenever | loader (removed by postinst) |
+| `Backport162.noguard` | turns the guard off: the tweak is always loaded, no marker | you |
+| `Backport162.off.all` | the tweak is never loaded (SpringBoard stock, the filter plist stays); wins over `noguard` | you |
+| `Backport162.off` | (unchanged) the tweak is loaded but every hook answers "off" | you |
+| `Backport162.debug`, `Backport162.log` | (unchanged) logging; the loader also logs its decisions with `.debug`, and always logs a trip and a failed `dlopen` of the core | you / tweak |
+
+Not covered by the guard: the backboardd, pointeruid, audio daemon, AVKit, UIKit-app and Stage Manager toggle dylibs (own filter plists, see the spec).
 - Settings > Backport162 > *Send logs now* uploads the logs to a GitHub repository on request only (see the `report` row); `Backport162.debug` makes the report much more useful.
 
 ## Review notes (0.5.1)

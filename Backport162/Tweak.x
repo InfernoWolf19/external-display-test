@@ -6,6 +6,9 @@
 //
 // Safety:
 //   * Only active on build 20A8372; any other build leaves SpringBoard untouched.
+//   * This file is the CORE (Backport162Core.dylib, <jbroot>/usr/lib/Backport162/, no filter plist). It is loaded by the boot guard loader (BPGuard.c = Backport162.dylib, the only
+//     dylib with the SpringBoard filter) and only when the previous SpringBoard launch finished booting; <jbroot>/tmp/Backport162.noguard / .off.all / .tripped / .booting
+//     belong to the loader (specs/BOOTGUARD-0.7.9.md). Nothing in this %ctor may block or message SpringBoard singletons at load time.
 //   * <jbroot>/tmp/Backport162.off            kill switch for everything (checked at most once a second)
 //   * <jbroot>/tmp/Backport162.off.<feature>  switch off one feature (names below)
 //   * <jbroot>/tmp/Backport162.debug          create it to log what the features do

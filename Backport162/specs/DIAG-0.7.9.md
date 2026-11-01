@@ -20,7 +20,7 @@ Process header (once per process start, text of the LAST header belongs to the r
 image (main) SpringBoard hdr=0x... slide=0x... path=...
 image UIKitCore hdr=0x... slide=0x... path=...
 image BackBoardServices ...
-image Backport162.dylib ...
+image Backport162Core.dylib ... (the tweak since the boot guard; the loader Backport162.dylib is listed too)
 watchdog started (period 250 ms, stall > 1000 ms, sampler ready)
 touchlat hook installed (SpringBoard sendEvent:, threshold 300 ms, 1 line/s)
 ```
@@ -36,7 +36,7 @@ HH:MM:SS.mmm stall ended after 4210 ms
 ```
 * `run` / `cpu` come from `thread_info` taken just before the sample: `RUNNING` with a high cpu = the main thread is busy (a loop or heavy work); `WAITING` with cpu 0 = it is blocked (lock, `dispatch_sync`, mach message): the `bt` says on what.
 * `bt` = frame-pointer chain, at most 16 return addresses, PAC-stripped. `pc`/`lr` are separate (`lr` repeats the first `bt` entry except in leaf functions).
-* `sym:` is the same addresses as `image+offset(symbol+offset)` through `dladdr`, written as a SECOND line (it takes dyld locks; if the main thread holds one the first line is still there). System symbols are mostly stripped: symbolicate offline with `address - slide` against the cache of 20A8372; offsets in `Backport162.dylib` against the CI build of the same commit.
+* `sym:` is the same addresses as `image+offset(symbol+offset)` through `dladdr`, written as a SECOND line (it takes dyld locks; if the main thread holds one the first line is still there). System symbols are mostly stripped: symbolicate offline with `address - slide` against the cache of 20A8372; offsets in `Backport162Core.dylib` against the CI build of the same commit.
 * `stall begin: ... (no sample: 20 per hour used)`: the hourly sample budget is used; at most 60 begin lines per hour.
 * `stall ended after N ms` = time from the ping to the answer of the main queue.
 
