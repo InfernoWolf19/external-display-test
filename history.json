@@ -1,12 +1,4 @@
 {
- "0.7.9+266.80a95ef": {
-  "date": "2026-10-25T15:50:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+266.80a95ef_iphoneos-arm64.deb",
-  "run": 266,
-  "sha": "80a95effcc4722823043d6b79b8bf5f0517184ae",
-  "subject": "Y11Modifiers: entity removal transitions move only the removed window under Stage Manager, tap requests carry the tapped item in shelf / peek handlers (switches y11_removal, y11_tapreq); DELTA-SWEEP verdicts for the switcher modifier rows",
-  "version": "0.7.9+266.80a95ef"
- },
  "0.7.9+267.dcef91c": {
   "date": "2026-10-25T15:58:13Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+267.dcef91c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "0267b3da3dd675f31b6690f04fe9aa02331cc586",
   "subject": "Y29Blur: the root blur early out only runs when the content layer is not rasterized (the 16.0 completion clears the rasterization its blur start set; 16.2 never sets it), otherwise the 16.0 body runs: home icons stayed rasterized / missing after a quick dismiss",
   "version": "0.7.9+327.0267b3d"
+ },
+ "0.7.9+329.1c7cce6": {
+  "date": "2026-11-01T08:28:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+329.1c7cce6_iphoneos-arm64.deb",
+  "run": 329,
+  "sha": "1c7cce6c3597e4ba8f5549f592c4aa30f07b5dcc",
+  "subject": "G1C: a dismiss that lands while the swipe-up open is still in flight (main transition 1->1, effective mode 2, no stock modifier) gets the ToHome fly out like the settled 2->1 dismiss (g1c_quickdismiss); it fell to the default quick animation",
+  "version": "0.7.9+329.1c7cce6"
  }
 }
