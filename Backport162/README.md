@@ -363,6 +363,8 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y24_shelfscale | (Y31Misc.x) the classic switcher shelf expansion clamps its presentation value like 16.2 |
 | y24_protoextras | (Y32Proto.x) the recents protobuf also stores the reference bounds and semantic size types of the window layout attributes (16.2 fields), so they survive a respring |
 | y24_wrapperview | (Y31Misc.x) a hosted secure app is not put into the classic wrapper view (16.2) |
+| y34_lazytypes | (Y34ClassicTypes.x / Y34LazyTypes.c) the supported screen type bits of an app are calculated by the 16.2 body (recompiled from the 16.2 machine code): larger iPhone launch images count on the 12.9 inch iPad Pro |
+| y34_splashtypes | (Y34ClassicTypes.x) the same for splash board apps: 16.2 no longer excludes beta apps from the Sydney type bits |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
