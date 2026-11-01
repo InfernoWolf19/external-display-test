@@ -63,7 +63,9 @@ static void Y29_ApplyRoot(id self, SEL _cmd, void (^completion)(BOOL, BOOL)) {
             id filters = Y17_Obj0("blurroot", Y17_Obj0("blurroot", content, "layer"), "filters");
             if (isZero(radius) && !filters) {
                 BPY_LOG(@"[y29] root blur radius already zero and no filters: completion without animation");
-                if (completion) completion(YES, NO);
+                // the 16.0 body never completes synchronously (its completion runs from the animation block, 0x1c5fc91a8 caller registers sibling completions after this call):
+                // an early synchronous completion could end the layout update group before they exist, so it is delivered on the next main queue turn
+                if (completion) { void (^done)(BOOL, BOOL) = [completion copy]; dispatch_async(dispatch_get_main_queue(), ^{ done(YES, NO); }); }
                 return;
             }
         } else if (!mi || !ci) Y17_GuardOnce("blurroot", self, "_rootModifier / _contentView ivars");
