@@ -1183,6 +1183,44 @@ static BOOL BP2B_LayerHasModifier(id layer, NSArray<NSString *> *keyPaths) {
     return NO;
 }
 
+// Diagnostic (Backport162.debug): the content subtree of a card ~0.9 s after its last configuration.  The card container's layer scale, its bounds, and for every view of the
+// snapshot / page / wrapper chain the frame / bounds / transform scale; for a SBSwitcherSnapshotImageView also the flags (_stretchToFillBounds, usesNonuniformScaling) and the natural
+// size of its image view and image.  A "tiny" card (content drawn at ~ s * s) shows an image view whose bounds equal its natural size with transform scale 1 under a layer scale s.
+static const void *kBP2B_DumpGen = &kBP2B_DumpGen;
+static void BP2B_DumpTree(UIView *v, int depth, NSMutableString *out) {
+    if (!v || depth > 8) return;
+    NSString *cn = NSStringFromClass([v class]);
+    BOOL interesting = depth == 0 || [cn containsString:@"Snapshot"] || [cn containsString:@"PageView"] || [cn containsString:@"Orientation"] || [cn containsString:@"SceneView"] || [cn containsString:@"ContentView"] || [cn containsString:@"Image"];
+    if (interesting) {
+        CATransform3D t = v.layer.transform;
+        [out appendFormat:@"\n   %*s%@ frame %.1fx%.1f@%.1f,%.1f bounds %.1fx%.1f xform %.4f,%.4f", depth * 2, "", cn, v.frame.size.width, v.frame.size.height, v.frame.origin.x, v.frame.origin.y, v.bounds.size.width, v.bounds.size.height, t.m11, t.m22];
+        if ([cn isEqualToString:@"SBSwitcherSnapshotImageView"]) {
+            BOOL stretch = NO, nonuni = NO;
+            BP2B_IvarGet(v, "_stretchToFillBounds", &stretch, sizeof stretch);
+            nonuni = BP2B_Bool(v, sel_registerName("usesNonuniformScaling"));
+            UIView *iv = BP2B_IvarObj(v, "_imageView");
+            id img = BP2B_Obj(iv, sel_registerName("image"));
+            CGSize isz = BP2B_Size(img, sel_registerName("size"));
+            CATransform3D it = iv.layer.transform;
+            [out appendFormat:@" [stretch %d nonuniform %d imageView bounds %.1fx%.1f xform %.4f,%.4f image %.1fx%.1f scale %.1f]", (int)stretch, (int)nonuni, iv.bounds.size.width, iv.bounds.size.height, it.m11, it.m22, isz.width, isz.height, BP2B_Dbl(img, sel_registerName("scale"))];
+        }
+    }
+    for (UIView *sv in [v.subviews copy]) BP2B_DumpTree(sv, depth + (interesting ? 1 : 0), out);
+}
+static void BP2B_ScheduleDump(id c, NSUInteger idx, double layerScale, id appLayout) {
+    if (!c || !BP_LogEnabled()) return;
+    NSNumber *gen = @([objc_getAssociatedObject(c, kBP2B_DumpGen) unsignedLongLongValue] + 1);
+    objc_setAssociatedObject(c, kBP2B_DumpGen, gen, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    __weak id wc = c;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.9 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        id cc = wc;
+        if (!cc || ![objc_getAssociatedObject(cc, kBP2B_DumpGen) isEqual:gen]) return;           // a later configuration superseded this one
+        NSMutableString *o = [NSMutableString string];
+        BP2B_DumpTree(cc, 0, o);
+        BP_Log(@"[g2b] content %p idx %lu layerScale %.4f (settled 0.9 s):%@", (__bridge void *)appLayout, (unsigned long)idx, layerScale, o);
+    });
+}
+
 // bool query with an index argument; a missing selector is announced (BP_SelMiss) and answers NO
 static BOOL BP2B_BoolIdx(id o, SEL s, NSUInteger i) {
     if (!o) return NO;
@@ -1407,6 +1445,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
                 if (lastPos.count > 200) [lastPos removeAllObjects];
                 if (![lastPos[pk] isEqualToString:pl]) { lastPos[pk] = pl; BP_Log(@"[g2b] pos %p %@", (__bridge void *)leaf, pl); }
             }
+            BP2B_ScheduleDump(c, idx, layerScale, appLayout);
             // progress properties: only when the size / centre really change
             id resizeProp = nil, repositionProp = nil;
             CGRect cb = BP2B_Rect(c, @selector(bounds));

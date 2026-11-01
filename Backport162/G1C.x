@@ -4906,7 +4906,7 @@ static unsigned long long G1C_As_ScrollAfterRemoving(id self, SEL _cmd, unsigned
 // 0x1c780f7dc: remembers the scroll direction for the snapshot cache window
 static id G1C_As_HandleScroll(id self, SEL _cmd, id event) {
     if (G1C_PilesOn()) {
-        CGPoint off = G1C_Resp(self, @selector(contentOffset)) ? G1C_SendPoint0(self, @selector(contentOffset)) : CGPointZero;
+        CGPoint off = G1C_Resp(event, @selector(contentOffset)) ? G1C_SendPoint0(event, @selector(contentOffset)) : CGPointZero;      // 16.2 0x1c780f804: `contentOffset` of the SCROLL EVENT (the port sent it to the modifier: sel-g1c anomaly, always 0)
         CGPoint prev = G1C_IvarPoint(self, "_previousContentOffset");
         if (!G1C_IsInvalidPoint(off) && fabs(prev.x - off.x) > 0.0001) G1C_SetIvarBool(self, "_isScrollingForward", prev.x > off.x);      // BSFloatEqualToFloat
         G1C_SetIvarPoint(self, "_previousContentOffset", off);
