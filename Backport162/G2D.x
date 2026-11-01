@@ -47,7 +47,7 @@ static IMP gG2DOrigUpdate;
 
 // scalar ivar read (object_getIvar must not be used for scalars)
 static BOOL G2D_ScalarIvar(id o, const char *name, void *out, size_t size) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (!iv) return NO;
     memcpy(out, (const char *)(__bridge void *)o + ivar_getOffset(iv), size);
     return YES;
@@ -58,7 +58,7 @@ static void G2D_UpdateCancels(id self, SEL _cmd, id recognizer) {
     if (gG2DOrigUpdate) ((void (*)(id, SEL, id))gG2DOrigUpdate)(self, _cmd, recognizer);
     if (!G2D_ON() || !recognizer) return;
     @try {
-        Ivar pullIvar = class_getInstanceVariable(object_getClass(self), "_edgePullGestureRecognizer");
+        Ivar pullIvar = BP_IvarLookup(object_getClass(self), "_edgePullGestureRecognizer");
         if (BP_ObjIvar(self, pullIvar) != recognizer) return;                                         // only the touch edge pull (not the indirect pan, not the tap)
         unsigned long long edge = 0, type = 0;
         if (!G2D_ScalarIvar(self, "_screenEdge", &edge, sizeof edge) || !G2D_ScalarIvar(self, "_systemGestureType", &type, sizeof type)) return;
@@ -146,7 +146,7 @@ void G2D_Setup(void) {
     Class c = NSClassFromString(@"SBGrabberTongue");
     SEL s = NSSelectorFromString(@"_updateCancelsTouchesWithRecognizer:");
     Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m) { BP_Log(@"[g2d] SBGrabberTongue _updateCancelsTouchesWithRecognizer: not found, not installed"); return; }
+    if (!m) { BP_Anomaly("notinstalled", @"[g2d] SBGrabberTongue _updateCancelsTouchesWithRecognizer: not found, not installed"); return; }
     gG2DOrigUpdate = method_getImplementation(m);
     class_replaceMethod(c, s, (IMP)G2D_UpdateCancels, method_getTypeEncoding(m));
     BP_Log(@"[g2d] installed (home swipe cancels the touch stream of the app)");

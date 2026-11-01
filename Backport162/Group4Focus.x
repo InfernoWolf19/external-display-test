@@ -490,17 +490,17 @@ static BOOL BP_InstallReevaluateHook(void) {
         0xb4000440, 0xd503237f, 0xd100c3ff, 0xa9014ff4,       // stp fp,lr,[sp,#0x20]; add fp,sp,#0x20; mov x19,x0
         0xa9027bfd, 0x910083fd, 0xaa0003f3 };
     BP_MSHookFunction_t hookFn = (BP_MSHookFunction_t)dlsym(RTLD_DEFAULT, "MSHookFunction");
-    if (!hookFn) { BP_Log(@"direct hook: MSHookFunction not available, not hooking"); return NO; }
+    if (!hookFn) { BP_Anomaly("notinstalled", @"direct hook: MSHookFunction not available, not hooking"); return NO; }
     intptr_t slide = 0;
     BOOL found = NO;
     for (uint32_t i = 0, n = _dyld_image_count(); i < n; i++) {
         const char *name = _dyld_get_image_name(i);
         if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
     }
-    if (!found) { BP_Log(@"direct hook: SpringBoard.framework image not found, not hooking"); return NO; }
+    if (!found) { BP_Anomaly("notinstalled", @"direct hook: SpringBoard.framework image not found, not hooking"); return NO; }
     uintptr_t entry = kVmEntry + (uintptr_t)slide;
     if (memcmp((const void *)entry, kPrologue, sizeof kPrologue) != 0) {      // all 7 words, including the cbz
-        BP_Log(@"direct hook: prologue mismatch at %p, not hooking (suppression stays advisory)", (void *)entry);
+        BP_Anomaly("notinstalled", @"direct hook: prologue mismatch at %p, not hooking (suppression stays advisory)", (void *)entry);
         return NO;
     }
     void *target = BP_STRIP((void *)(entry + 4));
@@ -776,7 +776,7 @@ static BOOL BP_PanFromOtherDisplay(id gesture, id ownScene) {
 %hook SBFluidSwitcherGestureManager
 - (BOOL)gestureRecognizerShouldBegin:(id)gesture {
     if (BP_On(F_GESTUREGATE) && BP_On(F_ACTIVEDISPLAY)) {
-        Ivar iv = class_getInstanceVariable([self class], "_switcherController");     // 16.2 offset 0x10; found by name only
+        Ivar iv = BP_IvarLookup([self class], "_switcherController");     // 16.2 offset 0x10; found by name only
         id sw = BP_ObjIvar(self, iv);
         id own = [sw respondsToSelector:@selector(windowScene)] ? [sw windowScene] : nil;
         if (BP_PanFromOtherDisplay(gesture, own)) { BP_Log(@"gesture gate: switcher gesture NotForCurrentDisplay"); return NO; }
@@ -798,7 +798,7 @@ void BP_G4_Setup(void) {
     %init(G4);
     // MSHookFunction on a non-ObjC function: opt-in until it has been seen working on Dopamine/arm64e.
     if (BP_On(F_DIRECTHOOK)) BP_InstallReevaluateHook();
-    else BP_Log(@"direct hook not installed (Backport162.off.directhook exists); suppression is advisory");
+    else BP_Anomaly("notinstalled", @"direct hook not installed (Backport162.off.directhook exists); suppression is advisory");
 }
 
 // ================================================================================================ NOT PORTABLE

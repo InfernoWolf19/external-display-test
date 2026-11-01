@@ -60,7 +60,7 @@ __attribute__((constructor)) static void Y7_Setup(void) {
         if (!rq || !co || !cx || !class_getInstanceMethod(rq, sel_registerName("mutableCopyWithZone:")) ||
             !class_getInstanceMethod(co, sel_registerName("_configureRequest:forSwitcherTransitionRequest:withEventLabel:")) ||
             !class_getInstanceMethod(cx, sel_registerName("setEntities:withPolicy:centerEntity:floatingEntity:"))) {
-            BP_Log(@"[y7] NOT installed (class or selector missing)");
+            BP_Anomaly("notinstalled", @"[y7] NOT installed (class or selector missing)");
             return;
         }
         if (!class_getInstanceMethod(rq, sel_registerName("entityInsertionPolicy"))) {

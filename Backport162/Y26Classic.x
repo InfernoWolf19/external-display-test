@@ -39,7 +39,7 @@ static Y26_RoundFn gY26Round;
 static Y26_SizeCmpFn gY26Eq, gY26Ge, gY26Lt;
 
 static id Y26_AppInfo(id app) {
-    Ivar iv = class_getInstanceVariable(object_getClass(app), "_appInfo");
+    Ivar iv = BP_IvarLookup(object_getClass(app), "_appInfo");
     return BP_ObjIvar(app, iv);
 }
 

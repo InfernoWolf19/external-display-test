@@ -54,7 +54,7 @@
 // ------------------------------------------------------------------------------------------------ helpers
 
 static id G2C_IvarObj(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     return BP_ObjIvar(o, iv);
 }
 

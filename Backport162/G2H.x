@@ -312,7 +312,7 @@ void G2H_Setup(void) {
     SEL ms = @selector(setMaskView:);
     Method mm = ic ? class_getInstanceMethod(ic, ms) : NULL;
     if (!mm) {
-        BP_Log(@"[g2h] SBFluidSwitcherItemContainer setMaskView: not found, shadow fade not installed");
+        BP_Anomaly("notinstalled", @"[g2h] SBFluidSwitcherItemContainer setMaskView: not found, shadow fade not installed");
     } else {
         gG2HOrigSetMask = method_getImplementation(mm);
         class_replaceMethod(ic, ms, (IMP)G2H_SetMaskView, method_getTypeEncoding(mm));
@@ -325,7 +325,7 @@ void G2H_Setup(void) {
     Class vcc = NSClassFromString(@"SBFluidSwitcherViewController");
     SEL ls = sel_registerName("_layoutAppLayout:roleMask:completion:");
     Method lm = vcc ? class_getInstanceMethod(vcc, ls) : NULL;
-    if (!em || !lm) { BP_Log(@"[g2h] SBContinuousExposeRootSwitcherModifier handleTransitionEvent: / SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion: not found, dim diagnostics not installed"); return; }
+    if (!em || !lm) { BP_Anomaly("notinstalled", @"[g2h] SBContinuousExposeRootSwitcherModifier handleTransitionEvent: / SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion: not found, dim diagnostics not installed"); return; }
     gG2HOrigEvent = method_getImplementation(em);
     class_replaceMethod(rc, es, (IMP)G2H_Event, method_getTypeEncoding(em));
     gG2HOrigLayout = method_getImplementation(lm);

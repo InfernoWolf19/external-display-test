@@ -50,7 +50,7 @@ static BOOL BP_G3B_On(const char *name) { return BP_OnName(name); }     // INTEG
 // ------------------------------------------------------------------------------------------------ generic helpers
 static id BP_G3B_Ivar(id obj, const char *name) {                       // object ivar by name, nil if absent / not an object
     if (!obj) return nil;
-    Ivar iv = class_getInstanceVariable([obj class], name);
+    Ivar iv = BP_IvarLookup([obj class], name);
     if (!iv) return nil;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || enc[0] != '@') return nil;
@@ -58,7 +58,7 @@ static id BP_G3B_Ivar(id obj, const char *name) {                       // objec
 }
 static BOOL BP_G3B_SetIvar(id obj, const char *name, id val) {          // strong object ivar (object_setIvar retains)
     if (!obj) return NO;
-    Ivar iv = class_getInstanceVariable([obj class], name);
+    Ivar iv = BP_IvarLookup([obj class], name);
     if (!iv) return NO;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || enc[0] != '@') return NO;
@@ -66,7 +66,7 @@ static BOOL BP_G3B_SetIvar(id obj, const char *name, id val) {          // stron
     return YES;
 }
 static BOOL BP_G3B_ScalarIvar(id obj, const char *name, long long *out) {   // integer/BOOL ivar by name
-    Ivar iv = obj ? class_getInstanceVariable([obj class], name) : NULL;
+    Ivar iv = obj ? BP_IvarLookup([obj class], name) : NULL;
     if (!iv) return NO;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc) return NO;
@@ -698,7 +698,7 @@ static NSString *const kBPG3BWMStyleNote = @"SBSwitcherControllerWindowManagemen
         return;
     }
     if ((BOOL)cur == canBeHidden) return;
-    Ivar iv = class_getInstanceVariable([self class], "_stashTabCanBeHidden");
+    Ivar iv = BP_IvarLookup([self class], "_stashTabCanBeHidden");
     *(BOOL *)((char *)(__bridge void *)self + ivar_getOffset(iv)) = canBeHidden;
     id observer = BP_G3B_Ivar(self, "_observer");
     if ([observer respondsToSelector:@selector(stashTabVisibilityPolicyProviderDidUpdatePolicy:)]) [observer stashTabVisibilityPolicyProviderDidUpdatePolicy:self];
@@ -1639,13 +1639,13 @@ static BOOL BPG3BO_ItemAllowsOrthogonal(id mod, id item) {
 // find the NSArray ivar of a grid by NAME suffix (16.0 _SBDisplayItemFlexibleGrid has _widths/_heights; checked by name, not by offset)
 static Ivar BPG3BO_ArrayIvar(id obj, const char *name) {
     for (Class c = [obj class]; c; c = class_getSuperclass(c)) {
-        Ivar iv = class_getInstanceVariable(c, name);
+        Ivar iv = BP_IvarLookup(c, name);
         if (iv) { const char *e = ivar_getTypeEncoding(iv); return (e && e[0] == '@') ? iv : NULL; }
     }
     return NULL;
 }
 static void BPG3BO_MergeTransposed(id grid, double scale) {
-    Ivar fs = class_getInstanceVariable([grid class], "_fixedSize");
+    Ivar fs = BP_IvarLookup([grid class], "_fixedSize");
     Ivar wi = BPG3BO_ArrayIvar(grid, "_widths"), hi = BPG3BO_ArrayIvar(grid, "_heights");
     SEL build = BPS("_buildFixedGridWithScreenScale:");
     if (!fs || !wi || !hi || ![grid respondsToSelector:build]) return;
@@ -1734,7 +1734,7 @@ static void BPG3BO_MergeTransposed(id grid, double scale) {
 // 1.3 orthogonal grids: the grid cache is keyed without the orthogonal bit in 16.0, so orthogonal grids live in a private cache
 %hook SBDisplayItemLayoutGrid
 - (id)_gridForBounds:(CGRect)b contentOrientation:(long long)o layoutRestrictionInfo:(id)info screenScale:(double)s chamoisLayoutAttributes:(id)attrs {
-    Ivar iv = class_getInstanceVariable([self class], "_gridCache");
+    Ivar iv = BP_IvarLookup([self class], "_gridCache");
     if (tBPOrthDepth <= 0 || !iv || BPG3BO_ULL0(info, BPS("layoutRestrictions")) != 2 || !BP_G3B_On("g3b_grid")) {
         return %orig;
     }

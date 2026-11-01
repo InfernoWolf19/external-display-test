@@ -27,7 +27,7 @@
 #import "BP.h"
 
 // ----------------------------------------------------------------------------------------------- tiny helpers
-static inline id BP2B_Obj(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
+static inline id BP2B_Obj(id o, SEL s) { if (!o) return nil; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2b", o, s); return nil; } return ((id (*)(id, SEL))objc_msgSend)(o, s); }
 static inline id BP2B_Obj1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
 // For selectors that return VOID: never send them through BP2B_Obj/BP2B_Obj1 (ARC would retain/autorelease the stale x0 the callee leaves behind).
 static inline void BP2B_Void0(id o, SEL s) { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL))objc_msgSend)(o, s); }
@@ -43,7 +43,7 @@ static inline CGPoint BP2B_Point(id o, SEL s) { return (o && [o respondsToSelect
 
 static id BP2B_IvarObj(id obj, const char *name) {
     if (!obj) return nil;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return nil;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || (enc[0] != '@' && enc[0] != '#')) return nil;
@@ -51,7 +51,7 @@ static id BP2B_IvarObj(id obj, const char *name) {
 }
 static BOOL BP2B_IvarGet(id obj, const char *name, void *buf, size_t size) {
     if (!obj || !buf) return NO;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return NO;
     const char *enc = ivar_getTypeEncoding(iv);
     NSUInteger sz = 0;
@@ -63,7 +63,7 @@ static BOOL BP2B_IvarGet(id obj, const char *name, void *buf, size_t size) {
 }
 static BOOL BP2B_IvarSet(id obj, const char *name, const void *buf, size_t size) {
     if (!obj || !buf) return NO;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return NO;
     const char *enc = ivar_getTypeEncoding(iv);
     NSUInteger sz = 0;
@@ -1039,7 +1039,7 @@ static void BP2B_SetupCalculator(void) {
 
     SEL autoSel = sel_registerName("_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:");
     Method m = class_getInstanceMethod(c, autoSel);
-    if (!m) { BP_Log(@"[g2b] item3: calculator auto-layout method not found"); return; }
+    if (!m) { BP_Anomaly("notinstalled", @"[g2b] item3: calculator auto-layout method not found"); return; }
     // 0.7.0: the 16.0 body (SBChamoisOverlappingController modelForPreferredModel:...) is never called any more. If a prerequisite of the port is
     // missing the layout is returned unchanged (last-line guard, logged), exactly the 16.2 "cache hit" result shape.
     gOrigAutoLayout = BP2B_Replace(c, "_appLayoutByPerformingAutoLayoutIfNeededInAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:draggingItem:overlappingModelBeforeDragging:bounds:prefersStripHidden:prefersDockHidden:",
@@ -1527,7 +1527,7 @@ static void BP2B_SetupLayoutAppLayout(void) {
     Class vcc = objc_getClass("SBFluidSwitcherViewController");
     if (!vcc) return;
     SEL s = sel_registerName("_layoutAppLayout:roleMask:completion:");
-    if (!class_getInstanceMethod(vcc, s)) { BP_Log(@"[g2b] item2: _layoutAppLayout:roleMask:completion: not found"); return; }
+    if (!class_getInstanceMethod(vcc, s)) { BP_Anomaly("notinstalled", @"[g2b] item2: _layoutAppLayout:roleMask:completion: not found"); return; }
     // 16.2 selectors that the extended-protocol / ported modifiers expect on the VC are not needed here; only the method itself is replaced.
     gOrigLayoutAppLayout = BP2B_Replace(vcc, "_layoutAppLayout:roleMask:completion:", (IMP)BP2B_LayoutAppLayoutImpl);
     BP_Log(@"[g2b] item2: _layoutAppLayout:roleMask:completion: replaced");
@@ -2418,7 +2418,7 @@ void BP2B_Early(void) {
     if (!sm || !cm || !class_getClassMethod(cm, sel_registerName("_initalizeIMPCaching")) ||
         !class_getClassMethod(cm, sel_registerName("baseClassForQueryProtocol")) ||
         !class_getClassMethod(sm, sel_registerName("queryProtocol")) || !class_getClassMethod(sm, sel_registerName("contextProtocol"))) {
-        BP_Log(@"G2B: chain mechanism not found, protocol extension off");
+        BP_Anomaly("notinstalled", @"G2B: chain mechanism not found, protocol extension off");
         return;
     }
     if (BP2B_ProtocolsAlreadyInstalled(sm)) { BP_Log(@"G2B: too late (SBSwitcherModifier already initialised): fallback route only"); return; }
@@ -2448,7 +2448,7 @@ void BP2B_Early(void) {
     // Force the stock initialisation NOW (deterministic order) under the breadcrumb.
     if (![@"1" writeToFile:BP2B_CrumbPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]) {
         // no crash guard possible: do not take the risk
-        BP_Log(@"G2B: cannot write the crash breadcrumb, protocol extension not installed");
+        BP_Anomaly("notinstalled", @"G2B: cannot write the crash breadcrumb, protocol extension not installed");
         class_replaceMethod(meta, sel_registerName("contextProtocol"), gBP2B_OrigCtxProto, tc);
         class_replaceMethod(meta, sel_registerName("queryProtocol"), gBP2B_OrigQryProto, tq);
         return;
@@ -2498,7 +2498,7 @@ static const void *kBP2B_KbdSnap = &kBP2B_KbdSnap;
 static void BP2B_InstallQueryDefaults(void) {
     if (!gBP2B_ProtoOK) return;
     Class d = objc_getClass("SBDefaultImplementationsSwitcherModifier");
-    if (!d) { BP_Log(@"G2B: no SBDefaultImplementationsSwitcherModifier, query defaults not installed"); return; }
+    if (!d) { BP_Anomaly("notinstalled", @"G2B: no SBDefaultImplementationsSwitcherModifier, query defaults not installed"); return; }
     // ---- SBDefaultImplementationsSwitcherModifier, 162 0x1c788b348.. ----
     BP2B_ADD(d, "wantsContinuousExposeHoverGesture", "B16@0:8", ^BOOL(id me) { return NO; });                                                  // 0x1c788b648
     BP2B_ADD(d, "isContinuousExposeStripVisible", "B16@0:8", ^BOOL(id me) { return BP2B_FGT(BP2B_Dbl(me, sel_registerName("continuousExposeStripProgress")), 0.0); });   // 0x1c788b650

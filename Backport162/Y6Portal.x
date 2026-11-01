@@ -203,7 +203,7 @@ __attribute__((constructor)) static void Y6_Setup(void) {
         if (!co || !ov || !vc || !NSClassFromString(@"SBFluidSwitcherPortaledSceneLiveContentOverlay") || !NSClassFromString(@"SBPortalView") ||
             !class_getInstanceMethod(co, sel_registerName("_addOverlay:forAppLayout:animated:")) || !class_getInstanceMethod(co, sel_registerName("_existingOverlayTypeForAppLayout:")) ||
             !class_getInstanceMethod(co, sel_registerName("_removeOverlayForAppLayout:animated:")) || !class_getInstanceMethod(co, sel_registerName("_updateAlwaysLiveSceneContentOverlays"))) {
-            BP_Log(@"[y6] NOT installed (class or selector missing)");
+            BP_Anomaly("notinstalled", @"[y6] NOT installed (class or selector missing)");
             return;
         }
         if (!class_getInstanceMethod(vc, sel_registerName("liveContentOverlayForAppLayout:"))) class_addMethod(vc, sel_registerName("liveContentOverlayForAppLayout:"), (IMP)Y6_VCOverlayFor, "@24@0:8@16");

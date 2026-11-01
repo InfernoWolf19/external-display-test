@@ -42,5 +42,7 @@ static inline double Y17_ScaleForIdentity(const char *tag, id identity) {
 }
 static inline long long Y17_LL1(id o, const char *sel, id a) {
     SEL s = sel_registerName(sel);
-    return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL, id))objc_msgSend)(o, s, a) : 0;
+    if (!o) return 0;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-y17", o, s); return 0; }
+    return ((long long (*)(id, SEL, id))objc_msgSend)(o, s, a);
 }

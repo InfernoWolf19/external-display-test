@@ -83,7 +83,7 @@ static BOOL BP_G3_On(const char *name) { return BP_OnName(name); }     // INTEGR
 // ------------------------------------------------------------------------------------------------ helpers
 static id BP_G3_Ivar(id obj, const char *name) {
     if (!obj) return nil;
-    Ivar iv = class_getInstanceVariable([obj class], name);
+    Ivar iv = BP_IvarLookup([obj class], name);
     if (!iv) return nil;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || enc[0] != '@') return nil;                       // object ivars only
@@ -269,7 +269,7 @@ static id BP_G3_SpringBoardApp(void) {
         return;
     }
     if (![[self application] supportsChamoisSceneResizing] && style == 2) return;
-    Ivar iv = class_getInstanceVariable([self class], "_keyboardLayerMaskStyle");
+    Ivar iv = BP_IvarLookup([self class], "_keyboardLayerMaskStyle");
     if (iv) *(unsigned long long *)((char *)(__bridge void *)self + ivar_getOffset(iv)) = style;
     [[[self sceneIfExists] uiPresentationManager] modifyDefaultPresentationContext:^(id ctx) { [ctx setPresentedLayerTypes:style]; }];   // 16.2 block 0x1c76b60f0
 }
@@ -293,7 +293,7 @@ static id BP_G3_SpringBoardApp(void) {
 // 16.2 0x1c72afca0: reset the orientation-request state when the scene stops being effectively foreground.
 // PARTIAL: reads the 16.0 ivar _isEffectivelyForeground by name before/after %orig.
 - (void)_didUpdateSettingsWithDiff:(id)diff previousSettings:(id)prev {
-    BOOL was = NO; Ivar iv = class_getInstanceVariable([self class], "_isEffectivelyForeground");
+    BOOL was = NO; Ivar iv = BP_IvarLookup([self class], "_isEffectivelyForeground");
     if (iv) { ptrdiff_t off = ivar_getOffset(iv); was = *((BOOL *)((char *)(__bridge void *)self + off)); }
     %orig;
     if (iv && BP_G3_On("g3handle")) {
@@ -397,7 +397,7 @@ static char kBPG3SnapStack, kBPG3SnapCurrent, kBPG3SnapViewAssertion;
 static unsigned long long BP_G3_LayerRenderId(id layer) {
     static unsigned long long (*fn)(id); static dispatch_once_t once;
     dispatch_once(&once, ^{ fn = (unsigned long long (*)(id))dlsym(RTLD_DEFAULT, "CALayerGetRenderId"); });
-    if (!fn) { BP_Log(@"[g3snapshot] CALayerGetRenderId not found, render id 0"); return 0; }
+    if (!fn) { BP_Anomaly("notinstalled", @"[g3snapshot] CALayerGetRenderId not found, render id 0"); return 0; }
     return fn(layer);
 }
 
@@ -594,7 +594,7 @@ static NSString *BP_G3_ZoomTitle(id tvc, BOOL z) {
 }
 
 static BOOL BP_G3_CachedZoomed(id vc, BOOL *out) {                  // the VC's _isZoomed ivar by name
-    Ivar iv = vc ? class_getInstanceVariable([vc class], "_isZoomed") : NULL;
+    Ivar iv = vc ? BP_IvarLookup([vc class], "_isZoomed") : NULL;
     const char *enc = iv ? ivar_getTypeEncoding(iv) : NULL;
     if (!enc || (enc[0] != 'B' && enc[0] != 'c')) return NO;
     *out = *((BOOL *)((char *)(__bridge void *)vc + ivar_getOffset(iv)));
@@ -749,7 +749,7 @@ static NSString *BP_G3_MenuTitles(id menu, int depth) {
 static NSString *const kBPG3CanvasNote = @"SBWindowSceneCanvasSizeDidChangeNotification";    // 16.2 extern NSString const
 
 static BOOL BP_G3_BoolIvar(id obj, const char *name, BOOL *out) {
-    Ivar iv = obj ? class_getInstanceVariable([obj class], name) : NULL;
+    Ivar iv = obj ? BP_IvarLookup([obj class], name) : NULL;
     if (!iv) return NO;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || (enc[0] != 'B' && enc[0] != 'c')) return NO;
@@ -897,7 +897,7 @@ static void BP_G3_ApplyEnhancedWindowing(id controller, id scene) {
 static long long BP_G3_BootOrientationValue(void) {
     static int32_t (*mg)(CFStringRef, int32_t); static dispatch_once_t once;
     dispatch_once(&once, ^{ mg = (int32_t (*)(CFStringRef, int32_t))dlsym(RTLD_DEFAULT, "MGGetSInt32Answer"); });
-    if (!mg) { BP_Log(@"[g3bootorient] MGGetSInt32Answer not found"); return 0; }
+    if (!mg) { BP_Anomaly("notinstalled", @"[g3bootorient] MGGetSInt32Answer not found"); return 0; }
     int32_t w = mg(CFSTR("DisplayBootRotation"), -1);
     if (w > 0xb3) return w == 270 ? 4 : 0;
     if (w == 180) return 2;
@@ -932,7 +932,7 @@ static BOOL BP_G3_IsPadIdiom(void) {
     static long long (*nonFlat)(void); static dispatch_once_t once;
     dispatch_once(&once, ^{ nonFlat = (long long (*)(void))dlsym(RTLD_DEFAULT, "BKHIDServicesGetNonFlatDeviceOrientation"); });
     if (nonFlat) return nonFlat();
-    BP_Log(@"[g3bootorient] BKHIDServicesGetNonFlatDeviceOrientation not found, stock startup orientation");
+    BP_Anomaly("notinstalled", @"[g3bootorient] BKHIDServicesGetNonFlatDeviceOrientation not found, stock startup orientation");
     return %orig;
 }
 %end

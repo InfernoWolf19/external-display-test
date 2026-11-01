@@ -356,7 +356,7 @@ void G2F_Setup(void) {
         SEL s = NSSelectorFromString(@"anchorPointForIndex:");
         Method m = c ? class_getInstanceMethod(c, s) : NULL;
         Class iz = NSClassFromString(@"SBFullScreenToHomeIconZoomSwitcherModifier");
-        if (!m || !iz || ![iz instancesRespondToSelector:NSSelectorFromString(@"fullyPresentedFrameForIndex:frame:")]) { BP_Log(@"[g2f] SBContinuousExposeRootSwitcherModifier anchorPointForIndex: / icon zoom fullyPresentedFrameForIndex:frame: not found, pivot not installed"); }
+        if (!m || !iz || ![iz instancesRespondToSelector:NSSelectorFromString(@"fullyPresentedFrameForIndex:frame:")]) { BP_Anomaly("notinstalled", @"[g2f] SBContinuousExposeRootSwitcherModifier anchorPointForIndex: / icon zoom fullyPresentedFrameForIndex:frame: not found, pivot not installed"); }
         else {
             gG2FOrigAnchor = method_getImplementation(m);
             class_replaceMethod(c, s, (IMP)G2F_Anchor, method_getTypeEncoding(m));
@@ -370,7 +370,7 @@ void G2F_Setup(void) {
     Class ic = NSClassFromString(@"SBFluidSwitcherItemContainer");
     SEL rs = NSSelectorFromString(@"prepareForReuse");
     Method rm = ic ? class_getInstanceMethod(ic, rs) : NULL;
-    if (!lm || !rm || ![UIView instancesRespondToSelector:@selector(setMaskView:)]) { BP_Log(@"[g2f] SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion: / item container prepareForReuse not found, crop and close dump not installed"); return; }
+    if (!lm || !rm || ![UIView instancesRespondToSelector:@selector(setMaskView:)]) { BP_Anomaly("notinstalled", @"[g2f] SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion: / item container prepareForReuse not found, crop and close dump not installed"); return; }
     gG2FOrigLayout = method_getImplementation(lm);
     class_replaceMethod(vcc, ls, (IMP)G2F_Layout, method_getTypeEncoding(lm));
     gG2FOrigReuse = method_getImplementation(rm);

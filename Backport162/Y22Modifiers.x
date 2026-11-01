@@ -27,7 +27,7 @@
 
 typedef struct { double x, y, w, h; } Y22Rect;
 
-static id Y22_Ivar(id me, const char *name) { return BP_ObjIvar(me, class_getInstanceVariable(object_getClass(me), name)); }
+static id Y22_Ivar(id me, const char *name) { return BP_ObjIvar(me, BP_IvarLookup(object_getClass(me), name)); }
 
 static id Y22_Transition(id request) {
     Class pc = NSClassFromString(@"SBPerformTransitionSwitcherEventResponse");
@@ -90,7 +90,7 @@ static id Y22_FloorTap(id self, SEL _cmd, id event) {
 static IMP gY22OrigHomeFrame, gY22OrigHomeScale;
 static Class gY22HomeSuper;
 static BOOL Y22_FlyIn(id self) {
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_showingOrAnimatingCardsForFlyIn");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_showingOrAnimatingCardsForFlyIn");
     if (!iv) { Y17_GuardOnce("homeflyin", self, "_showingOrAnimatingCardsForFlyIn"); return YES; }
     return *(BOOL *)((char *)(__bridge void *)self + ivar_getOffset(iv));
 }
@@ -122,7 +122,7 @@ __attribute__((constructor)) static void Y22_Setup(void) {
         Class gc = NSClassFromString(@"SBGridSwitcherModifier"), fc = NSClassFromString(@"_SBFullScreenAppFloorSwitcherModifier"), hc = NSClassFromString(@"SBHomeGestureToHomeSwitcherModifier"), wc = NSClassFromString(@"SBWindowDragTransitionSwitcherModifier");
         if (gc && class_getInstanceMethod(gc, sel_registerName("handleTapAppLayoutEvent:"))) { gY22GridSuper = class_getSuperclass(gc); gY22OrigGrid = BPX_Replace(gc, "handleTapAppLayoutEvent:", (IMP)Y22_GridTap); n++; }
         else BP_Anomaly("gridtap", @"[y22] GUARD(gridtap) SBGridSwitcherModifier handleTapAppLayoutEvent: missing: not installed");
-        if (fc && class_getInstanceMethod(fc, sel_registerName("handleTapAppLayoutEvent:")) && class_getInstanceVariable(fc, "_activeAppLayout")) { gY22FloorSuper = class_getSuperclass(fc); gY22OrigFloor = BPX_Replace(fc, "handleTapAppLayoutEvent:", (IMP)Y22_FloorTap); n++; }
+        if (fc && class_getInstanceMethod(fc, sel_registerName("handleTapAppLayoutEvent:")) && BP_IvarLookup(fc, "_activeAppLayout")) { gY22FloorSuper = class_getSuperclass(fc); gY22OrigFloor = BPX_Replace(fc, "handleTapAppLayoutEvent:", (IMP)Y22_FloorTap); n++; }
         else BP_Anomaly("floortap", @"[y22] GUARD(floortap) _SBFullScreenAppFloorSwitcherModifier handleTapAppLayoutEvent: or _activeAppLayout missing: not installed");
         if (hc && class_getInstanceMethod(hc, sel_registerName("frameForIndex:")) && class_getInstanceMethod(hc, sel_registerName("scaleForIndex:"))) {
             gY22HomeSuper = class_getSuperclass(hc);

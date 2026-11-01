@@ -37,7 +37,7 @@
 static IMP gY20Orig;
 
 static id Y20_Ivar(id self, const char *name) {
-    Ivar iv = class_getInstanceVariable(object_getClass(self), name);
+    Ivar iv = BP_IvarLookup(object_getClass(self), name);
     if (!BP_IvarIsObj(iv)) { Y17_GuardOnce("kbdshortcuts", self, name); return nil; }
     return object_getIvar(self, iv);
 }

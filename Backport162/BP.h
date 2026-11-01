@@ -34,11 +34,43 @@ BOOL BP_LogEnabled(void);               // cheap test (cached one second): lets 
 
 // Object ivar access that cannot mistake a scalar ivar for an object (object_getIvar on a BOOL / NSInteger / struct-sized ivar returns the raw bits as an
 // "object" and ARC then retains them: SIGSEGV in objc_retain). Both return nil / do nothing unless the ivar exists and is an object, class or block.
+// Ivar lookup by name that is never silent: an ivar that does not exist (a different layout in this build, a class that is not the one the port assumed) reads as nil / 0 / NO in every
+// caller, so the miss is announced once per (class, name) through BP_Anomaly("ivar"). Nil class (nil receiver) is a legitimate absence and stays quiet.
+static inline Ivar BP_IvarLookup(Class cls, const char *name) {
+    Ivar iv = cls ? class_getInstanceVariable(cls, name) : NULL;
+    if (!iv && cls) {
+        static uintptr_t seen[512];
+        uintptr_t key = (((uintptr_t)(__bridge void *)cls * 31) ^ ((uintptr_t)name * 131)) | 1;
+        for (int k = 0; k < 512; k++) {
+            uintptr_t cur = __atomic_load_n(&seen[k], __ATOMIC_RELAXED);
+            if (cur == key) return iv;
+            if (cur == 0) { uintptr_t z = 0; if (__atomic_compare_exchange_n(&seen[k], &z, key, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) break; if (z == key) return iv; }
+        }
+        BP_Anomaly("ivar", @"ivar %s is missing on %s: every read of it answers nil / 0 / NO", name, class_getName(cls));
+    }
+    return iv;
+}
+// Selector miss of the typed send helpers (BPX_*, G1B_Send*, G1C_Resp, ...): the receiver exists but does not implement the selector, so the helper answers nil / 0 / NO. One line per
+// (tag, class, selector).  A nil receiver is a legitimate absence and is not reported.
+static inline void BP_SelMiss(const char *tag, id o, SEL s) {
+    static uintptr_t seen[1024];
+    Class k = object_getClass(o);
+    uintptr_t key = (((uintptr_t)(__bridge void *)k * 31) ^ ((uintptr_t)(void *)s * 131) ^ ((uintptr_t)tag * 7)) | 1;
+    for (int i = 0; i < 1024; i++) {
+        uintptr_t cur = __atomic_load_n(&seen[i], __ATOMIC_RELAXED);
+        if (cur == key) return;
+        if (cur == 0) { uintptr_t z = 0; if (__atomic_compare_exchange_n(&seen[i], &z, key, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) break; if (z == key) return; }
+    }
+    BP_Anomaly(tag, @"-[%s %s] is not implemented by the receiver: the helper answers nil / 0 / NO", class_getName(k), sel_getName(s));
+}
 static inline BOOL BP_IvarIsObj(Ivar iv) {
     const char *e = iv ? ivar_getTypeEncoding(iv) : NULL;
     return e && (e[0] == '@' || e[0] == '#');
 }
-static inline id BP_ObjIvar(id o, Ivar iv) { return (o && BP_IvarIsObj(iv)) ? object_getIvar(o, iv) : nil; }
+static inline id BP_ObjIvar(id o, Ivar iv) {
+    if (o && iv && !BP_IvarIsObj(iv)) BP_Anomaly("ivar-type", @"ivar %s of %s is not an object (type %s): read as nil", ivar_getName(iv), class_getName(object_getClass(o)), ivar_getTypeEncoding(iv) ?: "?");
+    return (o && BP_IvarIsObj(iv)) ? object_getIvar(o, iv) : nil;
+}
 static inline void BP_SetObjIvar(id o, Ivar iv, id v) { if (o && BP_IvarIsObj(iv)) object_setIvar(o, iv, v); }
 
 // Type gate that is never silent: YES when `v` is an instance of `Cls`; a NON-nil value of another class (the 16.2 contract returned a collection of another kind than the port assumed, the

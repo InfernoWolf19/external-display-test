@@ -87,7 +87,7 @@ __attribute__((constructor)) static void Y9_Setup(void) {
         Class cc = NSClassFromString(@"SBControlCenterController");
         if (!cc || !class_getInstanceMethod(cc, sel_registerName("canBePresented")) || !class_getInstanceMethod(cc, sel_registerName("_shouldShowGrabberOnFirstSwipe")) ||
             !class_getInstanceMethod(cc, sel_registerName("_isStatusBarHiddenIgnoringControlCenter"))) {
-            BP_Log(@"[y9] NOT installed (class or selector missing)");
+            BP_Anomaly("notinstalled", @"[y9] NOT installed (class or selector missing)");
             return;
         }
         gY9OrigCan = BPX_Replace(cc, "canBePresented", (IMP)Y9_CanBePresented);

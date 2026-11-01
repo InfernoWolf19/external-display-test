@@ -32,7 +32,7 @@
 static IMP gY27OrigUpdateDots, gY27OrigIsExpanded, gY27OrigDismiss, gY27OrigSetHidden, gY27OrigPointer, gY27OrigInset, gY27OrigLayout;
 
 static id Y27_Ivar(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (!iv) { Y17_GuardOnce("topaffordance", o, name); return nil; }
     return BP_ObjIvar(o, iv);
 }
@@ -48,7 +48,7 @@ static void Y27_UpdateDots(id self, SEL _cmd, long long mode, BOOL animated) {
 }
 static void Y27_SetInset(id self, SEL _cmd, double inset) {
     if (!BP_OnName("y24_topaffordance")) { if (gY27OrigInset) ((void (*)(id, SEL, double))gY27OrigInset)(self, _cmd, inset); return; }
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_additionalTopInset");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_additionalTopInset");
     if (!iv) { Y17_GuardOnce("topaffordance", self, "_additionalTopInset"); return; }
     *(double *)((char *)(__bridge void *)self + ivar_getOffset(iv)) = inset;
 }
@@ -74,7 +74,7 @@ static void Y27_SetHidden(id self, SEL _cmd, BOOL hidden, id reason, BOOL animat
 }
 static void Y27_SetPointer(id self, SEL _cmd, BOOL enabled) {
     if (!BP_OnName("y24_topaffordance")) { if (gY27OrigPointer) ((void (*)(id, SEL, BOOL))gY27OrigPointer)(self, _cmd, enabled); return; }
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_isSystemPointerInteractionEnabled");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_isSystemPointerInteractionEnabled");
     if (!iv) { Y17_GuardOnce("topaffordance", self, "_isSystemPointerInteractionEnabled"); return; }
     BOOL *flag = (BOOL *)((char *)(__bridge void *)self + ivar_getOffset(iv));
     if (*flag == enabled) return;
@@ -99,7 +99,7 @@ static void Y27_Layout(id self, SEL _cmd) {
     double scale = BPY_SEND(double, (), trait, "displayScale");
     double mainScale = BPY_SEND(double, (), (id)[UIScreen mainScreen], "scale");
     if (scale == mainScale) return;                                   // the 16.0 body already used this scale
-    Ivar cs = class_getInstanceVariable(object_getClass(self), "_contentScale");
+    Ivar cs = BP_IvarLookup(object_getClass(self), "_contentScale");
     if (!cs || !BPY_Responds(self, "_inverseContentScale") || !BPY_Responds(footer, "intrinsicContentSize") || !BPY_Responds(footer, "sb_setBoundsAndPositionFromFrame:") || !BPY_Responds(footer, "setTransform:")) {
         Y17_GuardOnce("overlayscale", self, "_contentScale / _inverseContentScale / footer sizing selectors"); return;
     }

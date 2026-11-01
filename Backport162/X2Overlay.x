@@ -80,9 +80,9 @@ static BOOL X2_Prefers(id vc) {
 
 static void X2_InstallGetter(const char *clsName, IMP imp, IMP *orig) {
     Class c = NSClassFromString([NSString stringWithUTF8String:clsName]);
-    if (!c) { BP_Log(@"[x2] class %s not found, getter not installed", clsName); return; }
+    if (!c) { BP_Anomaly("notinstalled", @"[x2] class %s not found, getter not installed", clsName); return; }
     IMP o = BPX_Replace(c, "prefersEmbeddedDisplayPresentation", imp);
-    if (!o) { BP_Log(@"[x2] %s has no prefersEmbeddedDisplayPresentation, not installed", clsName); return; }
+    if (!o) { BP_Anomaly("notinstalled", @"[x2] %s has no prefersEmbeddedDisplayPresentation, not installed", clsName); return; }
     *orig = o;
     BP_Log(@"[x2] %s prefersEmbeddedDisplayPresentation installed", clsName);
 }
@@ -119,7 +119,7 @@ static BOOL X2_Request3(id self, SEL _cmd, unsigned long long options, id builde
     if (app && X2_ON()) {
         gX2InBegin = NULL;                                                                    // one-shot: the request of the interactive Spotlight presentation
         id sb = (__bridge id)app;
-        Ivar iv = class_getInstanceVariable(object_getClass(sb), "_spotlightTransientOverlayViewController");
+        Ivar iv = BP_IvarLookup(object_getClass(sb), "_spotlightTransientOverlayViewController");
         id vc = BP_ObjIvar(sb, iv);
         id config = nil;
         BOOL prefers = X2_Prefers(vc);

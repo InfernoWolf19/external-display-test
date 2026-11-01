@@ -37,7 +37,7 @@ static BOOL Y8_IsExternal(id self, SEL _cmd) { return BPX_LL0(self, "displayOrdi
 // -[SBLayoutState interfaceOrientation]   (hot: asked for every frame during layout / drag; the ivar offset is looked up once, the switch is read only for a state without an orientation)
 static long long Y8_Orient(id self, SEL _cmd) {
     static ptrdiff_t off = -2;                                  // _interfaceOrientation of SBLayoutState (+0x8 in 20A8372); -1 = not found
-    if (off == -2) { Ivar iv = class_getInstanceVariable(NSClassFromString(@"SBLayoutState"), "_interfaceOrientation"); off = iv ? ivar_getOffset(iv) : -1; }
+    if (off == -2) { Ivar iv = BP_IvarLookup(NSClassFromString(@"SBLayoutState"), "_interfaceOrientation"); off = iv ? ivar_getOffset(iv) : -1; }
     if (off >= 0 && *(long long *)((uint8_t *)(__bridge void *)self + off) == 0 && BP_OnName("y8_extorient") &&
         BPY_Responds(self, "isDisplayExternal") && BPX_Bool0(self, "isDisplayExternal")) return 1;       // 16.2 -[SBMainDisplayLayoutState _defaultInterfaceOrientation] 0x1c7721500
     return gY8OrigOrient ? ((long long (*)(id, SEL))gY8OrigOrient)(self, _cmd) : 0;
@@ -111,7 +111,7 @@ __attribute__((constructor)) static void Y8_Setup(void) {
         Class ls = NSClassFromString(@"SBLayoutState"), ml = NSClassFromString(@"SBMainDisplayLayoutState"), al = NSClassFromString(@"SBAppLayout");
         if (!ls || !ml || !al || !class_getInstanceMethod(ls, sel_registerName("interfaceOrientation")) || !class_getInstanceMethod(al, sel_registerName("isInsetForHomeAffordance")) ||
             !class_getInstanceMethod(ml, sel_registerName("displayOrdinal"))) {
-            BP_Log(@"[y8] NOT installed (class or selector missing)");
+            BP_Anomaly("notinstalled", @"[y8] NOT installed (class or selector missing)");
             return;
         }
         if (!class_getInstanceMethod(ml, sel_registerName("isDisplayExternal"))) class_addMethod(ml, sel_registerName("isDisplayExternal"), (IMP)Y8_IsExternal, "B16@0:8");

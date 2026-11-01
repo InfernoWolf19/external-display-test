@@ -102,7 +102,7 @@ BOOL X7_TrackerScene(id manager, id *out) {
 
 static void X7_InstallTracker(void) {
     Class mgr = NSClassFromString(@"SBWindowSceneManager");
-    if (!mgr) { BP_Log(@"[x7] SBWindowSceneManager not found, tracker not installed"); return; }
+    if (!mgr) { BP_Anomaly("notinstalled", @"[x7] SBWindowSceneManager not found, tracker not installed"); return; }
     Class c = objc_allocateClassPair([NSObject class], "BPActiveDisplayKeyboardFocusTracker", 0);
     if (!c) { c = NSClassFromString(@"BPActiveDisplayKeyboardFocusTracker"); }
     else {
@@ -285,7 +285,7 @@ static void X7_Wrap(const char *cls, const char *sel, IMP imp, IMP *orig) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
     IMP o = c ? BPX_Replace(c, sel, imp) : NULL;
     if (o) *orig = o;
-    else BP_Log(@"[x7] -[%s %s] not found, not wrapped", cls, sel);
+    else BP_Anomaly("notinstalled", @"[x7] -[%s %s] not found, not wrapped", cls, sel);
 }
 
 // ---------------------------------------------------------------------------------------------- 3: external scene identities
@@ -296,7 +296,7 @@ static id X7_KfcExternalIds(id self, SEL _cmd) { return objc_getAssociatedObject
 static void X7_KfcSetExternalIds(id self, SEL _cmd, id ids) { objc_setAssociatedObject(self, &kX7ExtIdsKey, ids, OBJC_ASSOCIATION_COPY); }   // 0x1c77c8f94
 
 static os_unfair_lock_t X7_SvcLock(id svc) {
-    Ivar iv = class_getInstanceVariable(object_getClass(svc), "_lock");
+    Ivar iv = BP_IvarLookup(object_getClass(svc), "_lock");
     return iv ? (os_unfair_lock_t)((char *)(__bridge void *)svc + ivar_getOffset(iv)) : NULL;
 }
 static NSMapTable *X7_SvcMap(id svc) {
@@ -395,7 +395,7 @@ static id X7_Filter(id self, SEL _cmd, id token, int pid, id resultBlock) {
     typedef id (*Orig)(id, SEL, id, int, id);
     Orig orig = (Orig)gX7OrigFilter;
     if (!BP_OnName("kbextscenes") || !token || pid < 1) return orig(self, _cmd, token, pid, resultBlock);
-    Ivar lockIv = class_getInstanceVariable(object_getClass(self), "_lock");
+    Ivar lockIv = BP_IvarLookup(object_getClass(self), "_lock");
     if (!lockIv || ivar_getOffset(lockIv) != 8) return orig(self, _cmd, token, pid, resultBlock);
     os_unfair_lock_t lk = (os_unfair_lock_t)((char *)(__bridge void *)self + 8);
     os_unfair_lock_lock(lk);
@@ -452,7 +452,7 @@ static void X7_InstallUcsBlock(void) {
         const char *name = _dyld_get_image_name(i);
         if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
     }
-    if (!found) { BP_Log(@"[x7] UCS block: SpringBoard.framework image not found, not installing"); return; }
+    if (!found) { BP_Anomaly("notinstalled", @"[x7] UCS block: SpringBoard.framework image not found, not installing"); return; }
     if (!class_getInstanceMethod(NSClassFromString(@"SBUniversalControlServer"), sel_registerName("_lock_reevaluateKeyboardFocusDisablement"))) { BP_Log(@"[x7] UCS block: -_lock_reevaluateKeyboardFocusDisablement missing, not installing"); return; }
     uintptr_t entry = kInvoke + (uintptr_t)slide;
     if (memcmp((const void *)entry, kPro, sizeof kPro) != 0 || memcmp((const void *)(kMake + (uintptr_t)slide), kPair, sizeof kPair) != 0) {
@@ -487,7 +487,7 @@ void X7_Setup(void) {
                && class_getInstanceMethod(km, sel_registerName("startSuppressingKeyboardWithReason:predicate:"))
                && class_getInstanceMethod(km, sel_registerName("acquireKeyboardSuppressionAssertionWithReason:predicate:"));
         if (!ok) {
-            BP_Log(@"[x7] display scoped suppression NOT installed (UIApplicationSceneDeactivationAssertion / SBKeyboardSuppressionManager selectors missing)");
+            BP_Anomaly("notinstalled", @"[x7] display scoped suppression NOT installed (UIApplicationSceneDeactivationAssertion / SBKeyboardSuppressionManager selectors missing)");
         } else {
             class_addMethod(ua, sel_registerName("sb_acquireWithPredicate:transitionContext:displayIdentity:"), (IMP)X7_SBAcquireWith, "v40@0:8@16@24@32");
             class_addMethod(ua, sel_registerName("sb_acquireForDisplayIdentity:"), (IMP)X7_SBAcquireFor, "v24@0:8@16");
@@ -533,7 +533,7 @@ void X7_Setup(void) {
         gX7OrigFilter = BPX_Replace(kfc, "_filterFocusedSceneIdentityToken:focusedPID:resultBlock:", (IMP)X7_Filter);
         BP_Log(@"[x7] OverlayUI focus request tracking %s, _filterFocusedSceneIdentityToken: consumer %s", (gX7OrigUserFocus && gX7OrigRemoveFocus) ? "installed" : "NOT installed (selector missing)", gX7OrigFilter ? "installed" : "NOT installed (selector missing)");
     } else {
-        BP_Log(@"[x7] SBKeyboardFocusService / SBWorkspaceKeyboardFocusController missing, external scene identities not installed");
+        BP_Anomaly("notinstalled", @"[x7] SBKeyboardFocusService / SBWorkspaceKeyboardFocusController missing, external scene identities not installed");
     }
 }
 #pragma clang diagnostic pop

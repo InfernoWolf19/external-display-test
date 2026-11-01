@@ -54,7 +54,7 @@ static IMP gG2EOrigLayout;
 static char kG2ELogged;
 
 static BOOL G2E_Scalar(id o, const char *name, void *out, size_t size) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (!iv) return NO;
     memcpy(out, (const char *)(__bridge void *)o + ivar_getOffset(iv), size);
     return YES;
@@ -135,7 +135,7 @@ void G2E_Setup(void) {
     Class c = NSClassFromString(@"SBHomeGestureSwitcherModifier");
     SEL s = NSSelectorFromString(@"_layoutSettingsForAppLayout:layoutSettings:");
     Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m || !class_getInstanceVariable(c, "_startingEnvironmentMode")) { BP_Log(@"[g2e] SBHomeGestureSwitcherModifier _layoutSettingsForAppLayout:layoutSettings: not found, not installed"); return; }
+    if (!m || !BP_IvarLookup(c, "_startingEnvironmentMode")) { BP_Anomaly("notinstalled", @"[g2e] SBHomeGestureSwitcherModifier _layoutSettingsForAppLayout:layoutSettings: not found, not installed"); return; }
     gG2EOrigLayout = method_getImplementation(m);
     class_replaceMethod(c, s, (IMP)G2E_LayoutSettings, method_getTypeEncoding(m));
     BP_Log(@"[g2e] installed (home swipe close: instant gesture tracking of a mode 3 start becomes the stock tracking spring)");

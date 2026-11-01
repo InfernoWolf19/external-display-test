@@ -57,7 +57,7 @@ typedef void (^PIPSVoid)(void);                               // "v8@?0"
 
 // object ivar by name (the adapters keep their PIP controller (weak), Pegasus controller and container view controller (weak) in ivars: object_getIvar reads the pointer)
 static id PIPS_Ivar(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     return BP_ObjIvar(o, iv);
 }
 static id PIPS_Class(NSString *name) { return NSClassFromString(name); }

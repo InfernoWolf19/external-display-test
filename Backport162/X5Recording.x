@@ -80,7 +80,7 @@ void X5_Setup(void) {
     const char *kCfg = "_configureForConnectingWindowScene:windowSceneContext:", *kMain = "recordingIndicatorManagerForMainDisplay", *kSB = "_configureStatusBarWithCurrentStyleRequest";
     BOOL ok = ext && ws && sb && vc && class_getInstanceMethod(ext, sel_registerName(kCfg)) && class_getInstanceMethod(sb, sel_registerName(kMain))
            && class_getInstanceMethod(vc, sel_registerName(kSB)) && NSClassFromString(@"SBRecordingIndicatorManager");
-    if (!ok) { BP_Log(@"[x5] per display recording indicator NOT installed (class or selector missing)"); return; }
+    if (!ok) { BP_Anomaly("notinstalled", @"[x5] per display recording indicator NOT installed (class or selector missing)"); return; }
     class_addMethod(ext, sel_registerName("recordingIndicatorManager"), (IMP)X5_DelegateManager, "@16@0:8");
     class_addMethod(ext, sel_registerName("setRecordingIndicatorManager:"), (IMP)X5_DelegateSetManager, "v24@0:8@16");
     class_addMethod(ws, sel_registerName("recordingIndicatorManager"), (IMP)X5_SceneManager, "@16@0:8");

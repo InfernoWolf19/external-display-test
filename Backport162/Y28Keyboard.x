@@ -29,7 +29,7 @@ static IMP gY28OrigGet, gY28OrigUpdate, gY28OrigAddObserver;
 static __thread void *tY28Self;          // the controller whose -_updateHomeAffordance runs (unretained)
 
 static id Y28_SceneOf(id controller) {
-    Ivar iv = class_getInstanceVariable(object_getClass(controller), "_topMostAssertion");
+    Ivar iv = BP_IvarLookup(object_getClass(controller), "_topMostAssertion");
     id assertion = BP_ObjIvar(controller, iv);
     id window = Y17_Obj0("kbgrabber", assertion, "sourceWindow");
     id scene = Y17_Obj0("kbgrabber", window, "windowScene");

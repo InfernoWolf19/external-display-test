@@ -142,7 +142,7 @@ __attribute__((constructor)) static void Y2_Setup(void) {
         Class mg = NSClassFromString(@"SBTransientUIInteractionManager"), ta = NSClassFromString(@"SBTopAffordanceViewController"), sh = NSClassFromString(@"SBSwitcherShelfViewController");
         SEL mm = sel_registerName("mainDisplayManager");
         if (!sgm || !sb || !mg || !ta || !sh || !class_getClassMethod(sgm, mm) || !class_getInstanceMethod(sb, sel_registerName("systemTransientUIInteractionManager"))) {
-            BP_Log(@"[y2] NOT installed (class or selector missing)");
+            BP_Anomaly("notinstalled", @"[y2] NOT installed (class or selector missing)");
             return;
         }
         Method cm = class_getClassMethod(sgm, mm);

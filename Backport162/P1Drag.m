@@ -54,7 +54,7 @@ void P1_NoteMissing(id o, SEL x) {
         tab[n].s = x; tab[n].c = k;
         __atomic_store_n(&count, n + 1, __ATOMIC_RELEASE);
     }
-    BP_Log(@"p1: selector %@ missing on %@, treated as NO / nil / 0", NSStringFromSelector(x), NSStringFromClass(k));
+    BP_Anomaly("sel-p1", @"p1: selector %@ missing on %@, treated as NO / nil / 0", NSStringFromSelector(x), NSStringFromClass(k));       // always on (audit class B)
 }
 static inline BOOL P1_Resp(id o, SEL x) {
     if (!o) return NO;
@@ -81,7 +81,7 @@ static CGRect P1_Rect0(id o, const char *s) { SEL x = sel_registerName(s); retur
 // Non-silent ivar lookup: an ivar missing on a non-nil object is logged once per ivar + class (the accessors then answer nil / 0 / NO).
 Ivar P1_IvarOf(id o, const char *name) {
     if (!o) return NULL;
-    Ivar iv = class_getInstanceVariable(object_getClass(o), name);
+    Ivar iv = BP_IvarLookup(object_getClass(o), name);
     if (!iv) {
         static NSMutableSet *seen; static dispatch_once_t once;
         dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
@@ -1051,7 +1051,7 @@ static IMP P1_Replace(const char *cls, const char *sel, IMP imp, IMP *orig) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
     SEL s = sel_registerName(sel);
     Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m) { BP_Log(@"p1: %s -%s not found, not replaced", cls, sel); return NULL; }
+    if (!m) { BP_Anomaly("notinstalled", @"p1: %s -%s not found, not replaced", cls, sel); return NULL; }
     IMP prev = method_getImplementation(m);
     if (orig) *orig = prev;
     class_replaceMethod(c, s, imp, method_getTypeEncoding(m));

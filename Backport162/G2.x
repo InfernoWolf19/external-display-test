@@ -51,7 +51,7 @@
 // Read an object ivar by NAME (never by offset). Returns nil if the class has no such ivar or it is not an object.
 static id BP_G2_GetIvarObj(id obj, const char *name) {
     if (!obj) return nil;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return nil;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || (enc[0] != '@' && enc[0] != '#')) return nil;
@@ -61,7 +61,7 @@ static id BP_G2_GetIvarObj(id obj, const char *name) {
 // Read a scalar ivar by name (BOOL / integer / double / CGRect ...) into buf. Returns NO if missing or size mismatch.
 static BOOL BP_G2_GetIvarRaw(id obj, const char *name, void *buf, size_t size) {
     if (!obj || !buf) return NO;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return NO;
     ptrdiff_t off = ivar_getOffset(iv);
     NSUInteger sz = 0;
@@ -75,7 +75,7 @@ static BOOL BP_G2_GetIvarRaw(id obj, const char *name, void *buf, size_t size) {
 
 static BOOL BP_G2_SetIvarRaw(id obj, const char *name, const void *buf, size_t size) {
     if (!obj || !buf) return NO;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return NO;
     ptrdiff_t off = ivar_getOffset(iv);
     NSUInteger sz = 0;
@@ -89,22 +89,34 @@ static BOOL BP_G2_SetIvarRaw(id obj, const char *name, const void *buf, size_t s
 
 // Message helpers with explicit types (private selectors are not declared anywhere).
 static inline id BP_G2_Obj(id o, SEL s) {
-    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil;
+    if (!o) return nil;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2", o, s); return nil; }
+    return ((id (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline id BP_G2_Obj1(id o, SEL s, id a) {
-    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil;
+    if (!o) return nil;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2", o, s); return nil; }
+    return ((id (*)(id, SEL, id))objc_msgSend)(o, s, a);
 }
 static inline BOOL BP_G2_Bool(id o, SEL s) {
-    return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO;
+    if (!o) return NO;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2", o, s); return NO; }
+    return ((BOOL (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline double BP_G2_Dbl(id o, SEL s) {
-    return (o && [o respondsToSelector:s]) ? ((double (*)(id, SEL))objc_msgSend)(o, s) : 0.0;
+    if (!o) return 0.0;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2", o, s); return 0.0; }
+    return ((double (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline unsigned long long BP_G2_ULL(id o, SEL s) {
-    return (o && [o respondsToSelector:s]) ? ((unsigned long long (*)(id, SEL))objc_msgSend)(o, s) : 0ull;
+    if (!o) return 0ull;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2", o, s); return 0ull; }
+    return ((unsigned long long (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline CGRect BP_G2_Rect(id o, SEL s) {
-    return (o && [o respondsToSelector:s]) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, s) : CGRectZero;
+    if (!o) return CGRectZero;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-g2", o, s); return CGRectZero; }
+    return ((CGRect (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline BOOL BP_G2_Equal(id a, id b) { return a == b || (a && b && [a isEqual:b]); }
 
@@ -1708,7 +1720,7 @@ static void BP_G2_AdoptAttributeGrid(id grid) {
     NSArray *w = BP_G2_Obj(attrs, sel_registerName("gridWidths")), *h = BP_G2_Obj(attrs, sel_registerName("gridHeights"));
     if (!BP_KIND("g2-grid", w, NSArray) || !BP_KIND("g2-grid", h, NSArray) || w.count == 0 || h.count == 0) return;
     Class k = object_getClass(grid);
-    Ivar wi = class_getInstanceVariable(k, "_widths"), hi = class_getInstanceVariable(k, "_heights");
+    Ivar wi = BP_IvarLookup(k, "_widths"), hi = BP_IvarLookup(k, "_heights");
     const char *we = wi ? ivar_getTypeEncoding(wi) : NULL, *he = hi ? ivar_getTypeEncoding(hi) : NULL;
     if (!we || !he || we[0] != '@' || he[0] != '@') return;
     BP_SetObjIvar(grid, wi, [w copy]);

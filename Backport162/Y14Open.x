@@ -70,7 +70,7 @@ __attribute__((constructor)) static void Y14_Setup(void) {
             gY14OrigOpen = BPX_Replace(sb, "_openURLCore:display:animating:activationSettings:origin:withResult:", (IMP)Y14_OpenURLCore);
             gY14OrigRequest = BPX_Replace(wk, "requestTransitionWithBuilder:", (IMP)Y14_RequestWithBuilder);
             BP_Log(@"[y14] installed (switch y14_openurl): URL opens choose the display");
-        } else BP_Log(@"[y14] NOT installed (class or selector missing)");
+        } else BP_Anomaly("notinstalled", @"[y14] NOT installed (class or selector missing)");
     }
 }
 #pragma clang diagnostic pop

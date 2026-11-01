@@ -76,7 +76,7 @@ static BOOL Y32_Varint(const unsigned char *b, unsigned long long *p, unsigned l
     return NO;
 }
 static NSDictionary *Y32_Scan(id reader) {
-    Ivar ipos = class_getInstanceVariable(object_getClass(reader), "_pos"), ilen = class_getInstanceVariable(object_getClass(reader), "_length"), ibytes = class_getInstanceVariable(object_getClass(reader), "_bytes");
+    Ivar ipos = BP_IvarLookup(object_getClass(reader), "_pos"), ilen = BP_IvarLookup(object_getClass(reader), "_length"), ibytes = BP_IvarLookup(object_getClass(reader), "_bytes");
     if (!ipos || !ilen || !ibytes) { Y17_GuardOnce("protoextras", reader, "_pos / _length / _bytes"); return nil; }
     char *base = (char *)(__bridge void *)reader;
     unsigned long long pos = *(unsigned long long *)(base + ivar_getOffset(ipos)), end = *(unsigned long long *)(base + ivar_getOffset(ilen));

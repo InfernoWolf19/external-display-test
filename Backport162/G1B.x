@@ -330,10 +330,10 @@ static void G1B_BuildRouting162(void) {
     gRtCls = NSClassFromString(@"SBRoutingSwitcherModifier");
     if (!gRtCls) return;
     gRtSuper = class_getSuperclass(gRtCls);
-    gRtIvCur = class_getInstanceVariable(gRtCls, "_currentModifier");
-    gRtIvDel = class_getInstanceVariable(gRtCls, "_delegate");
-    gRtIvMods = class_getInstanceVariable(gRtCls, "_modifiers");
-    if (!gRtIvCur || !gRtIvDel || !gRtIvMods) { gRtCls = Nil; BP_Log(@"g1b: routing162: SBRoutingSwitcherModifier ivars missing (cur %d del %d mods %d), group inert", gRtIvCur != NULL, gRtIvDel != NULL, gRtIvMods != NULL); return; }
+    gRtIvCur = BP_IvarLookup(gRtCls, "_currentModifier");
+    gRtIvDel = BP_IvarLookup(gRtCls, "_delegate");
+    gRtIvMods = BP_IvarLookup(gRtCls, "_modifiers");
+    if (!gRtIvCur || !gRtIvDel || !gRtIvMods) { gRtCls = Nil; BP_Anomaly("notinstalled", @"g1b: routing162: SBRoutingSwitcherModifier ivars missing (cur %d del %d mods %d), group inert", gRtIvCur != NULL, gRtIvDel != NULL, gRtIvMods != NULL); return; }
     const G1BMethod rm[] = { { "_currentModifierOrFallback", (IMP)G1B_RT_CurrentOrFallback, "@16@0:8" } };
     if (!class_getInstanceMethod(gRtCls, @selector(_currentModifierOrFallback))) G1B_AddMethods(gRtCls, rm, 1);
     const G1BMethod mm[] = { { "fallbackModifierForRoutingModifier:", (IMP)G1B_RT_MainFallback, "@24@0:8@16" } };
@@ -800,7 +800,7 @@ static void G1B_BuildEventsAndResponses(void) {
         long long t = G1B_SendLL0(response, @selector(type));
         if (t == G1BRespPresentStripEdgeProtectGrabber && [response respondsToSelector:@selector(isInitialPresentation)]) {
             id sc = nil;
-            Ivar iv = class_getInstanceVariable([self class], "_switcherController");
+            Ivar iv = BP_IvarLookup([self class], "_switcherController");
             sc = BP_ObjIvar(self, iv);       // weak ivar: object_getIvar returns the loaded value
             BOOL initial = ((BOOL (*)(id, SEL))objc_msgSend)(response, @selector(isInitialPresentation));
             SEL s = initial ? NSSelectorFromString(@"presentContinuousExposeStripRevealGrabberTongueImmediately")
@@ -833,7 +833,7 @@ static void G1B_BuildEventsAndResponses(void) {
         %orig;
         return;
     }
-    Ivar iv = class_getInstanceVariable([self class], "_visibleOverlayAccessoryViews");
+    Ivar iv = BP_IvarLookup([self class], "_visibleOverlayAccessoryViews");
     NSDictionary *map = BP_ObjIvar(self, iv);
     id layout = [map isKindOfClass:[NSDictionary class]] ? [[map allKeysForObject:view] firstObject] : nil;
     if (!layout) {
@@ -1500,7 +1500,7 @@ static __thread __unsafe_unretained id tAWCoordinator;      // coordinator insid
 static __thread __unsafe_unretained id tAWLayout;           // N: the app layout that handler asserts on (nil when the assertion cannot run)
 
 static BOOL G1B_AW_Contains(id coord, id layout) {
-    Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
+    Ivar iv = BP_IvarLookup(object_getClass(coord), "_appLayouts");
     id arr = BP_ObjIvar(coord, iv);
     return BP_KIND("g1b-aw", arr, NSArray) && [arr containsObject:layout];
 }
@@ -1545,7 +1545,7 @@ static void G1B_AW_Repair(id coord, id layout, const char *how) {
             return;
         }
     }
-    Ivar iv = class_getInstanceVariable(object_getClass(coord), "_appLayouts");
+    Ivar iv = BP_IvarLookup(object_getClass(coord), "_appLayouts");
     id cur = BP_ObjIvar(coord, iv);
     if (!iv || (cur && ![cur isKindOfClass:[NSArray class]])) {
         BP_Log(@"addwin net (%s): cannot repair (ivar %p)", how, (void *)iv);
@@ -1626,7 +1626,7 @@ static void G1B_AW_Repair(id coord, id layout, const char *how) {
 static Class gWDSuper;
 static char kWDRadii;
 static id G1B_WD_Ivar(id me, const char *name) {
-    Ivar iv = class_getInstanceVariable(object_getClass(me), name);
+    Ivar iv = BP_IvarLookup(object_getClass(me), name);
     return BP_ObjIvar(me, iv);
 }
 static BOOL G1B_WD_Chamois(id me) { return [me respondsToSelector:@selector(isChamoisWindowingUIEnabled)] && G1B_SendB0(me, @selector(isChamoisWindowingUIEnabled)); }
@@ -1708,7 +1708,7 @@ static id G1B_WD_AdjustedStrip(id self, SEL _cmd, id strip) {
     SEL oi = @selector(initWithAppLayouts:);
     if (idx == NSNotFound || !oc || ![oc instancesRespondToSelector:oi] || ![me respondsToSelector:@selector(performTransactionWithTemporaryChildModifier:usingBlock:)]) return r;
     id override = G1B_Send1([oc alloc], oi, layouts);
-    Ivar ivFrame = class_getInstanceVariable(object_getClass(me), "_initialFrame");
+    Ivar ivFrame = BP_IvarLookup(object_getClass(me), "_initialFrame");
     unsigned long long index = idx;
     ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(me, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), override, ^{
         // [super frameForIndex:idx] -> _initialFrame, [super cornerRadiiForIndex:idx] -> _initialCornerRadii (16.2 block 0x1c78e6e8c)
@@ -1772,7 +1772,7 @@ static void G1B_BuildWindowDelete(void) {
     id c = (G1B_ON() && layout && [me respondsToSelector:ex]) ? G1B_Send1(me, ex, layout) : nil;       // the container this call recycles
     BOOL r = %orig;
     if (!c || !r) return r;
-    Ivar pool = class_getInstanceVariable(object_getClass(me), "_hiddenRecycledItemContainers");
+    Ivar pool = BP_IvarLookup(object_getClass(me), "_hiddenRecycledItemContainers");
     NSArray *recycled = BP_ObjIvar(me, pool);
     Class bp = NSClassFromString(@"SBBlurItemContainerParameters");
     SEL un = NSSelectorFromString(@"_unblurItemContainer:blurParameters:withAnimationUpdateMode:");
@@ -1803,7 +1803,7 @@ static void G1B_BuildWindowDelete(void) {
         // app layout (_visibleAdjustedAppLayouts = _leafAppLayoutsToAdjustedAppLayouts[leaf] of every leaf that has a container, 16.2 0x1c7448158), while the item containers are
         // keyed by LEAF app layouts: a stage with several windows (A&B) has containers for A and B but none for A&B, so testing _itemContainerForAppLayoutIfExists:(A&B) (what this
         // guard did up to 0.7.3) rejected every legitimate icon overlay of a multi-window stage (going home with 2+ windows).  The guard now tests the same dictionary as the assertion.
-        Ivar ov = class_getInstanceVariable(object_getClass(me), "_visibleOverlayAccessoryViews");
+        Ivar ov = BP_IvarLookup(object_getClass(me), "_visibleOverlayAccessoryViews");
         id ovd = ov ? BP_ObjIvar(me, ov) : nil;
         if (layout && ov && BP_KIND("g1b-icon", ovd, NSDictionary) && ![(NSDictionary *)ovd objectForKey:layout]) {
             BP_Anomaly("guard-g1b", @"GUARD icon overlay response for an app layout without overlay accessory view ignored: %@", layout);
@@ -1918,7 +1918,7 @@ static long long G1B_PlatMode(id self) { return [(NSNumber *)G1B_GET(self, kPlat
     G1B_SendV1(me, @selector(removeChildModifier:), child);
     id root = [[neu alloc] init];
     ((void (*)(id, SEL, id, long long, id))objc_msgSend)(me, @selector(addChildModifier:atLevel:key:), root, 0, key);
-    Ivar iv = class_getInstanceVariable(platC, "_lastTransitionEvent");
+    Ivar iv = BP_IvarLookup(platC, "_lastTransitionEvent");
     id last = BP_ObjIvar(me, iv);
     if (last) {
         id e = [last copy];
@@ -2211,7 +2211,7 @@ static id G1B_IZ_LayoutsForIdentifier(id self, SEL _cmd, id ident) {            
 %hook SBFullScreenToHomeIconZoomSwitcherModifier
 - (BOOL)shouldAsyncRenderUntilDelay:(double *)delay {                                                                         // 16.2 0x1c75b2034
     id me = (id)self;
-    Ivar iv = class_getInstanceVariable(object_getClass(me), "_direction");
+    Ivar iv = BP_IvarLookup(object_getClass(me), "_direction");
     long long direction = iv ? *(long long *)((uint8_t *)(__bridge void *)me + ivar_getOffset(iv)) : 0;
     if (!G1B_ON()) return %orig;
     if (direction != 0 || G1B_IZ_GetNoAsync(me, 0)) return NO;
@@ -2223,7 +2223,7 @@ static id G1B_IZ_LayoutsForIdentifier(id self, SEL _cmd, id ident) {            
 - (BOOL)wantsDockBehaviorAssertion {                                                                                          // 16.2 0x1c75b3988: direction 1 && floating dock -> YES, else direction == 0
     if (!G1B_ON()) return %orig;
     id me = (id)self;
-    Ivar iv = class_getInstanceVariable(object_getClass(me), "_direction"), fd = class_getInstanceVariable(object_getClass(me), "_homeScreenIconLocationIsFloatingDock");
+    Ivar iv = BP_IvarLookup(object_getClass(me), "_direction"), fd = BP_IvarLookup(object_getClass(me), "_homeScreenIconLocationIsFloatingDock");
     long long direction = iv ? *(long long *)((uint8_t *)(__bridge void *)me + ivar_getOffset(iv)) : 0;
     BOOL floatingDock = fd ? *(BOOL *)((uint8_t *)(__bridge void *)me + ivar_getOffset(fd)) : NO;
     return (direction == 1 && floatingDock) ? YES : (direction == 0);
@@ -2755,7 +2755,7 @@ static void G1B_GM_TickleStrip(id self, SEL _cmd) {
 }
 // SBSwitcherController (16.2 0x1c7606c3c / 0x1c7606c44): forward to the gesture manager (ivar +0xd8).
 static void G1B_SC_Forward(id self, SEL _cmd) {
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_gestureManager");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_gestureManager");
     id gm = BP_ObjIvar(self, iv);
     G1B_SendV0(gm, _cmd);
 }

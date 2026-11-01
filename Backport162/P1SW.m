@@ -50,7 +50,7 @@ static IMP PS_Replace(const char *cls, const char *sel, IMP imp) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
     SEL s = sel_registerName(sel);
     Method m = c ? class_getInstanceMethod(c, s) : NULL;
-    if (!m) { BP_Log(@"p1sw: %s -%s not found, not replaced", cls, sel); return NULL; }
+    if (!m) { BP_Anomaly("notinstalled", @"p1sw: %s -%s not found, not replaced", cls, sel); return NULL; }
     IMP prev = method_getImplementation(m);
     class_replaceMethod(c, s, imp, method_getTypeEncoding(m));
     return prev;

@@ -38,7 +38,7 @@ static Y11Set gSlide, gBlur;
 
 static Y11Set *Y11_SetFor(id self) { return [self isKindOfClass:gSlide.cls] ? &gSlide : &gBlur; }
 static id Y11_RemovedLayout(id self) {
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_appLayout");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_appLayout");
     return iv ? object_getIvar(self, iv) : nil;
 }
 // 16.2 test of the first lines of every method: this index is the removed layout and the preparation phase is over
@@ -165,7 +165,7 @@ __attribute__((constructor)) static void Y11_Setup(void) {
     @autoreleasepool {
         int n = 0;
         Class sl = NSClassFromString(@"SBEntityRemovalSlideOffscreenSwitcherModifier"), bl = NSClassFromString(@"SBEntityRemovalCrossblurSwitcherModifier");
-        if (sl && bl && class_getInstanceVariable(sl, "_appLayout") && class_getInstanceVariable(bl, "_appLayout") && class_getInstanceMethod(sl, sel_registerName("frameForIndex:")) &&
+        if (sl && bl && BP_IvarLookup(sl, "_appLayout") && BP_IvarLookup(bl, "_appLayout") && class_getInstanceMethod(sl, sel_registerName("frameForIndex:")) &&
             class_getInstanceMethod(bl, sel_registerName("opacityForLayoutRole:inAppLayout:atIndex:")) && class_getInstanceMethod(sl, sel_registerName("animationAttributesForLayoutElement:"))) {
             Y11_Patch(&gSlide, sl, NO);
             Y11_Patch(&gBlur, bl, YES);

@@ -61,7 +61,7 @@ static void Y13_Reuse(id self, SEL _cmd) {
     else if (!warned) { warned = YES; BP_Log(@"[y13] reuse: no setPreferredPointerLockStatusSuppressed: on this build (16.2 property, nothing reads it here), skipped"); }
     if (BPY_Responds(self, "_updateForPointerHoveringOverEdge:")) BPY_SEND(void, (unsigned long long), self, "_updateForPointerHoveringOverEdge:", 0ULL);
     else if (BPY_Responds(self, "pointerIsHoveringOverEdge:")) BPY_SEND(void, (unsigned long long), self, "pointerIsHoveringOverEdge:", 0ULL);
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_hoverGestureRecognizer");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_hoverGestureRecognizer");
     id r = iv ? object_getIvar(self, iv) : nil;
     if (r && BPY_Responds(r, "setEnabled:")) {
         BPY_SEND(void, (BOOL), r, "setEnabled:", NO);
@@ -73,7 +73,7 @@ static void Y13_Reuse(id self, SEL _cmd) {
 static void Y13_Fail(id self, SEL _cmd, id reason) {
     if (gY13OrigFail) ((void (*)(id, SEL, id))gY13OrigFail)(self, _cmd, reason);
     if (!BP_OnName("y13_failgestures")) return;
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_unpinSplitViewApplicationGestureRecognizer");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_unpinSplitViewApplicationGestureRecognizer");
     id r = iv ? object_getIvar(self, iv) : nil;
     if (r && BPY_Responds(r, "setEnabled:")) {
         BPY_SEND(void, (BOOL), r, "setEnabled:", NO);

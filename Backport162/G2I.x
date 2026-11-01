@@ -321,7 +321,7 @@ void G2I_Setup(void) {
     Class vcc = NSClassFromString(@"SBFluidSwitcherViewController");
     SEL ls = sel_registerName("_layoutAppLayout:roleMask:completion:");
     Method lm = vcc ? class_getInstanceMethod(vcc, ls) : NULL;
-    if (!em || !lm) { BP_Log(@"[g2i] SBContinuousExposeRootSwitcherModifier handleTransitionEvent: / SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion: not found, add-window diagnostics not installed"); return; }
+    if (!em || !lm) { BP_Anomaly("notinstalled", @"[g2i] SBContinuousExposeRootSwitcherModifier handleTransitionEvent: / SBFluidSwitcherViewController _layoutAppLayout:roleMask:completion: not found, add-window diagnostics not installed"); return; }
     gG2IOrigEvent = method_getImplementation(em);
     class_replaceMethod(rc, es, (IMP)G2I_Event, method_getTypeEncoding(em));
     gG2IOrigLayout = method_getImplementation(lm);

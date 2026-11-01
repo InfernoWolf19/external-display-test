@@ -217,7 +217,7 @@ __attribute__((constructor)) static void Y1_Setup(void) {
     @autoreleasepool {
         Class mw = NSClassFromString(@"SBMainWorkspace"), dh = NSClassFromString(@"SBDeviceApplicationSceneHandle");
         Class ext = NSClassFromString(@"SBSystemShellExternalDisplaySceneManager"), sm = NSClassFromString(@"SBSceneManager");
-        if (!mw || !dh || !ext || !sm) { BP_Log(@"[y1] NOT installed (class missing)"); return; }
+        if (!mw || !dh || !ext || !sm) { BP_Anomaly("notinstalled", @"[y1] NOT installed (class missing)"); return; }
         SEL rm = sel_registerName("_removeApplicationEntitiesFromWorkspace:error:");
         if (class_getInstanceMethod(mw, rm)) gY1OrigRemove = BPX_Replace(mw, "_removeApplicationEntitiesFromWorkspace:error:", (IMP)Y1_RemoveEntities);
         class_addMethod(mw, sel_registerName("_cleanupForRemovedAppEntity:"), (IMP)Y1_Cleanup, "v24@0:8@16");

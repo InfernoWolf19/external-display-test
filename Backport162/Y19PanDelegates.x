@@ -40,7 +40,7 @@ static BOOL Y19_RecvEvent(id self, SEL _cmd, id event) {
 }
 
 static BOOL Y19_IsIvar(id self, const char *ivarName, id gr) {
-    Ivar iv = class_getInstanceVariable(object_getClass(self), ivarName);
+    Ivar iv = BP_IvarLookup(object_getClass(self), ivarName);
     if (!BP_IvarIsObj(iv)) { Y17_GuardOnce("indirectgate", self, ivarName); return NO; }
     return gr && object_getIvar(self, iv) == gr;
 }

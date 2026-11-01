@@ -194,7 +194,7 @@ __attribute__((constructor)) static void Y3_Setup(void) {
             !class_getInstanceMethod(co, sel_registerName("switcherControllerForWindowScene:")) ||
             !class_getInstanceMethod(ls, sel_registerName("interfaceOrientationForLayoutRole:")) ||
             !class_getInstanceMethod(co, sel_registerName("_setContainerStatusBarHidden:animationDuration:usingAssertion:reason:windowScene:"))) {
-            BP_Log(@"[y3] NOT installed (class or selector missing)");
+            BP_Anomaly("notinstalled", @"[y3] NOT installed (class or selector missing)");
             return;
         }
         gY3OrigActive = BPX_Replace(co, "_activeDisplaySwitcherController", (IMP)Y3_Active);

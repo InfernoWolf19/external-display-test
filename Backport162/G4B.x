@@ -84,13 +84,13 @@ void BP4_NoteUserMirroringChoice(BOOL mirror);     // Group4Connect.m (saved mir
 // `type`, `count` ... are declared with different return types in Foundation: message explicitly when needed.
 static inline long long G4B_LL(id obj, SEL sel) { return ((long long (*)(id, SEL))objc_msgSend)(obj, sel); }
 static inline BOOL G4B_Bool(id obj, SEL sel) { return ((BOOL (*)(id, SEL))objc_msgSend)(obj, sel); }
-static inline id G4B_Obj(id obj, SEL sel) { return (obj && [obj respondsToSelector:sel]) ? ((id (*)(id, SEL))objc_msgSend)(obj, sel) : nil; }
-static inline id G4B_Obj1(id obj, SEL sel, id a) { return (obj && [obj respondsToSelector:sel]) ? ((id (*)(id, SEL, id))objc_msgSend)(obj, sel, a) : nil; }
+static inline id G4B_Obj(id obj, SEL sel) { if (!obj) return nil; if (![obj respondsToSelector:sel]) { BP_SelMiss("sel-g4b", obj, sel); return nil; } return ((id (*)(id, SEL))objc_msgSend)(obj, sel); }
+static inline id G4B_Obj1(id obj, SEL sel, id a) { if (!obj) return nil; if (![obj respondsToSelector:sel]) { BP_SelMiss("sel-g4b", obj, sel); return nil; } return ((id (*)(id, SEL, id))objc_msgSend)(obj, sel, a); }
 
 // Object ivar by name (never an offset). nil if absent or not an object.
 static id G4B_Ivar(id obj, const char *name) {
     if (!obj || !name) return nil;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return nil;
     const char *t = ivar_getTypeEncoding(iv);
     if (!t || t[0] != '@') return nil;
@@ -99,7 +99,7 @@ static id G4B_Ivar(id obj, const char *name) {
 // Scalar ivar (BOOL/int/long long...) by name through ivar_getOffset: returns NO if the ivar is missing.
 static BOOL G4B_IvarBytes(id obj, const char *name, void *out, size_t size) {
     if (!obj || !name || !out) return NO;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (!iv) return NO;
     memcpy(out, (const char *)(__bridge const void *)obj + ivar_getOffset(iv), size);
     return YES;
@@ -1152,7 +1152,7 @@ static NSHashTable *G4B_PointerScenes(id sceneManager, BOOL create) {
         %orig;
         return;
     }
-    Ivar liv = class_getInstanceVariable(object_getClass(self), "_lastPresentationUpdateDisplayConfiguration");
+    Ivar liv = BP_IvarLookup(object_getClass(self), "_lastPresentationUpdateDisplayConfiguration");
     id last = BP_ObjIvar(self, liv);
     BOOL changed = !(last && [last isEqual:cfg]);
     if (changed && liv) BP_SetObjIvar(self, liv, cfg);
@@ -1279,7 +1279,7 @@ static BOOL G4B_LPMInv(id m) {                               // lock-free read o
 }
 static BOOL G4B_LPMInvOnQueue(id m) { return [objc_getAssociatedObject(m, kLPMInv) boolValue]; }
 static void G4B_SetObjIvar(id obj, const char *name, id v) {
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     if (iv) BP_SetObjIvar(obj, iv, v);
 }
 static void G4B_OnLPMQueue(id m, dispatch_block_t b) {
@@ -2008,7 +2008,7 @@ static id G4B_hook_policy(id self, SEL cmd, id target) {
     G4B_PruneLocks(self);
     // window stealing (item 3)
     id stealWindow = nil;
-    Ivar addIv = class_getInstanceVariable(object_getClass(self), "_addingSpringBoardPreferredFocusWindowScene");
+    Ivar addIv = BP_IvarLookup(object_getClass(self), "_addingSpringBoardPreferredFocusWindowScene");
     BOOL adding = NO;
     BOOL haveAdd = addIv && ivar_getTypeEncoding(addIv) && ivar_getTypeEncoding(addIv)[0] == 'B';
     if (haveAdd) memcpy(&adding, (const char *)(__bridge const void *)self + ivar_getOffset(addIv), 1);
@@ -2053,7 +2053,7 @@ static void G4B_hook_apply(id self, SEL cmd, id policy) {
     if (self && G4B_On("focuslock")) {
         id wsm = G4B_WindowSceneManager();
         id active = G4B_ActiveUserScene(wsm);
-        Ivar iv = class_getInstanceVariable(object_getClass(self), "_springBoardFocusLockWindowScene");
+        Ivar iv = BP_IvarLookup(object_getClass(self), "_springBoardFocusLockWindowScene");
         if (active && iv && ivar_getOffset(iv) == 0xa0) {
             long long advice = [policy respondsToSelector:NSSelectorFromString(@"advicePolicy")] ? G4B_LL(policy, NSSelectorFromString(@"advicePolicy")) : 0;
             id lockScene = nil;
@@ -2113,11 +2113,11 @@ static void G4B_InstallFocusDirect(void) {
         const char *name = _dyld_get_image_name(i);
         if (name && strstr(name, "/SpringBoard.framework/SpringBoard")) { slide = _dyld_get_image_vmaddr_slide(i); found = YES; break; }
     }
-    if (!found) { BP_Log(@"focuslock: SpringBoard.framework image not found, not installing"); return; }
+    if (!found) { BP_Anomaly("notinstalled", @"focuslock: SpringBoard.framework image not found, not installing"); return; }
     Class k = NSClassFromString(@"SBWorkspaceKeyboardFocusController");
-    if (!class_getInstanceVariable(k, "_springBoardFocusLockAssertions") || !class_getInstanceVariable(k, "_springBoardWindowFocusStealingAssertions") ||
-        !class_getInstanceVariable(k, "_lastAcceptedArbiterSceneSuggestion") || !class_getInstanceVariable(k, "_addingSpringBoardPreferredFocusWindowScene") ||
-        !class_getInstanceVariable(k, "_springBoardFocusLockWindowScene")) {
+    if (!BP_IvarLookup(k, "_springBoardFocusLockAssertions") || !BP_IvarLookup(k, "_springBoardWindowFocusStealingAssertions") ||
+        !BP_IvarLookup(k, "_lastAcceptedArbiterSceneSuggestion") || !BP_IvarLookup(k, "_addingSpringBoardPreferredFocusWindowScene") ||
+        !BP_IvarLookup(k, "_springBoardFocusLockWindowScene")) {
         BP_Log(@"focuslock: an ivar of SBWorkspaceKeyboardFocusController is missing, not installing");
         return;
     }
@@ -2431,7 +2431,7 @@ static void G4B_FluidTeardown(id vc) {
     SEL inv = NSSelectorFromString(@"invalidate");
     static const char *const kInvalidatables[] = { "_stateCaptureInvalidatable", "_chamoisWindowingUIEnabledObserver", "_chamoisWindowingUIEverEnabledObserver", "_chamoisDefaultsObserver", "_wallpaperRequireAssertion" };
     for (size_t i = 0; i < sizeof kInvalidatables / sizeof kInvalidatables[0]; i++) {
-        Ivar iv = class_getInstanceVariable(object_getClass(vc), kInvalidatables[i]);
+        Ivar iv = BP_IvarLookup(object_getClass(vc), kInvalidatables[i]);
         if (!iv) continue;
         id o = object_getIvar(vc, iv);
         if ([o respondsToSelector:inv]) ((void (*)(id, SEL))objc_msgSend)(o, inv);

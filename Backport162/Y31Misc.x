@@ -43,7 +43,7 @@ static id Y31_CenterAttrs(id self, SEL _cmd, id element) {
     Method sm = owner ? class_getInstanceMethod(owner, _cmd) : NULL;
     id attrs = sm ? ((id (*)(id, SEL, id))method_getImplementation(sm))(self, _cmd, element) : nil;
     if (!BP_OnName("y24_centerpage")) return attrs;
-    Ivar morph = class_getInstanceVariable(object_getClass(self), "_isInAppMorphAnimation");
+    Ivar morph = BP_IvarLookup(object_getClass(self), "_isInAppMorphAnimation");
     if (!morph) { Y17_GuardOnce("centerpage", self, "_isInAppMorphAnimation"); return attrs; }
     if (*(BOOL *)((char *)(__bridge void *)self + ivar_getOffset(morph))) return attrs;
     id settings = objc_getAssociatedObject(self, &kY31Settings);
@@ -67,7 +67,7 @@ static IMP gY31OrigShelfScale;
 static double Y31_ShelfScale(id self, SEL _cmd, unsigned long long index) {
     if (!BP_OnName("y24_shelfscale")) return gY31OrigShelfScale ? ((double (*)(id, SEL, unsigned long long))gY31OrigShelfScale)(self, _cmd, index) : 1.0;
     Class own = NSClassFromString(@"SBShelfExpansionSwitcherModifier");
-    Ivar iStyle = class_getInstanceVariable(own, "_style"), iDismiss = class_getInstanceVariable(own, "_dismissalScale"), iExp = class_getInstanceVariable(own, "_bezierCurveScaleExponent");
+    Ivar iStyle = BP_IvarLookup(own, "_style"), iDismiss = BP_IvarLookup(own, "_dismissalScale"), iExp = BP_IvarLookup(own, "_bezierCurveScaleExponent");
     Method sm = own ? class_getInstanceMethod(class_getSuperclass(own), _cmd) : NULL;
     if (!iStyle || !iDismiss || !iExp || !sm || !BPY_Responds(self, "_presentationValueForIndex:")) {
         Y17_GuardOnce("shelfscale", self, "_style / _dismissalScale / _bezierCurveScaleExponent / super scaleForIndex: / _presentationValueForIndex:");

@@ -91,13 +91,13 @@ static inline void    G1C_SendVB(id o, SEL s, BOOL a)               { ((void (*)
 static inline void    G1C_SendVD(id o, SEL s, double a)             { ((void (*)(id, SEL, double))objc_msgSend)(o, s, a); }
 static inline id      G1C_Cls0(NSString *n, SEL s)                  { Class c = NSClassFromString(n); return (c && [c respondsToSelector:s]) ? G1B_Send0((id)c, s) : nil; }
 static inline long long G1C_SendLLId(id o, SEL s, id a)          { return ((long long (*)(id, SEL, id))objc_msgSend)(o, s, a); }
-static inline BOOL    G1C_Resp(id o, SEL s)                         { return o && [o respondsToSelector:s]; }
+static inline BOOL    G1C_Resp(id o, SEL s)                         { if (!o) return NO; if ([o respondsToSelector:s]) return YES; BP_SelMiss("sel-g1c", o, s); return NO; }
 static inline BOOL    G1C_IsKind(id o, NSString *clsName)           { Class c = NSClassFromString(clsName); return c && o && [o isKindOfClass:c]; }
 
 // object ivar of a system object by name (never an offset); returns nil when the ivar is absent
 static id G1C_IvarObj(id o, const char *name) {
     if (!o) return nil;
-    Ivar iv = class_getInstanceVariable(object_getClass(o), name);
+    Ivar iv = BP_IvarLookup(object_getClass(o), name);
     if (!iv) return nil;
     const char *enc = ivar_getTypeEncoding(iv);
     if (!enc || enc[0] != '@') return nil;
@@ -105,7 +105,7 @@ static id G1C_IvarObj(id o, const char *name) {
 }
 static BOOL G1C_IvarRaw(id o, const char *name, void *buf, size_t size, BOOL write) {
     if (!o) return NO;
-    Ivar iv = class_getInstanceVariable(object_getClass(o), name);
+    Ivar iv = BP_IvarLookup(object_getClass(o), name);
     if (!iv) return NO;
     uint8_t *p = (uint8_t *)(__bridge void *)o + ivar_getOffset(iv);
     if (write) memcpy(p, buf, size); else memcpy(buf, p, size);
@@ -953,9 +953,9 @@ static int G1C_Ids16CallerKind(void *ra0) {
     st.idsInSwitcher = sw;
     st.idsGeneration += 1;
     // keep the 16.0 state coherent: single ordered set, group cache cleared, 16.0 generation counter bumped
-    Ivar ivSet = class_getInstanceVariable(object_getClass(self), "_continuousExposeIdentifiers");
+    Ivar ivSet = BP_IvarLookup(object_getClass(self), "_continuousExposeIdentifiers");
     if (ivSet) BP_SetObjIvar(self, ivSet, [NSOrderedSet orderedSetWithArray:sw ?: @[]]);
-    Ivar ivMap = class_getInstanceVariable(object_getClass(self), "_appLayoutsForContinuousExposeIdentifiers");
+    Ivar ivMap = BP_IvarLookup(object_getClass(self), "_appLayoutsForContinuousExposeIdentifiers");
     if (ivMap) BP_SetObjIvar(self, ivMap, nil);
     long long g16 = 0;
     if (G1C_IvarRaw(self, "_continuousExposeIdentifiersChangedGenerationCount", &g16, sizeof g16, NO)) { g16 += 1; G1C_IvarRaw(self, "_continuousExposeIdentifiersChangedGenerationCount", &g16, sizeof g16, YES); }
@@ -1007,7 +1007,7 @@ static int G1C_Ids16CallerKind(void *ra0) {
     id appLayout = G1C_IvarObj(self, "_appLayout"), behind = G1C_IvarObj(self, "_behindAppLayout");
     id to = [event respondsToSelector:@selector(transitioningToAppLayout)] ? G1B_Send0(event, @selector(transitioningToAppLayout)) : nil;
     id toId = to ? G1B_Send0(to, @selector(continuousExposeIdentifier)) : nil, myId = appLayout ? G1B_Send0(appLayout, @selector(continuousExposeIdentifier)) : nil;
-    Ivar ivFront = class_getInstanceVariable(object_getClass(self), "_appLayoutToOrderFront");
+    Ivar ivFront = BP_IvarLookup(object_getClass(self), "_appLayoutToOrderFront");
     SEL complete = @selector(_completeIfNeededIgnoringHover:);
     BOOL doComplete = NO;
     if ((toId == myId) || (toId && [toId isEqual:myId])) {
@@ -1040,7 +1040,7 @@ static int G1C_Ids16CallerKind(void *ra0) {
         id front = G1C_IvarObj(self, "_appLayoutToOrderFront");
         id removed = G1B_Send0(event, @selector(appLayoutsWithRemovalContexts));
         if (front && BP_KIND("g1c-removal", removed, NSArray) && [removed containsObject:front]) {
-            Ivar iv = class_getInstanceVariable(object_getClass(self), "_appLayoutToOrderFront");
+            Ivar iv = BP_IvarLookup(object_getClass(self), "_appLayoutToOrderFront");
             if (iv) BP_SetObjIvar(self, iv, nil);
         }
     }
@@ -1233,13 +1233,13 @@ void G1C_RevealRecognizerEvent(id mgr, id gr) {
         SEL gtSel = sel_registerName("_gestureType");
         if (![t respondsToSelector:gtSel]) { P1_NoteMissing(t, gtSel); return; }
         if (((long long (*)(id, SEL))objc_msgSend)(t, gtSel) != 0xb) return;            // not a strip reveal transaction (another gesture owns the manager now)
-        Ivar done = class_getInstanceVariable(object_getClass(t), "_completedGestureWithTransitionRequest");
+        Ivar done = BP_IvarLookup(object_getClass(t), "_completedGestureWithTransitionRequest");
         if (!done) { BP_Anomaly("guard-g1c", @"GUARD(reveal txn) %p: ivar _completedGestureWithTransitionRequest missing on %@, watchdog does nothing", (__bridge void *)t, G1C_DbgCls(t)); return; }
         if (G1C_IvarBool(t, "_completedGestureWithTransitionRequest")) {
             if (BP_LogEnabled()) BP_Log(@"g1c: strip reveal transaction %p got its complete but is still running 3 s after the recognizer ended (animation / layout transaction in flight), watchdog leaves it", (__bridge void *)t);
             return;
         }
-        id vc = BP_ObjIvar(m, class_getInstanceVariable(object_getClass(m), "_switcherContentController"));
+        id vc = BP_ObjIvar(m, BP_IvarLookup(object_getClass(m), "_switcherContentController"));
         SEL perf = sel_registerName("_performModifierPerformTransitionResponse:");
         id initial = (gG1CRevealInitialMgr == m) ? gG1CRevealInitial : nil;
         id resp = initial ? G1C_NewPerformActivate(initial, YES) : nil;
@@ -2430,7 +2430,7 @@ static id G1C_NewWindowDragContentFor(id gid, id initial, id item) {
 
 static void G1C_SetIvarObj(id o, const char *name, id v) {
     if (!o) return;
-    Ivar iv = class_getInstanceVariable(object_getClass(o), name);
+    Ivar iv = BP_IvarLookup(object_getClass(o), name);
     if (iv) BP_SetObjIvar(o, iv, v);
 }
 static BOOL G1C_IsInvalidPoint(CGPoint p) { return p.x == DBL_MAX && p.y == DBL_MAX; }      // SBInvalidPoint = {DBL_MAX, DBL_MAX} (0x1c7a92f20)
@@ -2837,7 +2837,7 @@ static id G1C_Wdd_Init(id self, SEL _cmd, id item, id initial, id delegate) {
     if (!item || !initial || !delegate) return nil;                      // 16.2 NSAssert (SBContinuousExposeWindowDragDestinationSwitcherModifier.m lines 0x2c..0x2e)
     G1C_SetIvarObj(me, "_selectedDisplayItem", item);
     G1C_SetIvarObj(me, "_initialAppLayout", initial);
-    Ivar dv = class_getInstanceVariable(object_getClass(me), "_destinationDelegate");
+    Ivar dv = BP_IvarLookup(object_getClass(me), "_destinationDelegate");
     if (dv) G1C_storeWeak((uint8_t *)(__bridge void *)me + ivar_getOffset(dv), delegate);
     G1C_SetIvarLL(me, "_proposedDestination", 0);
     G1C_SetIvarObj(me, "_proposedAppLayout", initial);
@@ -6323,7 +6323,7 @@ typedef struct { unsigned long long a, b; } G1CRtTongue;
 // the device). They are small, so they are ported 1:1 (16.2 0x1c75209ec / 0x1c7521034 / 0x1c752236c; 16.0 0x1c609d860 / 0x1c609ddec / 0x1c609f440): all three run a block with the
 // Routing modifier's `_currentModifier` temporarily set to the routed modifier.
 static void G1C_RtSetCurrent(id routing, id m) {
-    Ivar iv = class_getInstanceVariable(object_getClass(routing), "_currentModifier");
+    Ivar iv = BP_IvarLookup(object_getClass(routing), "_currentModifier");
     if (iv) BP_SetObjIvar(routing, iv, m);
 }
 static void G1C_RtRoute(id routing, id modifier, void (^block)(void)) {                               // _SBRoutingSwitcherModifierRouteToModifier

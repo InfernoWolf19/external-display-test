@@ -10,33 +10,47 @@
 // object-returning, no argument / one object argument / two object arguments
 static inline id BPX_Obj0(id o, const char *sel) {
     SEL s = sel_registerName(sel);
-    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil;
+    if (!o) return nil;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return nil; }
+    return ((id (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline id BPX_Obj1(id o, const char *sel, id a) {
     SEL s = sel_registerName(sel);
-    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil;
+    if (!o) return nil;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return nil; }
+    return ((id (*)(id, SEL, id))objc_msgSend)(o, s, a);
 }
 static inline id BPX_Obj2(id o, const char *sel, id a, id b) {
     SEL s = sel_registerName(sel);
-    return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id, id))objc_msgSend)(o, s, a, b) : nil;
+    if (!o) return nil;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return nil; }
+    return ((id (*)(id, SEL, id, id))objc_msgSend)(o, s, a, b);
 }
 // BOOL / long long returns (never route a scalar through the id helpers: ARC would retain the bits)
 static inline BOOL BPX_Bool0(id o, const char *sel) {
     SEL s = sel_registerName(sel);
-    return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO;
+    if (!o) return NO;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return NO; }
+    return ((BOOL (*)(id, SEL))objc_msgSend)(o, s);
 }
 static inline long long BPX_LL0(id o, const char *sel) {
     SEL s = sel_registerName(sel);
-    return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL))objc_msgSend)(o, s) : 0;
+    if (!o) return 0;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return 0; }
+    return ((long long (*)(id, SEL))objc_msgSend)(o, s);
 }
 // void setters
 static inline void BPX_SetObj1(id o, const char *sel, id a) {
     SEL s = sel_registerName(sel);
-    if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(o, s, a);
+    if (!o) return;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return; }
+    ((void (*)(id, SEL, id))objc_msgSend)(o, s, a);
 }
 static inline void BPX_SetBool1(id o, const char *sel, BOOL a) {
     SEL s = sel_registerName(sel);
-    if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, BOOL))objc_msgSend)(o, s, a);
+    if (!o) return;
+    if (![o respondsToSelector:s]) { BP_SelMiss("sel-bpx", o, s); return; }
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(o, s, a);
 }
 
 // [SBApp windowSceneManager]: SBApp is the UIApplication of SpringBoard
@@ -52,7 +66,7 @@ static inline id BPX_MainWorkspace(void) {
 
 // object ivar by name (nil unless the ivar exists and is an object)
 static inline id BPX_IvarObj(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     return BP_ObjIvar(o, iv);
 }
 

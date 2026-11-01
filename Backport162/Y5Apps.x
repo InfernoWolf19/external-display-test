@@ -93,19 +93,19 @@ __attribute__((constructor)) static void Y5_Setup(void) {
     @autoreleasepool {
         Class vc = NSClassFromString(@"SBDeviceApplicationSceneViewController"), pool = NSClassFromString(@"SBStatusBarReusePool"), app = NSClassFromString(@"SBApplication");
         SEL cs = sel_registerName("_defaultLaunchingSizeForDisplayConfiguration:classicMode:");
-        if (!vc || !pool || !app) { BP_Log(@"[y5] NOT installed (class missing)"); return; }
+        if (!vc || !pool || !app) { BP_Anomaly("notinstalled", @"[y5] NOT installed (class missing)"); return; }
         if (class_getInstanceMethod(vc, sel_registerName("_createStatusBar")) && class_getInstanceMethod(vc, sel_registerName("_removeStatusBar")) &&
             class_getInstanceMethod(pool, sel_registerName("recycleStatusBar:")) && class_getInstanceMethod(pool, sel_registerName("getReusableStatusBarWithReason:withFrame:"))) {
             gY5Create = BPX_Replace(vc, "_createStatusBar", (IMP)Y5_CreateSB);
             gY5Remove = BPX_Replace(vc, "_removeStatusBar", (IMP)Y5_RemoveSB);
             gY5Recycle = BPX_Replace(pool, "recycleStatusBar:", (IMP)Y5_Recycle);
             gY5Reusable = BPX_Replace(pool, "getReusableStatusBarWithReason:withFrame:", (IMP)Y5_Reusable);
-        } else BP_Log(@"[y5] status bar pool part NOT installed (selector missing)");
+        } else BP_Anomaly("notinstalled", @"[y5] status bar pool part NOT installed (selector missing)");
         Method cm = class_getClassMethod(app, cs);
         if (cm) {
             gY5ClassicSize = method_getImplementation(cm);
             class_replaceMethod(object_getClass(app), cs, (IMP)Y5_ClassicSize, method_getTypeEncoding(cm));
-        } else BP_Log(@"[y5] classic size part NOT installed (class method missing)");
+        } else BP_Anomaly("notinstalled", @"[y5] classic size part NOT installed (class method missing)");
         BP_Log(@"[y5] installed (switches y5_sbpool, y5_classicsize)");
     }
 }

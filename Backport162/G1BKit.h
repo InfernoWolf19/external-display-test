@@ -93,7 +93,7 @@ static size_t G1B_AddMethods(Class cls, const G1BMethod *meths, size_t nMeths) {
 static BOOL G1B_HasSuper(Class sup, SEL sel) { return sup && class_getInstanceMethod(sup, sel) != NULL; }
 
 static ptrdiff_t G1B_IvarOffset(Class cls, const char *name) {
-    Ivar iv = cls ? class_getInstanceVariable(cls, name) : NULL;
+    Ivar iv = cls ? BP_IvarLookup(cls, name) : NULL;
     return iv ? ivar_getOffset(iv) : -1;
 }
 
@@ -116,14 +116,14 @@ static ptrdiff_t G1B_IvarOffset(Class cls, const char *name) {
 
 // Typed message helpers. Safe by construction: an object that does not respond to the selector yields nil / 0 / NO instead of an
 // "unrecognized selector" exception (a SpringBoard crash seen on 0.6.0 came from exactly such a send on a 16.0 event class).
-static inline id G1B_Send0(id o, SEL s)                       { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
-static inline id G1B_Send1(id o, SEL s, id a)                 { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
-static inline long long G1B_SendLL0(id o, SEL s)              { return (o && [o respondsToSelector:s]) ? ((long long (*)(id, SEL))objc_msgSend)(o, s) : 0; }
-static inline BOOL G1B_SendB0(id o, SEL s)                    { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
-static inline BOOL G1B_SendB1(id o, SEL s, id a)              { return (o && [o respondsToSelector:s]) ? ((BOOL (*)(id, SEL, id))objc_msgSend)(o, s, a) : NO; }
-static inline void G1B_SendV0(id o, SEL s)                   { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL))objc_msgSend)(o, s); }   // for VOID selectors (G1B_Send0 would retain the stale x0)
-static inline void G1B_SendV1(id o, SEL s, id a)              { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
-static inline void G1B_SendVLL(id o, SEL s, long long a)      { if (o && [o respondsToSelector:s]) ((void (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
+static inline id G1B_Send0(id o, SEL s) { if (!o) return nil; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return nil; } return ((id (*)(id, SEL))objc_msgSend)(o, s); }
+static inline id G1B_Send1(id o, SEL s, id a) { if (!o) return nil; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return nil; } return ((id (*)(id, SEL, id))objc_msgSend)(o, s, a); }
+static inline long long G1B_SendLL0(id o, SEL s) { if (!o) return 0; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return 0; } return ((long long (*)(id, SEL))objc_msgSend)(o, s); }
+static inline BOOL G1B_SendB0(id o, SEL s) { if (!o) return NO; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return NO; } return ((BOOL (*)(id, SEL))objc_msgSend)(o, s); }
+static inline BOOL G1B_SendB1(id o, SEL s, id a) { if (!o) return NO; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return NO; } return ((BOOL (*)(id, SEL, id))objc_msgSend)(o, s, a); }
+static inline void G1B_SendV0(id o, SEL s)                   { if (!o) return; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return; } ((void (*)(id, SEL))objc_msgSend)(o, s); }   // for VOID selectors (G1B_Send0 would retain the stale x0)
+static inline void G1B_SendV1(id o, SEL s, id a)              { if (!o) return; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return; } ((void (*)(id, SEL, id))objc_msgSend)(o, s, a); }
+static inline void G1B_SendVLL(id o, SEL s, long long a)      { if (!o) return; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return; } ((void (*)(id, SEL, long long))objc_msgSend)(o, s, a); }
 
 // SBAppendSwitcherModifierResponse(new, existing): the C helper of the 16.0 SpringBoard binary (_SBAppendSwitcherModifierResponse 0x1c62a07b4). 16.2 itself also
 // calls +[SBSwitcherModifierEventResponse responseByAppendingResponse:toResponse:] (present in 16.0, e.g. 16.2 SBWindowDeleteSwitcherModifier -transitionDidEnd
@@ -145,7 +145,7 @@ static BOOL G1B_HaveAppend(void) {
 }
 
 
-static double G1B_Dbl0(id o, SEL s) { return (o && [o respondsToSelector:s]) ? ((double (*)(id, SEL))objc_msgSend)(o, s) : 0.0; }
+static double G1B_Dbl0(id o, SEL s) { if (!o) return 0.0; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1b", o, s); return 0.0; } return ((double (*)(id, SEL))objc_msgSend)(o, s); }
 
 static id G1B_NewUpdateLayoutResponse(unsigned long long options, long long mode) {
     Class c = NSClassFromString(@"SBUpdateLayoutSwitcherEventResponse");

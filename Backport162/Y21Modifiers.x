@@ -41,7 +41,7 @@ static Class gY21Super;
 static const char kY21Radii = 0;
 static IMP gY21OrigDecline, gY21OrigCommit, gY21OrigResize;
 
-static id Y21_Ivar(id me, const char *name) { return BP_ObjIvar(me, class_getInstanceVariable(object_getClass(me), name)); }
+static id Y21_Ivar(id me, const char *name) { return BP_ObjIvar(me, BP_IvarLookup(object_getClass(me), name)); }
 static BOOL Y21_Chamois(id me) { return BPX_Bool0(me, "isChamoisWindowingUIEnabled"); }
 static BOOL Y21_On(void) { return BP_OnName("y17_centerwindow"); }
 
@@ -121,7 +121,7 @@ static id Y21_WillBegin(id me, SEL _cmd, IMP orig) {
         return r;
     }
     id override = G1B_INIT(id)([oc alloc], oi, layouts);
-    Ivar ivFrame = class_getInstanceVariable(object_getClass(me), "_initialFrame");
+    Ivar ivFrame = BP_IvarLookup(object_getClass(me), "_initialFrame");
     unsigned long long index = idx;
     ((void (*)(id, SEL, id, void (^)(void)))objc_msgSend)(me, @selector(performTransactionWithTemporaryChildModifier:usingBlock:), override, ^{
         Y21Rect f = G1B_SUPER(Y21Rect, gY21Super, me, @selector(frameForIndex:), (struct objc_super *, SEL, unsigned long long), index);
@@ -214,7 +214,7 @@ __attribute__((constructor)) static void Y21_Setup(void) {
             n++;
         } else BP_Anomaly("centerwindow", @"[y21] GUARD(centerwindow) SBWindowDecline/CommitSwitcherModifier missing or with different super classes: not installed");
         Class rs = NSClassFromString(@"SBItemResizeGestureSwitcherModifier");
-        if (rs && class_getInstanceMethod(rs, sel_registerName("_anyItemExceedsWidthThresholdToHideStrip")) && class_getInstanceVariable(rs, "_currentAppLayout")) {
+        if (rs && class_getInstanceMethod(rs, sel_registerName("_anyItemExceedsWidthThresholdToHideStrip")) && BP_IvarLookup(rs, "_currentAppLayout")) {
             gY21OrigResize = BPX_Replace(rs, "_anyItemExceedsWidthThresholdToHideStrip", (IMP)Y21_AnyExceeds);
             n++;
         } else BP_Anomaly("resizestrip", @"[y21] GUARD(resizestrip) SBItemResizeGestureSwitcherModifier _anyItemExceedsWidthThresholdToHideStrip or _currentAppLayout missing: not installed");

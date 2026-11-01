@@ -55,8 +55,8 @@ static void Y29_ApplyRoot(id self, SEL _cmd, void (^completion)(BOOL, BOOL)) {
     if (BP_OnName("y24_blurroot")) {
         static Y29_ZeroFn isZero; static dispatch_once_t once;
         dispatch_once(&once, ^{ isZero = (Y29_ZeroFn)dlsym(RTLD_DEFAULT, "BSFloatIsZero"); if (!isZero) BP_Anomaly("blurroot", @"[y29] GUARD(blurroot) BSFloatIsZero does not resolve: not applied"); });
-        Ivar mi = class_getInstanceVariable(object_getClass(self), "_rootModifier");
-        Ivar ci = class_getInstanceVariable(object_getClass(self), "_contentView");
+        Ivar mi = BP_IvarLookup(object_getClass(self), "_rootModifier");
+        Ivar ci = BP_IvarLookup(object_getClass(self), "_contentView");
         id modifier = BP_ObjIvar(self, mi), content = BP_ObjIvar(self, ci);
         if (isZero && modifier && content && BPY_Responds(modifier, "rootContentViewBlurRadius")) {
             double radius = BPY_SEND(double, (), modifier, "rootContentViewBlurRadius");

@@ -102,7 +102,7 @@ typedef struct { CGSize normalizedSize; CGRect referenceBounds; long long semant
 static BOOL G3C_On(void) { return BP_OnName("g3c"); }
 
 static id G3C_Ivar(id obj, const char *name) {
-    Ivar iv = obj ? class_getInstanceVariable(object_getClass(obj), name) : NULL;
+    Ivar iv = obj ? BP_IvarLookup(object_getClass(obj), name) : NULL;
     const char *enc = iv ? ivar_getTypeEncoding(iv) : NULL;
     return (enc && enc[0] == '@') ? object_getIvar(obj, iv) : nil;
 }
@@ -424,7 +424,7 @@ static BOOL G3C_EndPeekPick(id mgr, id ctx) {
 static id G3C_StateWith(id r, long long peek, long long mode) {
     if (![r respondsToSelector:@selector(_initWithLayoutState:)]) return r;
     id n = [[[r class] alloc] _initWithLayoutState:r];
-    Ivar ip = class_getInstanceVariable([n class], "_peekConfiguration"), im = class_getInstanceVariable([n class], "_unlockedEnvironmentMode");
+    Ivar ip = BP_IvarLookup([n class], "_peekConfiguration"), im = BP_IvarLookup([n class], "_unlockedEnvironmentMode");
     if (!n || !ip || !im) return r;
     *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(ip)) = peek;
     *(long long *)((uint8_t *)(__bridge void *)n + ivar_getOffset(im)) = mode;

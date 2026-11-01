@@ -43,7 +43,7 @@
 #define G2G_LOG(...) do { if (BP_LogEnabled()) BP_Log(__VA_ARGS__); } while (0)
 
 static id G2G_Ivar(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     return iv ? object_getIvar(o, iv) : nil;
 }
 static id G2G_Send0(id o, const char *sel) {
@@ -115,7 +115,7 @@ static void G2G_Register(void) {
         BP_Log(@"g2g: observer registered at the multi display user interaction coordinator (SpringBoard pid %d)", (int)getpid());
         return;
     }
-    if (++gG2GTries > 60) { BP_Log(@"g2g: coordinator / addPointerInteractionObserver: not found after %d tries, observer not registered", gG2GTries); return; }
+    if (++gG2GTries > 60) { BP_Anomaly("notinstalled", @"g2g: coordinator / addPointerInteractionObserver: not found after %d tries, observer not registered", gG2GTries); return; }
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ G2G_Register(); });
 }
 
@@ -169,7 +169,7 @@ static void G2G_ClientState(id self, SEL _cmd, id controller) {
 static IMP G2G_Replace(Class c, const char *sel, IMP imp) {
     SEL s = sel_registerName(sel);
     Method m = class_getInstanceMethod(c, s);
-    if (!m) { BP_Log(@"g2g: -[%s %s] not found, trace not installed", class_getName(c), sel); return NULL; }
+    if (!m) { BP_Anomaly("notinstalled", @"g2g: -[%s %s] not found, trace not installed", class_getName(c), sel); return NULL; }
     IMP orig = method_getImplementation(m);
     class_replaceMethod(c, s, imp, method_getTypeEncoding(m));
     return orig;
@@ -184,7 +184,7 @@ void G2G_Setup(void) {
         gG2GOrigApply = G2G_Replace(core, "applyStyle:forRegion:effectSourceHandler:completion:", (IMP)G2G_Apply);
         gG2GOrigState = G2G_Replace(core, "pointerClientControllerClientInteractionStateDidChange:", (IMP)G2G_ClientState);
     } else {
-        BP_Log(@"g2g: _UIPointerArbiterCore_iOS not found, arbiter trace not installed");
+        BP_Anomaly("notinstalled", @"g2g: _UIPointerArbiterCore_iOS not found, arbiter trace not installed");
     }
     if (!gG2GOrigApply || !gG2GOrigSet || !gG2GOrigExit) BP_Log(@"g2g: arbiter methods missing (exit %p set %p apply %p): stale enter filter cannot work", gG2GOrigExit, gG2GOrigSet, gG2GOrigApply);
     Class oc = objc_allocateClassPair([NSObject class], "BPG2GPointerObserver", 0);

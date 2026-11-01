@@ -120,7 +120,7 @@ static id X3_ExtendedPolicyPrefs(id self, SEL _cmd, id controller) {
     SEL sLs = sel_registerName("logicalScaleForDisplayScale:");
     double logical = [map respondsToSelector:sLs] ? ((double (*)(id, SEL, long long))objc_msgSend)(map, sLs, BPX_LL0(ms, "scale")) : 1.0;
     double contents = 1.0;
-    Ivar cs = class_getInstanceVariable(object_getClass(self), "_contentScale");
+    Ivar cs = BP_IvarLookup(object_getClass(self), "_contentScale");
     if (cs) memcpy(&contents, (const char *)(__bridge const void *)self + ivar_getOffset(cs), sizeof contents);
     return [[BPSceneHostingDisplayPreferences alloc] initWithDisplayConfigurationRequest:req logicalScale:CGSizeMake(logical, logical) contentsScale:contents keepOtherModes:NO];
 }
@@ -268,7 +268,7 @@ static void X3_CtlTransform(id self, SEL _cmd, id config, id builder) {
 static IMP gX3OrigNIFactory;
 static void X3_BuilderSetCloningSupported(id self, SEL _cmd, BOOL supported) {
     if (!supported) { ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("setCloningNotSupported")); return; }
-    Ivar lk = class_getInstanceVariable(object_getClass(self), "_lock"), nc = class_getInstanceVariable(object_getClass(self), "_lock_noCloning");
+    Ivar lk = BP_IvarLookup(object_getClass(self), "_lock"), nc = BP_IvarLookup(object_getClass(self), "_lock_noCloning");
     if (!lk || !nc) return;
     os_unfair_lock_t l = (os_unfair_lock_t)((char *)(__bridge void *)self + ivar_getOffset(lk));
     os_unfair_lock_lock(l);
@@ -294,7 +294,7 @@ void X3_Setup(void) {
     const char *kMode = "_preferredModeForDisplayForTargetCADisplay:", *kTr = "displayController:transformDisplayConfiguration:withBuilder:", *kLs = "_preferredLogicalScale";
     BOOL ok = pol && ctl && class_getInstanceMethod(pol, sel_registerName(kMode)) && class_getInstanceMethod(pol, sel_registerName(kTr)) && class_getInstanceMethod(ctl, sel_registerName(kLs))
            && NSClassFromString(@"CADisplayModeCriteria");
-    if (!ok) { BP_Log(@"[x3] monitor mode choice NOT installed (class or selector missing)"); return; }
+    if (!ok) { BP_Anomaly("notinstalled", @"[x3] monitor mode choice NOT installed (class or selector missing)"); return; }
     gX3OrigPreferredMode = BPX_Replace(pol, kMode, (IMP)X3_PreferredMode);
     gX3OrigTransform = BPX_Replace(pol, kTr, (IMP)X3_Transform);
     gX3OrigLogicalScale = BPX_Replace(ctl, kLs, (IMP)X3_LogicalScale);

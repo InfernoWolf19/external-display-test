@@ -53,7 +53,7 @@ static BOOL EDEDisabled(void) {
 // Object ivar by name; nil when the ivar is missing or not an object (BP.h: object_getIvar on a scalar returns raw bits that ARC would retain).
 static id EDEIvar(id obj, const char *name) {
     if (!obj) return nil;
-    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
+    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
     return BP_ObjIvar(obj, iv);
 }
 
@@ -123,7 +123,7 @@ static BOOL EDEInstall(id sb, BOOL early, BOOL quiet) {
         if (!provider) { EDELog(@"provider creation failed"); return YES; }
 
         gResolverFactory = resFact; gPolicyFactory = polFact; gProvider = provider;
-        Ivar iv = class_getInstanceVariable(object_getClass(sb), "_extendedDisplayControllerProvider");
+        Ivar iv = BP_IvarLookup(object_getClass(sb), "_extendedDisplayControllerProvider");
         if (iv) {
             object_setIvar(sb, iv, provider);
             // object_setIvar does not retain under ARC; balance the strong ivar we just filled.

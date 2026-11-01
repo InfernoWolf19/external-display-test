@@ -121,7 +121,7 @@ __attribute__((constructor)) static void Y4_Setup(void) {
     @autoreleasepool {
         Class ic = NSClassFromString(@"SBIconController"), ai = NSClassFromString(@"SBAlertItem"), rs = NSClassFromString(@"SBAlertItemPresenterWindowSceneResolver");
         Class hide = NSClassFromString(@"SBHideAppIconAlertItem"), del = NSClassFromString(@"SBDeleteNonAppIconAlertItem"), wid = NSClassFromString(@"SBRemoveWidgetAlertItem");
-        if (!ic || !ai || !rs || !hide || !del || !wid) { BP_Log(@"[y4] NOT installed (class missing)"); return; }
+        if (!ic || !ai || !rs || !hide || !del || !wid) { BP_Anomaly("notinstalled", @"[y4] NOT installed (class missing)"); return; }
         if (!class_getInstanceMethod(ai, sel_registerName("_setPreferredActivationWindowScene:"))) {
             class_addMethod(ai, sel_registerName("_setPreferredActivationWindowScene:"), (IMP)Y4_SetPref, "v24@0:8@16");
             class_addMethod(ai, sel_registerName("_preferredActivationWindowScene"), (IMP)Y4_GetPref, "@16@0:8");

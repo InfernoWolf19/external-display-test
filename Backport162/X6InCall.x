@@ -40,7 +40,7 @@
 #define X6_ON() BP_OnName("incallscene")
 
 static void X6_SetIvar(id o, const char *name, id v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     BP_SetObjIvar(o, iv, v);
 }
 
@@ -174,7 +174,7 @@ void X6_Setup(void) {
     SEL createS = sel_registerName("inCallPresentationManager:createPresentationSessionWithSceneHandle:");
     if (!sess || !mgr || !handle || !mw || !class_getInstanceMethod(mw, createS) || !class_getInstanceMethod(mgr, sel_registerName("_runZombieChecksForScene:"))
         || !class_getInstanceMethod(handle, sel_registerName("_enumerateObserversWithBlock:"))) {
-        BP_Log(@"[x6] in-call per scene NOT installed (class or selector missing)");
+        BP_Anomaly("notinstalled", @"[x6] in-call per scene NOT installed (class or selector missing)");
         return;
     }
     class_addMethod(sess, sel_registerName("_sceneManager"), (IMP)X6_SessionSceneManager, "@16@0:8");

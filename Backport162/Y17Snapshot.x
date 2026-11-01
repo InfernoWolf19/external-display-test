@@ -81,7 +81,7 @@ static id Y17_Rep(id self, SEL _cmd, id item) {
 static void Y17_Reload(id self, SEL _cmd, long long style) {
     if (gY17OrigReload) ((void (*)(id, SEL, long long))gY17OrigReload)(self, _cmd, style);
     if (!BP_OnName("y17_snapreload")) return;
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_controlQueue");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_controlQueue");
     id q = iv ? object_getIvar(self, iv) : nil;
     if (q) {
         dispatch_sync((dispatch_queue_t)q, ^{});

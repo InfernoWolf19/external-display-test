@@ -106,7 +106,7 @@ static BOOL Y25_ChamoisAvailable(void) {
     return fn ? fn() : YES;
 }
 static id Y25_GMWeak(id gm, const char *name) {
-    Ivar iv = gm ? class_getInstanceVariable(object_getClass(gm), name) : NULL;
+    Ivar iv = gm ? BP_IvarLookup(object_getClass(gm), name) : NULL;
     return BP_ObjIvar(gm, iv);                 // a weak ivar holds the raw pointer
 }
 static NSHashTable *Y25_Banners(id gm) { return objc_getAssociatedObject(gm, &kY25Banners); }

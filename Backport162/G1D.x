@@ -41,15 +41,15 @@ static void G1D_GM_Update(id gestureManager, BOOL enabled);           // section
 // ------------------------------------------------------------------------------------------------ helpers
 
 static id G1D_IvarObj(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     return BP_ObjIvar(o, iv);
 }
 static void G1D_SetIvarObj(id o, const char *name, id v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (iv) BP_SetObjIvar(o, iv, v);
 }
 static unsigned long long G1D_IvarULL(id o, const char *name) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (!iv) return 0;
     const uint8_t *p = (const uint8_t *)(__bridge void *)o + ivar_getOffset(iv);
     const char *e = ivar_getTypeEncoding(iv);                       // read exactly the ivar's size (an int ivar read as 8 bytes returned the neighbour's bits too)
@@ -60,7 +60,7 @@ static unsigned long long G1D_IvarULL(id o, const char *name) {
         default: return *(const unsigned long long *)p;
     }
 }
-static id G1D_Msg1(id o, SEL s, id a) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id))objc_msgSend)(o, s, a) : nil; }
+static id G1D_Msg1(id o, SEL s, id a) { if (!o) return nil; if (![o respondsToSelector:s]) { BP_SelMiss("sel-g1d", o, s); return nil; } return ((id (*)(id, SEL, id))objc_msgSend)(o, s, a); }
 static id G1D_Msg2(id o, SEL s, id a, id b) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, id, id))objc_msgSend)(o, s, a, b) : nil; }
 static id G1D_MsgLL(id o, SEL s, long long a) { return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL, long long))objc_msgSend)(o, s, a) : nil; }
 
@@ -941,7 +941,7 @@ static char kG1DStripTongue, kG1DTongueName, kG1DFailReqDone;
 enum { G1DStripTongueGestureType = 0x37, G1DStripIndirectGestureType = 0x34, G1DStripRevealFluidGestureType = 0xb };
 
 static id G1D_GMWeak(id gm, const char *name) {
-    Ivar iv = gm ? class_getInstanceVariable(object_getClass(gm), name) : NULL;
+    Ivar iv = gm ? BP_IvarLookup(object_getClass(gm), name) : NULL;
     return BP_ObjIvar(gm, iv);                    // a weak ivar holds the raw pointer, the runtime zeroes it on dealloc
 }
 static id G1D_GM_SC(id gm) { return G1D_GMWeak(gm, "_switcherController"); }
@@ -970,7 +970,7 @@ static BOOL G1D_TongueUsable(id gm) {
     if (!tc || ![tc instancesRespondToSelector:NSSelectorFromString(@"initWithDelegate:edge:type:windowScene:")]) return NO;
     static const char *needed[] = { "_liveWindowResizeGestureRecognizer", "_hoverGestureRecognizer", "_indirectRevealContinuousExposeStripsGestureRecognizer",
                                     "_indirectRevealContinuousExposeStripOverflowGestureRecognizer", "_dragRevealContinuousExposeStripOverflowGestureRecognizer" };
-    for (size_t i = 0; i < sizeof needed / sizeof needed[0]; i++) if (!class_getInstanceVariable(object_getClass(gm), needed[i])) return NO;
+    for (size_t i = 0; i < sizeof needed / sizeof needed[0]; i++) if (!BP_IvarLookup(object_getClass(gm), needed[i])) return NO;
     return YES;
 }
 
@@ -1804,11 +1804,11 @@ static BOOL G1D_WD_ShouldBegin(id gm, id gr) {
 
 // -[SBWindowDragGestureWorkspaceTransaction _beginWithGesture:] (16.2 0x1c733da30, 16.0 0x1c5eca434)
 static void G1D_SetIvarBool(id o, const char *name, BOOL v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (iv) *(BOOL *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) = v;
 }
 static void G1D_SetIvarPoint(id o, const char *name, CGPoint v) {
-    Ivar iv = o ? class_getInstanceVariable(object_getClass(o), name) : NULL;
+    Ivar iv = o ? BP_IvarLookup(object_getClass(o), name) : NULL;
     if (iv) *(CGPoint *)((uint8_t *)(__bridge void *)o + ivar_getOffset(iv)) = v;
 }
 static void G1D_WD_Begin(id txn, id gesture, Class sup) {
@@ -2188,7 +2188,7 @@ static __thread __unsafe_unretained id tPipRestoreEntity;
     @try { %orig; } @finally { tPipRestoreEntity = saved; }
 }
 - (void)keyboardFocusController:(id)controller externalSceneDidAcquireFocus:(id)scene {
-    if (!G1D_ON("g1d_pipkeyboard") || !class_getInstanceVariable(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged")) {
+    if (!G1D_ON("g1d_pipkeyboard") || !BP_IvarLookup(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged")) {
         %orig;
         return;
     }
@@ -2197,7 +2197,7 @@ static __thread __unsafe_unretained id tPipRestoreEntity;
     if (!ws) return;                                                                  // 16.2 leaves the remembered mode alone
     id sc = G1B_Send0(ws, NSSelectorFromString(@"switcherController"));
     if (!sc) NSLog(@"expected a switcherController!");
-    Ivar iv = class_getInstanceVariable(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged");
+    Ivar iv = BP_IvarLookup(object_getClass(self), "_unlockedEnvironmentModeWhenKeyboardFocusChanged");
     *(long long *)((uint8_t *)(__bridge void *)self + ivar_getOffset(iv)) = G1B_SendLL0(sc, NSSelectorFromString(@"unlockedEnvironmentMode"));
 }
 %end
