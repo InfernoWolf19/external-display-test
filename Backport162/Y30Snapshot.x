@@ -67,7 +67,14 @@ static CGRect Y30_ImageFrame(id self, SEL _cmd, id entry) {
             }
         }
     }
-    return gY30OrigFrame ? ((CGRect (*)(id, SEL, id))gY30OrigFrame)(self, _cmd, entry) : CGRectZero;
+    CGRect f = gY30OrigFrame ? ((CGRect (*)(id, SEL, id))gY30OrigFrame)(self, _cmd, entry) : CGRectZero;
+    if (BP_LogEnabled()) {       // diagnostic only (Backport162.debug): the size the card gives its snapshot vs the cell it sits in; a tiny card shows frame << bounds of the reusable snapshot view
+        CGRect b = BPY_SEND(CGRect, (), self, "bounds");
+        id sv = Y17_Obj0("snapdiag", self, "superview");
+        CGRect sb = sv ? BPY_SEND(CGRect, (), sv, "bounds") : CGRectZero;
+        BP_Log(@"[y30] snapshot frame %p: image frame size %.1fx%.1f, view bounds %.1fx%.1f, superview bounds %.1fx%.1f (ratio %.2f), flags chamois %d", (__bridge void *)self, f.size.width, f.size.height, b.size.width, b.size.height, sb.size.width, sb.size.height, b.size.width > 0 ? f.size.width / b.size.width : 0.0, (int)Y30_BoolIvar(self, "_isChamoisWindowingEnabled"));
+    }
+    return f;
 }
 
 // 16.2 -setImage: also sends sizeToFit to the image view; 16.0 -layoutSubviews sizes it to fit (non stretch) right after the -setNeedsLayout of 16.0 -setImage:, so the final state is the same.
