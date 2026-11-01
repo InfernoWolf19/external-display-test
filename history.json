@@ -1,12 +1,4 @@
 {
- "0.7.9+256.3a899d0": {
-  "date": "2026-10-24T23:33:00Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+256.3a899d0_iphoneos-arm64.deb",
-  "run": 256,
-  "sha": "3a899d0beabf184e082cadf59b802f256000b62d",
-  "subject": "Docs: focuslock test recipe steps 3 and 4 rewritten as two plain cases",
-  "version": "0.7.9+256.3a899d0"
- },
  "0.7.9+257.6661b44": {
   "date": "2026-10-24T23:36:58Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+257.6661b44_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "a905444cb9490a531224941923767ccc83d986bb",
   "subject": "Y29Blur: the root blur early out delivers its completion on the next main queue turn like the 16.0 body (it never completes synchronously)",
   "version": "0.7.9+316.a905444"
+ },
+ "0.7.9+317.d8344ff": {
+  "date": "2026-11-01T00:35:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+317.d8344ff_iphoneos-arm64.deb",
+  "run": 317,
+  "sha": "d8344ff80caa6d632d7f8bfb9c925d2165aa3be2",
+  "subject": "BOOTGUARD: tiny pure C loader is the only SpringBoard dylib; the tweak is Backport162Core.dylib, skipped for one launch when the previous launch never finished booting",
+  "version": "0.7.9+317.d8344ff"
  }
 }
