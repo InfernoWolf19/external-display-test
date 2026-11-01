@@ -1,12 +1,4 @@
 {
- "0.7.9+263.4e79217": {
-  "date": "2026-10-25T15:22:41Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+263.4e79217_iphoneos-arm64.deb",
-  "run": 263,
-  "sha": "4e7921730ff7eaa09b41c0363135cf504f746c7a",
-  "subject": "Y8Layout / Y9Misc: external display layout state default orientation, no home affordance inset under Stage Manager, Spotlight open frame, layout state equality per display (y8_*); Control Center rules per scene, transient overlay keyboard focus (y9_*); DELTA-SWEEP verdicts for layout, overlay, banner, control center rows",
-  "version": "0.7.9+263.4e79217"
- },
  "0.7.9+264.d586333": {
   "date": "2026-10-25T15:26:13Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+264.d586333_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "3d473a5ff184536e6ad8dac6e94f9e210c2fedcd",
   "subject": "Audit class A + card path: type gates announce a rejected non-nil value (BP_KIND), card scale answers follow the same predicate as the pile frames, every pile fallback to the 16.0 scaled-frame body is announced",
   "version": "0.7.9+323.3d473a5"
+ },
+ "0.7.9+324.8becfff": {
+  "date": "2026-11-01T02:27:38Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+324.8becfff_iphoneos-arm64.deb",
+  "run": 324,
+  "sha": "8becfffe5ddf67ef8f536ca81e9e665066e65faa",
+  "subject": "Audit class D: every thread-local armed override (62 wrappers: Y3 active controller, Y2, Y10..Y17, Y25, Y31, X2/X5/X7/X9, G1D, G3B, G4B focus lock, P1 re-entrancy depth, ...) is restored in @finally, so an exception of the stock body cannot leave it armed",
+  "version": "0.7.9+324.8becfff"
  }
 }
