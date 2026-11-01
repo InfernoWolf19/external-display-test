@@ -94,11 +94,15 @@ def run_emu(c, names, seed, args, case_mem):
     uc.hook_add(UC_HOOK_MEM_READ_UNMAPPED | UC_HOOK_MEM_WRITE_UNMAPPED | UC_HOOK_MEM_FETCH_UNMAPPED, unm)
     uc.reg_write(UC_ARM64_REG_SP, SP0_EMU); uc.reg_write(UC_ARM64_REG_X30, 0xdead0000)
     xi = 0; di = 0
+    soff = 0
     for kind, v in zip(c.sig, args):
         if kind == 'x':
             uc.reg_write(UC_ARM64_REG_X0 + xi, v); xi += 1
-        else:
+        elif kind == 'd':
             uc.reg_write(UC_ARM64_REG_D0 + di, d2i(v)); di += 1
+        else:
+            sz = {'b': 1, 'w': 4, 'q': 8}[kind]; soff = (soff + sz - 1) // sz * sz
+            uc.mem_write(SP0_EMU + soff, int(v & ((1 << (8 * sz)) - 1)).to_bytes(sz, 'little')); soff += sz
     tr = Trace(); idx = [0]
     ctx = a2c.Ctx(c.ver)
     def N(v):
@@ -123,12 +127,14 @@ def run_emu(c, names, seed, args, case_mem):
         if n.lstrip('_') in ('objc_claimAutoreleasedReturnValue', 'objc_retainAutoreleasedReturnValue', 'objc_autoreleaseReturnValue', 'objc_retain', 'objc_autorelease', 'objc_unsafeClaimAutoreleasedReturnValue', 'objc_retainAutorelease', 'objc_retainAutoreleaseReturnValue'): return
         if n.lstrip('_') == 'objc_release': return
         if n.lstrip('_') in ('objc_storeStrong', 'objc_enumerationMutation'):
-            tr.calls.append((norm_name(n), tuple(N(v) for v in x[:2]), ())); return
+            tr.calls.append((norm_name(n), tuple(N(v) for v in x[:2]), (), ())); return
         d = [uc.reg_read(UC_ARM64_REG_D0 + i) for i in range(8)]
         kind = c.kinds_at.get(callout.pc, 'x')
         if n.startswith('msgSend:'): uc.reg_write(UC_ARM64_REG_X1, 0x72000000); x[1] = 0x72000000
         xs_ = tuple(N(v) for v in x)
-        tr.calls.append((norm_name(n), xs_, tuple(d)))
+        sp_ = uc.reg_read(UC_ARM64_REG_SP)
+        stk_ = tuple(N(struct.unpack('<Q', bytes(uc.mem_read(sp_ + 8 * j, 8)))[0]) for j in range(12))
+        tr.calls.append((norm_name(n), xs_, tuple(d), stk_))
         k = idx[0]; idx[0] += 1
         if n == 'msgSend:countByEnumeratingWithState:objects:count:':
             st = x[2]; first = struct.unpack('<Q', bytes(uc.mem_read(st, 8)))[0] == 0
@@ -222,10 +228,11 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
         nm = ('M:' + n) if isMsg else ('F:' + n.lstrip('_'))
         kind = kind_p.value.decode() if kind_p.value else 'x'
         if not isMsg and n.lstrip('_') in ('objc_enumerationMutation',):
-            tr.calls.append((nm, tuple(N(X[i]) for i in range(2)), ())); return
+            tr.calls.append((nm, tuple(N(X[i]) for i in range(2)), (), ())); return
         d = tuple(VR[i][0] for i in range(8))
         xs_ = tuple(N(X[i]) for i in range(8))
-        tr.calls.append((nm, xs_, d))
+        stk_ = tuple(N(struct.unpack('<Q', ctypes.string_at(X[31] + 8 * j, 8))[0]) for j in range(12))
+        tr.calls.append((nm, xs_, d, stk_))
         k = idx[0]; idx[0] += 1
         if isMsg and n == 'countByEnumeratingWithState:objects:count:':
             st = X[2]; first = struct.unpack('<Q', ctypes.string_at(st, 8))[0] == 0
@@ -244,15 +251,16 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
             for j in range(nd): VR[j][0] = d2i(ds[j]); VR[j][1] = 0
     cbo = CB(cb); ivo = IV(lambda n: ivmap[n.decode()])
     lib.lift_set(cbo, ivo)
-    xs = []; ds_ = []
+    xs = []; ds_ = []; sts = []
     for kind, v in zip(c.sig, args):
-        (xs if kind == 'x' else ds_).append(v)
+        (xs if kind == 'x' else (ds_ if kind == 'd' else sts)).append(v)
     # call run(self-derived args) : integer args as pointers into the buffers
     xs = [selfb if v == SELF_EMU else (objb + (v - OBJ_EMU) if OBJ_EMU <= v < OBJ_EMU + OBJ_SZ else v) for v in xs]
     xs += [0] * (8 - len(xs)); ds_ += [0.0] * (8 - len(ds_))
     lib.run.restype = ctypes.c_uint64
-    lib.run.argtypes = [ctypes.c_uint64] * 8 + [ctypes.c_double] * 8
-    r = lib.run(*xs, *ds_)
+    sts += [0] * (4 - len(sts))
+    lib.run.argtypes = [ctypes.c_uint64] * 8 + [ctypes.c_double] * 8 + [ctypes.c_uint64] * 4
+    r = lib.run(*xs, *ds_, *sts)
     tr.ret = (r, None, None)
     mem = bytes(selfbuf)
     tr.mem = [N(struct.unpack_from('<Q', mem, o)[0]) for o in range(0, SELF_SZ, 8)]
@@ -263,12 +271,16 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
 def main():
     ver, st, en, cname, sig, retk, cls, nseeds = sys.argv[1], int(sys.argv[2], 16), int(sys.argv[3], 16), sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], int(sys.argv[8])
     cls = None if cls == '-' else cls
-    L = a2c.Lift(ver, st, en, cname, sig, retk, {}, cls)
+    kinds_ = {}
+    if '--kinds' in sys.argv:
+        for kv in sys.argv[sys.argv.index('--kinds') + 1].split(','):
+            k_, v_ = kv.split('='); kinds_['msgSend:' + k_] = v_
+    L = a2c.Lift(ver, st, en, cname, sig, retk, kinds_, cls)
     head, fn = L.generate()
     a2c.save_memo()
     for w in L.stats['warn']: print('WARN', w)
     open(W + cname + '.tc.c', 'w').write('#include "liftest.h"\n' + head + '\n' + fn + '\nconst char *const *lift_dbg_strs = %s_strs; int lift_dbg_nstrs = (int)(sizeof(%s_strs) / sizeof(%s_strs[0])); const char *const *lift_dbg_cls = %s_cls; int lift_dbg_ncls = (int)(sizeof(%s_cls) / sizeof(%s_cls[0])); const char *const *lift_dbg_sels = %s_sels; int lift_dbg_nsels = (int)(sizeof(%s_sels) / sizeof(%s_sels[0]));\n' % (cname, cname, cname, cname, cname, cname, cname, cname, cname) + '''
-void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, double d0, double d1, double d2, double d3, double d4, double d5, double d6, double d7) {
+void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, double d0, double d1, double d2, double d3, double d4, double d5, double d6, double d7, uint64_t st0, uint64_t st1, uint64_t st2, uint64_t st3) {
     %s
 }
 ''' % build_call(cname, sig, retk))
@@ -302,6 +314,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
         args = []
         for kind in c.sig:
             if kind == 'd': args.append(r.choice(DVALS))
+            elif kind in ('b', 'w', 'q'): args.append(r.choice([0, 1]))
             else: args.append(r.choice([SELF_EMU, OBJ_EMU + 0x100 * r.randrange(1, 40), 0, 1]))
         args[0:1] = [SELF_EMU] if c.sig and c.sig[0] == 'x' else args[0:1]
         te, Ne = run_emu(c, names, seed, args, (selfw, objw))
@@ -315,7 +328,9 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
                 print('MISMATCH seed', seed, 'emu err', te.err)
                 for i, (a, b) in enumerate(zip(te.calls, tl.calls)):
                     if a != b: print(' first call difference at', i, '\n  emu ', a, '\n  lift', b); break
-                else: print(' calls', len(te.calls), len(tl.calls), 'mem equal', te.mem == tl.mem, 'omem equal', te.omem == tl.omem, 'ret', Ne(te.ret[0]), Nl(tl.ret[0]))
+                else:
+                    print(' emu tail', [c_[0] for c_ in te.calls][-3:], 'lift tail', [c_[0] for c_ in tl.calls][-3:])
+                    print(' calls', len(te.calls), len(tl.calls), 'mem equal', te.mem == tl.mem, 'omem equal', te.omem == tl.omem, 'ret', Ne(te.ret[0]), Nl(tl.ret[0]))
                 for i_, (a_, b_) in enumerate(zip(te.mem, tl.mem)):
                     if a_ != b_: print('  mem word', hex(i_ * 8), 'emu', a_, 'lift', b_); break
     print('%s: seeds %d, mismatches %d, total calls compared %d, distinct call sequences %d' % (cname, nseeds, bad, ncalls, len(paths)))
@@ -325,10 +340,11 @@ def build_call(cname, sig, retk, ret=False):
     xs = ['a%d' % i for i in range(sum(1 for k in sg if k == 'x'))]
     ds = ['d%d' % i for i in range(sum(1 for k in sg if k == 'd'))]
     # ABI order of the lifted function parameters = order in sig
-    args = []; xi = 0; di = 0
+    args = []; xi = 0; di = 0; si = 0
     for k in sg:
         if k == 'x': args.append('a%d' % xi); xi += 1
-        else: args.append('d%d' % di); di += 1
+        elif k == 'd': args.append('d%d' % di); di += 1
+        else: args.append('(%s)st%d' % ({'b': 'uint8_t', 'w': 'uint32_t', 'q': 'uint64_t'}[k], si)); si += 1
     call = '%s(%s)' % (cname, ', '.join(args))
     if retk == 'x': return ('return %s;' % call) if ret else '(void)%s;' % call
     if retk == 'v': return ('%s; return 0;' % call) if ret else '%s;' % call

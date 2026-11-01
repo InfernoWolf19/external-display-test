@@ -96,6 +96,43 @@ def ivar_tables(ver):
             if m2: tab[cur]['iv'].append((m2.group(2), int(m2.group(4), 16), int(m2.group(3), 16)))
     _IVT[ver] = tab; return tab
 
+
+_RET = {}
+def ret_kinds(ver):
+    """selector -> set of return kinds (x v d size rect STRUCT..) from the ObjC dumps of that build"""
+    if ver in _RET: return _RET[ver]
+    out = {}
+    names = ['sb160n_objc.txt', 'UIKitCore160n.txt'] if ver == '160' else ['sb162_objc.txt', 'UIKitCore162.txt']
+    for fnm in names:
+        if not os.path.exists(S + fnm): continue
+        for l in open(S + fnm, errors='replace'):
+            if l.startswith('- (') or l.startswith('+ ('):
+                d = 0; k = 2
+                while k < len(l):
+                    if l[k] == '(': d += 1
+                    elif l[k] == ')':
+                        d -= 1
+                        if d == 0: break
+                    k += 1
+                t = l[3:k].strip()
+                rest = l[k + 1:]
+                for _ in range(4): rest = re.sub(r'\{[^{}]*\}', '', rest)
+                b2 = re.sub(r'\((?:[^()]|\([^()]*\))*\)', '', rest.split(';')[0])
+                parts = re.findall(r'(\w+):', b2)
+                sel = (':'.join(parts) + ':') if parts else (b2.split()[0] if b2.split() else None)
+                if not sel: continue
+                if t.startswith('struct CGRect'): kd = 'rect'
+                elif t.startswith('struct CGSize'): kd = 'size'
+                elif t in ('double', 'CGFloat'): kd = 'd'
+                elif t == 'void': kd = 'v'
+                elif t.startswith('struct') or t.startswith('union'): kd = 'STRUCT ' + t[:40]
+                else: kd = 'x'
+                out.setdefault(sel, set()).add(kd)
+    _RET[ver] = out; return out
+FN_KINDS = {'BSRectWithSize': 'rect', 'BSSizeSwap': 'size', 'BSSizeRoundForScale': 'size', 'SBUICScaledRectWithOffsets': 'rect', 'BSRectWithSizeCenteredInRect': 'rect',
+            'BSRectRoundForScale': 'rect', 'BSSizeScale': 'size', 'UIRectGetCenter': 'size', 'BSPointRoundForScale': 'size', 'CGRectIntegral': 'rect',
+            'CGRectInset': 'rect', 'CGRectOffset': 'rect', 'UIEdgeInsetsInsetRect': 'rect', 'CGRectUnion': 'rect', 'CGRectIntersection': 'rect', 'CGSizeApplyAffineTransform': 'size'}
+
 def rname(n):
     n = {'fp': 'x29', 'lr': 'x30'}.get(n, n)
     return n
@@ -110,7 +147,7 @@ class Lift:
         s.ins = list(md.disasm(code[start & 0xfff:(start & 0xfff) + (end - start)], start))
         assert len(s.ins) * 4 == end - start, (len(s.ins), (end - start) // 4)
         s.cval = {}   # reg -> const address
-        s.baked = set(); s.kinds_at = {}
+        s.baked = set(); s.kinds_at = {}; s.bakedsym = {}
         s.out = []
         s.globals = {}   # addr -> description
         s.stats = {'warn': []}
@@ -271,6 +308,8 @@ class Lift:
             return
         if mn == 'eor' and ops and nm(ops[0]) == 'x16' and len(ops) == 3 and nm(ops[1]) == 'x30': return
         if mn == 'tbz' and nm(ops[0]) == 'x16': return
+        if mn.startswith('pac') or mn.startswith('aut') and mn not in ('autibsp', 'autiasp'):
+            s.stats['warn'].append('BLOCK/PAC: %x %s %s is not executable in recompiled code (inspection only)' % (i.address, mn, i.op_str)); return
         if mn in ('retab', 'ret', 'retaa'):
             E('goto Lret;'); return
         # ----- moves / arithmetic
@@ -342,6 +381,19 @@ class Lift:
             if mn == 'tst': s.flags_logic('&', a, b, is64)
             else: s.flags_add_sub(mn == 'cmn', a, b, is64)
             return
+        if mn in ('ccmp', 'ccmn', 'fccmp', 'fccmpe'):
+            nz = ops[2].imm; c = s.cond(i.cc)
+            setf = 'N = %d; Z = %d; C = %d; V = %d;' % ((nz >> 3) & 1, (nz >> 2) & 1, (nz >> 1) & 1, nz & 1)
+            if mn.startswith('f'):
+                a = s.frd(nm(ops[0])); b = s.frd(nm(ops[1])) if ops[1].type == A.ARM64_OP_REG else '0.0'
+                E('if (%s) { FCMP(%s, %s); } else { %s }' % (c, a, b, setf)); return
+            a = s.rd(i, ops[0]); b = s.rd(i, ops[1]); is64 = nm(ops[0])[0] == 'x'
+            t = 'uint64_t' if is64 else 'uint32_t'; sh = 63 if is64 else 31
+            if mn == 'ccmp':
+                body = '%s a_ = (%s)(%s), b_ = (%s)(%s); %s r_ = a_ - b_; N = (r_ >> %d) & 1; Z = (r_ == 0); C = (a_ >= b_); V = (((a_ ^ b_) & (a_ ^ r_)) >> %d) & 1;' % (t, t, a, t, b, t, sh, sh)
+            else:
+                body = '%s a_ = (%s)(%s), b_ = (%s)(%s); %s r_ = a_ + b_; N = (r_ >> %d) & 1; Z = (r_ == 0); C = (r_ < a_); V = ((~(a_ ^ b_) & (a_ ^ r_)) >> %d) & 1;' % (t, t, a, t, b, t, sh, sh)
+            E('if (%s) { %s } else { %s }' % (c, body, setf)); return
         if mn in ('and', 'orr', 'eor', 'ands', 'bic', 'orn', 'eon', 'bics'):
             d = nm(ops[0])
             a = s.rd(i, ops[1]); b = s.rd(i, ops[2])
@@ -504,6 +556,9 @@ class Lift:
         if load and const_addr is not None and not pair and base in s.baked and sz in (1, 2, 4, 8) and r0[0] in 'xwd':
             data = s.ctx.read(const_addr, sz)
             v = int.from_bytes(data, 'little')
+            if sz == 8 and r0[0] == 'x' and (v >= (1 << 40) or 0x180000000 <= v < 0x200000000) and base in s.bakedsym:
+                sy, ta = s.bakedsym[base]
+                E('X[%d] = LD64((uint64_t)GSYM(%s_fns, %d) + %d); /* %s: pointer value, loaded at run time */' % (int(r0[1:]), s.cname, s.intern(s.fns, sy), const_addr - ta, sy)); s.kill(r0); return
             if mn in ('ldrsw', 'ldursw'): v = struct.unpack('<q', struct.pack('<i', v & 0xffffffff))[0] & 0xffffffffffffffff
             if r0[0] == 'd': E('VR[%d][0] = 0x%xull; VR[%d][1] = 0; /* baked const @%x */' % (int(r0[1:]), v, int(r0[1:]), const_addr))
             else: E(s.wr(i, r0, '0x%xull' % v) + ' /* baked const @%x */' % const_addr); s.kill(r0); s.baked.discard(r0)
@@ -539,7 +594,7 @@ class Lift:
                     if tsym.startswith('_OBJC_CLASS_$_'):
                         E('X[%d] = (uint64_t)CLS(%s_cls, %d);' % (int(r0[1:]), s.cname, s.intern(s.cls, tsym[len('_OBJC_CLASS_$_'):]))); s.kill(r0); return
                     if tsym and ('__TEXT' in tsec or '__const' in tsec or 'cstring' in tsec):
-                        s.cval[r0] = tgt; s.baked.add(r0)
+                        s.cval[r0] = tgt; s.baked.add(r0); s.bakedsym[r0] = (tsym, tgt)
                         E('X[%d] = 0x%xull; /* address of %s (immutable table, loads from it are baked) */' % (int(r0[1:]), tgt, tsym)); return
                     if tsym:
                         E('X[%d] = (uint64_t)GSYM(%s_fns, %d); /* %s */' % (int(r0[1:]), s.cname, s.intern(s.fns, tsym), tsym)); s.kill(r0); return
@@ -704,7 +759,17 @@ class Lift:
     def callkind(s, idx, name):
         """decide the return kind of the call at idx by scanning the code after it"""
         ins = s.ins
+        akey = name + '@%x' % ins[idx].address
+        if akey in s.kinds: return s.kinds[akey]
         if name in s.kinds: return s.kinds[name]
+        if name.startswith('msgSend:'):
+            ks = ret_kinds(s.ver).get(name[8:])
+            if ks and len(ks) == 1:
+                k0 = next(iter(ks))
+                if k0.startswith('STRUCT'): s.stats['warn'].append('call %s returns %s: indirect result (x8) is NOT modelled' % (name, k0))
+                return 'x' if k0.startswith('STRUCT') else k0
+            if ks and len(ks) > 1: raise Exception('AMBIGUOUS return kind of %s in the dumps %s (call at %x): give --kinds %s=<x|v|d|size|rect>' % (name, sorted(ks), ins[idx].address, name[8:]))
+        elif name.lstrip('_') in FN_KINDS: return FN_KINDS[name.lstrip('_')]
         d_used = -1; x_used = False; d_written = set(); x_written = set(); first = None
         for j in range(idx + 1, min(idx + 60, len(ins))):
             q = ins[j]
@@ -748,6 +813,25 @@ class Lift:
         if d_used >= 0: return {0: 'd', 1: 'size', 2: 'rect', 3: 'rect'}[d_used]
         return 'x'
 
+    def rtcall(s, nm):
+        """C statement for a call of an objc runtime helper / stack check, None for any other callee"""
+        m = re.match(r'objc_(retain|release)_x(\d+)$', nm.lstrip('_'))
+        if m:
+            fnm = m.group(1); r = int(m.group(2))
+            return ('X[0] = (uint64_t)RT_%s((void *)X[%d]);' if fnm == 'retain' else 'RT_%s((void *)X[%d]);') % (fnm.upper(), r)
+        rt = {'objc_claimAutoreleasedReturnValue': 'X[0] = (uint64_t)RT_CLAIM((void *)X[0]);',
+              'objc_retainAutoreleasedReturnValue': 'X[0] = (uint64_t)RT_CLAIM((void *)X[0]);',
+              'objc_unsafeClaimAutoreleasedReturnValue': 'X[0] = (uint64_t)RT_UNSAFECLAIM((void *)X[0]);',
+              'objc_retain': 'X[0] = (uint64_t)RT_RETAIN((void *)X[0]);',
+              'objc_release': 'RT_RELEASE((void *)X[0]);',
+              'objc_autorelease': 'X[0] = (uint64_t)RT_AUTORELEASE((void *)X[0]);',
+              'objc_retainAutorelease': 'X[0] = (uint64_t)RT_RETAINAUTORELEASE((void *)X[0]);',
+              'objc_autoreleaseReturnValue': 'X[0] = (uint64_t)RT_AUTORELEASERV((void *)X[0]);',
+              'objc_retainAutoreleaseReturnValue': 'X[0] = (uint64_t)RT_RETAINAUTORELEASERV((void *)X[0]);',
+              'objc_storeStrong': 'RT_STORESTRONG((void **)X[0], (void *)X[1]);',
+              'objc_enumerationMutation': 'RT_ENUMMUT((void *)X[0]);',
+              'stack_chk_fail': 'STACKFAIL();'}
+        return rt.get(nm.lstrip('_'))
     def call(s, idx, i, t):
         E = s.emit
         nm = s.ctx.stubname(t)
@@ -762,26 +846,9 @@ class Lift:
             kind = s.callkind(idx, nm)
             E('X[1] = (uint64_t)SEL(%s_sels, %d);' % (s.cname, s.intern(s.sels, sel)))
             E('CALLMSG(%s);' % kind); s.note_call(i, nm, kind); return
-        base = nm.lstrip('_')
-        # objc runtime helpers
-        m = re.match(r'objc_(retain|release)_x(\d+)$', nm.lstrip('_'))
-        if m:
-            fnm = m.group(1); r = int(m.group(2))
-            E(('X[0] = (uint64_t)RT_%s((void *)X[%d]);' if fnm == 'retain' else 'RT_%s((void *)X[%d]);') % (fnm.upper(), r)); return
-        rt = {'objc_claimAutoreleasedReturnValue': 'X[0] = (uint64_t)RT_CLAIM((void *)X[0]);',
-              'objc_retainAutoreleasedReturnValue': 'X[0] = (uint64_t)RT_CLAIM((void *)X[0]);',
-              'objc_unsafeClaimAutoreleasedReturnValue': 'X[0] = (uint64_t)RT_UNSAFECLAIM((void *)X[0]);',
-              'objc_retain': 'X[0] = (uint64_t)RT_RETAIN((void *)X[0]);',
-              'objc_release': 'RT_RELEASE((void *)X[0]);',
-              'objc_autorelease': 'X[0] = (uint64_t)RT_AUTORELEASE((void *)X[0]);',
-              'objc_retainAutorelease': 'X[0] = (uint64_t)RT_RETAINAUTORELEASE((void *)X[0]);',
-              'objc_autoreleaseReturnValue': 'X[0] = (uint64_t)RT_AUTORELEASERV((void *)X[0]);',
-              'objc_retainAutoreleaseReturnValue': 'X[0] = (uint64_t)RT_RETAINAUTORELEASERV((void *)X[0]);',
-              'objc_storeStrong': 'RT_STORESTRONG((void **)X[0], (void *)X[1]);',
-              'objc_enumerationMutation': 'RT_ENUMMUT((void *)X[0]);',
-              '___stack_chk_fail': 'STACKFAIL();'}
-        if nm.lstrip('_') in rt or nm in rt:
-            E(rt.get(nm) or rt[nm.lstrip('_')]); return
+        rc = s.rtcall(nm)
+        if rc is not None:
+            E(rc); return
         kind = s.callkind(idx, nm)
         k = s.intern(s.fns, nm)
         E('CALLFN(%s_fns, %d, %s);' % (s.cname, k, kind)); s.note_call(i, nm, kind)
@@ -793,6 +860,9 @@ class Lift:
             s.emit('X[1] = (uint64_t)SEL(%s_sels, %d);' % (s.cname, s.intern(s.sels, nm[8:])))
             kind = s.retk
             s.emit('CALLMSG(%s); goto Lret;' % kind); return
+        rc = s.rtcall(nm)
+        if rc is not None:
+            s.emit(rc + ' goto Lret;'); return
         k = s.intern(s.fns, nm)
         s.emit('CALLFN(%s_fns, %d, %s); goto Lret;' % (s.cname, k, s.retk))
 
@@ -801,9 +871,16 @@ class Lift:
         sig = s.sig.split(',') if s.sig else []
         params = []; pre = []
         xi = 0; di = 0
+        soff = 0
         for k, a in enumerate(sig):
             if a == 'x': params.append('uint64_t a%d' % k); pre.append('X[%d] = a%d;' % (xi, k)); xi += 1
             elif a == 'd': params.append('double a%d' % k); pre.append('VR[%d][0] = DB(a%d);' % (di, k)); di += 1
+            elif a in ('b', 'w', 'q'):
+                # argument passed on the stack (Darwin packs by natural alignment): the machine code reads it at [sp_at_entry + soff]
+                sz = {'b': 1, 'w': 4, 'q': 8}[a]
+                soff = (soff + sz - 1) // sz * sz
+                params.append('%s a%d' % ({'b': 'uint8_t', 'w': 'uint32_t', 'q': 'uint64_t'}[a], k))
+                pre.append('ST%d(X[31] + %d, a%d);' % (sz * 8, soff, k)); soff += sz
             else: raise Exception(a)
         rt = {'v': 'void', 'x': 'uint64_t', 'd': 'double', 'size': 'LiftSize', 'rect': 'LiftRect'}[s.retk]
         ret = {'v': 'return;', 'x': 'return X[0];', 'd': 'return FD(VR[0][0]);', 'size': 'LiftSize r_ = { FD(VR[0][0]), FD(VR[1][0]) }; return r_;',
@@ -824,9 +901,9 @@ class Lift:
         fn.append('    uint64_t X[32]; uint64_t VR[32][2]; int N = 0, Z = 0, C = 0, V = 0; uint64_t RES = 0; (void)RES;')
         fn.append('    uint8_t stk_[0x1000] __attribute__((aligned(16)));')
         fn.append('    memset(X, 0, sizeof X); memset(VR, 0, sizeof VR);')
-        fn.append('    X[31] = (uint64_t)(uintptr_t)(stk_ + 0x800);')
-        for p in pre: fn.append('    ' + p)
+        fn.append('    X[31] = (uint64_t)(uintptr_t)(stk_ + 0x800); X[30] = 0xdead0000ull;')
         fn.append('    LIFT_ENTRY(); LIFT_STKINIT(stk_);')
+        for p in pre: fn.append('    ' + p)
         fn.append(body)
         fn.append('Lret:')
         fn.append('    ' + ret)
@@ -840,7 +917,7 @@ def main():
     if '--ret' in a: retk = a[a.index('--ret') + 1]
     if '--kinds' in a:
         for kv in a[a.index('--kinds') + 1].split(','):
-            k, v = kv.split('='); kinds['msgSend:' + k if not k.startswith('_') and ':' not in k[:1] and not k.startswith('fn:') else k] = v
+            k, v = kv.split('='); kinds[k if k.startswith('fn:') else 'msgSend:' + k] = v
     cls = a[a.index('--cls') + 1] if '--cls' in a else None
     L = Lift(ver, st, en, cname, sig, retk, kinds, cls)
     head, fn = L.generate()

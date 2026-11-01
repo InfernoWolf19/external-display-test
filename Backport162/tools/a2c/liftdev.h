@@ -65,6 +65,11 @@ static inline const char *lift_preflight(const char *const *fns, int nf, const c
 #define LIFT_CALL_d(fn) do { double r_ = ((double (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); VR[0][0] = DB(r_); VR[0][1] = 0; } while (0)
 #define LIFT_CALL_size(fn) do { LiftSize r_ = ((LiftSize (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); VR[0][0] = DB(r_.w); VR[1][0] = DB(r_.h); VR[0][1] = VR[1][1] = 0; } while (0)
 #define LIFT_CALL_rect(fn) do { LiftRect r_ = ((LiftRect (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); VR[0][0] = DB(r_.x); VR[1][0] = DB(r_.y); VR[2][0] = DB(r_.w); VR[3][0] = DB(r_.h); VR[0][1] = VR[1][1] = VR[2][1] = VR[3][1] = 0; } while (0)
+// indirect results (x8): the callee writes the struct through the hidden pointer; the typed pointer returns a struct of that size so the compiler passes x8 itself
+typedef struct { uint8_t b[48]; } LiftM48;
+typedef struct { uint8_t b[128]; } LiftM128;
+#define LIFT_CALL_m48(fn) do { LiftM48 r_ = ((LiftM48 (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); memcpy((void *)(uintptr_t)X[8], &r_, sizeof r_); } while (0)
+#define LIFT_CALL_m128(fn) do { LiftM128 r_ = ((LiftM128 (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); memcpy((void *)(uintptr_t)X[8], &r_, sizeof r_); } while (0)
 #define CALLMSG(kind) LIFT_CALL_##kind((void *)lift_objc_msgSend)
 #define CALLFN(t, i, kind) do { void *f_ = lift_gsym((t)[i]); if (f_) LIFT_CALL_##kind(f_); } while (0)
 
