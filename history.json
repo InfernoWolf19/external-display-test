@@ -1,12 +1,4 @@
 {
- "0.7.9+267.dcef91c": {
-  "date": "2026-10-25T15:58:13Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+267.dcef91c_iphoneos-arm64.deb",
-  "run": 267,
-  "sha": "dcef91c55c1234f98e36c9b40fa957b4b51f80f8",
-  "subject": "Y12Dock: the floating dock of a display decides with its own display's environment mode, dock window stays visible while the dock library popover is open (switches y12_dockmode, y12_dockwin); DELTA-SWEEP verdicts for floating dock and window rows",
-  "version": "0.7.9+267.dcef91c"
- },
  "0.7.9+268.f47012c": {
   "date": "2026-10-25T20:21:12Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+268.f47012c_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "0267b3da3dd675f31b6690f04fe9aa02331cc586",
   "subject": "Y29Blur: the root blur early out only runs when the content layer is not rasterized (the 16.0 completion clears the rasterization its blur start set; 16.2 never sets it), otherwise the 16.0 body runs: home icons stayed rasterized / missing after a quick dismiss",
   "version": "0.7.9+327.0267b3d"
+ },
+ "0.7.9+328.dbf1ddf": {
+  "date": "2026-11-01T08:29:13Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+328.dbf1ddf_iphoneos-arm64.deb",
+  "run": 328,
+  "sha": "dbf1ddf2e4fc743412a8b77ebd7099b8e4807a22",
+  "subject": "Audit class E + F: IMP / send signatures checked against the 16.0 and 16.2 type dumps (1178 IMPs, 590 encodings, 3196 sends); Y31 statusBarFrame BOOL argument, P1 void send and Y15 / Y6 types fixed; caller / callee findings, summary table and README logging section of the audit",
+  "version": "0.7.9+328.dbf1ddf"
  },
  "0.7.9+329.1c7cce6": {
   "date": "2026-11-01T08:28:33Z",
