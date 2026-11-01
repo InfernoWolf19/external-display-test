@@ -1,12 +1,4 @@
 {
- "0.7.9+268.f47012c": {
-  "date": "2026-10-25T20:21:12Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+268.f47012c_iphoneos-arm64.deb",
-  "run": 268,
-  "sha": "f47012c6aaa34ed44c58419766d615267e3d9ed0",
-  "subject": "Y13Fluid / Y14Open / Y15InCall: bring-to-front stamp, container reuse reset, gesture fail reset (y13_*); URL open picks the target display (y14_openurl); In-Call transitions and banner on the session's own display (y15_*); Y10 auto PiP skips gesture requests, Y11 Deck tap requests; DELTA-SWEEP verdicts",
-  "version": "0.7.9+268.f47012c"
- },
  "0.7.9+269.9fb6153": {
   "date": "2026-10-25T20:21:06Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+269.9fb6153_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "1c7cce6c3597e4ba8f5549f592c4aa30f07b5dcc",
   "subject": "G1C: a dismiss that lands while the swipe-up open is still in flight (main transition 1->1, effective mode 2, no stock modifier) gets the ToHome fly out like the settled 2->1 dismiss (g1c_quickdismiss); it fell to the default quick animation",
   "version": "0.7.9+329.1c7cce6"
+ },
+ "0.7.9+330.9ec11ad": {
+  "date": "2026-11-01T08:33:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+330.9ec11ad_iphoneos-arm64.deb",
+  "run": 330,
+  "sha": "9ec11ad61545eabb5ecc6b6244d226f7b90ee0df",
+  "subject": "G2B: debug line with the values every card container is configured with (index, frame, scale, page scale, fill flags, root modifier class), logged when a card's values change; no behaviour change",
+  "version": "0.7.9+330.9ec11ad"
  }
 }
