@@ -1216,6 +1216,14 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
         double pageScale = BP2B_S2(double, root, "contentPageViewScaleForAppLayout:withScale:", (id)(appLayout), (double)(S));
         BOOL overlayFill = BP2B_S1(BOOL, root, "shouldScaleOverlayToFillBoundsAtIndex:", (NSUInteger)(idx));
         BOOL contentFill = BP2B_S1(BOOL, root, "shouldScaleContentToFillBoundsAtIndex:", (NSUInteger)(idx));
+        if (BP_LogEnabled()) {       // diagnostic (Backport162.debug): what every card container is configured with, logged when a card's values change (a tiny card shows frame ~ s*W with S ~ s, or S ~ s*s)
+            static NSMutableDictionary *last;
+            if (!last) last = [NSMutableDictionary dictionary];
+            NSString *line = [NSString stringWithFormat:@"idx %lu frame %.1fx%.1f at %.1f,%.1f scale %.4f pageScale %.4f fillContent %d fillOverlay %d root %s", (unsigned long)idx, frame.size.width, frame.size.height, frame.origin.x, frame.origin.y, S, pageScale, (int)contentFill, (int)overlayFill, class_getName(object_getClass(root))];
+            NSNumber *key = @((unsigned long long)(__bridge void *)appLayout);
+            if (last.count > 200) [last removeAllObjects];
+            if (![last[key] isEqualToString:line]) { last[key] = line; BP_Log(@"[g2b] card %p %@", (__bridge void *)appLayout, line); }
+        }
         CGRect clipIdx = BP2B_S2(CGRect, root, "clippingFrameForIndex:withBounds:", (NSUInteger)(idx), (CGRect)(BP2B_RectWithSize(frame.size.width, frame.size.height)));
         BOOL clips = BP2B_S1(BOOL, root, "clipsToBoundsAtIndex:", (NSUInteger)(idx));
         unsigned long long maskedCorners = BP2B_S1(unsigned long long, root, "maskedCornersForIndex:", (NSUInteger)(idx));
