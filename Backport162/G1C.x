@@ -2442,16 +2442,23 @@ static void G1C_SetIvarSize(id o, const char *n, CGSize v) { G1C_IvarRaw(o, n, &
 static Class gWdParent, gWdGrand, gWdCls, gWddParent, gWddCls, gWdrParent, gWdrGrand, gWdrCls;
 
 // --- context queries with a single-display fallback (the data layer / extended protocols answer the real ones, DM7) ---
+// 16.2 reads these with bs_firstObjectPassingTest: / bs_containsObjectPassingTest:, which accept any collection: the coordinator hands out an NSCountedSet copy of _draggingAppLayouts (16.2 0x1c76e2df8)
+// and the view controller answers with a mutable set of proposed layouts, so an NSArray only check rejected both and every cross display drag fell back to the default window size (log: 375x646 -> 1506x1228)
+static NSArray *G1C_WdAsArray(id r) {
+    if ([r isKindOfClass:[NSArray class]]) return r;
+    if ([r isKindOfClass:[NSSet class]]) return [(NSSet *)r allObjects];            // NSSet, NSMutableSet, NSCountedSet
+    return nil;
+}
 static NSArray *G1C_WdDragging(id self, id initial) {
     SEL s = NSSelectorFromString(@"draggingAppLayoutsForContinuousExposeWindowDrag");
-    id r = G1C_Resp(self, s) ? G1B_Send0(self, s) : nil;
-    if ([r isKindOfClass:[NSArray class]] && [(NSArray *)r count]) return r;
+    NSArray *a = G1C_WdAsArray(G1C_Resp(self, s) ? G1B_Send0(self, s) : nil);
+    if (a.count) return a;
     return initial ? @[ initial ] : @[];
 }
 static NSArray *G1C_WdProposedAll(id self, id dest) {
     SEL s = NSSelectorFromString(@"proposedAppLayoutsForContinuousExposeWindowDrag");
-    id r = G1C_Resp(self, s) ? G1B_Send0(self, s) : nil;
-    if ([r isKindOfClass:[NSArray class]] && [(NSArray *)r count]) return r;
+    NSArray *a = G1C_WdAsArray(G1C_Resp(self, s) ? G1B_Send0(self, s) : nil);
+    if (a.count) return a;
     id p = dest ? G1B_Send0(dest, @selector(proposedAppLayout)) : nil;
     return p ? @[ p ] : @[];
 }
@@ -2893,6 +2900,7 @@ static id G1C_Wdd_AddItem(id self, SEL _cmd, id item, id layout, CGSize size, CG
         as = G1C_DM_InferAttributedSize(size, cb, G1C_DM_DefaultWindowSize(attrs), G1C_DM_ScreenEdgePadding(attrs));       // _SBDisplayItemAttributedSizeInfer 0x1c75cedfc
     else
         as = G1C_Wdd_AttrSize(G1B_Send1(first, @selector(layoutAttributesForItem:), selItem));                              // dragged in from another switcher: that window's size
+    if (BP_LogEnabled()) BP_Log(@"drag add item: first dragging layout %p ordinal %lld (own %lld) -> %@ attributed size type %lld normalized %@", (__bridge void *)first, first ? G1B_SendLL0(first, @selector(preferredDisplayOrdinal)) : -1LL, G1B_SendLL0(self, @selector(displayOrdinal)), (!first || G1B_SendLL0(first, @selector(preferredDisplayOrdinal)) == G1B_SendLL0(self, @selector(displayOrdinal))) ? @"inferred from the default frame" : @"carried over from the source display", as.semanticSizeType, NSStringFromCGSize(as.normalizedSize));
     SEL ia = NSSelectorFromString(@"initWithContentOrientation:lastInteractionTime:sizingPolicy:attributedSize:normalizedCenter:");
     id na = ((id (*)(id, SEL, long long, long long, long long, G1CAttributedSize, CGPoint))objc_msgSend)([dla alloc], ia, 0, 0, 0, as, norm);
     NSMutableDictionary *map = [(NSDictionary *)G1B_Send0(layout, @selector(itemsToLayoutAttributesMap)) mutableCopy];
