@@ -85,12 +85,12 @@ __attribute__((constructor)) static void Y28_Setup(void) {
     if (!BPY_BuildOK()) return;
     @autoreleasepool {
         Class c = NSClassFromString(@"SBKeyboardHomeAffordanceController");
-        Class coord = NSClassFromString(@"SBSceneManagerCoordinator");
-        id mainMgr = coord ? BPX_Obj0((id)coord, "mainDisplaySceneManager") : nil;
-        Class mgrClass = mainMgr ? object_getClass(mainMgr) : Nil;
+        // NEVER message the live objects from a constructor: +[SBSceneManagerCoordinator mainDisplaySceneManager] reaches the coordinator singleton, which would be created while
+        // SpringBoard is still loading images (build 50bd5e8 did that and the iPad stayed on the Apple logo).  The class is looked up by name only.
+        Class mgrClass = NSClassFromString(@"SBMainDisplaySceneManager");
         if (!c || !mgrClass || !class_getInstanceMethod(c, sel_registerName("_getHomeGrabberContainingView:isAlwaysPortrait:")) || !class_getInstanceMethod(c, sel_registerName("_updateHomeAffordance")) ||
             !class_getInstanceMethod(mgrClass, sel_registerName("addObserver:"))) {
-            BP_Log(@"[y28] GUARD(kbgrabber) SBKeyboardHomeAffordanceController (%p) / main display scene manager class (%p) or their selectors missing: not installed", (__bridge void *)c, (__bridge void *)mgrClass);
+            BP_Log(@"[y28] GUARD(kbgrabber) SBKeyboardHomeAffordanceController (%p) / SBMainDisplaySceneManager (%p) or their selectors missing: not installed", (__bridge void *)c, (__bridge void *)mgrClass);
             return;
         }
         gY28OrigGet = BPX_Replace(c, "_getHomeGrabberContainingView:isAlwaysPortrait:", (IMP)Y28_Get);
