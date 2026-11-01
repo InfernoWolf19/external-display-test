@@ -1,12 +1,4 @@
 {
- "0.7.9+279.7e26771": {
-  "date": "2026-10-27T16:38:51Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+279.7e26771_iphoneos-arm64.deb",
-  "run": 279,
-  "sha": "7e26771d17b974ff0a3f29d0d0522c6afc090c5e",
-  "subject": "G3B hosted keyboard window: the iPad's window no longer shows the keyboard of a host scene that lives on the monitor (switch kbhosthere); every SHOW/HIDE logs the requester, reason, orientations, frames and displays",
-  "version": "0.7.9+279.7e26771"
- },
  "0.7.9+280.edf44f3": {
   "date": "2026-10-27T16:54:37Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+280.edf44f3_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "020d89aa88499aaf1c7c42040da51b014f72bd91",
   "subject": "tools/a2c: stack argument image, class ivar remap (self immediates -> IVOFF), direct selectors / C strings, CFString and class pointers through the GOT, trace comparison harness (tracecmp.py: Unicorn vs lifted C on the same modelled environment) and method diff tool (mdiff.py)",
   "version": "0.7.9+340.020d89a"
+ },
+ "0.7.9+341.0f88075": {
+  "date": "2026-11-01T20:04:02Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+341.0f88075_iphoneos-arm64.deb",
+  "run": 341,
+  "sha": "0f88075f7b854d9538a363948905d90d3fc855a0",
+  "subject": "Y37RemoteAlert: port the 16.2 remote alert presentation target predicate (SBSRemoteAlertPresentationTargetPredicate re-implemented, target accessors and XPC keys, SpringBoard shouldActivate 0x1c735a4b4 and embedded presentation 0x1c735acb8 through the predicate, overlay providers registered only while their scene is live, app switcher dismissal by shouldDismissInSwitcher)",
+  "version": "0.7.9+341.0f88075"
  }
 }
