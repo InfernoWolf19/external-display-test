@@ -1,12 +1,4 @@
 {
- "0.7.9+262.e9afd3e": {
-  "date": "2026-10-25T15:20:57Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+262.e9afd3e_iphoneos-arm64.deb",
-  "run": 262,
-  "sha": "e9afd3e488bfa8bda38f7d243f24aced22eedbdd",
-  "subject": "Audit of all P1/PV/PS helper calls: PS_DefFrame sent environment to the modifier instead of the layout (fixed); helpers and ivar lookups log once when a selector / ivar is missing on a non-nil receiver instead of answering NO silently",
-  "version": "0.7.9+262.e9afd3e"
- },
  "0.7.9+263.4e79217": {
   "date": "2026-10-25T15:22:41Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+263.4e79217_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "bd3bb4600801eff0dce5cf31413c57445c36d1f8",
   "subject": "Always-on anomaly channel: BP_Anomaly writes \"ANOMALY <tag>: <message>\" to Backport162.log without Backport162.debug (de-duplicated, 300 lines / 40 per tag cap); every GUARD(...) line and Y17_GuardOnce route through it",
   "version": "0.7.9+322.bd3bb46"
+ },
+ "0.7.9+323.3d473a5": {
+  "date": "2026-11-01T02:21:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+323.3d473a5_iphoneos-arm64.deb",
+  "run": 323,
+  "sha": "3d473a5ff184536e6ad8dac6e94f9e210c2fedcd",
+  "subject": "Audit class A + card path: type gates announce a rejected non-nil value (BP_KIND), card scale answers follow the same predicate as the pile frames, every pile fallback to the 16.0 scaled-frame body is announced",
+  "version": "0.7.9+323.3d473a5"
  }
 }
