@@ -1,12 +1,4 @@
 {
- "0.7.9+281.aeb09df": {
-  "date": "2026-10-27T16:57:53Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+281.aeb09df_iphoneos-arm64.deb",
-  "run": 281,
-  "sha": "aeb09dfe0c7e60b74545555a4d1fa25f940ef295",
-  "subject": "G1C/G1D: strip reveal no longer freezes after a quick second reveal: the completion timer of a reveal gesture carried one shared reason and finished the NEXT reveal's modifier mid-drag (g1c_revealtimer); last-line watchdog for a reveal transaction that never gets its complete (g1c_revealwatch); reveal recognizer / modifier lifecycle log lines",
-  "version": "0.7.9+281.aeb09df"
- },
  "0.7.9+282.cc9d0eb": {
   "date": "2026-10-27T16:57:32Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+282.cc9d0eb_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b53c9affaa13feef856ddb91b53ad6668d863954",
   "subject": "G1C: handleScrollEvent: reads contentOffset from the scroll EVENT (16.2 0x1c780f804), not from the modifier (sel-g1c anomaly, always 0); G2B: debug dump of the content subtree of every card 0.9 s after its last configuration",
   "version": "0.7.9+342.b53c9af"
+ },
+ "0.7.9+343.4e6096b": {
+  "date": "2026-11-01T20:11:59Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+343.4e6096b_iphoneos-arm64.deb",
+  "run": 343,
+  "sha": "4e6096b373754b9cae91268dd1a437481894762f",
+  "subject": "DELTA-SWEEP pass 4: S1 system UI scene family decoded (structure, addresses, exact remaining work), _main_launchDisplayContext verified EQUIVALENT, UIK U2 decode so far",
+  "version": "0.7.9+343.4e6096b"
  }
 }
