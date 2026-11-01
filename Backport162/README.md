@@ -369,6 +369,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y36_preflight | (Y36Preflight.x) the 16.2 privacy preflight gate: PrivacyDisclosureCore (PDCPreflightManager / ConsentStore / RequestHandle / AlertPresenter), SBPrivacyPreflightController, SBApplicationSceneUpdateTransaction preflight + delegate, SBToAppsWorkspaceTransaction prelaunch skip, contingency plan removal leg; consent UI is a native alert (PDUIApp does not exist on 16.0). Gate is on where MobileGestalt green-tea is on, exactly like 16.2 |
 | y36_fblaunch | (Y36Preflight.x) FrontBoard FBApplicationUpdateScenesTransaction: the app process launch child is added by `_executeProcessLaunchIfAppropriate` once `_isReadyToLaunch` (16.2), not in init (16.0) |
 | y36_forcepreflight | (Y36Preflight.x, OPT-IN: `Backport162.on.y36_forcepreflight`) test switch: reads the os_feature `PrivacyDisclosure/preflight` and MobileGestalt green-tea as on, so the consent alert can be tried outside a regulated region |
+| y37_alerttarget | (Y37RemoteAlert.x) remote alert presentation target predicate (SBSRemoteAlertPresentationTargetPredicate re-implemented, target accessors / XPC keys of 16.2), SpringBoard shouldActivate / embedded presentation through the predicate, overlay providers registered only while their scene is live (display mode 4), app switcher dismisses only targets that ask for it |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
