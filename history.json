@@ -1,12 +1,4 @@
 {
- "0.7.9+277.c4f1093": {
-  "date": "2026-10-25T22:01:04Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+277.c4f1093_iphoneos-arm64.deb",
-  "run": 277,
-  "sha": "c4f10937db6104cc9450a0e2fa4befea5f78671c",
-  "subject": "P1VC: decisive per container line at the end of a layout transition (p1_ctrend); docs for the blank window analysis",
-  "version": "0.7.9+277.c4f1093"
- },
  "0.7.9+278.d336e87": {
   "date": "2026-10-27T16:37:31Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+278.d336e87_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "e615a33a1812e89dbdad1d344502f8a95a84e4cf",
   "subject": "Chain answerers of the 16.2 card body: removal transitions pin / anchor / perspective / accessory overrides (Y11, 16.2 0x1c74145ec.. / 0x1c760c070..), FullScreenToStrip shouldAllowGroupOpacityForAppLayout: (G1B, new switch g1b_groupopacity)",
   "version": "0.7.9+338.e615a33"
+ },
+ "0.7.9+339.5889d17": {
+  "date": "2026-11-01T15:11:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+339.5889d17_iphoneos-arm64.deb",
+  "run": 339,
+  "sha": "5889d17ae8fbdb4baac7b2d9e1112e0f283978a8",
+  "subject": "Y36Preflight: port the 16.2 privacy preflight gate (PrivacyDisclosureCore re-implemented: PDCPreflightManager / ConsentStore / RequestHandle / AlertPresenter; SBPrivacyPreflightController + SBApplicationPrivacyPreflightController; SBApplicationSceneUpdateTransaction preflight, delegate and _isReadyToLaunch; SBToAppsWorkspaceTransaction -_willBegin prelaunch skip 0x1c729b83c; contingency plan removal leg; FrontBoard FBApplicationUpdateScenesTransaction launch scheduling 0x1a3665490; native consent alert instead of the absent PDUIApp)",
+  "version": "0.7.9+339.5889d17"
  }
 }
