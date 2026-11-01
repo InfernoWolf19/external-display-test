@@ -5593,15 +5593,20 @@ static void G1C_CloseTraceTransition(id root, id event, long long phase) {
     if (G1C_Resp(event, @selector(isiPadOSWindowingModeChangeEvent)) && G1B_SendB0(event, @selector(isiPadOSWindowingModeChangeEvent))) return nil;    // the iPadOS platform modifier handles it
     if (!G1B_SendB0(event, @selector(isAnimated)) || (G1C_Resp(event, @selector(isGestureInitiated)) && G1B_SendB0(event, @selector(isGestureInitiated)))) return orig;
     long long f = G1B_SendLL0(event, @selector(fromEnvironmentMode)), t = G1B_SendLL0(event, @selector(toEnvironmentMode));
-    if (!orig && !(f == 2 && t == 1)) return orig;      // 16.0 returns nil only for animated non-gesture 2->1 (the SwitcherDismissFix case): fill just that one
+    // A dismiss that lands while the switcher opened by the home swipe is still opening arrives as 1->1 (the gesture transaction's mode 2 is not committed yet: log 'from mode 1 to mode 1 ... stock modifier=nil'
+    // with the root still in effective mode 2, a few hundred ms after the swipe). Stock returns nil for it, exactly like the 2->1 SwitcherDismissFix case, so the cards got the quick default animation
+    // (and the icons came back by the default fade) instead of the fly out. It is the same fill, with the switcher -> home direction. Backport162.off.g1c_quickdismiss restores nil.
+    BOOL quickDismiss = (f == 1 && t == 1 && !orig && BP_OnName("g1c_quickdismiss") && G1C_Resp(self, @selector(_effectiveEnvironmentMode)) && G1B_SendLL0(self, @selector(_effectiveEnvironmentMode)) == 2);
+    if (!orig && !(f == 2 && t == 1) && !quickDismiss) return orig;      // 16.0 returns nil only for animated non-gesture 2->1 (the SwitcherDismissFix case) and the in flight 1->1 above: fill just those
     id tid = G1C_Resp(event, @selector(transitionID)) ? G1B_Send0(event, @selector(transitionID)) : nil;
     id n = nil;
     if (f == 2 && t == 3) n = G1C_NewSwitcherToApp(tid, 0);
     else if (f == 3 && t == 2) n = G1C_NewSwitcherToApp(tid, 1);
-    else if ((f == 2 && t == 1) || (f == 1 && t == 2)) {
+    else if ((f == 2 && t == 1) || (f == 1 && t == 2) || quickDismiss) {
         id mm = G1C_Resp(self, @selector(multitaskingModifier)) ? G1B_Send0(self, @selector(multitaskingModifier)) : nil;
         SEL ci = NSSelectorFromString(@"initWithTransitionID:direction:continuousExposeModifier:");
-        if (mm && gCEToHomeCls && [gCEToHomeCls instancesRespondToSelector:ci]) n = ((id (*)(id, SEL, id, long long, id))objc_msgSend)([gCEToHomeCls alloc], ci, tid, f == 1 ? 1 : 0, [mm copy]);
+        if (mm && gCEToHomeCls && [gCEToHomeCls instancesRespondToSelector:ci]) n = ((id (*)(id, SEL, id, long long, id))objc_msgSend)([gCEToHomeCls alloc], ci, tid, (f == 1 && t == 2) ? 1 : 0, [mm copy]);
+        else BP_Anomaly("g1c-quickdismiss", @"ToHome modifier not built (multitaskingModifier %p, class %p, selector %d)", (__bridge void *)mm, (__bridge void *)gCEToHomeCls, (int)(gCEToHomeCls && [gCEToHomeCls instancesRespondToSelector:ci]));
     } else if (f == 3 && t == 3 && G1C_Kind(orig, @"SBContinuousExposeAppToAppModifier")) n = G1C_NewAppToApp(event);
     if (BP_LogEnabled() && n) BP_Log(@"GLITCH main transition replaced: %@ -> %@", G1C_DbgCls(orig), G1C_DbgCls(n));
     return n ?: orig;
