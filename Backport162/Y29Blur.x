@@ -60,8 +60,14 @@ static void Y29_ApplyRoot(id self, SEL _cmd, void (^completion)(BOOL, BOOL)) {
         id modifier = BP_ObjIvar(self, mi), content = BP_ObjIvar(self, ci);
         if (isZero && modifier && content && BPY_Responds(modifier, "rootContentViewBlurRadius")) {
             double radius = BPY_SEND(double, (), modifier, "rootContentViewBlurRadius");
-            id filters = Y17_Obj0("blurroot", Y17_Obj0("blurroot", content, "layer"), "filters");
-            if (isZero(radius) && !filters) {
+            id layer = Y17_Obj0("blurroot", content, "layer");
+            id filters = Y17_Obj0("blurroot", layer, "filters");
+            // The 16.0 body's completion (0x1c5fca21c) also CLEARS the rasterization the 16.0 blur start set on this layer (rasterizationScale reset, shouldRasterize = NO); 16.2 never
+            // rasterizes it, so its early out has nothing to clean up. Here the early out is only the 16.2 behaviour when no rasterization is left to clean up: otherwise the content
+            // layer would stay rasterized (stale / blank bitmap: the home icons missing after a dismiss, coming back later), so the 16.0 body runs.
+            BOOL rasterized = layer && BPY_Responds(layer, "shouldRasterize") && BPY_SEND(BOOL, (), layer, "shouldRasterize");
+            if (rasterized && isZero(radius) && !filters) BPY_LOG(@"[y29] root blur radius zero, no filters but the content layer is still rasterized: the 16.0 body runs to clear it");
+            if (isZero(radius) && !filters && !rasterized) {
                 BPY_LOG(@"[y29] root blur radius already zero and no filters: completion without animation");
                 // the 16.0 body never completes synchronously (its completion runs from the animation block, 0x1c5fc91a8 caller registers sibling completions after this call):
                 // an early synchronous completion could end the layout update group before they exist, so it is delivered on the next main queue turn
