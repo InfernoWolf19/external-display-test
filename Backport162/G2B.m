@@ -13,6 +13,8 @@
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wignored-attributes"      // BP2B_S*: __unsafe_unretained on a non-object RET (the zero answer of a missed send)
+#pragma clang diagnostic ignored "-Wvoid-ptr-dereference"
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -1133,11 +1135,15 @@ static void BP2B_EnumerateValidRoles(void (^blk)(long long)) {
 }
 static CGRect BP2B_RectWithSize(double w, double h) { return CGRectMake(0, 0, w, h); }            // SBRectWithSize
 
-#define BP2B_S0(RET, o, sel) ((RET (*)(id, SEL))objc_msgSend)((o), sel_registerName(sel))
-#define BP2B_S1(RET, o, sel, a) ((RET (*)(id, SEL, __typeof__(a)))objc_msgSend)((o), sel_registerName(sel), (a))
-#define BP2B_S2(RET, o, sel, a, b) ((RET (*)(id, SEL, __typeof__(a), __typeof__(b)))objc_msgSend)((o), sel_registerName(sel), (a), (b))
-#define BP2B_S3(RET, o, sel, a, b, c) ((RET (*)(id, SEL, __typeof__(a), __typeof__(b), __typeof__(c)))objc_msgSend)((o), sel_registerName(sel), (a), (b), (c))
-#define BP2B_S4(RET, o, sel, a, b, c, d) ((RET (*)(id, SEL, __typeof__(a), __typeof__(b), __typeof__(c), __typeof__(d)))objc_msgSend)((o), sel_registerName(sel), (a), (b), (c), (d))
+// Typed sends with a last-line guard: a receiver that does not implement the selector is announced once (ANOMALY sel-g2b, always on) and the send answers 0 / NO / nil / zero struct
+// (what a send to nil answers) instead of raising "unrecognized selector" inside the card layout of every layout update.  A nil receiver is a legitimate absence and stays quiet.
+static void *BP2B_ZeroBuf(void) { static char z[256]; return z; }
+#define BP2B_MISS(o_, s_) ((o_) ? BP_SelMiss("sel-g2b", (o_), (s_)) : (void)0)
+#define BP2B_S0(RET, o, sel) ({ id o_ = (o); SEL s_ = sel_registerName(sel); (o_ && [o_ respondsToSelector:s_]) ? ((RET (*)(id, SEL))objc_msgSend)(o_, s_) : (BP2B_MISS(o_, s_), *(__unsafe_unretained RET *)BP2B_ZeroBuf()); })
+#define BP2B_S1(RET, o, sel, a) ({ id o_ = (o); SEL s_ = sel_registerName(sel); (o_ && [o_ respondsToSelector:s_]) ? ((RET (*)(id, SEL, __typeof__(a)))objc_msgSend)(o_, s_, (a)) : (BP2B_MISS(o_, s_), *(__unsafe_unretained RET *)BP2B_ZeroBuf()); })
+#define BP2B_S2(RET, o, sel, a, b) ({ id o_ = (o); SEL s_ = sel_registerName(sel); (o_ && [o_ respondsToSelector:s_]) ? ((RET (*)(id, SEL, __typeof__(a), __typeof__(b)))objc_msgSend)(o_, s_, (a), (b)) : (BP2B_MISS(o_, s_), *(__unsafe_unretained RET *)BP2B_ZeroBuf()); })
+#define BP2B_S3(RET, o, sel, a, b, c) ({ id o_ = (o); SEL s_ = sel_registerName(sel); (o_ && [o_ respondsToSelector:s_]) ? ((RET (*)(id, SEL, __typeof__(a), __typeof__(b), __typeof__(c)))objc_msgSend)(o_, s_, (a), (b), (c)) : (BP2B_MISS(o_, s_), *(__unsafe_unretained RET *)BP2B_ZeroBuf()); })
+#define BP2B_S4(RET, o, sel, a, b, c, d) ({ id o_ = (o); SEL s_ = sel_registerName(sel); (o_ && [o_ respondsToSelector:s_]) ? ((RET (*)(id, SEL, __typeof__(a), __typeof__(b), __typeof__(c), __typeof__(d)))objc_msgSend)(o_, s_, (a), (b), (c), (d)) : (BP2B_MISS(o_, s_), *(__unsafe_unretained RET *)BP2B_ZeroBuf()); })
 
 // 160 and 162 both apply the animation through +[UIView sb_animateWithSettings:mode:animations:completion:]
 static void BP2B_Animate(id settings, long long mode, void (^anims)(void), void (^completion)(BOOL, BOOL)) {
@@ -1434,8 +1440,8 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             if ([c respondsToSelector:blurS])
                 ((void (*)(id, SEL, BOOL, double, double, double, void (^)(void), void (^)(void)))objc_msgSend)(c, blurS, blurred && !liveBlur, 0.25, blurDelay, blurIcon, began, done);
             // 16.2 NEW: group opacity
-            if ([root respondsToSelector:sel_registerName("shouldAllowGroupOpacityForAppLayout:")]) {
-                BOOL gop = BP2B_Bool1(root, sel_registerName("shouldAllowGroupOpacityForAppLayout:"), appLayout);
+            {
+                BOOL gop = BP2B_S1(BOOL, root, "shouldAllowGroupOpacityForAppLayout:", (id)(appLayout));          // a miss is announced (sel-g2b) and answers NO
                 id layer = BP2B_Obj(c, @selector(layer));
                 if ([layer respondsToSelector:@selector(setAllowsGroupOpacity:)]) [(CALayer *)layer setAllowsGroupOpacity:gop];
             }
@@ -1530,7 +1536,7 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             double accScale = S;
             if ([root respondsToSelector:sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:")]) {
                 accScale = ((double (*)(id, SEL, double, id))objc_msgSend)(root, sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:"), S, appLayout);
-            }
+            } else BP_SelMiss("sel-g2b", root, sel_registerName("adjustedSpaceAccessoryViewScale:forAppLayout:"));   // announced; the scale stays the index scale
             CGRect adjF = BP2B_S2(CGRect, root, "adjustedSpaceAccessoryViewFrame:forAppLayout:", (CGRect)(frame), (id)(appLayout));
             CGPoint adjA = BP2B_S2(CGPoint, root, "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (CGPoint)(anchor), (id)(appLayout));
             double accPageScale = pageScale;
