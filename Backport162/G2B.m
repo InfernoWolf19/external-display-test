@@ -1179,21 +1179,22 @@ static BOOL BP2B_LayerHasModifier(id layer, NSArray<NSString *> *keyPaths) {
 
 static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long long roleMask, id completion) {
     typedef void (*Orig)(id, SEL, id, unsigned long long, id);
-    #define BP2B_FALLBACK() do { if (gOrigLayoutAppLayout) ((Orig)gOrigLayoutAppLayout)(vc, cmd, appLayout, roleMask, completion); return; } while (0)
-    if (!appLayout || !BP2B_Enabled("g2blayout")) BP2B_FALLBACK();
+    // every fallback to the 16.0 body is announced once per reason (ANOMALY g2b-layout, always on): the 16.2 container configuration below is what the pile floor's answers (unscaled frames + card scale) are written for
+    #define BP2B_FALLBACK(WHY) do { BP_Anomaly("g2b-layout", @"_layoutAppLayout:roleMask:completion: runs the 16.0 body: %s", (WHY)); if (gOrigLayoutAppLayout) ((Orig)gOrigLayoutAppLayout)(vc, cmd, appLayout, roleMask, completion); return; } while (0)
+    if (!appLayout || !BP2B_Enabled("g2blayout")) BP2B_FALLBACK(!appLayout ? "no app layout" : "g2blayout switch off");
     id root = BP2B_IvarObj(vc, "_rootModifier");
-    if (!root || !BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled"))) BP2B_FALLBACK();         // classic switcher: 16.0 code unchanged
+    if (!root || !BP2B_Bool(vc, sel_registerName("isChamoisWindowingUIEnabled"))) BP2B_FALLBACK(!root ? "no _rootModifier" : "classic switcher (isChamoisWindowingUIEnabled NO)");         // classic switcher: 16.0 code unchanged
     NSArray *aps = BP2B_Obj(vc, sel_registerName("appLayouts"));
     NSUInteger idx = aps ? [aps indexOfObject:appLayout] : NSNotFound;
     BOOL rotationAnim = BP2B_Bool(root, sel_registerName("shouldPerformRotationAnimationForOrientationChange"));
     if (idx != NSNotFound) {
-        if (rotationAnim) BP2B_FALLBACK();
+        if (rotationAnim) BP2B_FALLBACK("rotation animation for an orientation change");
         SEL pinS = sel_registerName("shouldPinLayoutRolesToSpace:");
-        if ([root respondsToSelector:pinS] && ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(root, pinS, idx)) BP2B_FALLBACK();
+        if ([root respondsToSelector:pinS] && ((BOOL (*)(id, SEL, NSUInteger))objc_msgSend)(root, pinS, idx)) BP2B_FALLBACK("shouldPinLayoutRolesToSpace: YES for this index");
     }
     Class group = NSClassFromString(@"SBC2GroupCompletion");
     SEL performS = sel_registerName("perform:finalCompletion:options:delegate:");
-    if (!group || !class_getClassMethod(group, performS)) BP2B_FALLBACK();
+    if (!group || !class_getClassMethod(group, performS)) BP2B_FALLBACK("SBC2GroupCompletion perform:finalCompletion:options:delegate: missing");
 
     long long contentOrientation = 0;
     BP2B_IvarGet(vc, "_contentOrientation", &contentOrientation, sizeof contentOrientation);
