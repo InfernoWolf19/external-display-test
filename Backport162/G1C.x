@@ -4681,8 +4681,17 @@ static CGRect G1C_As_FrameForRole(id self, SEL _cmd, long long role, id layout, 
     SEL om = NSSelectorFromString(@"overlappingModelForAppLayout:"), cc = NSSelectorFromString(@"compactedCenterForItem:"), sf = NSSelectorFromString(@"sizeForItem:");
     id item = (c[@"frames"][layout] && G1C_Resp(layout, @selector(itemForLayoutRole:))) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), role) : nil;
     id model = (item && G1C_Resp(self, om)) ? G1B_Send1(self, om, layout) : nil;
-    if (!model || !G1C_Resp(model, cc) || !G1C_Resp(model, sf) || !G1C_Resp(model, @selector(compactedBoundingBox)))
+    if (!model || !G1C_Resp(model, cc) || !G1C_Resp(model, sf) || !G1C_Resp(model, @selector(compactedBoundingBox))) {
+        if (BP_LogEnabled()) {       // diagnostic (Backport162.debug): the 16.0 role frame is derived from `bounds` (the SCALED card size in the grid): a snapshot sized from it is drawn tiny
+            static NSMutableSet *seen;
+            NSString *why = !layout ? @"no layout" : !G1C_PilesOn() ? @"piles off" : !c ? @"no pile cache" : !c[@"frames"][layout] ? @"layout not in the pile frames" : !item ? @"no item for role" : !model ? @"no overlapping model" : @"model lacks selectors";
+            NSString *key = [NSString stringWithFormat:@"%@|%p|%lld", why, (__bridge void *)layout, role];
+            if (!seen) seen = [NSMutableSet set];
+            if (seen.count > 400) [seen removeAllObjects];
+            if (![seen containsObject:key]) { [seen addObject:key]; BP_Log(@"[g1c] frameForLayoutRole falls back to the 16.0 body (bounds derived): %@, role %lld, layout %p, bounds %.1fx%.1f", why, role, (__bridge void *)layout, bounds.size.width, bounds.size.height); }
+        }
         return G1B_SUPER(CGRect, gAsParent, self, _cmd, (struct objc_super *, SEL, long long, id, CGRect), role, layout, bounds);
+    }
     CGPoint ctr = ((CGPoint (*)(id, SEL, id))objc_msgSend)(model, cc, item);
     CGRect box = G1C_SendRect0(model, @selector(compactedBoundingBox));
     CGSize size = ((CGSize (*)(id, SEL, id))objc_msgSend)(model, sf, item);
@@ -4804,7 +4813,16 @@ static double G1C_As_Distance(id self, SEL _cmd, unsigned long long idx) {
     CGRect f = G1C_As_PileBox(self, c, pick, YES);
     BOOL rtl = G1C_Resp(self, @selector(isRTLEnabled)) && G1B_SendB0(self, @selector(isRTLEnabled));
     double x = rtl ? G1C_SendRect0(self, @selector(switcherViewBounds)).size.width - f.origin.x : CGRectGetMaxX(f);
-    return x + G1B_Dbl0(G1B_Send0(self, @selector(chamoisLayoutAttributes)), NSSelectorFromString(@"switcherHorizontalInterItemSpacing"));
+    double dist = x + G1B_Dbl0(G1B_Send0(self, @selector(chamoisLayoutAttributes)), NSSelectorFromString(@"switcherHorizontalInterItemSpacing"));
+    if (BP_LogEnabled()) {       // diagnostic (Backport162.debug): the inputs of the fly out distance of the home slide (tap on empty space / home); logged when they change
+        static unsigned long long lastIdx = ~0ULL; static double lastDist = -1, lastSx = -1; static NSUInteger lastLoc = ~0UL, lastLen = ~0UL;
+        double sx = G1C_As_ScrollX(self);
+        if (idx != lastIdx || dist != lastDist || sx != lastSx || rg.location != lastLoc || rg.length != lastLen) {
+            lastIdx = idx; lastDist = dist; lastSx = sx; lastLoc = rg.location; lastLen = rg.length;
+            BP_Log(@"[g1c] home slide distance idx %llu = %.1f (pile pick %lu of %lu, visible pile range %lu+%lu, scrollX %.1f, view width %.1f)", idx, dist, (unsigned long)pick, (unsigned long)n, (unsigned long)rg.location, (unsigned long)rg.length, sx, G1C_SendRect0(self, @selector(switcherViewBounds)).size.width);
+        }
+    }
+    return dist;
 }
 static long long G1C_As_IndexInPile(id self, SEL _cmd, id layout);
 // _visiblePileIdentifiers 0x1c781345c: the identifiers whose pile box (scroll applied) touches the shadow-extended view

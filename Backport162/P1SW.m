@@ -172,11 +172,21 @@ static CGRect PS_Integral(CGRect r, double scale) {                             
     double x1 = ceil(CGRectGetMaxX(r) * scale) / scale, y1 = ceil(CGRectGetMaxY(r) * scale) / scale;
     return CGRectMake(x0, y0, x1 - x0, y1 - y0);
 }
+// diagnostic (Backport162.debug): the 16.0 default role frame is derived from `bounds`; logged once per (reason, environment, role)
+static void PS_DefFallbackLog(const char *why, long long env, long long role, CGRect bounds) {
+    if (!BP_LogEnabled()) return;
+    static NSMutableSet *seen;
+    NSString *key = [NSString stringWithFormat:@"%s|%lld|%lld", why, env, role];
+    if (!seen) seen = [NSMutableSet set];
+    if ([seen containsObject:key]) return;
+    [seen addObject:key];
+    BP_Log(@"[p1sw] default role frame uses the 16.0 body (bounds derived): %s, environment %lld, role %lld, bounds %.1fx%.1f", why, env, role, bounds.size.width, bounds.size.height);
+}
 static CGRect PS_DefFrame(id self, SEL _cmd, long long role, id layout, CGRect bounds) {
     typedef CGRect (*Orig)(id, SEL, long long, id, CGRect);
-    if (!BP_OnName("p1_defroles") || !PS_ModelReady()) return ((Orig)sDefFrame)(self, _cmd, role, layout, bounds);
+    if (!BP_OnName("p1_defroles") || !PS_ModelReady()) { PS_DefFallbackLog(!BP_OnName("p1_defroles") ? "p1_defroles off" : "model not ready", -1, role, bounds); return ((Orig)sDefFrame)(self, _cmd, role, layout, bounds); }
     long long env = PS_L0(layout, "environment");               // 16.0 0x1c63df39c / 16.2 0x1c788a4d0: -environment is sent to the SBAppLayout (x19 = the layout argument), not to the modifier
-    if (env == 3 || env == 2 || role == 4 || !PS_B0(self, "isChamoisWindowingUIEnabled")) return ((Orig)sDefFrame)(self, _cmd, role, layout, bounds);   // identical in 16.0 and 16.2
+    if (env == 3 || env == 2 || role == 4 || !PS_B0(self, "isChamoisWindowingUIEnabled")) { PS_DefFallbackLog(!PS_B0(self, "isChamoisWindowingUIEnabled") ? "not chamois" : "environment/role rule", env, role, bounds); return ((Orig)sDefFrame)(self, _cmd, role, layout, bounds); }   // identical in 16.0 and 16.2
     id calc = PS_S0(self, "displayItemLayoutAttributesCalculator");
     SEL om = sel_registerName("overlappingModelForAppLayout:containerOrientation:chamoisLayoutAttributes:floatingDockHeight:screenScale:bounds:prefersStripHidden:prefersDockHidden:");
     SEL ifr = sel_registerName("itemForLayoutRole:");
