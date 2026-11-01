@@ -1,12 +1,4 @@
 {
- "0.7.9+261.475993c": {
-  "date": "2026-10-25T15:10:57Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+261.475993c_iphoneos-arm64.deb",
-  "run": 261,
-  "sha": "475993c46432651174de7fd7e6b7b7b64684cca4",
-  "subject": "Fix SpringBoard stack overflow on window resize from full screen: isLiveResize is read from the gesture transaction (as 16.0 / 16.2), not from the switcher transition request; re-entrancy guard for gesture update / complete (switch p1_reentry)",
-  "version": "0.7.9+261.475993c"
- },
  "0.7.9+262.e9afd3e": {
   "date": "2026-10-25T15:20:57Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+262.e9afd3e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "5aa8f91474a192ff8c5dd015382e4b12e0aea425",
   "subject": "Diagnostics (Backport162.debug only, no behaviour change): log when a card's role frame falls back to the 16.0 bounds derived body (G1C pile floor, P1SW default roles) and the inputs of the home slide fly out distance, to pin the tiny card and quick dismiss causes",
   "version": "0.7.9+321.5aa8f91"
+ },
+ "0.7.9+322.bd3bb46": {
+  "date": "2026-11-01T02:16:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+322.bd3bb46_iphoneos-arm64.deb",
+  "run": 322,
+  "sha": "bd3bb4600801eff0dce5cf31413c57445c36d1f8",
+  "subject": "Always-on anomaly channel: BP_Anomaly writes \"ANOMALY <tag>: <message>\" to Backport162.log without Backport162.debug (de-duplicated, 300 lines / 40 per tag cap); every GUARD(...) line and Y17_GuardOnce route through it",
+  "version": "0.7.9+322.bd3bb46"
  }
 }
