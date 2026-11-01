@@ -51,11 +51,15 @@ static void Y29_BlurContainer(id self, SEL _cmd, id container, id params, long l
     }
 }
 typedef BOOL (*Y29_ZeroFn)(double);
-// OPT-IN since the cards regression report (tiny / zoomed / rectangular cards that flip ~0.4 s after the grid settles, build a905444 vs c8bf6ae): the 16.0 body, even with a zero radius and no
-// filters, completes through an (empty) sb_animateWithSettings animation, i.e. AFTER the animation duration; this early out completes it at once (16.2 callers do not wait for it), so the layout
-// update group finishes while the cards are still animating and the "settled" work (live content -> snapshot swap, container reconfiguration) runs mid animation. Backport162.on.y24_blurroot restores it.
+// Default ON again (kill switch Backport162.off.y24_blurroot).  It was opt-in after the cards regression report (tiny / zoomed / rectangular cards flipping ~0.4 s after the grid settled), but that
+// report persisted with the early out off: the cause was the card configuration (the pinned case of -_layoutAppLayout:roleMask:completion: ran the 16.0 body under 16.2 contract answers, G2B.m).
+// Why the early out is correct under the ported card body (16.2 caller 0x1c7441b9c, -[SBFluidSwitcherViewController _updateLayoutWithCompletion:] block): the caller runs inside
+// +[SBC2GroupCompletion perform:finalCompletion:options:delegate:] (same code in 16.0 and 16.2), makes the completion "content-view-blur-radius" and passes it to this method (call at 0x1c7441cf8),
+// then makes "shelves", "content view transform", "layout visible items", ... The group's final completion only runs when EVERY made completion has run; "layout visible items" is completed by the
+// per-card groups of the ported body (every card animation joins them through make(...)), i.e. when the card animations end.  16.2 itself completes the blur completion at once when the radius is
+// zero and the layer has no filters (0x1c7442bf4), so removing the artificial 16.0 delay (an empty animation of the full duration) only moves the end of the group to the end of the card animations.
 static void Y29_ApplyRoot(id self, SEL _cmd, void (^completion)(BOOL, BOOL)) {
-    if (BP_OptInName("y24_blurroot")) {
+    if (BP_OnName("y24_blurroot")) {
         static Y29_ZeroFn isZero; static dispatch_once_t once;
         dispatch_once(&once, ^{ isZero = (Y29_ZeroFn)dlsym(RTLD_DEFAULT, "BSFloatIsZero"); if (!isZero) BP_Anomaly("blurroot", @"[y29] GUARD(blurroot) BSFloatIsZero does not resolve: not applied"); });
         Ivar mi = BP_IvarLookup(object_getClass(self), "_rootModifier");

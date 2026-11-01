@@ -355,7 +355,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y24_overlayscale | (Y27Views.x) the icon zoom overlay footer is aligned at the display scale of its own display (monitor) instead of the iPad scale |
 | y24_kbgrabber | (Y28Keyboard.x) the home grabber on the software keyboard takes its scene from the keyboard owner window (monitor aware) and is always-portrait only on the main display |
 | y24_blurraster | (Y29Blur.x) the cross blur container of the switcher is not rasterized (16.2 shouldRasterize = NO) |
-| y24_blurroot | **OPT-IN** (`Backport162.on.y24_blurroot`; Y29Blur.x): the root content blur animation is skipped when there is nothing to blur. Off by default: it completes the layout update group before the 16.0 body would (after its animation duration), so cards were reconfigured mid animation (tiny / zoomed cards flipping ~0.4 s after the grid settled) |
+| y24_blurroot | (Y29Blur.x; kill switch `Backport162.off.y24_blurroot`) the root content blur animation is skipped when there is nothing to blur (16.2 `_applyRootContentViewBlurRadiusWithCompletion:` early out). Default ON again: it had been made opt-in for the tiny / zoomed card report, which persisted without it (cause: the pinned card configuration, see `g2blayout`); the group completion argument is in the comment above `Y29_ApplyRoot` |
 | y24_snapstretch | (Y30Snapshot.x) switcher snapshots of classic apps: non uniform stretch mode and sizeToFit of the snapshot image view follow 16.2 |
 | y24_centerpage | (Y31Misc.x) the centre window presentation uses critically damped animation settings (16.2) |
 | y24_minviable | (Y31Misc.x) the minimum viable switcher reads the environment mode of its own display |
