@@ -1,12 +1,4 @@
 {
- "0.7.9+259.7dd10ca": {
-  "date": "2026-10-25T15:03:57Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+259.7dd10ca_iphoneos-arm64.deb",
-  "run": 259,
-  "sha": "7dd10ca8af563c68cb6329fc03109415e35a2ef4",
-  "subject": "Y6Portal: cross display window drag shows a live portal copy on the display under the pointer (portaled overlay creator, newPortaledLiveContentOverlayView, liveContentOverlayForAppLayout:, type 4 removal), always-live overlay size per display (switches y6_portal, y6_alwayslive)",
-  "version": "0.7.9+259.7dd10ca"
- },
  "0.7.9+260.afc0109": {
   "date": "2026-10-25T15:11:22Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+260.afc0109_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "0efa07d085333fc8368afeb2a497091192077fc6",
   "subject": "G1C: the cross display window drag reads the dragging / proposed layouts as any collection (the coordinator answers an NSCountedSet, the VC an NSMutableSet; the NSArray only check rejected them and every drag to the other display fell back to the default window size instead of the source window's size, 16.2 0x1c74f406c); debug line per dragged-in window",
   "version": "0.7.9+319.0efa07d"
+ },
+ "0.7.9+320.a0f1c00": {
+  "date": "2026-11-01T01:07:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+320.a0f1c00_iphoneos-arm64.deb",
+  "run": 320,
+  "sha": "a0f1c0005d85f0183752097b6d7bb2a78b9b851e",
+  "subject": "Y30Snapshot: debug line per snapshot layout (image frame size vs view and superview bounds) to pin the tiny card input; no behaviour change",
+  "version": "0.7.9+320.a0f1c00"
  }
 }
