@@ -1,12 +1,4 @@
 {
- "0.7.9+257.6661b44": {
-  "date": "2026-10-24T23:36:58Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+257.6661b44_iphoneos-arm64.deb",
-  "run": 257,
-  "sha": "6661b44a8dc8530ef23c2e7207bfc47499a91fe7",
-  "subject": "Item 4 (H2): the inline ids updates of the 16.0 transition blocks are suppressed for app-to-app switches (caller identified by return address against the verified 16.0 block ranges); close / home / zoom keep them; switch g1c_ids16supp",
-  "version": "0.7.9+257.6661b44"
- },
  "0.7.9+258.eb694cd": {
   "date": "2026-10-24T23:44:18Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+258.eb694cd_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "d8344ff80caa6d632d7f8bfb9c925d2165aa3be2",
   "subject": "BOOTGUARD: tiny pure C loader is the only SpringBoard dylib; the tweak is Backport162Core.dylib, skipped for one launch when the previous launch never finished booting",
   "version": "0.7.9+317.d8344ff"
+ },
+ "0.7.9+318.9c9f21a": {
+  "date": "2026-11-01T00:42:15Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+318.9c9f21a_iphoneos-arm64.deb",
+  "run": 318,
+  "sha": "9c9f21afff6cccd3d5ee74e4d1bd60b8f22e86f3",
+  "subject": "Y30Snapshot: -setImage: and the non stretch -layoutSubviews run the 16.0 bodies unchanged (identical to the 16.2 result, disassembled); only the stretch mode is re-implemented",
+  "version": "0.7.9+318.9c9f21a"
  }
 }
