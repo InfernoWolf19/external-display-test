@@ -1,12 +1,4 @@
 {
- "0.7.9+275.256780e": {
-  "date": "2026-10-25T20:47:55Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+275.256780e_iphoneos-arm64.deb",
-  "run": 275,
-  "sha": "256780e895993e260574d8f53cba07bddf468134",
-  "subject": "DELTA-SWEEP: port table per family, cross references, floor modifier review",
-  "version": "0.7.9+275.256780e"
- },
  "0.7.9+276.8728cf0": {
   "date": "2026-10-25T20:52:17Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+276.8728cf0_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "6bd01b88735592a152b435a96612327d0beb3d77",
   "subject": "Y29Blur: y24_blurroot is default ON again (kill file Backport162.off.y24_blurroot); the tiny / zoomed card report persisted with it off, the cause was the card configuration",
   "version": "0.7.9+336.6bd01b8"
+ },
+ "0.7.9+337.f1f0472": {
+  "date": "2026-11-01T14:58:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+337.f1f0472_iphoneos-arm64.deb",
+  "run": 337,
+  "sha": "f1f04725181df5980a6a7b10496ac8446aac2f17",
+  "subject": "Y34ClassicTypes: port the 16.2 supported type calculation of classic apps (-_calculateSupportedTypesLazilyIfNecessary recompiled from the 16.2 machine code by the new tools/a2c, -_calculateSupportedTypesForSplashBoard without the isBeta gate), proven against the Unicorn emulation of the original code",
+  "version": "0.7.9+337.f1f0472"
  }
 }

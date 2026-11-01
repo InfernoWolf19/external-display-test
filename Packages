@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 337, commit f1f0472: Y34ClassicTypes: port the 16.2 supported type calculation of classic apps (-_calculateSupportedTypesLazilyIfNecessary recompiled from the 16.2 machine code by the new tools/a2c, -_calculateSupportedTypesForSplashBoard without the isBeta gate), proven against the Unicorn emulation of the original code
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+337.f1f0472
+Installed-Size: 4860
+Filename: debs/com.infernowolf19.backport162_0.7.9+337.f1f0472_iphoneos-arm64.deb
+Size: 1531392
+MD5sum: e88bd9d92100d6e980467124522d23eb
+SHA1: d0d5623a80c25322f3df55a90ffc14beba7238ed
+SHA256: 299e7ecfffb63fca55b24b73a2cf2304da3266dd1f3a6a875861f5521fd860dd
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 336, commit 6bd01b8: Y29Blur: y24_blurroot is default ON again (kill file Backport162.off.y24_blurroot); the tiny / zoomed card report persisted with it off, the cause was the card configuration
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1295,25 +1317,3 @@ Size: 1390694
 MD5sum: cc088711126ea1ad2be8c3e7745ba65c
 SHA1: 2859f4bf3b4b76dc239f2f56a9f52b85711037ae
 SHA256: 30cfc347565cdf7739666a88f114eb1103a07c67ff9817c52db1c046dae1795b
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 275, commit 256780e: DELTA-SWEEP: port table per family, cross references, floor modifier review
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Recommends: preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+275.256780e
-Installed-Size: 4184
-Filename: debs/com.infernowolf19.backport162_0.7.9+275.256780e_iphoneos-arm64.deb
-Size: 1390688
-MD5sum: 540cf352a18cf45870f5f6c3b98238e1
-SHA1: 5ad91d88a3d19f07bdd68827ac54d2339642c92c
-SHA256: a0a86c50e903dd88f16a20a8077d28c854670b9be727bfa78b9abad9988483ba
