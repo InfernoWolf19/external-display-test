@@ -9,6 +9,8 @@
 //                                             container bounds otherwise; every other case: super
 //                 scaleForIndex: / opacityForLayoutRole:inAppLayout:atIndex: (Crossblur only): the 16.0 formulas for the removed layout while not preparing, super for the rest
 //                 animationAttributesForLayoutElement:   the 16.0 attributes only for the app layout element that equals _appLayout, super for the rest
+//                 shouldPinLayoutRolesToSpace: / shouldUseAnchorPointToPinLayoutRolesToSpace: (16.2 only) YES for the removed layout, perspectiveAngleForAppLayout: 0, adjustedSpaceAccessoryViewAnchorPoint: (0.5, 0.5),
+//                                             adjustedSpaceAccessoryViewFrame: its frameForIndex:, all added by Y11_AddRemovalQueries (super class otherwise)
 //               Ported: wrappers that run the 16.0 body in exactly those cases and the super implementation otherwise; Stage Manager frame = overlapping model bounding box (the slide offset of the
 //               16.0 body is kept: it is the difference of the 16.0 result and the container bounds).  Reached from -[SBContinuousExposeRootSwitcherModifier transitionModifierForMainTransitionEvent:].
 //  y11_tapreq   SBShelfCarouselSwitcherModifier / SBSlideOverPeekSwitcherModifier / SBPeekSplitViewRoutingSwitcherModifier / SBDeckSwitcherModifier / SBDeckFloatingSwitcherModifier -handleTapAppLayoutEvent: 16.2 (0x1c78e4460 / 0x1c75dda00 / 0x1c74e7108 / 0x1c78dbad4 / 0x1c77b19a4) build
@@ -119,6 +121,63 @@ static double Y11_Opacity(id self, SEL _cmd, long long role, id layout, unsigned
     return s->oOpacity ? ((double (*)(id, SEL, long long, id, unsigned long long))s->oOpacity)(self, _cmd, role, layout, i) : 1.0;
 }
 
+// ---- 16.2 only query overrides of both removal transitions (SlideOffscreen 0x1c74145ec.., Crossblur 0x1c760c070..): the removed layout (not preparing) is PINNED with its anchor
+// (the card configuration of _layoutAppLayout then applies the anchor through the layer), has no perspective, an accessory anchor of (0.5, 0.5) and an accessory frame equal to
+// its frameForIndex: (the bounding box above); every other layout asks the super class.  16.0 had none of these overrides (the super class answered everything).
+typedef struct { double x, y; } Y11Point;
+#define Y11_SUPERCLS(self_) class_getSuperclass(Y11_SetFor(self_)->cls)
+#define Y11_SUPERSEND(RET, self_, cmd_, ARGT, ...) ({ struct objc_super s_ = { (__bridge __unsafe_unretained id)(__bridge void *)(self_), Y11_SUPERCLS(self_) }; ((RET (*) ARGT)objc_msgSendSuper)(&s_, (cmd_), ##__VA_ARGS__); })
+// last-line guard: the super class must answer the selector (query protocol trampoline / default implementation); when it does not, the 16.2 default answer is used and the miss is announced (ANOMALY y11-removal)
+static BOOL Y11_SuperHas(id self, SEL cmd) {
+    Class sup = Y11_SUPERCLS(self);
+    if (sup && class_getInstanceMethod(sup, cmd)) return YES;
+    BP_Anomaly("y11-removal", @"[y11] %s has no %s in its super class chain: the default answer is used", class_getName(object_getClass(self)), sel_getName(cmd));
+    return NO;
+}
+static BOOL Y11_Pin(id self, SEL _cmd, unsigned long long i) {
+    if ((BP_OnName("y11_removal") && Y11_IsRemovedNow(self, i)) || !Y11_SuperHas(self, _cmd)) return YES;
+    return Y11_SUPERSEND(BOOL, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static BOOL Y11_UseAnchor(id self, SEL _cmd, unsigned long long i) {
+    if ((BP_OnName("y11_removal") && Y11_IsRemovedNow(self, i)) || !Y11_SuperHas(self, _cmd)) return YES;
+    return Y11_SUPERSEND(BOOL, self, _cmd, (struct objc_super *, SEL, unsigned long long), i);
+}
+static BOOL Y11_IsRemovedLayoutNow(id self, id layout) {
+    id removed = Y11_RemovedLayout(self);
+    return removed && [removed isEqual:layout] && !BPX_Bool0(self, "isPreparingLayout");
+}
+static double Y11_Perspective(id self, SEL _cmd, id layout) {
+    if ((BP_OnName("y11_removal") && Y11_IsRemovedLayoutNow(self, layout)) || !Y11_SuperHas(self, _cmd)) return 0.0;
+    return Y11_SUPERSEND(double, self, _cmd, (struct objc_super *, SEL, id), layout);
+}
+static Y11Point Y11_AccAnchor(id self, SEL _cmd, Y11Point anchor, id layout) {
+    if (BP_OnName("y11_removal") && Y11_IsRemovedLayoutNow(self, layout)) return (Y11Point){ 0.5, 0.5 };
+    if (!Y11_SuperHas(self, _cmd)) return anchor;
+    return Y11_SUPERSEND(Y11Point, self, _cmd, (struct objc_super *, SEL, Y11Point, id), anchor, layout);
+}
+static Y11Rect Y11_AccFrame(id self, SEL _cmd, Y11Rect frame, id layout) {
+    if (BP_OnName("y11_removal") && Y11_IsRemovedLayoutNow(self, layout)) {
+        NSArray *ls = BPX_Obj0(self, "appLayouts");
+        NSUInteger idx = [ls indexOfObject:Y11_RemovedLayout(self)];
+        return ((Y11Rect (*)(id, SEL, unsigned long long))objc_msgSend)(self, sel_registerName("frameForIndex:"), (unsigned long long)idx);
+    }
+    if (!Y11_SuperHas(self, _cmd)) return frame;
+    return Y11_SUPERSEND(Y11Rect, self, _cmd, (struct objc_super *, SEL, Y11Rect, id), frame, layout);
+}
+static void Y11_AddRemovalQueries(Class c) {
+    struct { const char *sel; IMP imp; const char *types; } t[] = {
+        { "shouldPinLayoutRolesToSpace:", (IMP)Y11_Pin, "B24@0:8Q16" },
+        { "shouldUseAnchorPointToPinLayoutRolesToSpace:", (IMP)Y11_UseAnchor, "B24@0:8Q16" },
+        { "perspectiveAngleForAppLayout:", (IMP)Y11_Perspective, "d24@0:8@16" },
+        { "adjustedSpaceAccessoryViewAnchorPoint:forAppLayout:", (IMP)Y11_AccAnchor, "{CGPoint=dd}40@0:8{CGPoint=dd}16@32" },
+        { "adjustedSpaceAccessoryViewFrame:forAppLayout:", (IMP)Y11_AccFrame, "{CGRect={CGPoint=dd}{CGSize=dd}}56@0:8{CGRect={CGPoint=dd}{CGSize=dd}}16@48" },
+    };
+    for (unsigned k = 0; k < sizeof t / sizeof t[0]; k++) {
+        SEL sl = sel_registerName(t[k].sel);
+        if (!class_addMethod(c, sl, t[k].imp, t[k].types)) BP_Anomaly("y11-removal", @"[y11] %s already implements %s: the 16.2 removal override was not added", class_getName(c), t[k].sel);
+    }
+}
+
 static void Y11_Patch(Y11Set *s, Class c, BOOL withOpacity) {
     s->cls = c;
     Class sup = class_getSuperclass(c);
@@ -134,6 +193,7 @@ static void Y11_Patch(Y11Set *s, Class c, BOOL withOpacity) {
     s->oScale = BPX_Replace(c, "scaleForIndex:", (IMP)Y11_Scale);
     s->oAnim = BPX_Replace(c, "animationAttributesForLayoutElement:", (IMP)Y11_Anim);
     if (withOpacity) s->oOpacity = BPX_Replace(c, "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)Y11_Opacity);
+    Y11_AddRemovalQueries(c);
 }
 
 // ---- y11_tapreq ----

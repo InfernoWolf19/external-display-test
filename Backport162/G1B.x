@@ -1397,6 +1397,18 @@ static double G1B_XB_TitleOpacity(id self, SEL _cmd, unsigned long long i) {
 }
 static id G1B_XB_Attrs(id self, SEL _cmd, id el) { return G1B_Attrs(self, _cmd, el, gTransSuper, 0.45, 0.92, 0, NO); }
 
+// 16.2 -shouldAllowGroupOpacityForAppLayout: of both FullScreenToStrip transitions (0x1c758b2c8 / 0x1c789064c): `_SBFIsChamoisFullScreenToStripGroupOpacityAvailable() ?
+// [outgoing isEqual:layout] (Crossblur: [layout isEqual:_fromAppLayout]) : [super ...]`.  The os feature flag defaults to YES (SpringBoardFoundation 0x18ee09a6c, specs/group1b-modifiers.md 3.x);
+// the answer is NO for every layout but the outgoing one (the window leaving full screen is composited as one group while it fades).  Kill switch Backport162.off.g1b_groupopacity = [super].
+static BOOL G1B_F2S_GroupOpacity(id self, SEL _cmd, id layout) {
+    if (!BP_OnName("g1b_groupopacity")) return G1B_SUPER(BOOL, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), layout);
+    return F2S_O(self, layout);
+}
+static BOOL G1B_XB_GroupOpacity(id self, SEL _cmd, id layout) {
+    if (!BP_OnName("g1b_groupopacity")) return G1B_SUPER(BOOL, gTransSuper, self, _cmd, (struct objc_super *, SEL, id), layout);
+    return [layout isEqual:G1B_GET(self, kXBFrom)];
+}
+
 static void G1B_BuildFullScreenToStrip(void) {
     Class sup = NSClassFromString(@"SBTransitionSwitcherModifier");
     if (!sup || !G1B_HasSuper(sup, @selector(initWithTransitionID:)) || !G1B_HasSuper(sup, @selector(overlappingModelForAppLayout:))) return;
@@ -1410,7 +1422,7 @@ static void G1B_BuildFullScreenToStrip(void) {
         { "cornerRadiiForIndex:", (IMP)G1B_F2S_Radii, "{?=dddd}24@0:8Q16" }, { "anchorPointForIndex:", (IMP)G1B_F2S_Anchor, "{CGPoint=dd}24@0:8Q16" },
         { "perspectiveAngleForAppLayout:", (IMP)G1B_F2S_Persp, "d24@0:8@16" }, { "scaleForIndex:", (IMP)G1B_F2S_Scale, "d24@0:8Q16" },
         { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1B_F2S_Opacity, "d40@0:8q16@24Q32" }, { "titleAndIconOpacityForIndex:", (IMP)G1B_F2S_TitleOpacity, "d24@0:8Q16" },
-        { "animationAttributesForLayoutElement:", (IMP)G1B_F2S_Attrs, "@24@0:8@16" },
+        { "animationAttributesForLayoutElement:", (IMP)G1B_F2S_Attrs, "@24@0:8@16" }, { "shouldAllowGroupOpacityForAppLayout:", (IMP)G1B_F2S_GroupOpacity, "B24@0:8@16" },
     };
     BOOL made = NO;
     gF2SCls = G1B_MakeClass("SBContinuousExposeFullScreenToStripTransitionSwitcherModifier", sup, i1, 1, m1, sizeof m1 / sizeof m1[0], NULL, &made);
@@ -1425,6 +1437,7 @@ static void G1B_BuildFullScreenToStrip(void) {
         { "opacityForLayoutRole:inAppLayout:atIndex:", (IMP)G1B_XB_Opacity, "d40@0:8q16@24Q32" }, { "perspectiveAngleForAppLayout:", (IMP)G1B_XB_Persp, "d24@0:8@16" },
         { "anchorPointForIndex:", (IMP)G1B_XB_Anchor, "{CGPoint=dd}24@0:8Q16" }, { "cornerRadiiForIndex:", (IMP)G1B_XB_Radii, "{?=dddd}24@0:8Q16" },
         { "titleAndIconOpacityForIndex:", (IMP)G1B_XB_TitleOpacity, "d24@0:8Q16" }, { "animationAttributesForLayoutElement:", (IMP)G1B_XB_Attrs, "@24@0:8@16" },
+        { "shouldAllowGroupOpacityForAppLayout:", (IMP)G1B_XB_GroupOpacity, "B24@0:8@16" },
     };
     made = NO;
     gXBCls = G1B_MakeClass("SBContinuousExposeFullScreenToStripCrossblurTransitionSwitcherModifier", sup, i2, 4, m2, sizeof m2 / sizeof m2[0], NULL, &made);
