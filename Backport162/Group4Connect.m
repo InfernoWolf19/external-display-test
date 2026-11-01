@@ -170,7 +170,7 @@ typedef void (^BP4Block)(void);
 // Object ivar by name (no offsets).  Returns nil if the ivar is missing or is not an object.
 static id BP4_Ivar(id obj, const char *name) {
     if (!obj || !name) return nil;
-    Ivar iv = BP_IvarLookup(object_getClass(obj), name);
+    Ivar iv = class_getInstanceVariable(object_getClass(obj), name);
     if (!iv) return nil;
     const char *t = ivar_getTypeEncoding(iv);
     if (!t || t[0] != '@') return nil;
@@ -735,7 +735,7 @@ static void hk_provDidDisconnect(id self, SEL _cmd, id manager, id identity) {
 #if defined(__APPLE__)
     if (!identity || !BP4_On(BP4_PROVMAP)) return;
     Class c = object_getClass(self);
-    Ivar lockIv = BP_IvarLookup(c, "_lock");
+    Ivar lockIv = class_getInstanceVariable(c, "_lock");
     id map = BP4_Ivar(self, "_lock_rootDisplaysToControllerMap");
     if (!lockIv || !map || ![map respondsToSelector:@selector(removeObjectForKey:)]) return;
     ptrdiff_t off = ivar_getOffset(lockIv);
