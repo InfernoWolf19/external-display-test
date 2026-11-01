@@ -1,12 +1,4 @@
 {
- "0.7.9+273.b23ddb4": {
-  "date": "2026-10-25T20:44:07Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+273.b23ddb4_iphoneos-arm64.deb",
-  "run": 273,
-  "sha": "b23ddb4ede506efad026f81ecac58475399543cc",
-  "subject": "DELTA-SWEEP: shas for Y12..Y16",
-  "version": "0.7.9+273.b23ddb4"
- },
  "0.7.9+274.971056b": {
   "date": "2026-10-25T20:46:15Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+274.971056b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "2363e6cec5cb3a5a689d26acbf3c019bebf1d91b",
   "subject": "Y29Blur: y24_blurroot is opt-in again: its early out completes the layout update group before the 16.0 body would (after the animation duration), cards were reconfigured mid animation (tiny / zoomed cards flipping ~0.4 s after the grid settled, a905444 vs c8bf6ae)",
   "version": "0.7.9+334.2363e6c"
+ },
+ "0.7.9+335.f0c3898": {
+  "date": "2026-11-01T14:37:27Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+335.f0c3898_iphoneos-arm64.deb",
+  "run": 335,
+  "sha": "f0c38988420e74a7ffc7c6d653e237897d85aef5",
+  "subject": "G2B: port the 16.2 pinned / in-flight adoption branch of _layoutAppLayout:roleMask:completion: and drop the pin / rotation fallbacks to the 16.0 body",
+  "version": "0.7.9+335.f0c3898"
  }
 }
