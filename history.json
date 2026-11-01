@@ -1,12 +1,4 @@
 {
- "0.7.9+274.971056b": {
-  "date": "2026-10-25T20:46:15Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+274.971056b_iphoneos-arm64.deb",
-  "run": 274,
-  "sha": "971056beb10153b4f6cf26650d85e972b5bcf33a",
-  "subject": "Y16Contingency: transient overlay keyboard visibility and dismissal use the display of the overlay (y16_overlaykb, y16_overlaydismiss); DELTA-SWEEP updated",
-  "version": "0.7.9+274.971056b"
- },
  "0.7.9+275.256780e": {
   "date": "2026-10-25T20:47:55Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+275.256780e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "f0c38988420e74a7ffc7c6d653e237897d85aef5",
   "subject": "G2B: port the 16.2 pinned / in-flight adoption branch of _layoutAppLayout:roleMask:completion: and drop the pin / rotation fallbacks to the 16.0 body",
   "version": "0.7.9+335.f0c3898"
+ },
+ "0.7.9+336.6bd01b8": {
+  "date": "2026-11-01T14:43:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+336.6bd01b8_iphoneos-arm64.deb",
+  "run": 336,
+  "sha": "6bd01b88735592a152b435a96612327d0beb3d77",
+  "subject": "Y29Blur: y24_blurroot is default ON again (kill file Backport162.off.y24_blurroot); the tiny / zoomed card report persisted with it off, the cause was the card configuration",
+  "version": "0.7.9+336.6bd01b8"
  }
 }
