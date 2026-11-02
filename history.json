@@ -1,12 +1,4 @@
 {
- "0.7.9+285.dd088e7": {
-  "date": "2026-10-30T15:12:53Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+285.dd088e7_iphoneos-arm64.deb",
-  "run": 285,
-  "sha": "dd088e78d96ff05dec5a00c952905ab9378510af",
-  "subject": "G1D: the early refusal of the window drag gesture logs (was silent); CORE-LEFTOVERS section 12: outcome of every press of the u9 drag test",
-  "version": "0.7.9+285.dd088e7"
- },
  "0.7.9+286.ac633da": {
   "date": "2026-10-30T15:11:59Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+286.ac633da_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "b7d90609c97c27635163de474b967754de571be0",
   "subject": "Y38SceneUpdater: S1 steps 2 and 3, SBSceneSettingsUpdater updatesGeometry / setActive:withTransitionContext: / safeUpdateScene:withDisplayConfiguration:updateGeometry: / __updateSceneSettings: (0x1c74da1f8), SBSceneManager add/removeSingleScene and PointerUIScene presentation binder methods (0x1c73ee064..)",
   "version": "0.7.9+347.b7d9060"
+ },
+ "0.7.9+348.388299e": {
+  "date": "2026-11-02T01:56:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+348.388299e_iphoneos-arm64.deb",
+  "run": 348,
+  "sha": "388299e9d1ad1738d310a5ef08ff9bb4209ae2f7",
+  "subject": "Y39SingleScene: S1 step 4, SBSingleSceneController of 16.2 (_newActivationContext 0x1c790f8d0, _isClientProcessRunning 0x1c790fa9c, setSceneActive: 0x1c790f0fc, _evaluateSceneActivationState 0x1c790fb30, delegate driven setShouldActivateUponClientConnection: 0x1c790edfc / setShouldBeKeptActiveWhileForeground: 0x1c790ef64, single scene binder calls of _setVisible:)",
+  "version": "0.7.9+348.388299e"
  },
  "0.7.9+349.fca798e": {
   "date": "2026-11-02T01:56:13Z",
