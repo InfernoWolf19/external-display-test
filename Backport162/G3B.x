@@ -334,7 +334,8 @@ static BOOL BP_G3B_OptIn(const char *name) { return BP_OnName(name); }     // de
 static BOOL BP_G3B_PreflightFeatureEnabled(void) {       // +[PDCPreflightManager isPreflightFeatureEnabled] 0x20e63dea0
     static BOOL result; static dispatch_once_t once;
     dispatch_once(&once, ^{
-        BOOL (*feature)(const char *, const char *) = (BOOL (*)(const char *, const char *))dlsym(RTLD_DEFAULT, "os_feature_enabled_impl");
+        BOOL (*feature)(const char *, const char *) = (BOOL (*)(const char *, const char *))dlsym(RTLD_DEFAULT, "_os_feature_enabled_impl");     // Mach-O name __os_feature_enabled_impl
+        if (!feature) feature = (BOOL (*)(const char *, const char *))dlsym(RTLD_DEFAULT, "os_feature_enabled_impl");
         BOOL (*mg)(CFStringRef) = (BOOL (*)(CFStringRef))dlsym(RTLD_DEFAULT, "MGGetBoolAnswer");
         BOOL (*ctGreen)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "ct_green_tea_logging_enabled");
         BOOL preflight = feature ? feature("PrivacyDisclosure", "preflight") : NO;

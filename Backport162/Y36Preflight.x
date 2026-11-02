@@ -210,8 +210,11 @@ static void Y36_HandleCancel(id self, SEL _cmd) {                               
 // ------------------------------------------------------------------------------------------------ PrivacyDisclosureCore : the manager
 static BOOL Y36_OsFeature(const char *domain, const char *feature) {
     static BOOL (*fn)(const char *, const char *); static dispatch_once_t once;
-    dispatch_once(&once, ^{ fn = (BOOL (*)(const char *, const char *))dlsym(RTLD_DEFAULT, "os_feature_enabled_impl"); });
-    if (!fn) { BP_Anomaly("y36-feature", @"os_feature_enabled_impl not found: PrivacyDisclosure/%s reads NO", feature); return NO; }
+    dispatch_once(&once, ^{      // the Mach-O symbol is __os_feature_enabled_impl (libsystem_featureflags), i.e. dlsym name "_os_feature_enabled_impl"
+        fn = (BOOL (*)(const char *, const char *))dlsym(RTLD_DEFAULT, "_os_feature_enabled_impl");
+        if (!fn) fn = (BOOL (*)(const char *, const char *))dlsym(RTLD_DEFAULT, "os_feature_enabled_impl");
+    });
+    if (!fn) { BP_Anomaly("y36-feature", @"_os_feature_enabled_impl (libsystem_featureflags) not found by dlsym: PrivacyDisclosure/%s reads NO", feature); return NO; }
     return fn(domain, feature);
 }
 // 0x20e63dea0 + blocks 0x20e63dee4 / the green tea once: (allRegions || green-tea) && (preflight || ct_green_tea_logging_enabled())
