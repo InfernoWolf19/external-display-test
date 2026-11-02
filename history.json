@@ -1,12 +1,4 @@
 {
- "0.7.9+282.cc9d0eb": {
-  "date": "2026-10-27T16:57:32Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+282.cc9d0eb_iphoneos-arm64.deb",
-  "run": 282,
-  "sha": "cc9d0eb8cfb966885b4120e5d677c65124e675b4",
-  "subject": "Drag log load: update / async-both / bring-to-front lines are logged for the first updates of a transaction and on change only (a drag logged ~500 multi line records per second, every BP_Log opens and writes the file on the main thread)",
-  "version": "0.7.9+282.cc9d0eb"
- },
  "0.7.9+283.4897c3e": {
   "date": "2026-10-27T16:59:56Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+283.4897c3e_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4e6096b373754b9cae91268dd1a437481894762f",
   "subject": "DELTA-SWEEP pass 4: S1 system UI scene family decoded (structure, addresses, exact remaining work), _main_launchDisplayContext verified EQUIVALENT, UIK U2 decode so far",
   "version": "0.7.9+343.4e6096b"
+ },
+ "0.7.9+346.27f04b6": {
+  "date": "2026-11-02T01:43:59Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+346.27f04b6_iphoneos-arm64.deb",
+  "run": 346,
+  "sha": "27f04b6752d32c5a19aeb17b314e3f7bc167ceb9",
+  "subject": "Y34ClassicPlaceholder: the SEL argument handed to the lifted bodies goes through void * (-Wcast-of-sel-type is an error in the CI build): fixes the red builds 344 and 345",
+  "version": "0.7.9+346.27f04b6"
  }
 }
