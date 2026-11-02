@@ -1,12 +1,4 @@
 {
- "0.7.9+284.ccf3424": {
-  "date": "2026-10-30T15:08:59Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+284.ccf3424_iphoneos-arm64.deb",
-  "run": 284,
-  "sha": "ccf34247fbc867472d7a187103018134da7c6332",
-  "subject": "Z2OrientTraits: 16.2 body of SBSwitcherController switcherOrientation:... (chamois / non primary overlay / canDetermineActiveOrientation rules, follow-up rotation in transitionDidBegin, unique transition labels, actuateOrientationForTraitsDelegate:), external display arbiter input follows the display's real orientation (switches or_traits, or_label, or_extinputs, or_extreal)",
-  "version": "0.7.9+284.ccf3424"
- },
  "0.7.9+285.dd088e7": {
   "date": "2026-10-30T15:12:53Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+285.dd088e7_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b7d90609c97c27635163de474b967754de571be0",
   "subject": "Y38SceneUpdater: S1 steps 2 and 3, SBSceneSettingsUpdater updatesGeometry / setActive:withTransitionContext: / safeUpdateScene:withDisplayConfiguration:updateGeometry: / __updateSceneSettings: (0x1c74da1f8), SBSceneManager add/removeSingleScene and PointerUIScene presentation binder methods (0x1c73ee064..)",
   "version": "0.7.9+347.b7d9060"
+ },
+ "0.7.9+349.fca798e": {
+  "date": "2026-11-02T01:56:13Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+349.fca798e_iphoneos-arm64.deb",
+  "run": 349,
+  "sha": "fca798eff5179dd94da7e93cd8e02e01ca253d45",
+  "subject": "G2B: debug dump of every view of a card (not only the snapshot chain) with the live content overlay (class, view, superview, bounds, hosted scene reference size, resizesHostedContext, blurred), and the blur / overlay fields on the [g2b] pos line",
+  "version": "0.7.9+349.fca798e"
  }
 }
