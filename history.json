@@ -1,12 +1,4 @@
 {
- "0.7.9+293.fa3b283": {
-  "date": "2026-10-31T01:14:03Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+293.fa3b283_iphoneos-arm64.deb",
-  "run": 293,
-  "sha": "fa3b283d9052f415577c7b842a4185cad6426005",
-  "subject": "BPDaemon.h: a daemon log line longer than the buffer keeps its newline (the next line was glued to it)",
-  "version": "0.7.9+293.fa3b283"
- },
  "0.7.9+294.4ea593a": {
   "date": "2026-10-31T10:23:03Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+294.4ea593a_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "8f5c67874b8c3aa93559132b1136cc89f898e7b7",
   "subject": "Y40SystemUIScenes: S1 steps 5 and 6, SBSystemUISceneController of 16.2 (init with the vending policy 0x1c7965d48, display identity keyed scene controllers, createScene / destroyScenes / processDidExit), Input / Overlay / AccessibilityUIServer controllers, run time SBEyedropperUISceneController / SBMomentsUISceneController, data driven SBSystemUIScenesCoordinator (+_sceneControllersConfigurations 0x1c77a86ac, -init 0x1c77a8f64), traits roles of the new controllers",
   "version": "0.7.9+356.8f5c678"
+ },
+ "0.7.9+357.b388840": {
+  "date": "2026-11-02T16:01:35Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+357.b388840_iphoneos-arm64.deb",
+  "run": 357,
+  "sha": "b388840013797ad4ee0f21187f639ba668b18bd0",
+  "subject": "Y41SystemUIClients: S1 step 7, the system UI scene client side of the application support service (initializationContextForClient: 0x1c77ea600, shouldOverrideClientInitialization: 0x1c77ea5bc, service:overrideClientInitialization: 0x1c764ee7c, destroyScenes... 0x1c764f3f4, workspace:didReceiveSceneRequestWithOptions:completion: 0x1c77ad8dc, +_newApplicationInitializationContext 0x1c7363804, sb_embeddedDisplayDefaultContextForSystemUIScenes 0x1c7536608)",
+  "version": "0.7.9+357.b388840"
  }
 }
