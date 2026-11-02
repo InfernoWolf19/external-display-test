@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 352, commit 32474aa: Y34ClassicWrapper / Y34ClassicSupport: objc_msgSendSuper2 declared (private symbol), the weak ivar unregistration goes through a private C prototype of objc_storeWeak (ARC rejects the cast): fixes build 351
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+352.32474aa
+Installed-Size: 5216
+Filename: debs/com.infernowolf19.backport162_0.7.9+352.32474aa_iphoneos-arm64.deb
+Size: 1660428
+MD5sum: 75020afd2b0289c85c35ec4b82d47a2e
+SHA1: 4e0bfa152e307a731340ad70a19e6b6c01c4cc08
+SHA256: ef999f38ef5c2f3210c82d12564a5d8e1a7c0acbe9f079df09e9694a582964e1
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 350, commit 9494c48: Y30Snapshot: the stretch layout applies the scaling transform to the scaling view (16.0 0x1c5e33f1c / 16.2 0x1c72a6374), not to the image view; 16.2 SBSwitcherSnapshotImageView prepareForReuse added and run on reuse (y24_snapreuse)
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1295,25 +1317,3 @@ Size: 1429060
 MD5sum: 251565ed0c3618a85236bc4ed807c7e3
 SHA1: f113ac7c8ff2532d7bcad230448f0dee1a863f2f
 SHA256: 5caeca73df165b9e7470e67da7d8754d975958f09e2b43d90df29843b61d8888
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 287, commit 8585700: Backport162UIK (new in-app dylib, UIK.m): U1 UIScreen bounds of an external main-like screen are never swapped by the interface orientation, _connectScreen sets it to portrait without notification (16.2; screenBoundsIgnoresSceneOrientation is unread in 16.2 UIKit); switches uik, uik_screenbounds; specs/UIKIT-APP-0.7.9.md
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Recommends: preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+287.8585700
-Installed-Size: 4448
-Filename: debs/com.infernowolf19.backport162_0.7.9+287.8585700_iphoneos-arm64.deb
-Size: 1429158
-MD5sum: 7e79cb9511647d14d868a427a8128d69
-SHA1: 1242fbea7a06f7ee7111f2f9c42347dc4025896e
-SHA256: fb36bf23b15d9dad14ccb828ffa0be3e021579924742dc7d8c737b59052c2212

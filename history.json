@@ -1,12 +1,4 @@
 {
- "0.7.9+287.8585700": {
-  "date": "2026-10-30T15:12:38Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+287.8585700_iphoneos-arm64.deb",
-  "run": 287,
-  "sha": "858570012660724f7cd186074fbe672f972000c8",
-  "subject": "Backport162UIK (new in-app dylib, UIK.m): U1 UIScreen bounds of an external main-like screen are never swapped by the interface orientation, _connectScreen sets it to portrait without notification (16.2; screenBoundsIgnoresSceneOrientation is unread in 16.2 UIKit); switches uik, uik_screenbounds; specs/UIKIT-APP-0.7.9.md",
-  "version": "0.7.9+287.8585700"
- },
  "0.7.9+288.2d933eb": {
   "date": "2026-10-30T15:15:43Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+288.2d933eb_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "9494c4878c38d287bf2dc4df3456334a1768cef7",
   "subject": "Y30Snapshot: the stretch layout applies the scaling transform to the scaling view (16.0 0x1c5e33f1c / 16.2 0x1c72a6374), not to the image view; 16.2 SBSwitcherSnapshotImageView prepareForReuse added and run on reuse (y24_snapreuse)",
   "version": "0.7.9+350.9494c48"
+ },
+ "0.7.9+352.32474aa": {
+  "date": "2026-11-02T02:15:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+352.32474aa_iphoneos-arm64.deb",
+  "run": 352,
+  "sha": "32474aa70aba9f91b24e8ae3ac967c902007f90e",
+  "subject": "Y34ClassicWrapper / Y34ClassicSupport: objc_msgSendSuper2 declared (private symbol), the weak ivar unregistration goes through a private C prototype of objc_storeWeak (ARC rejects the cast): fixes build 351",
+  "version": "0.7.9+352.32474aa"
  }
 }
