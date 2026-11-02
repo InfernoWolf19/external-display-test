@@ -1,12 +1,4 @@
 {
- "0.7.9+292.8be2cdd": {
-  "date": "2026-10-30T15:24:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+292.8be2cdd_iphoneos-arm64.deb",
-  "run": 292,
-  "sha": "8be2cddf7d97bf95a6bf172c1b595439a0a64089",
-  "subject": "G3B hosted keyboard window: the SHOW / HIDE debug line (ten message sends for its arguments) is only built while Backport162.debug exists",
-  "version": "0.7.9+292.8be2cdd"
- },
  "0.7.9+293.fa3b283": {
   "date": "2026-10-31T01:14:03Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+293.fa3b283_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "ed69c9c8d0ecee002d013265d0042f624b38e99d",
   "subject": "DELTA-SWEEP pass 4.4: device evidence (what was not installed and why), the rows ported already by other files, the exact blockers of the rows that stay open; README row y35_medusaend",
   "version": "0.7.9+355.ed69c9c"
+ },
+ "0.7.9+356.8f5c678": {
+  "date": "2026-11-02T15:56:39Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+356.8f5c678_iphoneos-arm64.deb",
+  "run": 356,
+  "sha": "8f5c67874b8c3aa93559132b1136cc89f898e7b7",
+  "subject": "Y40SystemUIScenes: S1 steps 5 and 6, SBSystemUISceneController of 16.2 (init with the vending policy 0x1c7965d48, display identity keyed scene controllers, createScene / destroyScenes / processDidExit), Input / Overlay / AccessibilityUIServer controllers, run time SBEyedropperUISceneController / SBMomentsUISceneController, data driven SBSystemUIScenesCoordinator (+_sceneControllersConfigurations 0x1c77a86ac, -init 0x1c77a8f64), traits roles of the new controllers",
+  "version": "0.7.9+356.8f5c678"
  }
 }
