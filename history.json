@@ -1,12 +1,4 @@
 {
- "0.7.9+289.25ce873": {
-  "date": "2026-10-30T15:16:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+289.25ce873_iphoneos-arm64.deb",
-  "run": 289,
-  "sha": "25ce873a0d8b7a7ddc7faf2a80eb60540e31ff12",
-  "subject": "Y18IndirectPan / Y19PanDelegates: SBIndirectPanGestureRecognizer follows the 16.2 hover state machine (pointer leaving ends the gesture, idle timers on entering, touches of the monitor cancelled instead of the iPad's: y17_indirectpan, y17_pancancel), hover-only gate with accepting owners (y17_indirectgate), floating dock folder rule and window clipping (y17_dockfolder, y17_dockclip); DELTA-SWEEP: indirect pan family rows decided",
-  "version": "0.7.9+289.25ce873"
- },
  "0.7.9+291.2ded79c": {
   "date": "2026-10-30T15:23:07Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+291.2ded79c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "21bf2801981a4707b9697c284e2fb0a219db9e81",
   "subject": "Y36Preflight / G3B: resolve os_feature_enabled_impl through its dlsym name _os_feature_enabled_impl (Mach-O __os_feature_enabled_impl); the plain name is not found on the device ('ANOMALY y36-feature ... not found', preflight/preflightInAllRegions read NO only because of the failed lookup)",
   "version": "0.7.9+353.21bf280"
+ },
+ "0.7.9+354.492a2c3": {
+  "date": "2026-11-02T15:50:50Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+354.492a2c3_iphoneos-arm64.deb",
+  "run": 354,
+  "sha": "492a2c3a011d2c2b75580229680fd69e65ac34ae",
+  "subject": "Y34: install what the device log showed missing: BSSizeSwap and SBFIsChamoisWindowingUIAvailable do not exist in 16.0 (C re-implementations in Y34LiftRT.c, BSSizeSwap checked against the 16.2 machine code with Unicorn), class symbols fall back to objc_getClass, the preflight and the install anomalies name EVERY unresolved symbol; Y35SmallRows: SBMedusaDecoratedDeviceApplicationSceneViewController transitionWillEnd (16.2 body, no transient error message)",
+  "version": "0.7.9+354.492a2c3"
  }
 }
