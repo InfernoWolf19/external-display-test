@@ -1,12 +1,4 @@
 {
- "0.7.9+286.ac633da": {
-  "date": "2026-10-30T15:11:59Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+286.ac633da_iphoneos-arm64.deb",
-  "run": 286,
-  "sha": "ac633da5c5506054327293415de8e7b11efd0f6c",
-  "subject": "P5 hold-flip guard compares the pointer location in window coordinates (locationInView:nil) with the window bounds, not the location in the touch's own view",
-  "version": "0.7.9+286.ac633da"
- },
  "0.7.9+287.8585700": {
   "date": "2026-10-30T15:12:38Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+287.8585700_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "fca798eff5179dd94da7e93cd8e02e01ca253d45",
   "subject": "G2B: debug dump of every view of a card (not only the snapshot chain) with the live content overlay (class, view, superview, bounds, hosted scene reference size, resizesHostedContext, blurred), and the blur / overlay fields on the [g2b] pos line",
   "version": "0.7.9+349.fca798e"
+ },
+ "0.7.9+350.9494c48": {
+  "date": "2026-11-02T02:03:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+350.9494c48_iphoneos-arm64.deb",
+  "run": 350,
+  "sha": "9494c4878c38d287bf2dc4df3456334a1768cef7",
+  "subject": "Y30Snapshot: the stretch layout applies the scaling transform to the scaling view (16.0 0x1c5e33f1c / 16.2 0x1c72a6374), not to the image view; 16.2 SBSwitcherSnapshotImageView prepareForReuse added and run on reuse (y24_snapreuse)",
+  "version": "0.7.9+350.9494c48"
  }
 }
