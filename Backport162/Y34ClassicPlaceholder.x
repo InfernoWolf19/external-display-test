@@ -36,16 +36,16 @@ static IMP gY34OrigRequest;
 
 static id Y34_PhRequest(id self, SEL _cmd, id sceneView, id context) {
     if (!BP_OnName("y34_placeholder")) return ((id (*)(id, SEL, id, id))gY34OrigRequest)(self, _cmd, sceneView, context);
-    uint64_t r = y34_ph_request(Y34_P(self), (uint64_t)(uintptr_t)_cmd, Y34_P(sceneView), Y34_P(context));
+    uint64_t r = y34_ph_request(Y34_P(self), (uint64_t)(uintptr_t)(void *)_cmd, Y34_P(sceneView), Y34_P(context));
     return (__bridge id)(void *)(uintptr_t)r;
 }
 static id Y34_PhContentView(id self, SEL _cmd, id handle, id config, long long orientation, id snapshot, CGSize size, id statusBar, BOOL mismatch, CGRect bounds) {
-    uint64_t r = y34_ph_contentView(Y34_P(self), (uint64_t)(uintptr_t)_cmd, Y34_P(handle), Y34_P(config), (uint64_t)orientation, Y34_P(snapshot), size.width, size.height, Y34_P(statusBar), mismatch,
+    uint64_t r = y34_ph_contentView(Y34_P(self), (uint64_t)(uintptr_t)(void *)_cmd, Y34_P(handle), Y34_P(config), (uint64_t)orientation, Y34_P(snapshot), size.width, size.height, Y34_P(statusBar), mismatch,
                                     bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height);
     return (__bridge id)(void *)(uintptr_t)r;
 }
 static id Y34_ZoomView(id self, SEL _cmd, id handle, id config, long long orientation, id snapshot, CGSize size, id statusBar, BOOL decode, BOOL mismatch, CGRect bounds) {
-    uint64_t r = y34_zoom_view(Y34_P(self), (uint64_t)(uintptr_t)_cmd, Y34_P(handle), Y34_P(config), (uint64_t)orientation, Y34_P(snapshot), size.width, size.height, Y34_P(statusBar), decode, mismatch,
+    uint64_t r = y34_zoom_view(Y34_P(self), (uint64_t)(uintptr_t)(void *)_cmd, Y34_P(handle), Y34_P(config), (uint64_t)orientation, Y34_P(snapshot), size.width, size.height, Y34_P(statusBar), decode, mismatch,
                                bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height);
     return (__bridge id)(void *)(uintptr_t)r;
 }
