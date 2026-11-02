@@ -30,6 +30,8 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
+// objc_storeWeak under a private name: a runtime-added weak ivar is a plain void ** for ARC (no cast to id __autoreleasing * allowed)
+extern void *y34_storeWeak(void **location, void *obj) __asm__("_objc_storeWeak");
 extern void y34_sv_note(void *self, void *cmd, uint8_t userAction);
 extern void *y34_sv_create(void *self, void *cmd, void *host);
 extern void y34_sv_configure(void *self, void *cmd, void *host);
@@ -57,7 +59,7 @@ static void Y34_SvMove(id self, SEL _cmd) { y34_sv_move(Y34_S(self), (void *)_cm
 static void Y34_SvDealloc(id self, SEL _cmd) { y34_sv_dealloc(Y34_S(self), (void *)_cmd); }
 static void Y34_SvDestruct(id self, SEL _cmd) {
     void **w = Y34_IvarSlot(self, gIvCurrentHost);
-    objc_storeWeak((id __autoreleasing *)w, nil);      // objc_destroyWeak: unregisters the weak slot
+    y34_storeWeak(w, NULL);                           // objc_destroyWeak: unregisters the weak slot
     Y34_ObjRelease(self, gIvAssertion);
 }
 

@@ -28,6 +28,7 @@
 #pragma clang diagnostic ignored "-Wunused-function"
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
+extern void objc_msgSendSuper2(void);      // private (not in the SDK headers): the machine code of 16.2 uses it for [super initWithFrame:]
 extern void y34_wv_layout(void *self, void *cmd);
 extern const char *y34_classicwrapper_preflight(void);
 
