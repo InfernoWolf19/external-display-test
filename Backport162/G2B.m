@@ -1188,12 +1188,12 @@ static BOOL BP2B_LayerHasModifier(id layer, NSArray<NSString *> *keyPaths) {
 // size of its image view and image.  A "tiny" card (content drawn at ~ s * s) shows an image view whose bounds equal its natural size with transform scale 1 under a layer scale s.
 static const void *kBP2B_DumpGen = &kBP2B_DumpGen;
 static void BP2B_DumpTree(UIView *v, int depth, NSMutableString *out) {
-    if (!v || depth > 8) return;
+    if (!v || depth > 14) return;
     NSString *cn = NSStringFromClass([v class]);
-    BOOL interesting = depth == 0 || [cn containsString:@"Snapshot"] || [cn containsString:@"PageView"] || [cn containsString:@"Orientation"] || [cn containsString:@"SceneView"] || [cn containsString:@"ContentView"] || [cn containsString:@"Image"];
+    BOOL interesting = YES;      // every view of the card (the live content overlay, its scene view and the blur content view are not in the snapshot chain)
     if (interesting) {
         CATransform3D t = v.layer.transform;
-        [out appendFormat:@"\n   %*s%@ frame %.1fx%.1f@%.1f,%.1f bounds %.1fx%.1f xform %.4f,%.4f", depth * 2, "", cn, v.frame.size.width, v.frame.size.height, v.frame.origin.x, v.frame.origin.y, v.bounds.size.width, v.bounds.size.height, t.m11, t.m22];
+        [out appendFormat:@"\n   %*s%@ frame %.1fx%.1f@%.1f,%.1f bounds %.1fx%.1f xform %.4f,%.4f sub %.4f,%.4f alpha %.2f hidden %d", depth * 2, "", cn, v.frame.size.width, v.frame.size.height, v.frame.origin.x, v.frame.origin.y, v.bounds.size.width, v.bounds.size.height, t.m11, t.m22, v.layer.sublayerTransform.m11, v.layer.sublayerTransform.m22, v.alpha, (int)v.hidden];
         if ([cn isEqualToString:@"SBSwitcherSnapshotImageView"]) {
             BOOL stretch = NO, nonuni = NO;
             BP2B_IvarGet(v, "_stretchToFillBounds", &stretch, sizeof stretch);
@@ -1207,7 +1207,7 @@ static void BP2B_DumpTree(UIView *v, int depth, NSMutableString *out) {
     }
     for (UIView *sv in [v.subviews copy]) BP2B_DumpTree(sv, depth + (interesting ? 1 : 0), out);
 }
-static void BP2B_ScheduleDump(id c, NSUInteger idx, double layerScale, id appLayout) {
+static void BP2B_ScheduleDump(id c, NSUInteger idx, double layerScale, id appLayout, id live) {
     if (!c || !BP_LogEnabled()) return;
     NSNumber *gen = @([objc_getAssociatedObject(c, kBP2B_DumpGen) unsignedLongLongValue] + 1);
     objc_setAssociatedObject(c, kBP2B_DumpGen, gen, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -1217,6 +1217,12 @@ static void BP2B_ScheduleDump(id c, NSUInteger idx, double layerScale, id appLay
         if (!cc || ![objc_getAssociatedObject(cc, kBP2B_DumpGen) isEqual:gen]) return;           // a later configuration superseded this one
         NSMutableString *o = [NSMutableString string];
         BP2B_DumpTree(cc, 0, o);
+        if (live) {       // the overlay object, its view, and (for the scene overlay) the hosted scene view controller's reference size / content orientation
+            UIView *lv = BP2B_Obj(live, sel_registerName("contentOverlayView"));
+            id dvc = BP2B_IvarObj(live, "_deviceApplicationSceneViewController");
+            CGSize ref = BP2B_Size(dvc, sel_registerName("contentReferenceSize"));
+            [o appendFormat:@"\n   live overlay %s view %@ (%p) superview %@ frame %.1fx%.1f bounds %.1fx%.1f ref %.1fx%.1f dvc %@ resizesHosted %d blurred %d", class_getName(object_getClass(live)), lv ? NSStringFromClass([lv class]) : @"-", (__bridge void *)lv, lv.superview ? NSStringFromClass([lv.superview class]) : @"-", lv.frame.size.width, lv.frame.size.height, lv.bounds.size.width, lv.bounds.size.height, ref.width, ref.height, dvc ? NSStringFromClass([dvc class]) : @"-", (int)BP2B_Bool(live, sel_registerName("resizesHostedContext")), (int)BP2B_Bool(live, sel_registerName("isBlurred"))];
+        }
         BP_Log(@"[g2b] content %p idx %lu layerScale %.4f (settled 0.9 s):%@", (__bridge void *)appLayout, (unsigned long)idx, layerScale, o);
     });
 }
@@ -1440,12 +1446,12 @@ static void BP2B_LayoutAppLayoutImpl(id vc, SEL cmd, id appLayout, unsigned long
             if (BP_LogEnabled()) {       // diagnostic (Backport162.debug): the position branch taken for this card (pin / anchor / rotation / adoption), logged when it changes
                 static NSMutableDictionary *lastPos;
                 if (!lastPos) lastPos = [NSMutableDictionary dictionary];
-                NSString *pl = [NSString stringWithFormat:@"idx %lu role %lld pin %d useAnchor %d rot %d adopted %d anchor %.3f,%.3f applied %.3f,%.3f xy %.1f,%.1f layerScale %.4f comp %.2f,%.2f modes pos %lld->%lld scale %lld->%lld", (unsigned long)idx, role, (int)pin, (int)useAnchor, (int)rotationAnim, (int)adopted, anchor.x, anchor.y, anchorApplied.x, anchorApplied.y, X, Y, layerScale, compX, compY, positionMode, posModeAdj, scaleMode, scaleModeEff];
+                NSString *pl = [NSString stringWithFormat:@"idx %lu role %lld pin %d useAnchor %d rot %d adopted %d anchor %.3f,%.3f applied %.3f,%.3f xy %.1f,%.1f layerScale %.4f comp %.2f,%.2f modes pos %lld->%lld scale %lld->%lld blurred %d target %lld delay %.2f iconScale %.4f live %s fillOverlay %d", (unsigned long)idx, role, (int)pin, (int)useAnchor, (int)rotationAnim, (int)adopted, anchor.x, anchor.y, anchorApplied.x, anchorApplied.y, X, Y, layerScale, compX, compY, positionMode, posModeAdj, scaleMode, scaleModeEff, (int)blurred, blurTarget, blurDelay, blurIcon, live ? class_getName(object_getClass(live)) : "-", (int)overlayFill];
                 NSNumber *pk = @((unsigned long long)(__bridge void *)leaf);
                 if (lastPos.count > 200) [lastPos removeAllObjects];
                 if (![lastPos[pk] isEqualToString:pl]) { lastPos[pk] = pl; BP_Log(@"[g2b] pos %p %@", (__bridge void *)leaf, pl); }
             }
-            BP2B_ScheduleDump(c, idx, layerScale, appLayout);
+            BP2B_ScheduleDump(c, idx, layerScale, appLayout, live);
             // progress properties: only when the size / centre really change
             id resizeProp = nil, repositionProp = nil;
             CGRect cb = BP2B_Rect(c, @selector(bounds));
