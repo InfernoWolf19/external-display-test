@@ -84,9 +84,10 @@ class Ctx:
 _IVT = {}
 def ivar_tables(ver):
     if ver in _IVT: return _IVT[ver]
-    fn = S + ('sb160n_objc.txt' if ver == '160' else 'sb162_objc.txt')
     tab = {}; cur = None
-    for l in open(fn, errors='replace'):
+    for fn in (S + ('sb160n_objc.txt' if ver == '160' else 'sb162_objc.txt'), S + 'sbui/' + ver + '.txt'):
+      cur = None
+      for l in open(fn, errors='replace'):
         m = re.match(r'@interface (\w+)(?: \((\w+)\))? *(?::\s*(\w+))?', l)
         if m and l.rstrip().endswith('{') or (m and '{ //' in l):
             cur = m.group(1); tab.setdefault(cur, {'super': m.group(3), 'iv': []}); continue
@@ -98,11 +99,12 @@ def ivar_tables(ver):
 
 
 _RET = {}
+RAWT = {}
 def ret_kinds(ver):
     """selector -> set of return kinds (x v d size rect STRUCT..) from the ObjC dumps of that build"""
     if ver in _RET: return _RET[ver]
     out = {}
-    names = ['sb160n_objc.txt', 'UIKitCore160n.txt'] if ver == '160' else ['sb162_objc.txt', 'UIKitCore162.txt']
+    names = ['sb160n_objc.txt', 'UIKitCore160n.txt', 'sbui/160.txt'] if ver == '160' else ['sb162_objc.txt', 'UIKitCore162.txt', 'sbui/162.txt']
     for fnm in names:
         if not os.path.exists(S + fnm): continue
         for l in open(S + fnm, errors='replace'):
@@ -128,10 +130,23 @@ def ret_kinds(ver):
                 elif t.startswith('struct') or t.startswith('union'): kd = 'STRUCT ' + t[:40]
                 else: kd = 'x'
                 out.setdefault(sel, set()).add(kd)
+                RAWT.setdefault(sel, set()).add(t)
     _RET[ver] = out; return out
 FN_KINDS = {'BSRectWithSize': 'rect', 'BSSizeSwap': 'size', 'BSSizeRoundForScale': 'size', 'SBUICScaledRectWithOffsets': 'rect', 'BSRectWithSizeCenteredInRect': 'rect',
             'BSRectRoundForScale': 'rect', 'BSSizeScale': 'size', 'UIRectGetCenter': 'size', 'BSPointRoundForScale': 'size', 'CGRectIntegral': 'rect',
-            'CGRectInset': 'rect', 'CGRectOffset': 'rect', 'UIEdgeInsetsInsetRect': 'rect', 'CGRectUnion': 'rect', 'CGRectIntersection': 'rect', 'CGSizeApplyAffineTransform': 'size'}
+            'CGRectInset': 'rect', 'CGRectOffset': 'rect', 'UIEdgeInsetsInsetRect': 'rect', 'CGRectUnion': 'rect', 'CGRectIntersection': 'rect', 'CGSizeApplyAffineTransform': 'size',
+            'UIWindowConvertRectFromOrientationToOrientation': 'rect',
+            'sb__mainScreenReferenceBounds': 'rect', 'CGAffineTransformConcat': 'm48', 'CGAffineTransformMakeRotation': 'm48', 'CGAffineTransformMakeScale': 'm48', 'CGAffineTransformMakeTranslation': 'm48',
+            'CGAffineTransformInvert': 'm48', 'CGAffineTransformScale': 'm48', 'CGAffineTransformRotate': 'm48', 'CGAffineTransformTranslate': 'm48',
+            'CGRectGetHeight': 'd', 'CGRectGetWidth': 'd', 'CGRectGetMinX': 'd', 'CGRectGetMinY': 'd', 'CGRectGetMaxX': 'd', 'CGRectGetMaxY': 'd', 'CGRectGetMidX': 'd', 'CGRectGetMidY': 'd',
+            'SBClassicUtilitiesScaleFactorForPhoneAppZoomedIn': 'd', 'SBFAngleForRotationFromInterfaceOrientationToInterfaceOrientation': 'd', 'SBScreenDisplayCornerRadius': 'd',
+            'SBClassicUtilitiesInsetAndTranslateLayerForPresentationWithHomeAffordance': 'v'}
+# C functions whose result is an integer / pointer / BOOL / void (x register or nothing): anything else must be listed above or given with --kinds fn:NAME=kind
+X_FNS = {'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
+         'sb__runningInSpringBoard', 'MGCopyAnswer', 'SBFIsChamoisWindowingUIAvailable', 'os_log_type_enabled', 'os_log_debug_impl', 'SBLogCommon', 'objc_alloc', 'objc_opt_class',
+         'objc_opt_isKindOfClass', 'objc_opt_new', 'objc_initWeak', 'objc_copyWeak', 'objc_destroyWeak', 'objc_loadWeakRetained', 'objc_storeWeak', 'objc_msgSendSuper2', 'Unwind_Resume',
+         'j__objc_storeStrong', 'dispatch_async', 'SBFLoggingMethodProem', 'CGRectGetNull'}
+
 
 def rname(n):
     n = {'fp': 'x29', 'lr': 'x30'}.get(n, n)
@@ -362,7 +377,8 @@ class Lift:
                 if not sec_ and sym_ in ('?', ''):
                     lit0 = s.ctx.cstring(cvalres)
                     if lit0 and all(32 <= ord(ch) < 127 for ch in lit0):
-                        sec_ = '__TEXT.__objc_methname' if (d == 'x1' and re.match(r'^[A-Za-z_][A-Za-z0-9_:]*$', lit0)) else '__TEXT.__cstring'
+                        # selectors are uniqued into the shared libobjc method name region (< 0x188000000 in both caches); C strings live in the image's own __cstring
+                        sec_ = '__TEXT.__objc_methname' if (cvalres < 0x188000000 and re.match(r'^[A-Za-z_][A-Za-z0-9_:]*$', lit0)) else '__TEXT.__cstring'
                 if 'methname' in sec_:
                     nmx = s.ctx.cstring(cvalres)
                     E('X[%d] = (uint64_t)SEL(%s_sels, %d); /* direct selector %s */' % (int(d[1:]), s.cname, s.intern(s.sels, nmx), nmx)); s.cval[d] = ('sel', nmx); return
@@ -553,6 +569,9 @@ class Lift:
         elif not wb: pass
         if base == 'sp': pass
         # constant (global) loads
+        if load and const_addr is not None and not pair and base in s.baked and sz == 16 and r0[0] == 'q':
+            lo, hi = struct.unpack('<QQ', s.ctx.read(const_addr, 16))
+            E('VR[%d][0] = 0x%xull; VR[%d][1] = 0x%xull; /* baked const @%x */' % (int(r0[1:]), lo, int(r0[1:]), hi, const_addr)); return
         if load and const_addr is not None and not pair and base in s.baked and sz in (1, 2, 4, 8) and r0[0] in 'xwd':
             data = s.ctx.read(const_addr, sz)
             v = int.from_bytes(data, 'little')
@@ -606,7 +625,10 @@ class Lift:
             for j, r in enumerate(regs):
                 off = j * sz
                 a = eas[j] if eas else '(%s) + %d' % (ea, off)
-                if load and const_addr is not None and base in s.baked and sz in (4, 8):
+                if load and const_addr is not None and base in s.baked and sz == 16 and r[0] == 'q':
+                    d16 = s.ctx.read(const_addr + off, 16); lo, hi = struct.unpack('<QQ', d16)
+                    E('VR[%d][0] = 0x%xull; VR[%d][1] = 0x%xull; /* baked const @%x */' % (int(r[1:]), lo, int(r[1:]), hi, const_addr + off))
+                elif load and const_addr is not None and base in s.baked and sz in (4, 8):
                     bv = int.from_bytes(s.ctx.read(const_addr + off, sz), 'little')
                     if r[0] in 'xw': E(s.wr(i, r, '0x%xull' % bv) + ' /* baked const @%x */' % (const_addr + off)); s.kill(r)
                     else: E('VR[%d][0] = 0x%xull; VR[%d][1] = 0; /* baked const @%x */' % (int(r[1:]), bv, int(r[1:]), const_addr + off))
@@ -760,6 +782,7 @@ class Lift:
         """decide the return kind of the call at idx by scanning the code after it"""
         ins = s.ins
         akey = name + '@%x' % ins[idx].address
+        if ('fn:' + name.lstrip('_')) in s.kinds: return s.kinds['fn:' + name.lstrip('_')]
         if akey in s.kinds: return s.kinds[akey]
         if name in s.kinds: return s.kinds[name]
         if name.startswith('msgSend:'):
@@ -768,8 +791,14 @@ class Lift:
                 k0 = next(iter(ks))
                 if k0.startswith('STRUCT'): s.stats['warn'].append('call %s returns %s: indirect result (x8) is NOT modelled' % (name, k0))
                 return 'x' if k0.startswith('STRUCT') else k0
-            if ks and len(ks) > 1: raise Exception('AMBIGUOUS return kind of %s in the dumps %s (call at %x): give --kinds %s=<x|v|d|size|rect>' % (name, sorted(ks), ins[idx].address, name[8:]))
-        elif name.lstrip('_') in FN_KINDS: return FN_KINDS[name.lstrip('_')]
+            if ks and len(ks) > 1 and os.environ.get('A2C_INSPECT'): s.stats['warn'].append('AMBIGUOUS %s' % name)
+            elif ks and len(ks) > 1: raise Exception('AMBIGUOUS return kind of %s in the dumps %s (call at %x): give --kinds %s=<x|v|d|size|rect>' % (name, sorted(ks), ins[idx].address, name[8:]))
+        else:
+            bare = name.lstrip('_')
+            if bare in FN_KINDS: return FN_KINDS[bare]
+            if name in FN_KINDS: return FN_KINDS[name]
+            if bare not in X_FNS and name not in X_FNS:
+                raise Exception('UNKNOWN return kind of C function %s (call at %x): add it to FN_KINDS / X_FNS after checking its prototype, or pass --kinds fn:%s=<x|v|d|size|rect|m48|m128>' % (name, ins[idx].address, name))
         d_used = -1; x_used = False; d_written = set(); x_written = set(); first = None
         for j in range(idx + 1, min(idx + 60, len(ins))):
             q = ins[j]
@@ -849,7 +878,7 @@ class Lift:
         rc = s.rtcall(nm)
         if rc is not None:
             E(rc); return
-        kind = s.callkind(idx, nm)
+        kind = s.callkind(idx, nm if not (nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel') else 'msgSend:' + x1tag[1])
         k = s.intern(s.fns, nm)
         E('CALLFN(%s_fns, %d, %s);' % (s.cname, k, kind)); s.note_call(i, nm, kind)
     def note_call(s, i, nm, kind): s.kinds_at[i.address] = kind
@@ -910,9 +939,21 @@ class Lift:
         fn.append('}')
         return head, '\n'.join(fn)
 
+def auto_end(ver, start):
+    """end of the function at `start`: the next pacibsp (start of the next function), at most 6000 instructions"""
+    a = start + 4
+    while a < start + 24000:
+        pg = a & ~0xfff
+        d = dump(ver, pg, 0x1000)
+        for off in range(a - pg, 0x1000, 4):
+            if struct.unpack_from('<I', d, off)[0] == 0xd503237f and pg + off > start + 4: return pg + off
+        a = pg + 0x1000
+    raise Exception('no function end found')
+
 def main():
     a = sys.argv
-    ver, st, en, cname, sig = a[1], int(a[2], 16), int(a[3], 16), a[4], a[5]
+    ver, st, en, cname, sig = a[1], int(a[2], 16), (auto_end(a[1], int(a[2], 16)) if a[3] == 'auto' else int(a[3], 16)), a[4], a[5]
+    if a[3] == 'auto': sys.stderr.write('auto end %x (%d instructions)\n' % (en, (en - st) // 4))
     retk = 'x'; kinds = {}
     if '--ret' in a: retk = a[a.index('--ret') + 1]
     if '--kinds' in a:

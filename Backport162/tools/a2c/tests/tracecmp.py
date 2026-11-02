@@ -22,13 +22,21 @@ def rnd(seed, name, idx):
     h = hashlib.md5(('%d/%s/%d' % (seed, name, idx)).encode()).digest()
     return random.Random(int.from_bytes(h[:8], 'little'))
 
+def is_obj_sel(name):
+    if not name.startswith('M:'): return False
+    a2c.ret_kinds('162')
+    ts = a2c.RAWT.get(name[2:])
+    if not ts: return True            # unknown selector: assume an object (a dereferenced small integer would crash the C side)
+    return any(('*' in x) or x.strip() in ('id', 'Class') or x.startswith('id ') or x.startswith('id<') or x.startswith('id /*') for x in ts)
 def ret_values(seed, name, idx, kind):
     r = rnd(seed, name, idx)
     c = r.random()
-    if c < 0.3: x0 = ('i', 0)
+    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name in ('F:SBSafeCast', 'F:objc_opt_class'):
+        x0 = ('i', 0) if c < 0.3 else ('o', r.randrange(1, 40))
+    elif c < 0.3: x0 = ('i', 0)
     elif c < 0.5: x0 = ('i', 1)
     elif c < 0.6: x0 = ('i', r.choice([2, 3, 4, 8]))
-    else: x0 = ('o', r.randrange(1, 40))
+    else: x0 = ('i', r.randrange(1, 3))
     ds = [r.choice(DVALS) for _ in range(4)]
     return x0, ds
 
@@ -106,7 +114,7 @@ def run_emu(c, names, seed, args, case_mem):
     tr = Trace(); idx = [0]
     ctx = a2c.Ctx(c.ver)
     def N(v):
-        if v == 0x72000000: return ('SEL',)
+        if v == 0x72000000 or 0x180000000 <= v < 0x188000000: return ('SEL',)   # selector (uniqued method name region of the cache)
         if SELF_EMU <= v < SELF_EMU + SELF_SZ: return ('S', v - SELF_EMU)
         if OBJ_EMU <= v < OBJ_EMU + OBJ_SZ: return ('O', v - OBJ_EMU)
         if SP0_EMU - 0x4000 <= v < SP0_EMU + 0x100: return ('K', v - SP0_EMU)
@@ -132,6 +140,7 @@ def run_emu(c, names, seed, args, case_mem):
         kind = c.kinds_at.get(callout.pc, 'x')
         if n.startswith('msgSend:'): uc.reg_write(UC_ARM64_REG_X1, 0x72000000); x[1] = 0x72000000
         xs_ = tuple(N(v) for v in x)
+        if n.lstrip('_') == 'objc_msgSendSuper2': xs_ = xs_[:1] + (('SEL',),) + xs_[2:]
         sp_ = uc.reg_read(UC_ARM64_REG_SP)
         stk_ = tuple(N(struct.unpack('<Q', bytes(uc.mem_read(sp_ + 8 * j, 8)))[0]) for j in range(12))
         tr.calls.append((norm_name(n), xs_, tuple(d), stk_))
@@ -147,6 +156,9 @@ def run_emu(c, names, seed, args, case_mem):
             return
         x0, ds = ret_values(seed, norm_name(n), k, kind)
         if kind == 'v': return
+        if kind in ('m48', 'm128'):
+            nb = int(kind[1:]); buf = b''.join(struct.pack('<d', ds[j % 4]) for j in range(nb // 8))
+            uc.mem_write(uc.reg_read(UC_ARM64_REG_X8), buf); return
         if kind == 'x':
             uc.reg_write(UC_ARM64_REG_X0, enc(x0, OBJ_EMU))
         else:
@@ -231,6 +243,7 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
             tr.calls.append((nm, tuple(N(X[i]) for i in range(2)), (), ())); return
         d = tuple(VR[i][0] for i in range(8))
         xs_ = tuple(N(X[i]) for i in range(8))
+        if not isMsg and n.lstrip('_') == 'objc_msgSendSuper2': xs_ = xs_[:1] + (('SEL',),) + xs_[2:]
         stk_ = tuple(N(struct.unpack('<Q', ctypes.string_at(X[31] + 8 * j, 8))[0]) for j in range(12))
         tr.calls.append((nm, xs_, d, stk_))
         k = idx[0]; idx[0] += 1
@@ -245,6 +258,8 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
             return
         x0, ds = ret_values(seed, nm, k, kind)
         if kind == 'v': return
+        if kind in ('m48', 'm128'):
+            nb = int(kind[1:]); ctypes.memmove(X[8], b''.join(struct.pack('<d', ds[j % 4]) for j in range(nb // 8)), nb); return
         if kind == 'x': X[0] = enc(x0, objb)
         else:
             nd = {'d': 1, 'size': 2, 'rect': 4}[kind]
@@ -289,7 +304,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
     src = src.replace('    ' + build_call(cname, sig, retk), '    ' + build_call(cname, sig, retk, ret=True))
     open(W + cname + '.tc.c', 'w').write(src)
     so = W + cname + '.tc.so'
-    subprocess.check_call(['gcc', '-O1', '-shared', '-fPIC', '-w', '-I', T, W + cname + '.tc.c', '-o', so, '-lm'])
+    subprocess.check_call(['gcc', '-g', '-O0', '-shared', '-fPIC', '-w', '-I', T, W + cname + '.tc.c', '-o', so, '-lm'])
     lib = ctypes.CDLL(so)
     # ivar offsets: every spec Class.name -> offset of this version's table
     tab = a2c.ivar_tables(ver)

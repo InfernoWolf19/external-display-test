@@ -30,25 +30,22 @@ extern void lift_stack_chk_fail(void) __asm__("___stack_chk_fail");
 #define LIFT_ENTRY() ((void)0)
 #define LIFT_STKINIT(p) ((void)0)
 #define SEL(t, i) lift_sel_registerName((t)[i])
-#define CLS(t, i) lift_objc_getClass((t)[i])
+// class and ivar lookups go through Y34LiftRT.c: a runtime SUBCLASS registered for a 16.2 class (lift_register_ext) that carries the ivars 16.0 lacks is returned for the
+// class name (so recompiled code allocates it) and is searched first for an ivar offset
+extern void *lift_class_lookup(const char *name);
+extern long lift_ivoff_lookup(const char *spec);
+extern void lift_register_ext(const char *baseName, void *extClass);
+#define CLS(t, i) lift_class_lookup((t)[i])
 static inline void *lift_gsym(const char *n) { if (*n == '_') n++; return dlsym(RTLD_DEFAULT, n); }
 #define GSYM(t, i) lift_gsym((t)[i])
 #define CFSTR_(t, i) lift_cfstr((t)[i])
-extern void *lift_cfstr(const char *utf8);   // provided by the includer's .m / .x side (an NSString constant): see Y34 files
-static inline long lift_ivoff(const char *spec) {
-    char cls[96]; const char *dot = strchr(spec, '.');
-    if (!dot || (size_t)(dot - spec) >= sizeof cls) return -1;
-    memcpy(cls, spec, (size_t)(dot - spec)); cls[dot - spec] = 0;
-    void *c = lift_objc_getClass(cls); if (!c) return -1;
-    void *iv = lift_class_getInstanceVariable(c, dot + 1); if (!iv) return -1;
-    return (long)lift_ivar_getOffset(iv);
-}
-#define IVOFF(t, i) lift_ivoff((t)[i])
+extern void *lift_cfstr(const char *utf8);   // provided by the includer's .m / .x side (an NSString constant): see Y34ClassicTypes.x
+#define IVOFF(t, i) lift_ivoff_lookup((t)[i])
 // first name the includer cannot resolve (NULL = everything resolves); checked once at install time, a function with a miss is NOT installed
 static inline const char *lift_preflight(const char *const *fns, int nf, const char *const *cls, int nc, const char *const *ivs, int ni) {
     for (int k = 0; k < nf; k++) if (fns[k] && !lift_gsym(fns[k])) return fns[k];
-    for (int k = 0; k < nc; k++) if (cls[k] && !lift_objc_getClass(cls[k])) return cls[k];
-    for (int k = 0; k < ni; k++) if (ivs[k] && lift_ivoff(ivs[k]) < 0) return ivs[k];
+    for (int k = 0; k < nc; k++) if (cls[k] && !lift_class_lookup(cls[k])) return cls[k];
+    for (int k = 0; k < ni; k++) if (ivs[k] && lift_ivoff_lookup(ivs[k]) < 0) return ivs[k];
     return 0;
 }
 #define LIFT_PREFLIGHT(f, c, i) lift_preflight((f), (int)(sizeof(f) / sizeof((f)[0])), (c), (int)(sizeof(c) / sizeof((c)[0])), (i), (int)(sizeof(i) / sizeof((i)[0])))
