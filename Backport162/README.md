@@ -373,6 +373,7 @@ Every row is a 16.2 behaviour that the sweep of all 1 466 logic-changed SpringBo
 | y37_alerttarget | (Y37RemoteAlert.x) remote alert presentation target predicate (SBSRemoteAlertPresentationTargetPredicate re-implemented, target accessors / XPC keys of 16.2), SpringBoard shouldActivate / embedded presentation through the predicate, overlay providers registered only while their scene is live (display mode 4), app switcher dismisses only targets that ask for it |
 | y38_scenews | (Y38SceneWorkspace.x) S1 step 1: SBFSceneWorkspaceDefaultDelegate (16.2 only class re-implemented) and the slimmed SBFSceneWorkspaceController (workspace delegate = the delegate passed in, create / invalidate without the 16.0 bookkeeping); acts only on controllers built with the default delegate (Y40) |
 | y38_updater | (Y38SceneUpdater.x) S1 steps 2 and 3: SBSceneSettingsUpdater updatesGeometry / setActive:withTransitionContext: / +safeUpdateScene:withDisplayConfiguration:updateGeometry: (the two argument form no longer sets the frame, 16.2) / reference display mode status; SBSceneManager single scene and pointer UI scene presentation binder methods |
+| y39_singlescene | (Y39SingleScene.x) S1 step 4: SBSingleSceneController of 16.2 (_newActivationContext, _isClientProcessRunning, setSceneActive:, activation through setActive:withTransitionContext:, delegate driven setScene:...withContextGenerator:, single scene presentation binder calls) |
 <!-- Y-ROWS-END -->
 
 ## Crash recorder
