@@ -29,6 +29,7 @@
 #pragma clang diagnostic ignored "-Wundeclared-selector"
 
 extern void objc_msgSendSuper2(void);      // private (not in the SDK headers): the machine code of 16.2 uses it for [super initWithFrame:]
+extern void *lift_symbol(const char *name);     // Y34LiftRT.c: dlsym, else the C re-implementation of a 16.2 only function
 extern void y34_wv_layout(void *self, void *cmd);
 extern const char *y34_classicwrapper_preflight(void);
 
@@ -112,14 +113,23 @@ __attribute__((constructor)) static void Y34Wrapper_Setup(void) {
         if (!BP_OnName("y34_classicwrapper")) return;
         gWvBase = NSClassFromString(@"SBDeviceApplicationSceneClassicWrapperView");
         const char *miss = y34_classicwrapper_preflight();
-        gAvailable = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "SBFIsChamoisWindowingUIAvailable");
-        gFloatIsOne = (BOOL (*)(double))dlsym(RTLD_DEFAULT, "BSFloatIsOne");
+        gAvailable = (BOOL (*)(void))lift_symbol("SBFIsChamoisWindowingUIAvailable");     // not exported by 16.0: SBFFeatureFlagsIsChamoisWindowingUIEnabled (Y34LiftRT.c)
+        gFloatIsOne = (BOOL (*)(double))lift_symbol("BSFloatIsOne");     // a signed function pointer on arm64e: valid to call, meaningless to print
         gFilterMin = (NSString *const *)dlsym(RTLD_DEFAULT, "kCAFilterBox");
         gFilterMag = (NSString *const *)dlsym(RTLD_DEFAULT, "kCAFilterLinearlySampledLinear");
         Class defaultsCls = NSClassFromString(@"SBDefaults"), domain = NSClassFromString(@"SBAppSwitcherDomain"), pv = NSClassFromString(@"_SBDeviceApplicationSceneClassicHostPositioningView");
-        if (!gWvBase || miss || !gAvailable || !gFloatIsOne || !gFilterMin || !gFilterMag || !defaultsCls || !domain || !pv) {
-            BP_Anomaly("y34", @"[y34] y34_classicwrapper NOT installed: base %p, recompiled layoutSubviews needs '%s', SBFIsChamoisWindowingUIAvailable %p BSFloatIsOne %p kCAFilterBox %p kCAFilterLinearlySampledLinear %p SBDefaults %p SBAppSwitcherDomain %p positioning view %p: the 16.0 wrapper view stays",
-                       (__bridge void *)gWvBase, miss ?: "-", (void *)gAvailable, (void *)gFloatIsOne, (void *)gFilterMin, (void *)gFilterMag, (__bridge void *)defaultsCls, (__bridge void *)domain, (__bridge void *)pv);
+        NSMutableArray<NSString *> *missing = [NSMutableArray array];
+        if (!gWvBase) [missing addObject:@"class SBDeviceApplicationSceneClassicWrapperView"];
+        if (miss) [missing addObject:[NSString stringWithFormat:@"recompiled layoutSubviews: %s", miss]];     // y34_classicwrapper_preflight lists EVERY unresolved name
+        if (!gAvailable) [missing addObject:@"SBFIsChamoisWindowingUIAvailable / SBFFeatureFlagsIsChamoisWindowingUIEnabled"];
+        if (!gFloatIsOne) [missing addObject:@"BSFloatIsOne"];
+        if (!gFilterMin) [missing addObject:@"kCAFilterBox"];
+        if (!gFilterMag) [missing addObject:@"kCAFilterLinearlySampledLinear"];
+        if (!defaultsCls) [missing addObject:@"class SBDefaults"];
+        if (!domain) [missing addObject:@"class SBAppSwitcherDomain"];
+        if (!pv) [missing addObject:@"class _SBDeviceApplicationSceneClassicHostPositioningView"];
+        if (missing.count) {
+            BP_Anomaly("y34", @"[y34] y34_classicwrapper NOT installed, unresolved: %@: the 16.0 wrapper view stays", [missing componentsJoinedByString:@", "]);
             return;
         }
         static const Y34IvarSpec ivars[] = {

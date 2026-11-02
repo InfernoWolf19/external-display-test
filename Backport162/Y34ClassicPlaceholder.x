@@ -57,7 +57,7 @@ __attribute__((constructor)) static void Y34Placeholder_Setup(void) {
         Class ui = NSClassFromString(@"SBUIController");
         const char *miss = y34_placeholder_preflight();
         if (!prov || !ui || miss) {
-            BP_Anomaly("y34", @"[y34] y34_placeholder NOT installed: provider %p SBUIController %p, the recompiled 16.2 bodies need '%s': the 16.0 launch image path keeps running", (__bridge void *)prov, (__bridge void *)ui, miss ?: "-");
+            BP_Anomaly("y34", @"[y34] y34_placeholder NOT installed: provider %p SBUIController %p, unresolved names of the recompiled 16.2 bodies: %s: the 16.0 launch image path keeps running", (__bridge void *)prov, (__bridge void *)ui, miss ?: "-");
             return;
         }
         SEL cvSel = sel_registerName("_contentViewFromSceneHandle:displayConfiguration:orientation:snapshot:size:statusBarDescriptor:hasOrientationMismatchForClassicApp:customContainerBounds:");

@@ -36,17 +36,21 @@ extern void *lift_class_lookup(const char *name);
 extern long lift_ivoff_lookup(const char *spec);
 extern void lift_register_ext(const char *baseName, void *extClass);
 #define CLS(t, i) lift_class_lookup((t)[i])
-static inline void *lift_gsym(const char *n) { if (*n == '_') n++; return dlsym(RTLD_DEFAULT, n); }
+// C functions of the 16.2 frameworks that 16.0 does not export (BSSizeSwap, SBFIsChamoisWindowingUIAvailable): tiny C re-implementations in Y34LiftRT.c, used only when dlsym finds nothing
+extern void *lift_builtin(const char *bareName);
+static inline void *lift_gsym(const char *n) { if (*n == '_') n++; void *p = dlsym(RTLD_DEFAULT, n); return p ? p : lift_builtin(n); }
 #define GSYM(t, i) lift_gsym((t)[i])
 #define CFSTR_(t, i) lift_cfstr((t)[i])
 extern void *lift_cfstr(const char *utf8);   // provided by the includer's .m / .x side (an NSString constant): see Y34ClassicTypes.x
 #define IVOFF(t, i) lift_ivoff_lookup((t)[i])
-// first name the includer cannot resolve (NULL = everything resolves); checked once at install time, a function with a miss is NOT installed
+// EVERY name the process cannot resolve, comma separated in a static buffer (NULL = everything resolves); checked once at install time, a function with a miss is NOT installed
 static inline const char *lift_preflight(const char *const *fns, int nf, const char *const *cls, int nc, const char *const *ivs, int ni) {
-    for (int k = 0; k < nf; k++) if (fns[k] && !lift_gsym(fns[k])) return fns[k];
-    for (int k = 0; k < nc; k++) if (cls[k] && !lift_class_lookup(cls[k])) return cls[k];
-    for (int k = 0; k < ni; k++) if (ivs[k] && lift_ivoff_lookup(ivs[k]) < 0) return ivs[k];
-    return 0;
+    static char buf[512]; size_t n = 0; buf[0] = 0;
+#define LIFT_PF_ADD(s) do { size_t l_ = strlen(s); if (n + l_ + 2 < sizeof buf) { if (n) buf[n++] = ','; memcpy(buf + n, (s), l_); n += l_; buf[n] = 0; } } while (0)
+    for (int k = 0; k < nf; k++) if (fns[k] && !lift_gsym(fns[k])) LIFT_PF_ADD(fns[k]);
+    for (int k = 0; k < nc; k++) if (cls[k] && !lift_class_lookup(cls[k])) LIFT_PF_ADD(cls[k]);
+    for (int k = 0; k < ni; k++) if (ivs[k] && lift_ivoff_lookup(ivs[k]) < 0) LIFT_PF_ADD(ivs[k]);
+    return n ? buf : 0;
 }
 #define LIFT_PREFLIGHT(f, c, i) lift_preflight((f), (int)(sizeof(f) / sizeof((f)[0])), (c), (int)(sizeof(c) / sizeof((c)[0])), (i), (int)(sizeof(i) / sizeof((i)[0])))
 

@@ -114,7 +114,7 @@ __attribute__((constructor)) static void Y34Support_Setup(void) {
         // the recompiled bodies find the two ivars by name through the subclass: registered before the preflight (which resolves them); a failed preflight leaves it unused
         lift_register_ext("SBDeviceApplicationSceneView", (__bridge void *)gSvExt);
         const char *miss = y34_classicsupport_preflight();
-        if (miss) { BP_Anomaly("y34", @"[y34] y34_classicsupport NOT installed: the recompiled 16.2 bodies need '%s', which this process cannot resolve: the 16.0 scene view stays", miss); return; }
+        if (miss) { BP_Anomaly("y34", @"[y34] y34_classicsupport NOT installed: unresolved names of the recompiled 16.2 bodies: %s: the 16.0 scene view stays", miss); return; }
         // the new 16.2 method of the base SBSceneView
         if (!class_getInstanceMethod(sceneView, sel_registerName("_updateLiveViewContainment")))
             class_addMethod(sceneView, sel_registerName("_updateLiveViewContainment"), (IMP)Y34_UpdateLiveViewContainment, "v@:");

@@ -37,3 +37,24 @@ long lift_ivoff_lookup(const char *spec) {
     if (!iv) return -1;
     return (long)lift_ivar_getOffset(iv);
 }
+
+// ---- C functions that exist in the 16.2 frameworks only --------------------------------------------------------------------------------------------------------------------
+typedef struct { double w, h; } LiftBuiltinSize;
+// _BSSizeSwap (BaseBoard 16.2 0x18e5573b4): fmov d2, d0; fmov d0, d1; fmov d1, d2; ret
+static LiftBuiltinSize lift_bi_BSSizeSwap(double w, double h) { LiftBuiltinSize r = { h, w }; return r; }
+// _SBFIsChamoisWindowingUIAvailable (SpringBoardFoundation 16.2 0x18ee09820): the cached availability of the feature "SBChamoisWindowingUI".  16.0 computes the very same flag in
+// SBFFeatureFlagsIsChamoisWindowingUIEnabled (16.0 SpringBoardFoundation 0x18eb692c4, what its switcher controller derives -isChamoisWindowingUIEnabled from); without both symbols the tweak
+// runs on a Stage Manager device by construction, so YES (the same answer G1D.x gives).
+static uint64_t lift_bi_SBFIsChamoisWindowingUIAvailable(void) {
+    uint64_t (*fn)(void) = (uint64_t (*)(void))dlsym(RTLD_DEFAULT, "SBFFeatureFlagsIsChamoisWindowingUIEnabled");
+    return fn ? (fn() & 1) : 1;
+}
+void *lift_builtin(const char *bare) {
+    // class symbols (_OBJC_CLASS_$_Name, the receiver class of an objc_msgSendSuper2) are the Class object itself; dlsym of them fails for classes of the shared cache images on some builds
+    if (strncmp(bare, "OBJC_CLASS_$_", 13) == 0) return lift_objc_getClass(bare + 13);
+    if (strcmp(bare, "BSSizeSwap") == 0) return (void *)lift_bi_BSSizeSwap;
+    if (strcmp(bare, "SBFIsChamoisWindowingUIAvailable") == 0) return (void *)lift_bi_SBFIsChamoisWindowingUIAvailable;
+    return 0;
+}
+// symbol lookup for the Objective-C glue: the exported function, else the builtin
+void *lift_symbol(const char *name) { return lift_gsym(name); }

@@ -97,7 +97,7 @@ __attribute__((constructor)) static void Y34Types_Setup(void) {
         // lazy
         const char *miss = y34_lazy_types_preflight();
         if (miss) {
-            BP_Anomaly("y34", @"[y34] y34_lazytypes NOT installed: the recompiled 16.2 body needs '%s', which this process cannot resolve: the 16.0 body keeps running", miss);
+            BP_Anomaly("y34", @"[y34] y34_lazytypes NOT installed: the recompiled 16.2 body cannot resolve: %s: the 16.0 body keeps running", miss);
         } else if (!class_getInstanceMethod(app, sel_registerName("_calculateSupportedTypesLazilyIfNecessary"))) {
             BP_Anomaly("y34", @"[y34] y34_lazytypes NOT installed: -[SBApplication _calculateSupportedTypesLazilyIfNecessary] does not exist");
         } else {
