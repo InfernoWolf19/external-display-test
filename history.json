@@ -1,12 +1,4 @@
 {
- "0.7.9+294.4ea593a": {
-  "date": "2026-10-31T10:23:03Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+294.4ea593a_iphoneos-arm64.deb",
-  "run": 294,
-  "sha": "4ea593aec8a95a847350b2345999b7cb96a23e3f",
-  "subject": "REVIEW-DISPLAY-0.7.9: differential review of the display side hooks (table per hook, defects D1..D4, answers to the keyboard / drag / lock / daemon / token questions)",
-  "version": "0.7.9+294.4ea593a"
- },
  "0.7.9+295.c514d25": {
   "date": "2026-10-31T10:26:01Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+295.c514d25_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b388840013797ad4ee0f21187f639ba668b18bd0",
   "subject": "Y41SystemUIClients: S1 step 7, the system UI scene client side of the application support service (initializationContextForClient: 0x1c77ea600, shouldOverrideClientInitialization: 0x1c77ea5bc, service:overrideClientInitialization: 0x1c764ee7c, destroyScenes... 0x1c764f3f4, workspace:didReceiveSceneRequestWithOptions:completion: 0x1c77ad8dc, +_newApplicationInitializationContext 0x1c7363804, sb_embeddedDisplayDefaultContextForSystemUIScenes 0x1c7536608)",
   "version": "0.7.9+357.b388840"
+ },
+ "0.7.9+358.abeffc1": {
+  "date": "2026-11-14T02:31:51Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+358.abeffc1_iphoneos-arm64.deb",
+  "run": 358,
+  "sha": "abeffc1edbe1c94baca50b8785a2714420253515",
+  "subject": "Y34Ext: class identity shims for the runtime subclasses (-class answers the 16.0 class, -isMemberOfClass: accepts both) so 16.0 code and logs keep seeing SBDeviceApplicationSceneView / SBDeviceApplicationSceneClassicWrapperView; the installs log ANOMALY y34-ext (always on) with the kill file names",
+  "version": "0.7.9+358.abeffc1"
  }
 }
