@@ -1,12 +1,4 @@
 {
- "0.7.9+296.675c7f9": {
-  "date": "2026-10-31T10:25:47Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+296.675c7f9_iphoneos-arm64.deb",
-  "run": 296,
-  "sha": "675c7f90c01f92f27412b9a00b7921fed62b2ded",
-  "subject": "Backport162UIK K1: no software keyboard for text entry on the external display (16.2 softwareKeyboardAllowedForActiveKeyboardSceneDelegate + ChamoisExternalSWKeyboard preference NO, gates in _showKeyboardIgnoringPolicyDelegate: / _shouldMinimizeForHardwareKeyboard / _showsScribbleIconsInAssistantView / _isShowKeyboardButtonVisible, 16.2 visualMode table, keyboardScreen / textEntryFocusOnExternalDisplay / _windowHostingScene:didMoveFromScreen:toScreen:); switch uik_keyboard; spec K1",
-  "version": "0.7.9+296.675c7f9"
- },
  "0.7.9+297.a62c67d": {
   "date": "2026-10-31T10:27:16Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+297.a62c67d_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "3772da5dd2a1b0f9acf02263d0e8d2eb95dbc7ee",
   "subject": "DELTA-SWEEP pass 4: S1 status, UIK U2 corrected addresses and the exact blocker (dyld caches / ipsw not available in the session)",
   "version": "0.7.9+359.3772da5"
+ },
+ "0.7.9+360.62a0a6a": {
+  "date": "2026-11-14T02:35:04Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+360.62a0a6a_iphoneos-arm64.deb",
+  "run": 360,
+  "sha": "62a0a6a069f82fcda10801a1ba9208efdfc7deae",
+  "subject": "a2c: arm64e block-literal groundwork (PAC sign/auth, indirect calls, --locals, descriptor emission)",
+  "version": "0.7.9+360.62a0a6a"
  }
 }
