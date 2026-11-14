@@ -16,6 +16,7 @@ void lift_set(lift_cb_t cb, lift_iv_t iv) { lift_cb = cb; lift_iv = iv; }
 #define IVOFF(t, i) lift_iv((t)[i])
 const char *lift_kind;
 #define LIFT_STKINIT(p) memset((p), 0, sizeof (p))
+#define CALLPTR(fn, kind) (lift_kind = #kind, lift_cb(0, "indirect", X, VR))
 #define CALLMSG(kind) (lift_kind = #kind, lift_cb(1, (const char *)(uintptr_t)X[1], X, VR))
 #define CALLFN(t, i, kind) (lift_kind = #kind, lift_cb(0, (t)[i], X, VR))
 #define LIFT_PREFLIGHT(f, c, i) ((const char *)0)

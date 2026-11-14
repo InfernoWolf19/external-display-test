@@ -54,4 +54,24 @@ static inline uint64_t lift_sdiv64(uint64_t a, uint64_t b) { int64_t x = (int64_
 static inline uint32_t lift_sdiv32(uint64_t a, uint64_t b) { int32_t x = (int32_t)a, y = (int32_t)b; if (y == 0) return 0; if (x == INT32_MIN && y == -1) return (uint32_t)x; return (uint32_t)(x / y); }
 #define SDIV64(a, b) lift_sdiv64((a), (b))
 #define SDIV32(a, b) lift_sdiv32((a), (b))
+
+// ---- pointer authentication (arm64e) -------------------------------------------------------------------------------------------------------------------------------
+// The recompiled code signs / authenticates exactly where the machine code does (block isa / invoke / descriptor, helper pointers); keys 0 IA, 1 IB, 2 DA, 3 DB.  Off arm64e (the arm64
+// slice, the Linux test harness) signing is the identity.
+#if defined(__arm64e__) && __has_feature(ptrauth_intrinsics)
+#include <ptrauth.h>
+#define LIFT_PAC(key, p, m) ((uint64_t)__builtin_ptrauth_sign_unauthenticated((void *)(uintptr_t)(p), (key), (uint64_t)(m)))
+#define LIFT_AUT(key, p, m) ((uint64_t)__builtin_ptrauth_auth((void *)(uintptr_t)(p), (key), (uint64_t)(m)))
+#define LIFT_STRIP(p) ((uint64_t)__builtin_ptrauth_strip((void *)(uintptr_t)(p), 0))
+#define LIFT_FNADDR(fn) ((uint64_t)__builtin_ptrauth_strip((void *)(fn), 0))
+// a signed pointer (key, modifier) turned into a pointer the C compiler may call (IA key, zero discriminator = the C function pointer schema)
+#define LIFT_CALLPTR(p, key, m) ((void *)__builtin_ptrauth_auth_and_resign((void *)(uintptr_t)(p), (key), (uint64_t)(m), 0, 0))
+#else
+#define __builtin_ptrauth_blend_discriminator(p, d) ((uint64_t)0)
+#define LIFT_PAC(key, p, m) ((uint64_t)(p))
+#define LIFT_AUT(key, p, m) ((uint64_t)(p))
+#define LIFT_STRIP(p) ((uint64_t)(p))
+#define LIFT_FNADDR(fn) ((uint64_t)(uintptr_t)(fn))
+#define LIFT_CALLPTR(p, key, m) ((void *)(uintptr_t)(p))
+#endif
 #endif

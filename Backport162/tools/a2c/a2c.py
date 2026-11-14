@@ -142,7 +142,7 @@ FN_KINDS = {'BSRectWithSize': 'rect', 'BSSizeSwap': 'size', 'BSSizeRoundForScale
             'SBClassicUtilitiesScaleFactorForPhoneAppZoomedIn': 'd', 'SBFAngleForRotationFromInterfaceOrientationToInterfaceOrientation': 'd', 'SBScreenDisplayCornerRadius': 'd',
             'SBClassicUtilitiesInsetAndTranslateLayerForPresentationWithHomeAffordance': 'v'}
 # C functions whose result is an integer / pointer / BOOL / void (x register or nothing): anything else must be listed above or given with --kinds fn:NAME=kind
-X_FNS = {'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
+X_FNS = {'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
          'sb__runningInSpringBoard', 'MGCopyAnswer', 'SBFIsChamoisWindowingUIAvailable', 'os_log_type_enabled', 'os_log_debug_impl', 'SBLogCommon', 'objc_alloc', 'objc_opt_class',
          'objc_opt_isKindOfClass', 'objc_opt_new', 'objc_initWeak', 'objc_copyWeak', 'objc_destroyWeak', 'objc_loadWeakRetained', 'objc_storeWeak', 'objc_msgSendSuper2', 'Unwind_Resume',
          'j__objc_storeStrong', 'dispatch_async', 'SBFLoggingMethodProem', 'CGRectGetNull'}
@@ -162,7 +162,7 @@ class Lift:
         s.ins = list(md.disasm(code[start & 0xfff:(start & 0xfff) + (end - start)], start))
         assert len(s.ins) * 4 == end - start, (len(s.ins), (end - start) // 4)
         s.cval = {}   # reg -> const address
-        s.baked = set(); s.kinds_at = {}; s.bakedsym = {}
+        s.baked = set(); s.kinds_at = {}; s.bakedsym = {}; s.locals = {}; s.descs = []
         s.out = []
         s.globals = {}   # addr -> description
         s.stats = {'warn': []}
@@ -323,8 +323,27 @@ class Lift:
             return
         if mn == 'eor' and ops and nm(ops[0]) == 'x16' and len(ops) == 3 and nm(ops[1]) == 'x30': return
         if mn == 'tbz' and nm(ops[0]) == 'x16': return
-        if mn.startswith('pac') or mn.startswith('aut') and mn not in ('autibsp', 'autiasp'):
-            s.stats['warn'].append('BLOCK/PAC: %x %s %s is not executable in recompiled code (inspection only)' % (i.address, mn, i.op_str)); return
+        if (mn.startswith('pac') or mn.startswith('aut')) and mn not in ('autibsp', 'autiasp', 'pacibsp', 'paciasp'):
+            keymap = {'ia': 0, 'ib': 1, 'da': 2, 'db': 3}
+            kk = mn[3:5]; zero = len(mn) > 5 and mn[5] == 'z'
+            if kk not in keymap: raise Exception('pac form ' + mn)
+            d = nm(ops[0]); mod = '0ull' if zero else s.rdreg(nm(ops[1]))
+            fnm = 'LIFT_PAC' if mn.startswith('pac') else 'LIFT_AUT'
+            E('X[%d] = %s(%d, X[%d], %s);' % (int(d[1:]), fnm, keymap[kk], int(d[1:]), mod)); s.kill(d); return
+        if mn in ('xpaci', 'xpacd'):
+            d = nm(ops[0]); E('X[%d] = LIFT_STRIP(X[%d]);' % (int(d[1:]), int(d[1:]))); s.kill(d); return
+        if mn in ('blr', 'blraa', 'blraaz', 'blrab', 'blrabz', 'br', 'braa', 'braaz', 'brab', 'brabz'):
+            tgt = s.rdreg(nm(ops[0]))
+            if mn.endswith('aa') or mn.endswith('aaz'): ptr = 'LIFT_CALLPTR(%s, 0, %s)' % (tgt, '0ull' if mn.endswith('z') else s.rdreg(nm(ops[1])))
+            elif mn.endswith('ab') or mn.endswith('abz'): ptr = 'LIFT_CALLPTR(%s, 1, %s)' % (tgt, '0ull' if mn.endswith('z') else s.rdreg(nm(ops[1])))
+            else: ptr = '(void *)(%s)' % tgt
+            kind = s.callkind(idx, 'indirect')
+            if mn.startswith('bl'):
+                for rr in range(0, 18): s.kill('x%d' % rr)
+                E('CALLPTR(%s, %s);' % (ptr, kind))
+            else:
+                E('CALLPTR(%s, %s); goto Lret;' % (ptr, s.retk))
+            return
         if mn in ('retab', 'ret', 'retaa'):
             E('goto Lret;'); return
         # ----- moves / arithmetic
@@ -373,6 +392,11 @@ class Lift:
                 k = s.classify(cvalres)
                 if k[0] == 'cfstr':
                     E('X[%d] = (uint64_t)CFSTR_(%s_strs, %d); /* @"%s" */' % (int(d[1:]), s.cname, s.intern(s.strs, k[1]), k[1])); return
+                if cvalres in s.locals:
+                    E('X[%d] = LIFT_FNADDR(%s); /* address of the lifted local function */' % (int(d[1:]), s.locals[cvalres])); return
+                dk = s.descriptor(cvalres)
+                if dk is not None:
+                    E('X[%d] = (uint64_t)(uintptr_t)%s_desc%d_get(); /* block descriptor, signature %s */' % (int(d[1:]), s.cname, dk, json.dumps(s.descs[dk]['sig']))); return
                 sym_, sec_ = s.ctx.a2s2(cvalres)
                 if not sec_ and sym_ in ('?', ''):
                     lit0 = s.ctx.cstring(cvalres)
@@ -682,6 +706,35 @@ class Lift:
                 if o <= off < o + max(sz, 1): return ('%s.%s' % (c, name), off - o)
             c = tab[c]['super']; seen += 1
         return None
+    def decode_ptr(s, v):
+        """chained cache pointer -> (target, key, addrdiv, diversity or None)"""
+        if v >> 63: return (0x180000000 + (v & 0xffffffff), (v >> 49) & 3, (v >> 48) & 1, (v >> 32) & 0xffff)
+        return (v & 0x7ffffffffff, None, None, None)
+    def descriptor(s, addr):
+        """index of the block descriptor at `addr` (a __DATA_CONST.__const object {reserved, size, [copy, dispose,] signature}), None when it is not one"""
+        sym, sec = s.ctx.a2s2(addr)
+        if 'const' not in sec: return None
+        try: w = struct.unpack('<5Q', s.ctx.read(addr, 40))
+        except Exception: return None
+        if not (0x18 <= w[1] <= 0x400): return None
+        t2 = s.decode_ptr(w[2])
+        sec2 = s.ctx.a2s2(t2[0])[1] if 0x180000000 <= t2[0] < 0x200000000 else ''
+        helpers = 'text' in sec2 and 'cstring' not in sec2
+        if helpers:
+            t3 = s.decode_ptr(w[3]); t4 = s.decode_ptr(w[4])
+            sig = s.ctx.cstring(t4[0]) if 0x180000000 <= t4[0] < 0x200000000 else ''
+            for tt in (t2, t3):
+                if tt[0] not in s.locals: raise Exception('block descriptor %x: helper function %x is not in --locals' % (addr, tt[0]))
+        else:
+            sig = s.ctx.cstring(t2[0]) if 0x180000000 <= t2[0] < 0x200000000 else ''
+        if not sig or any(ord(ch) < 32 or ord(ch) > 126 for ch in sig): return None
+        for k, d in enumerate(s.descs):
+            if d['addr'] == addr: return k
+        k = len(s.descs)
+        d = {'addr': addr, 'w0': w[0], 'w1': w[1], 'helpers': helpers, 'sig': sig}
+        if helpers: d['copy'] = (s.locals[t2[0]],) + t2[1:]; d['dispose'] = (s.locals[t3[0]],) + t3[1:]
+        s.descs.append(d)
+        return k
     def kill(s, r):
         s.cval.pop(r, None); s.baked.discard(r)
     def intern(s, d, name):
@@ -782,10 +835,12 @@ class Lift:
         """decide the return kind of the call at idx by scanning the code after it"""
         ins = s.ins
         akey = name + '@%x' % ins[idx].address
+        if name == 'indirect' and 'indirect@%x' % ins[idx].address in s.kinds: return s.kinds['indirect@%x' % ins[idx].address]
         if ('fn:' + name.lstrip('_')) in s.kinds: return s.kinds['fn:' + name.lstrip('_')]
         if akey in s.kinds: return s.kinds[akey]
         if name in s.kinds: return s.kinds[name]
-        if name.startswith('msgSend:'):
+        if name in ('indirect', 'local'): pass
+        elif name.startswith('msgSend:'):
             ks = ret_kinds(s.ver).get(name[8:])
             if ks and len(ks) == 1:
                 k0 = next(iter(ks))
@@ -863,13 +918,15 @@ class Lift:
         return rt.get(nm.lstrip('_'))
     def call(s, idx, i, t):
         E = s.emit
-        nm = s.ctx.stubname(t)
-        if not nm: s.stats['warn'].append('unresolved call %x -> %x' % (i.address, t)); nm = 'UNRESOLVED_%x' % t
+        nm = '' if t in s.locals else s.ctx.stubname(t)
+        if not nm and t not in s.locals: s.stats['warn'].append('unresolved call %x -> %x' % (i.address, t)); nm = 'UNRESOLVED_%x' % t
         # registers clobbered
         x1tag = s.cval.get('x1')
         for rr in range(0, 18): s.kill('x%d' % rr)
         if nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel' and x1tag[1].startswith('init') and s.cls:
             s.cval['x0'] = ('self', s.cls)
+        if t in s.locals:
+            E('CALLPTR((void *)%s, %s);' % (s.locals[t], s.callkind(idx, 'local'))); return
         if nm.startswith('msgSend:'):
             sel = nm[8:]
             kind = s.callkind(idx, nm)
@@ -883,6 +940,8 @@ class Lift:
         E('CALLFN(%s_fns, %d, %s);' % (s.cname, k, kind)); s.note_call(i, nm, kind)
     def note_call(s, i, nm, kind): s.kinds_at[i.address] = kind
     def tailcall(s, i, t):
+        if t in s.locals:
+            s.emit('CALLPTR((void *)%s, %s); goto Lret;' % (s.locals[t], s.retk)); return
         nm = s.ctx.stubname(t)
         s.emit('/* tail call %s */' % nm)
         if nm.startswith('msgSend:'):
@@ -924,7 +983,21 @@ class Lift:
         tabs.append('static const char *const %s_fns[] = { %s };' % (s.cname, ', '.join('"%s"' % n for n, j in sorted(s.fns.items(), key=lambda kv: kv[1])) or '0'))
         tabs.append('static const char *const %s_strs[] = { %s };' % (s.cname, ', '.join(json.dumps(n) for n, j in sorted(s.strs.items(), key=lambda kv: kv[1])) or '0'))
         tabs.append('static const char *%s_preflight(void) { return LIFT_PREFLIGHT(%s_fns, %s_cls, %s_ivs); }' % (s.cname, s.cname, s.cname, s.cname))
-        head = '\n'.join(h + tabs)
+        dtext = []
+        for k, dd in enumerate(s.descs):
+            dtext.append('static uint64_t %s_desc%d[5];' % (s.cname, k))
+            dbody = ['static uint64_t *%s_desc%d_get(void) {' % (s.cname, k), '    uint64_t *d_ = %s_desc%d;' % (s.cname, k), '    d_[0] = 0x%xull; d_[1] = 0x%xull;' % (dd['w0'], dd['w1'])]
+            if dd['helpers']:
+                for idx_, nmk in ((2, 'copy'), (3, 'dispose')):
+                    fn_, key_, adiv_, div_ = dd[nmk]
+                    mod = ('__builtin_ptrauth_blend_discriminator(&d_[%d], %d)' % (idx_, div_)) if adiv_ else ('%d' % (div_ or 0))
+                    dbody.append('    d_[%d] = LIFT_PAC(%d, LIFT_FNADDR(%s), %s);' % (idx_, key_ if key_ is not None else 0, fn_, mod))
+                dbody.append('    d_[4] = (uint64_t)(uintptr_t)%s;' % json.dumps(dd['sig']))
+            else:
+                dbody.append('    d_[2] = (uint64_t)(uintptr_t)%s;' % json.dumps(dd['sig']))
+            dbody.append('    return d_;'); dbody.append('}')
+            dtext.append('\n'.join(dbody))
+        head = '\n'.join(h + tabs + dtext)
         fn = []
         fn.append('static %s %s(%s) {' % (rt, s.cname, ', '.join(params) or 'void'))
         fn.append('    uint64_t X[32]; uint64_t VR[32][2]; int N = 0, Z = 0, C = 0, V = 0; uint64_t RES = 0; (void)RES;')
@@ -961,6 +1034,9 @@ def main():
             k, v = kv.split('='); kinds[k if k.startswith('fn:') else 'msgSend:' + k] = v
     cls = a[a.index('--cls') + 1] if '--cls' in a else None
     L = Lift(ver, st, en, cname, sig, retk, kinds, cls)
+    if '--locals' in a:
+        for kv in a[a.index('--locals') + 1].split(','):
+            k_, v_ = kv.split('='); L.locals[int(k_, 16)] = v_
     head, fn = L.generate()
     save_memo()
     print(head); print(fn)

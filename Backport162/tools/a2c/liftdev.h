@@ -71,6 +71,7 @@ typedef struct { uint8_t b[48]; } LiftM48;
 typedef struct { uint8_t b[128]; } LiftM128;
 #define LIFT_CALL_m48(fn) do { LiftM48 r_ = ((LiftM48 (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); memcpy((void *)(uintptr_t)X[8], &r_, sizeof r_); } while (0)
 #define LIFT_CALL_m128(fn) do { LiftM128 r_ = ((LiftM128 (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); memcpy((void *)(uintptr_t)X[8], &r_, sizeof r_); } while (0)
+#define CALLPTR(fn, kind) LIFT_CALL_##kind(fn)
 #define CALLMSG(kind) LIFT_CALL_##kind((void *)lift_objc_msgSend)
 #define CALLFN(t, i, kind) do { void *f_ = lift_gsym((t)[i]); if (f_) LIFT_CALL_##kind(f_); } while (0)
 
