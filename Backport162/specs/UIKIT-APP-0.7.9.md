@@ -95,7 +95,7 @@ That the keyboard of a monitor field is shown through `_showKeyboardIgnoringPoli
 
 ---
 
-## U2. Scene based UIScreen lifecycle and live resize: NOT DONE (blocker: analysis tooling)
+## U2. Scene based UIScreen lifecycle and live resize: NOT DONE (blocker: the dyld caches / ipsw are not in the session; exact list in DELTA-SWEEP-0.7.9.md Pass 4 section 4)
 
 Status: **not ported, nothing decoded beyond the name level.** The session's scratchpad (16.0 / 16.2 dyld caches, `ipsw`, the UIKitCore text dumps and the body-diff tools used for U1 and K1) was withdrawn by the environment while U1 and K1 were being finished, so the UIKitCore bodies below could not be disassembled. Faithful porting needs those bodies (rule of this task: decode, do not guess), so no code was written.
 
