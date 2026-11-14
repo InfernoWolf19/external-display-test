@@ -1,12 +1,4 @@
 {
- "0.7.9+295.c514d25": {
-  "date": "2026-10-31T10:26:01Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+295.c514d25_iphoneos-arm64.deb",
-  "run": 295,
-  "sha": "c514d2525d21bd02d24244b08d3722c51dceb37f",
-  "subject": "Z2OrientTraits: external display orientation follows 16.2 (Portrait main-like screen, valid scene orientation never rewritten, unset -> 1, refresh on change; invalid container orientation guarded); ORIENTATION-0.7.9: corrected section 2, delegate and dock section, acceptance checklist with verified / open status, NEEDS EDIT P1SW.m",
-  "version": "0.7.9+295.c514d25"
- },
  "0.7.9+296.675c7f9": {
   "date": "2026-10-31T10:25:47Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+296.675c7f9_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "abeffc1edbe1c94baca50b8785a2714420253515",
   "subject": "Y34Ext: class identity shims for the runtime subclasses (-class answers the 16.0 class, -isMemberOfClass: accepts both) so 16.0 code and logs keep seeing SBDeviceApplicationSceneView / SBDeviceApplicationSceneClassicWrapperView; the installs log ANOMALY y34-ext (always on) with the kill file names",
   "version": "0.7.9+358.abeffc1"
+ },
+ "0.7.9+359.3772da5": {
+  "date": "2026-11-14T02:33:38Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+359.3772da5_iphoneos-arm64.deb",
+  "run": 359,
+  "sha": "3772da5dd2a1b0f9acf02263d0e8d2eb95dbc7ee",
+  "subject": "DELTA-SWEEP pass 4: S1 status, UIK U2 corrected addresses and the exact blocker (dyld caches / ipsw not available in the session)",
+  "version": "0.7.9+359.3772da5"
  }
 }
