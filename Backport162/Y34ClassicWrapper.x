@@ -156,8 +156,9 @@ __attribute__((constructor)) static void Y34Wrapper_Setup(void) {
         class_addMethod(gWvExt, sel_registerName("_shouldRasterizePositioningLayer"), (IMP)Y34_WvShouldRasterize, "B@:");
         Protocol *p = objc_getProtocol("PTSettingsKeyObserver");
         if (p) class_addProtocol(gWvExt, p);
+        Y34_AddIdentityShims(gWvExt, gWvBase);
         lift_register_ext("SBDeviceApplicationSceneClassicWrapperView", (__bridge void *)gWvExt);
-        BP_Log(@"[y34] installed y34_classicwrapper (runtime subclass Y34ClassicWrapperView)");
+        BP_Anomaly("y34-ext", @"[y34] y34_classicwrapper active: wrapper views are instances of the runtime subclass Y34ClassicWrapperView (-class answers SBDeviceApplicationSceneClassicWrapperView); kill file Backport162.off.y34_classicwrapper");
     }
 }
 #pragma clang diagnostic pop

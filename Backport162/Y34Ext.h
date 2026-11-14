@@ -39,3 +39,22 @@ static inline void Y34_ObjSet(id o, Ivar iv, id v) {
     if (old) CFRelease(old);
 }
 static inline void Y34_ObjRelease(id o, Ivar iv) { Y34_ObjSet(o, iv, nil); }
+
+// ---- class identity shims -------------------------------------------------------------------------------------------------------------------------------------------------
+// 16.0 code (and logging) that asks an instance for its class must keep seeing the 16.0 class, not the runtime subclass: -class answers the base class and -isMemberOfClass: accepts
+// both.  (isKindOfClass: / respondsToSelector: / object_getClass-based lookups need nothing: the subclass IS a kind of the base class.)
+static Class gY34ShimBase[4], gY34ShimExt[4];
+static int gY34ShimN;
+static Class Y34_ShimBaseOf(id self) {
+    Class c = object_getClass(self);
+    for (int k = 0; k < gY34ShimN; k++) if (gY34ShimExt[k] == c) return gY34ShimBase[k];
+    return c;
+}
+static Class Y34_ShimClass(id self, SEL _cmd) { return Y34_ShimBaseOf(self); }
+static BOOL Y34_ShimIsMember(id self, SEL _cmd, Class k) { return k == Y34_ShimBaseOf(self) || k == object_getClass(self); }
+static inline void Y34_AddIdentityShims(Class ext, Class base) {
+    if (gY34ShimN >= 4) return;
+    gY34ShimBase[gY34ShimN] = base; gY34ShimExt[gY34ShimN] = ext; gY34ShimN++;
+    class_addMethod(ext, sel_registerName("class"), (IMP)Y34_ShimClass, "#@:");
+    class_addMethod(ext, sel_registerName("isMemberOfClass:"), (IMP)Y34_ShimIsMember, "B@:#");
+}

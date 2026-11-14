@@ -112,6 +112,7 @@ __attribute__((constructor)) static void Y34Support_Setup(void) {
         gIvCurrentHost = class_getInstanceVariable(gSvExt, "_currentHostView");
         if (!gIvAssertion || !gIvCurrentHost) { BP_Anomaly("y34", @"[y34] y34_classicsupport NOT installed: the subclass ivars are missing"); return; }
         // the recompiled bodies find the two ivars by name through the subclass: registered before the preflight (which resolves them); a failed preflight leaves it unused
+        Y34_AddIdentityShims(gSvExt, gSvBase);
         lift_register_ext("SBDeviceApplicationSceneView", (__bridge void *)gSvExt);
         const char *miss = y34_classicsupport_preflight();
         if (miss) { BP_Anomaly("y34", @"[y34] y34_classicsupport NOT installed: unresolved names of the recompiled 16.2 bodies: %s: the 16.0 scene view stays", miss); return; }
@@ -135,7 +136,7 @@ __attribute__((constructor)) static void Y34Support_Setup(void) {
         gOrigAlloc = am ? method_getImplementation(am) : NULL;
         if (!gOrigAlloc) { BP_Anomaly("y34", @"[y34] y34_classicsupport: +allocWithZone: not found, the subclass is never allocated"); return; }
         class_replaceMethod(meta, @selector(allocWithZone:), (IMP)Y34_SvAlloc, method_getTypeEncoding(am));
-        BP_Log(@"[y34] installed y34_classicsupport (runtime subclass Y34DeviceApplicationSceneView)");
+        BP_Anomaly("y34-ext", @"[y34] y34_classicsupport active: every SBDeviceApplicationSceneView is allocated as the runtime subclass Y34DeviceApplicationSceneView (+allocWithZone: replaced; -class answers SBDeviceApplicationSceneView); kill file Backport162.off.y34_classicsupport");
     }
 }
 #pragma clang diagnostic pop
