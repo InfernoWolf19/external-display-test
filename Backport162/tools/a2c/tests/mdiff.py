@@ -3,7 +3,7 @@
 (addresses / labels removed; ivars, selectors, classes, symbols are already NAMES in the lifted text).  Prints SAME / DIFF per method."""
 import sys, re, bisect, os
 sys.dont_write_bytecode = True
-sys.path.insert(0, '/tmp/claude-0/-home-user-external-display-test/y34work')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 import a2c
 S = a2c.S
 def syms(fn):
