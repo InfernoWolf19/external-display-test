@@ -52,6 +52,7 @@ static char kY40New, kY40Policy, kY40Process, kY40Delegate, kY40Eye, kY40Moments
 
 static Class gY40Base, gY40Single, gY40Coord;
 static IMP gY40Dealloc, gY40Connect, gY40Disconnect, gY40NewCtl, gY40NewId, gY40DescBuilder, gY40Create, gY40Destroy;
+static IMP gY40CoordWorkspace, gY40CtlWorkspace;
 static IMP gY40InputCreate, gY40OverlayConnect, gY40AXSetup, gY40CoordInit;
 static double *gY40LockLevel;                                                                  // UISpringBoardLockScreenWindowLevel
 static double *gY40NormalLevel;                                                                // UIWindowLevelNormal
@@ -441,6 +442,21 @@ static Y40_NEWRET id Y40_CoordInit(Y40_CONSUMED id self, SEL _cmd) {            
     BPY_LOG(@"[y40] coordinator: %lu system UI scene controllers", (unsigned long)[ctls count]);
     return me;
 }
+// -sceneWorkspaceControllerForProcessIdentity: 16.2 coordinator 0x1c77a9904 (line 238) / controller 0x1c7967488 (line 325): NSParameterAssert(identity)
+static id Y40_CoordWorkspace(id self, SEL _cmd, id identity) {
+    if (!identity && Y40_On()) {
+        BP_Anomaly("y40-assert", @"%s with a nil process identity: the 16.2 assertion fires", sel_getName(_cmd));
+        [[NSAssertionHandler currentHandler] handleFailureInMethod:_cmd object:self file:@"SBSystemUIScenesCoordinator.m" lineNumber:238 description:@"Invalid parameter not satisfying: %@", @"processIdentity != nil"];
+    }
+    return gY40CoordWorkspace ? ((id (*)(id, SEL, id))gY40CoordWorkspace)(self, _cmd, identity) : nil;
+}
+static id Y40_CtlWorkspace(id self, SEL _cmd, id identity) {
+    if (!identity && Y40_Flag(self)) {
+        BP_Anomaly("y40-assert", @"%s with a nil process identity: the 16.2 assertion fires", sel_getName(_cmd));
+        [[NSAssertionHandler currentHandler] handleFailureInMethod:_cmd object:self file:@"SBSystemUISceneController.m" lineNumber:325 description:@"Invalid parameter not satisfying: %@", @"identity != nil"];
+    }
+    return gY40CtlWorkspace ? ((id (*)(id, SEL, id))gY40CtlWorkspace)(self, _cmd, identity) : nil;
+}
 static id Y40_GetEye(id self, SEL _cmd) { return Y40_GET(self, kY40Eye); }
 static void Y40_SetEye(id self, SEL _cmd, id c) { Y40_SET(self, kY40Eye, c); }
 static id Y40_GetMoments(id self, SEL _cmd) { return Y40_GET(self, kY40Moments); }
@@ -569,6 +585,8 @@ __attribute__((constructor)) static void Y40_Setup(void) {
         ADD(coord, "momentsUISceneController", Y40_GetMoments, "@16@0:8");
         ADD(coord, "setMomentsUISceneController:", Y40_SetMoments, "v24@0:8@16");
         gY40CoordInit = BPX_Replace(coord, "init", (IMP)Y40_CoordInit);
+        gY40CoordWorkspace = BPX_Replace(coord, "sceneWorkspaceControllerForProcessIdentity:", (IMP)Y40_CoordWorkspace);
+        gY40CtlWorkspace = BPX_Replace(gY40Base, "sceneWorkspaceControllerForProcessIdentity:", (IMP)Y40_CtlWorkspace);
         // 5. traits roles of the two new controllers
         Class ext = objc_getClass("SBExternalDisplayWindowSceneDelegate"), emb = objc_getClass("SBEmbeddedDisplayWindowSceneDelegate");
         Class stage = objc_getClass("SBTraitsExternalDisplayRolesAndDefaultPoliciesProvider"), below = objc_getClass("SBTraitsEmbeddedDisplayRolesAndDefaultPoliciesProvider");

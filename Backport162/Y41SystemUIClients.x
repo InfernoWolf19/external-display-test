@@ -19,14 +19,15 @@
 //   +[SpringBoard _newApplicationInitializationContext] 0x1c7363804 [0x1c5eef658]: only [UISMutableApplicationInitializationContext sb_embeddedDisplayDefaultContext] (16.0 also set the default scene token of the
 //   SpringBoard bundle id when SBChamoisUISceneLifecycleIsEnabled() was NO).
 //
-// Not ported (exact): the application branch of -destroyScenesWithPersistentIdentifiers:... of 16.2 (block_invoke_2 0x1c764f860) looks the running application up INSIDE the block, 16.0 before the dispatch; the port
-// leaves that branch to the 16.0 method (same lookups, same SBWorkspaceDestroyApplicationSceneHandlesWithIntent), so a client that is neither an application nor a system UI scene client gets the 16.0 system UI
-// coordinator path instead of the 16.2 error code 2 "No scene handles found for provided persistence IDs." (the lookup _SBRunningApplicationForAuditToken is a SpringBoard internal function that has no exported name).
+// The application branch of -destroyScenesWithPersistentIdentifiers:... (16.2 block_invoke_2 0x1c764f860) stays the 16.0 code (same lookups and SBWorkspaceDestroyApplicationSceneHandlesWithIntent); a client that
+// is neither an application (SBRunningApplicationForAuditToken, an EXPORTED SpringBoard function, answers nil) nor a system UI scene client gets the 16.2 error 2 "No scene handles found for provided
+// persistence IDs." instead of the 16.0 fall back to the system UI coordinator.
 
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
+#import <mach/message.h>
 #import <dispatch/dispatch.h>
 #import "Y17Common.h"
 
@@ -36,6 +37,7 @@
 
 #define Y41_NEWRET __attribute__((ns_returns_retained))
 static IMP gY41InitCtx, gY41Destroy, gY41SceneRequest;
+static id (*gY41RunningApp)(audit_token_t);                                                  // SBRunningApplicationForAuditToken (exported by SpringBoard)
 static long long (*gY41ArtworkSubtype)(void);                                                // SBFEffectiveArtworkSubtype (SpringBoardFoundation)
 static BOOL Y41_On(void) { return BP_OnName("y41_sysuiclients"); }
 static id Y41_Send0(id o, const char *sel) { SEL s = sel_registerName(sel); return (o && [o respondsToSelector:s]) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
@@ -100,6 +102,14 @@ static Y41_NEWRET id Y41_NewAppInitContext(id cls, SEL _cmd) {
 static NSError *Y41_Error(NSString *domain, NSInteger code, NSString *key, NSString *msg) { return [NSError errorWithDomain:domain code:code userInfo:@{ key: msg }]; }
 static void Y41_Destroy(id self, SEL _cmd, id ids, unsigned long long type, BOOL sessions, id client, void (^completion)(NSError *)) {
     int pid = 0;
+    if (Y41_On() && gY41RunningApp && Y41_ClientPID(client, &pid) && !Y41_IsSystemUIClientPID(pid) && [client respondsToSelector:sel_registerName("realToken")]) {
+        // 16.2 block_invoke_2 0x1c764f860: a client that is no application finds no scene handle: error 2 (16.0 fell through to the system UI coordinator)
+        audit_token_t tok = ((audit_token_t (*)(id, SEL))objc_msgSend)(client, sel_registerName("realToken"));
+        if (!gY41RunningApp(tok)) {
+            dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(Y41_Error(@"SBApplicationSupportService", 2, NSLocalizedFailureReasonErrorKey, @"No scene handles found for provided persistence IDs.")); });
+            return;
+        }
+    }
     if (!Y41_On() || !Y41_ClientPID(client, &pid) || !Y41_IsSystemUIClientPID(pid)) {
         if (gY41Destroy) ((void (*)(id, SEL, id, unsigned long long, BOOL, id, id))gY41Destroy)(self, _cmd, ids, type, sessions, client, completion);
         return;
@@ -153,6 +163,8 @@ __attribute__((constructor)) static void Y41_Setup(void) {
         Class ctxCls = objc_getClass("SBApplicationSupportServiceRequestContext"), delegate = objc_getClass("SBApplicationSupportServiceDelegate"), mgr = objc_getClass("SBSceneManagerCoordinator");
         Class sb = objc_getClass("SpringBoard"), dctx = objc_getClass("UISDisplayContext"), actx = objc_getClass("UISApplicationInitializationContext");
         gY41ArtworkSubtype = (long long (*)(void))dlsym(RTLD_DEFAULT, "SBFEffectiveArtworkSubtype");
+        gY41RunningApp = (id (*)(audit_token_t))dlsym(RTLD_DEFAULT, "SBRunningApplicationForAuditToken");
+        if (!gY41RunningApp) BP_Anomaly("y41-install", @"[y41] symbol SBRunningApplicationForAuditToken (SpringBoard, exported) not found: a non application destroy request keeps the 16.0 path");
         if (!gY41ArtworkSubtype) [missing addObject:@"symbol SBFEffectiveArtworkSubtype (SpringBoardFoundation)"];
         if (!ctxCls || !class_getClassMethod(ctxCls, sel_registerName("initializationContextForClient:"))) [missing addObject:@"+[SBApplicationSupportServiceRequestContext initializationContextForClient:]"];
         if (!delegate || !class_getInstanceMethod(delegate, sel_registerName("service:overrideClientInitialization:"))) [missing addObject:@"-[SBApplicationSupportServiceDelegate service:overrideClientInitialization:]"];
