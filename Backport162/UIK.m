@@ -548,7 +548,7 @@ static void uik_displayAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id
 
 // ---- _UIScreenBasedWindowScene
 static BOOL uik_yes(id self, SEL _cmd) { (void)self; (void)_cmd; return YES; }
-static id uik_sceneScreen(id s) { return *(__strong id *)((char *)(__bridge void *)s + gUScreenOff); }
+static id uik_sceneScreen(id s) { return (__bridge id)*(void **)((char *)(__bridge void *)s + gUScreenOff); }
 static BOOL uik_sceneNeedsInv(id s) { return [objc_getAssociatedObject(s, &kUSceneNeedsInv) boolValue]; }
 static BOOL uik_sceneHasInvalidated(id s) { return ((BOOL (*)(id, SEL))objc_msgSend)(s, sel_registerName("_hasInvalidated")); }
 static id uik_preventAutoInvalidation(id self, SEL _cmd, NSString *reason) {                // 0x1895fea08
@@ -578,7 +578,7 @@ static void uik_performInvalidationIfNeeded(id self, SEL _cmd) {                
     UIK_Log("U2 performing invalidation for scene %p", (__bridge void *)self);
     ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_invalidate"));
     Class c = object_getClass(self);
-    id key = *(__strong id *)((char *)(__bridge void *)self + gULookupOff);
+    id key = (__bridge id)*(void **)((char *)(__bridge void *)self + gULookupOff);
     id q = ((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("unassociationCacheAccessQueue"));
     dispatch_sync((dispatch_queue_t)q, ^{ ((void (*)(id, SEL, id))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("unassociationCache")), sel_registerName("removeObjectForKey:"), key); });
 }
