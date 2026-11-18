@@ -1,12 +1,4 @@
 {
- "0.7.9+297.a62c67d": {
-  "date": "2026-10-31T10:27:16Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+297.a62c67d_iphoneos-arm64.deb",
-  "run": 297,
-  "sha": "a62c67d8c022d8b7c102d5b96397fb99ab9cd3fb",
-  "subject": "P1Drag/G1D core review: the ToApps scene take-over skips ancillary layout transactions like 16.2 0x1c72b0504 (p1_toappstake), the held finish of the end broadcast also recognises the transaction when p1_share is off, a queued re-entrant update is dropped by a complete, P1_NoteMissing builds no strings for a pair already reported (120 Hz path), the strip tongue failure requirement is added once per recognizer pair",
-  "version": "0.7.9+297.a62c67d"
- },
  "0.7.9+298.ea97abc": {
   "date": "2026-10-31T10:28:07Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+298.ea97abc_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "62a0a6a069f82fcda10801a1ba9208efdfc7deae",
   "subject": "a2c: arm64e block-literal groundwork (PAC sign/auth, indirect calls, --locals, descriptor emission)",
   "version": "0.7.9+360.62a0a6a"
+ },
+ "0.7.9+361.bb462cf": {
+  "date": "2026-11-18T20:26:42Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+361.bb462cf_iphoneos-arm64.deb",
+  "run": 361,
+  "sha": "bb462cf64c90777db13c451ba5987ead31463ec2",
+  "subject": "tools/restore: rebuild the analysis machine without apfs-fuse (minimal sealed APFS reader, decmpfs LZBITMAP, recipe); both dyld caches verified against the old spec addresses",
+  "version": "0.7.9+361.bb462cf"
  }
 }
