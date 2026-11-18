@@ -136,7 +136,7 @@ __attribute__((constructor)) static void Y34Support_Setup(void) {
         gOrigAlloc = am ? method_getImplementation(am) : NULL;
         if (!gOrigAlloc) { BP_Anomaly("y34", @"[y34] y34_classicsupport: +allocWithZone: not found, the subclass is never allocated"); return; }
         class_replaceMethod(meta, @selector(allocWithZone:), (IMP)Y34_SvAlloc, method_getTypeEncoding(am));
-        BP_Anomaly("y34-ext", @"[y34] y34_classicsupport active: every SBDeviceApplicationSceneView is allocated as the runtime subclass Y34DeviceApplicationSceneView (+allocWithZone: replaced; -class answers SBDeviceApplicationSceneView); kill file Backport162.off.y34_classicsupport");
+        BP_Anomaly("y34-ext", @"[y34] y34_classicsupport active: every SBDeviceApplicationSceneView is allocated as the runtime subclass Y34DeviceApplicationSceneView (+allocWithZone: replaced; -class answers SBDeviceApplicationSceneView); kill file Backport162.off.y34_classicsupport; class references answer the real class, only alloc is redirected; OS build 20A8372, tweak object compiled %s %s", __DATE__, __TIME__);
     }
 }
 #pragma clang diagnostic pop

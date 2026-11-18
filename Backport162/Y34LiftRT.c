@@ -2,7 +2,7 @@
 // A 16.2 class whose instances carry ivars the 16.0 class does not have (SBDeviceApplicationSceneClassicWrapperView: _appSwitcherDefaults, _chamoisEnabledObserver, _chamoisSettings,
 // _canRasterize; SBDeviceApplicationSceneView: _snapshottingInfoAssertion, _currentHostView) is represented by a runtime subclass that adds them with the 16.2 names
 // (Y34Ext.h creates it).  The recompiled code addresses every ivar by NAME (IVOFF), so it needs nothing else: lift_class_lookup answers the subclass for the 16.2 class name (the
-// code allocates it), lift_ivoff_lookup searches the subclass first (class_getInstanceVariable also finds the inherited ivars).
+// code allocates it: class references stay the REAL class, only alloc of the base is redirected, see lift_msg_fix / lift_intercept), lift_ivoff_lookup searches the subclass first (class_getInstanceVariable also finds the inherited ivars).
 #include "tools/a2c/liftdev.h"
 #include <string.h>
 
@@ -22,16 +22,55 @@ static void *ext_for(const char *name) {
     return 0;
 }
 
-void *lift_class_lookup(const char *name) {
-    void *e = ext_for(name);
-    return e ? e : lift_objc_getClass(name);
+// CLS(): ALWAYS the real class.  The code uses a class reference for type checks (objc_opt_isKindOfClass, isMemberOfClass:, class equality, SBSafeCast), where the 16.0 class is the right
+// answer for every instance (an instance of the runtime subclass is a kind of it too); answering the subclass there made `sceneView isKindOfClass:` fail for every view that was not an
+// exact instance of the subclass (crash: "Unsupported scene view provided to ...PlaceholderContentViewProvider").  The subclass is used ONLY to allocate (below).
+void *lift_class_lookup(const char *name) { return lift_objc_getClass(name); }
+
+// ---- allocation: alloc of a registered base class creates the runtime subclass --------------------------------------------------------------------------------------------------
+static void *ext_of_class(void *cls) {
+    for (int k = 0; k < gExtN; k++) if (lift_objc_getClass(gExt[k].base) == cls) return gExt[k].ext;
+    return 0;
+}
+// called before every objc_msgSend of the recompiled code: a class method alloc / allocWithZone: / new sent to a registered base class goes to the subclass
+void lift_msg_fix(uint64_t *X) {
+    if (!gExtN) return;
+    static void *sAlloc, *sAllocZ, *sNew;
+    if (!sAlloc) { sAlloc = lift_sel_registerName("alloc"); sAllocZ = lift_sel_registerName("allocWithZone:"); sNew = lift_sel_registerName("new"); }
+    void *sel = (void *)(uintptr_t)X[1];
+    if (sel != sAlloc && sel != sAllocZ && sel != sNew) return;
+    void *e = ext_of_class((void *)(uintptr_t)X[0]);
+    if (e) X[0] = (uint64_t)(uintptr_t)e;
+}
+extern void *lift_objc_alloc_real(void *) __asm__("_objc_alloc");
+extern void *lift_objc_allocWithZone_real(void *) __asm__("_objc_allocWithZone");
+extern void *lift_objc_opt_new_real(void *) __asm__("_objc_opt_new");
+extern void *lift_class_createInstance_real(void *, size_t) __asm__("_class_createInstance");
+static void *lift_i_alloc(void *c) { void *e = ext_of_class(c); return lift_objc_alloc_real(e ? e : c); }
+static void *lift_i_allocWithZone(void *c) { void *e = ext_of_class(c); return lift_objc_allocWithZone_real(e ? e : c); }
+static void *lift_i_alloc_init(void *c) {
+    void *o = lift_i_alloc(c);
+    return ((void *(*)(void *, void *))lift_objc_msgSend)(o, lift_sel_registerName("init"));
+}
+static void *lift_i_opt_new(void *c) { void *e = ext_of_class(c); return lift_objc_opt_new_real(e ? e : c); }
+static void *lift_i_createInstance(void *c, size_t extra) { void *e = ext_of_class(c); return lift_class_createInstance_real(e ? e : c, extra); }
+// C entry points that allocate by class: the lifted code gets these instead of the runtime's
+void *lift_intercept(const char *bare) {
+    if (!gExtN) return 0;
+    if (strcmp(bare, "objc_alloc") == 0) return (void *)lift_i_alloc;
+    if (strcmp(bare, "objc_allocWithZone") == 0) return (void *)lift_i_allocWithZone;
+    if (strcmp(bare, "objc_alloc_init") == 0) return (void *)lift_i_alloc_init;
+    if (strcmp(bare, "objc_opt_new") == 0) return (void *)lift_i_opt_new;
+    if (strcmp(bare, "class_createInstance") == 0) return (void *)lift_i_createInstance;
+    return 0;
 }
 
 long lift_ivoff_lookup(const char *spec) {
     char cls[96]; const char *dot = strchr(spec, '.');
     if (!dot || (size_t)(dot - spec) >= sizeof cls) return -1;
     memcpy(cls, spec, (size_t)(dot - spec)); cls[dot - spec] = 0;
-    void *c = lift_class_lookup(cls);          // the subclass when one is registered: finds its own ivars and every inherited one
+    void *c = ext_for(cls);                    // the subclass when one is registered: finds its own ivars and every inherited one
+    if (!c) c = lift_class_lookup(cls);
     if (!c) return -1;
     void *iv = lift_class_getInstanceVariable(c, dot + 1);
     if (!iv) return -1;

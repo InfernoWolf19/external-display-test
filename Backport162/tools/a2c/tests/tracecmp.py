@@ -5,7 +5,7 @@ Differential test of a2c.py output: the original machine code (Unicorn) and the 
 object memory are compared.  Calls are identified by name; answers depend on (seed, call index, callee name) only."""
 import sys, os, re, struct, ctypes, subprocess, random, hashlib
 sys.dont_write_bytecode = True
-sys.path.insert(0, '/tmp/claude-0/-home-user-external-display-test/y34work')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) + '/..')
 sys.path.insert(0, '/home/user/external-display-test/Backport162/tools/y26_classic_tree')
 import a2c
 from emu_lib import dump

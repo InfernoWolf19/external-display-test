@@ -158,7 +158,7 @@ __attribute__((constructor)) static void Y34Wrapper_Setup(void) {
         if (p) class_addProtocol(gWvExt, p);
         Y34_AddIdentityShims(gWvExt, gWvBase);
         lift_register_ext("SBDeviceApplicationSceneClassicWrapperView", (__bridge void *)gWvExt);
-        BP_Anomaly("y34-ext", @"[y34] y34_classicwrapper active: wrapper views are instances of the runtime subclass Y34ClassicWrapperView (-class answers SBDeviceApplicationSceneClassicWrapperView); kill file Backport162.off.y34_classicwrapper");
+        BP_Anomaly("y34-ext", @"[y34] y34_classicwrapper active: wrapper views are instances of the runtime subclass Y34ClassicWrapperView (-class answers SBDeviceApplicationSceneClassicWrapperView); kill file Backport162.off.y34_classicwrapper; class references answer the real class, only alloc is redirected; OS build 20A8372, tweak object compiled %s %s", __DATE__, __TIME__);
     }
 }
 #pragma clang diagnostic pop

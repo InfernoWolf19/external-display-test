@@ -38,7 +38,9 @@ extern void lift_register_ext(const char *baseName, void *extClass);
 #define CLS(t, i) lift_class_lookup((t)[i])
 // C functions of the 16.2 frameworks that 16.0 does not export (BSSizeSwap, SBFIsChamoisWindowingUIAvailable): tiny C re-implementations in Y34LiftRT.c, used only when dlsym finds nothing
 extern void *lift_builtin(const char *bareName);
-static inline void *lift_gsym(const char *n) { if (*n == '_') n++; void *p = dlsym(RTLD_DEFAULT, n); return p ? p : lift_builtin(n); }
+extern void *lift_intercept(const char *bareName);
+extern void lift_msg_fix(uint64_t *X);
+static inline void *lift_gsym(const char *n) { if (*n == '_') n++; void *p = lift_intercept(n); if (p) return p; p = dlsym(RTLD_DEFAULT, n); return p ? p : lift_builtin(n); }
 #define GSYM(t, i) lift_gsym((t)[i])
 #define CFSTR_(t, i) lift_cfstr((t)[i])
 extern void *lift_cfstr(const char *utf8);   // provided by the includer's .m / .x side (an NSString constant): see Y34ClassicTypes.x
@@ -72,7 +74,7 @@ typedef struct { uint8_t b[128]; } LiftM128;
 #define LIFT_CALL_m48(fn) do { LiftM48 r_ = ((LiftM48 (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); memcpy((void *)(uintptr_t)X[8], &r_, sizeof r_); } while (0)
 #define LIFT_CALL_m128(fn) do { LiftM128 r_ = ((LiftM128 (*)(LIFT_PARAMS))(fn))(LIFT_ARGS); memcpy((void *)(uintptr_t)X[8], &r_, sizeof r_); } while (0)
 #define CALLPTR(fn, kind) LIFT_CALL_##kind(fn)
-#define CALLMSG(kind) LIFT_CALL_##kind((void *)lift_objc_msgSend)
+#define CALLMSG(kind) do { lift_msg_fix(X); LIFT_CALL_##kind((void *)lift_objc_msgSend); } while (0)
 #define CALLFN(t, i, kind) do { void *f_ = lift_gsym((t)[i]); if (f_) LIFT_CALL_##kind(f_); } while (0)
 
 #define RT_RETAIN(p) lift_objc_retain(p)
