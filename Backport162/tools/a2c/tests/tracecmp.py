@@ -59,9 +59,25 @@ def enc(w, objbase):
 
 def parse_sig(sig): return [x for x in sig.split(',') if x]
 
+PACRE = re.compile(r'(pac|aut)([id][ab])(z?)$')
+NSB = ('SYM', 'NSConcreteStackBlock')
+def n_mod(N, m):
+    hi = (m >> 48) & 0xffff
+    return (N(m & 0xffffffffffff), hi) if hi else N(m)
+DATASYM = {}      # data symbol -> the NSString constant it holds (--datasyms kCAFilterBox=box): the Unicorn side reads the real CFString, the lifted side a cell
+def isk(n): return isinstance(n, tuple) and n[0] == 'K'
+def blk_snapshot(rd, N2, addr):
+    """normalised image of the block literal at addr (isa, flags, invoke, descriptor, captured words) when addr holds a block isa, else None"""
+    if N2(rd(addr)) != NSB: return None
+    d = N2(rd(addr + 24)); size = d[2] if isinstance(d, tuple) and d[0] == 'DESC' else 0x28
+    out = [NSB, rd(addr + 8), N2(rd(addr + 16)), d]
+    for o in range(0x20, size, 8): out.append(N2(rd(addr + o)))
+    return tuple(out)
+
 class Case:
-    def __init__(s, ver, start, end, cname, sig, retk, cls, kinds_at):
+    def __init__(s, ver, start, end, cname, sig, retk, cls, kinds_at, locals_=None):
         s.ver, s.start, s.end, s.cname, s.sig, s.retk, s.cls, s.kinds_at = ver, start, end, cname, parse_sig(sig), retk, cls, kinds_at
+        s.locals = locals_ or {}
 
 # --------------------------------------------------------------- emulator side
 def emu_names(ver, start, end):
@@ -92,6 +108,13 @@ def run_emu(c, names, seed, args, case_mem):
     selfw, objw = case_mem
     uc.mem_write(SELF_EMU, b''.join(struct.pack('<Q', enc(w, OBJ_EMU)) for w in selfw))
     uc.mem_write(OBJ_EMU, b''.join(struct.pack('<Q', enc(w, OBJ_EMU)) for w in objw))
+    pacs = {}
+    from capstone import Cs, CS_ARCH_ARM64, CS_MODE_ARM
+    md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
+    for i_ in md.disasm(bytes(code[c.start - base:c.end - base]), c.start):
+        if PACRE.match(i_.mnemonic):
+            pacs[i_.address] = (i_.mnemonic, [x.strip() for x in i_.op_str.split(',')])
+            uc.mem_write(i_.address, struct.pack('<I', 0xd503201f))      # nop: signing is the identity, the operands are logged (the lifted LIFT_PAC logs the same)
     mapped = set()
     def unm(uc, access, address, size, value, ud):
         pg = address & ~0xfff
@@ -114,27 +137,49 @@ def run_emu(c, names, seed, args, case_mem):
     tr = Trace(); idx = [0]
     ctx = a2c.Ctx(c.ver)
     def N(v):
+        if v in c.locals: return ('LFN', c.locals[v])
         if v == 0x72000000 or 0x180000000 <= v < 0x188000000: return ('SEL',)   # selector (uniqued method name region of the cache)
         if SELF_EMU <= v < SELF_EMU + SELF_SZ: return ('S', v - SELF_EMU)
         if OBJ_EMU <= v < OBJ_EMU + OBJ_SZ: return ('O', v - OBJ_EMU)
         if SP0_EMU - 0x4000 <= v < SP0_EMU + 0x100: return ('K', v - SP0_EMU)
-        if v >= (1 << 44) and (v >> 60) == 0 and (v >> 52) == 0: return ('CLS', '?')   # chained (PAC / diversity) class reference read from the cache data: class identity is not decoded here
+        if v >= (1 << 44) and (v >> 60) == 0 and (v >> 52) == 0:
+            sy_ = ctx.a2s2(v & 0x7ffffffffff)[0]
+            if sy_.lstrip('_') == 'NSConcreteStackBlock': return NSB
+            return ('CLS', sy_[len('_OBJC_CLASS_$_'):]) if sy_.startswith('_OBJC_CLASS_$_') else ('CLS', '?')   # chained (PAC / diversity) class reference read from the cache data: class identity is not decoded here
         if 0x180000000 <= v < 0x200000000:
             sec = ctx.a2s2(v)[1]
-            if 'objc_data' in sec: return ('CLS', '?')
+            if 'objc_data' in sec:
+                sy_ = ctx.a2s2(v)[0]
+                if sy_.lstrip('_') == 'NSConcreteStackBlock': return NSB
+                return ('CLS', sy_[len('_OBJC_CLASS_$_'):]) if sy_.startswith('_OBJC_CLASS_$_') else ('CLS', '?')
             if 'cfstring' in sec: return ('STR', ctx.cfstr(v))
             if 'cstring' in sec or 'methname' in sec: return ('STR', ctx.cstring(v))
+            if ctx.a2s2(v)[0].lstrip('_') == 'NSConcreteStackBlock': return NSB
+            if 'const' in sec:
+                try:
+                    w = struct.unpack('<5Q', ctx.read(v, 40))
+                    dp = lambda q: (0x180000000 + (q & 0xffffffff)) if q >> 63 else (q & 0x7ffffffffff)
+                    sg = ctx.cstring(dp(w[2])) if not (0x18 <= w[1] <= 0x400 and 0x180000000 <= dp(w[2]) < 0x200000000 and 'text' in ctx.a2s2(dp(w[2]))[1]) else ctx.cstring(dp(w[4]))
+                    if 0x18 <= w[1] <= 0x400 and sg and all(32 <= ord(ch) < 127 for ch in sg): return ('DESC', sg, w[1])
+                except Exception: pass
         return v
     def callout(nm, addr):
         n = names[addr]
         x = [uc.reg_read(UC_ARM64_REG_X0 + i) for i in range(8)]
         r = re.match(r'_objc_(retain|release)_x(\d+)$', n)
         if r:
-            if r.group(1) == 'retain': uc.reg_write(UC_ARM64_REG_X0, uc.reg_read(UC_ARM64_REG_X0 + int(r.group(2))))
+            v_ = uc.reg_read(UC_ARM64_REG_X0 + int(r.group(2)))
+            tr.calls.append(('E:' + r.group(1), (N(v_),), (), ()))
+            if r.group(1) == 'retain': uc.reg_write(UC_ARM64_REG_X0, v_)
             return
-        if n.lstrip('_') in ('objc_claimAutoreleasedReturnValue', 'objc_retainAutoreleasedReturnValue', 'objc_autoreleaseReturnValue', 'objc_retain', 'objc_autorelease', 'objc_unsafeClaimAutoreleasedReturnValue', 'objc_retainAutorelease', 'objc_retainAutoreleaseReturnValue'): return
-        if n.lstrip('_') == 'objc_release': return
-        if n.lstrip('_') in ('objc_storeStrong', 'objc_enumerationMutation'):
+        OWN = {'objc_claimAutoreleasedReturnValue': 'claim', 'objc_retainAutoreleasedReturnValue': 'claim', 'objc_autoreleaseReturnValue': 'autoreleaseRV', 'objc_retain': 'retain', 'objc_autorelease': 'autorelease',
+               'objc_unsafeClaimAutoreleasedReturnValue': 'unsafeclaim', 'objc_retainAutorelease': 'retainAutorelease', 'objc_retainAutoreleaseReturnValue': 'retainAutoreleaseRV', 'objc_release': 'release'}
+        if n.lstrip('_') in OWN:
+            tr.calls.append(('E:' + OWN[n.lstrip('_')], (N(x[0]),), (), ())); return
+        if n.lstrip('_') == 'objc_storeStrong':
+            tr.calls.append(('E:storeStrong', (N(x[0]), N(x[1])), (), ()))
+            uc.mem_write(x[0], struct.pack('<Q', x[1])); return
+        if n.lstrip('_') == 'objc_enumerationMutation':
             tr.calls.append((norm_name(n), tuple(N(v) for v in x[:2]), (), ())); return
         d = [uc.reg_read(UC_ARM64_REG_D0 + i) for i in range(8)]
         kind = c.kinds_at.get(callout.pc, 'x')
@@ -143,7 +188,9 @@ def run_emu(c, names, seed, args, case_mem):
         if n.lstrip('_') == 'objc_msgSendSuper2': xs_ = xs_[:1] + (('SEL',),) + xs_[2:]
         sp_ = uc.reg_read(UC_ARM64_REG_SP)
         stk_ = tuple(N(struct.unpack('<Q', bytes(uc.mem_read(sp_ + 8 * j, 8)))[0]) for j in range(12))
-        tr.calls.append((norm_name(n), xs_, tuple(d), stk_))
+        blks = tuple(b for b in (blk_snapshot(lambda a_: struct.unpack('<Q', bytes(uc.mem_read(a_, 8)))[0], N, v) for v in x[:8] if isk(N(v))) if b)
+        if n.lstrip('_') == 'objc_msgSendSuper2': blks = blks + (('SUPER', N(struct.unpack('<Q', bytes(uc.mem_read(x[0], 8)))[0]), N(struct.unpack('<Q', bytes(uc.mem_read(x[0] + 8, 8)))[0])),)
+        tr.calls.append((norm_name(n), xs_, tuple(d), stk_) + ((blks,) if blks else ()))
         k = idx[0]; idx[0] += 1
         if n == 'msgSend:countByEnumeratingWithState:objects:count:':
             st = x[2]; first = struct.unpack('<Q', bytes(uc.mem_read(st, 8)))[0] == 0
@@ -166,6 +213,12 @@ def run_emu(c, names, seed, args, case_mem):
             for j in range(nd): uc.reg_write(UC_ARM64_REG_D0 + j, d2i(ds[j]))
     callout.pc = 0
     def code_hook(uc, addr, size, ud):
+        if addr in pacs:
+            mn_, ops_ = pacs[addr]
+            def rv(o):
+                return 0 if o in ('xzr',) else uc.reg_read(UC_ARM64_REG_X0 + int(o[1:])) if o[0] == 'x' else uc.reg_read(UC_ARM64_REG_SP)
+            pm_ = PACRE.match(mn_)
+            tr.calls.append(('E:' + pm_.group(1) + pm_.group(2), (N(rv(ops_[0])), n_mod(N, rv(ops_[1])) if len(ops_) > 1 else 0), (), ()))
         if addr == 0xdead0000:
             tr.ret = (uc.reg_read(UC_ARM64_REG_X0), uc.reg_read(UC_ARM64_REG_D0), uc.reg_read(UC_ARM64_REG_D1)); uc.emu_stop(); return
         if c.start <= addr < c.end:
@@ -226,9 +279,22 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
     for i in range(nsel):
         if selp[i]: strmap[selp[i]] = ('SEL',)
     for i in range(ncls):
-        if clsp[i]: strmap[clsp[i]] = ('CLS', '?')
+        if clsp[i]: strmap[clsp[i]] = ('CLS', ctypes.string_at(clsp[i]).decode())
+    cells = (ctypes.c_uint64 * 128).in_dll(lib, 'lift_cells')
+    def cellmap():
+        for i in range(ctypes.c_int.in_dll(lib, 'lift_ncells').value):
+            nm_ = ctypes.string_at(cells[2 * i + 1]).decode().lstrip('_')
+            strmap[ctypes.addressof(cells) + 16 * i] = ('SYM', nm_)
+            strmap[cells[2 * i]] = ('STR', DATASYM[nm_]) if nm_ in DATASYM else ('SYMVAL', nm_)
+    fnaddrs = (ctypes.c_uint64 * 32).in_dll(lib, 'lift_fnaddrs'); fnnames = (ctypes.c_char_p * 16).in_dll(lib, 'lift_fnnames')
+    descs = (ctypes.c_uint64 * 48).in_dll(lib, 'lift_descs')
     tr = Trace(); idx = [0]
     def N(v):
+        cellmap()
+        for i_ in range(ctypes.c_int.in_dll(lib, 'lift_nfn').value):
+            if fnaddrs[2 * i_] == v: return ('LFN', fnnames[i_].decode())
+        for i_ in range(ctypes.c_int.in_dll(lib, 'lift_ndesc').value):
+            if descs[3 * i_] == v: return ('DESC', ctypes.string_at(descs[3 * i_ + 1]).decode(), descs[3 * i_ + 2])
         if v in strmap: return strmap[v]
         if selfb <= v < selfb + SELF_SZ: return ('S', v - selfb)
         if objb <= v < objb + OBJ_SZ: return ('O', v - objb)
@@ -245,7 +311,9 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
         xs_ = tuple(N(X[i]) for i in range(8))
         if not isMsg and n.lstrip('_') == 'objc_msgSendSuper2': xs_ = xs_[:1] + (('SEL',),) + xs_[2:]
         stk_ = tuple(N(struct.unpack('<Q', ctypes.string_at(X[31] + 8 * j, 8))[0]) for j in range(12))
-        tr.calls.append((nm, xs_, d, stk_))
+        blks = tuple(b for b in (blk_snapshot(lambda a_: struct.unpack('<Q', ctypes.string_at(a_, 8))[0], N, X[i]) for i in range(8) if isk(N(X[i]))) if b)
+        if n.lstrip('_') == 'objc_msgSendSuper2': blks = blks + (('SUPER', N(struct.unpack('<Q', ctypes.string_at(X[0], 8))[0]), N(struct.unpack('<Q', ctypes.string_at(X[0] + 8, 8))[0])),)
+        tr.calls.append((nm, xs_, d, stk_) + ((blks,) if blks else ()))
         k = idx[0]; idx[0] += 1
         if isMsg and n == 'countByEnumeratingWithState:objects:count:':
             st = X[2]; first = struct.unpack('<Q', ctypes.string_at(st, 8))[0] == 0
@@ -264,6 +332,13 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
         else:
             nd = {'d': 1, 'size': 2, 'rect': 4}[kind]
             for j in range(nd): VR[j][0] = d2i(ds[j]); VR[j][1] = 0
+    def ev(what, a, b):
+        w = what.decode()
+        if PACRE.match(w): tr.calls.append(('E:' + w, (N(a), n_mod(N, b)), (), ()))
+        elif w == 'storeStrong': tr.calls.append(('E:' + w, (N(a), N(b)), (), ()))
+        else: tr.calls.append(('E:' + w, (N(a),), (), ()))
+    EV = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_uint64, ctypes.c_uint64)
+    evo = EV(ev); lib.lift_set_ev(evo)
     cbo = CB(cb); ivo = IV(lambda n: ivmap[n.decode()])
     lib.lift_set(cbo, ivo)
     xs = []; ds_ = []; sts = []
@@ -290,11 +365,23 @@ def main():
     if '--kinds' in sys.argv:
         for kv in sys.argv[sys.argv.index('--kinds') + 1].split(','):
             k_, v_ = kv.split('='); kinds_['msgSend:' + k_] = v_
+    if '--datasyms' in sys.argv:
+        for kv in sys.argv[sys.argv.index('--datasyms') + 1].split(','):
+            k_, v_ = kv.split('='); DATASYM[k_] = v_
+    locs = {}; lbody = ''
+    if '--locals' in sys.argv:
+        for spec in sys.argv[sys.argv.index('--locals') + 1].split(','):
+            a_, e_, cn_, sg_, rk_ = spec.split(':'); sg_ = sg_.replace('+', ',')
+            LL = a2c.Lift(ver, int(a_, 16), int(e_, 16), cn_, sg_, rk_, {}, cls)
+            LL.locals = dict(locs)
+            hh, ff = LL.generate(); lbody += hh + '\n' + ff + '\n'; locs[int(a_, 16)] = cn_
+            for w in LL.stats['warn']: print('WARN', cn_, w)
     L = a2c.Lift(ver, st, en, cname, sig, retk, kinds_, cls)
+    L.locals = dict(locs)
     head, fn = L.generate()
     a2c.save_memo()
     for w in L.stats['warn']: print('WARN', w)
-    open(W + cname + '.tc.c', 'w').write('#include "liftest.h"\n' + head + '\n' + fn + '\nconst char *const *lift_dbg_strs = %s_strs; int lift_dbg_nstrs = (int)(sizeof(%s_strs) / sizeof(%s_strs[0])); const char *const *lift_dbg_cls = %s_cls; int lift_dbg_ncls = (int)(sizeof(%s_cls) / sizeof(%s_cls[0])); const char *const *lift_dbg_sels = %s_sels; int lift_dbg_nsels = (int)(sizeof(%s_sels) / sizeof(%s_sels[0]));\n' % (cname, cname, cname, cname, cname, cname, cname, cname, cname) + '''
+    open(W + cname + '.tc.c', 'w').write('#include "liftest.h"\n' + lbody + head + '\n' + fn + '\nconst char *const *lift_dbg_fns = %s_fns; int lift_dbg_nfns = (int)(sizeof(%s_fns) / sizeof(%s_fns[0])); const char *const *lift_dbg_strs = %s_strs; int lift_dbg_nstrs = (int)(sizeof(%s_strs) / sizeof(%s_strs[0])); const char *const *lift_dbg_cls = %s_cls; int lift_dbg_ncls = (int)(sizeof(%s_cls) / sizeof(%s_cls[0])); const char *const *lift_dbg_sels = %s_sels; int lift_dbg_nsels = (int)(sizeof(%s_sels) / sizeof(%s_sels[0]));\n' % ((cname,) * 12) + '''
 void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, double d0, double d1, double d2, double d3, double d4, double d5, double d6, double d7, uint64_t st0, uint64_t st1, uint64_t st2, uint64_t st3) {
     %s
 }
@@ -321,7 +408,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
             ivmap[spec] = -1
     print('ivmap', ivmap)
     names = emu_names(ver, st, en)
-    c = Case(ver, st, en, cname, sig, retk, cls, L.kinds_at)
+    c = Case(ver, st, en, cname, sig, retk, cls, L.kinds_at, locs)
     bad = 0; ncalls = 0; paths = set()
     for seed in range(nseeds):
         r = random.Random(seed)
@@ -335,6 +422,9 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
         te, Ne = run_emu(c, names, seed, args, (selfw, objw))
         tl, Nl = run_lifted(c, lib, L.kinds_at, seed, args, (selfw, objw), ivmap)
         ncalls += len(te.calls)
+        if os.environ.get('TCDUMP') and seed == 0:
+            for c_ in te.calls: print('EMU ', c_[0], c_[1][:3], c_[4:] if len(c_) > 4 else '')
+            for c_ in tl.calls: print('LIFT', c_[0], c_[1][:3], c_[4:] if len(c_) > 4 else '')
         paths.add(tuple(x[0] for x in te.calls))
         ok = te.err is None and te.calls == tl.calls and te.mem == tl.mem and te.omem == tl.omem and (retk in ('v', 'd', 'size', 'rect') or Ne(te.ret[0]) == Nl(tl.ret[0]))
         if not ok:

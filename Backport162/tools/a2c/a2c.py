@@ -323,13 +323,12 @@ class Lift:
             return
         if mn == 'eor' and ops and nm(ops[0]) == 'x16' and len(ops) == 3 and nm(ops[1]) == 'x30': return
         if mn == 'tbz' and nm(ops[0]) == 'x16': return
-        if (mn.startswith('pac') or mn.startswith('aut')) and mn not in ('autibsp', 'autiasp', 'pacibsp', 'paciasp'):
-            keymap = {'ia': 0, 'ib': 1, 'da': 2, 'db': 3}
-            kk = mn[3:5]; zero = len(mn) > 5 and mn[5] == 'z'
-            if kk not in keymap: raise Exception('pac form ' + mn)
-            d = nm(ops[0]); mod = '0ull' if zero else s.rdreg(nm(ops[1]))
-            fnm = 'LIFT_PAC' if mn.startswith('pac') else 'LIFT_AUT'
-            E('X[%d] = %s(%d, X[%d], %s);' % (int(d[1:]), fnm, keymap[kk], int(d[1:]), mod)); s.kill(d); return
+        pm = re.match(r'(pac|aut)([id])([ab])(z?)$', mn)
+        if pm:
+            key = (0 if pm.group(2) == 'i' else 2) + (0 if pm.group(3) == 'a' else 1)
+            d = nm(ops[0]); mod = '0ull' if pm.group(4) else s.rdreg(nm(ops[1]))
+            fnm = 'LIFT_PAC' if pm.group(1) == 'pac' else 'LIFT_AUT'
+            E('X[%d] = %s(%d, X[%d], %s);' % (int(d[1:]), fnm, key, int(d[1:]), mod)); s.kill(d); return
         if mn in ('xpaci', 'xpacd'):
             d = nm(ops[0]); E('X[%d] = LIFT_STRIP(X[%d]);' % (int(d[1:]), int(d[1:]))); s.kill(d); return
         if mn in ('blr', 'blraa', 'blraaz', 'blrab', 'blrabz', 'br', 'braa', 'braaz', 'brab', 'brabz'):
@@ -396,7 +395,7 @@ class Lift:
                     E('X[%d] = LIFT_FNADDR(%s); /* address of the lifted local function */' % (int(d[1:]), s.locals[cvalres])); return
                 dk = s.descriptor(cvalres)
                 if dk is not None:
-                    E('X[%d] = (uint64_t)(uintptr_t)%s_desc%d_get(); /* block descriptor, signature %s */' % (int(d[1:]), s.cname, dk, json.dumps(s.descs[dk]['sig']))); return
+                    E('X[%d] = (uint64_t)(uintptr_t)LIFT_DESC(%s_desc%d_get(), %s, 0x%xull); /* block descriptor */' % (int(d[1:]), s.cname, dk, json.dumps(s.descs[dk]['sig']), s.descs[dk]['w1'])); return
                 sym_, sec_ = s.ctx.a2s2(cvalres)
                 if not sec_ and sym_ in ('?', ''):
                     lit0 = s.ctx.cstring(cvalres)
@@ -641,6 +640,8 @@ class Lift:
                         E('X[%d] = 0x%xull; /* address of %s (immutable table, loads from it are baked) */' % (int(r0[1:]), tgt, tsym)); return
                     if tsym:
                         E('X[%d] = (uint64_t)GSYM(%s_fns, %d); /* %s */' % (int(r0[1:]), s.cname, s.intern(s.fns, tsym), tsym)); s.kill(r0); return
+                if sz == 8 and r0[0] == 'x' and not (0x180000000 <= tgt < 0x200000000) and 'const' in s.ctx.a2s2(const_addr)[1]:
+                    E('X[%d] = 0x%xull; /* integer constant %s @%x (immutable data) */' % (int(r0[1:]), tgt, sym, const_addr)); s.kill(r0); return
                 s.stats['warn'].append('unresolved data load %x (%s)' % (const_addr, sym))
         # generic
         def rdmem(expr, sz, signed):

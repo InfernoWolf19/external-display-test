@@ -58,6 +58,8 @@ static inline uint32_t lift_sdiv32(uint64_t a, uint64_t b) { int32_t x = (int32_
 // ---- pointer authentication (arm64e) -------------------------------------------------------------------------------------------------------------------------------
 // The recompiled code signs / authenticates exactly where the machine code does (block isa / invoke / descriptor, helper pointers); keys 0 IA, 1 IB, 2 DA, 3 DB.  Off arm64e (the arm64
 // slice, the Linux test harness) signing is the identity.
+#ifndef LIFT_TEST_HOOKS
+#define LIFT_DESC(p, sig, size) (p)
 #if defined(__arm64e__) && defined(__has_feature)
 #if __has_feature(ptrauth_intrinsics)
 #define LIFT_HAVE_PTRAUTH 1
@@ -79,4 +81,5 @@ static inline uint32_t lift_sdiv32(uint64_t a, uint64_t b) { int32_t x = (int32_
 #define LIFT_FNADDR(fn) ((uint64_t)(uintptr_t)(fn))
 #define LIFT_CALLPTR(p, key, m) ((void *)(uintptr_t)(p))
 #endif
+#endif /* LIFT_TEST_HOOKS */
 #endif
