@@ -1,12 +1,4 @@
 {
- "0.7.9+302.25197c1": {
-  "date": "2026-10-31T10:35:01Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+302.25197c1_iphoneos-arm64.deb",
-  "run": 302,
-  "sha": "25197c1055aaa01f356169e2a5512137ee8d92f7",
-  "subject": "ORIENTATION-0.7.9: arbiter actuation flags are ON on stock 20A8372 (device FeatureFlags + adoption defaults), no flag hook; DELTA-SWEEP: 50 orientation rows decided (delegate, dock, view stack, live overlay); Z2OrientTraits logs a GUARD if the actuation flag is off",
-  "version": "0.7.9+302.25197c1"
- },
  "0.7.9+303.953596a": {
   "date": "2026-10-31T10:37:21Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+303.953596a_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "6108bd18ed39bc23ab1708724534351fb93ffa19",
   "subject": "S1 gaps: the 16.2 nil assertions of -sceneWorkspaceControllerForProcessIdentity: (coordinator 0x1c77a9904, controller 0x1c7967488) and the destroy request of a client that is no application (error 2, SBRunningApplicationForAuditToken is an exported SpringBoard symbol)",
   "version": "0.7.9+369.6108bd1"
+ },
+ "0.7.9+370.fa67cd0": {
+  "date": "2026-11-18T21:05:30Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+370.fa67cd0_iphoneos-arm64.deb",
+  "run": 370,
+  "sha": "fa67cd0bf19aef70559d59e7fdd066921396583a",
+  "subject": "Y42Shelf: SBShelfLiveContentOverlayCoordinator -_addOverlaysIfNeededForTransitionContext: (16.2 0x1c798ac94, stack block, invoke 0x1c798b338) and SBShelfLiveContentOverlay's 16.2 init (0x1c798b6b8), recompiled from the 16.2 machine code",
+  "version": "0.7.9+370.fa67cd0"
  }
 }
