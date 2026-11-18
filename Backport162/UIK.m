@@ -30,6 +30,9 @@
 #import <string.h>
 #import <time.h>
 #import <unistd.h>
+#if __has_feature(ptrauth_calls)
+#include <ptrauth.h>
+#endif
 
 // ---------------------------------------------------------------- switches
 
@@ -453,10 +456,386 @@ static BOOL UIK_IsApp(void) {
     return strcmp(base, "SpringBoard") != 0;
 }
 
+// ---------------------------------------------------------------- U2: scene based UIScreen lifecycle, auto invalidation of the screen based window scenes, live resize (16.2)
+//
+// 16.2 UIKitCore (16.0 -> 16.2, decoded from the machine code, DELTA-SWEEP-0.7.9.md Pass 4 section 4):
+//  UIScreen   -_preventDisconnectionForReason: 0x18996babc (NEW)  +_FBSDisplayIdentityDisconnected: 0x18949bcb4 (deferred disconnect)  -_disconnectScreen 0x18996b94c
+//             the foreground scene counting is gone (+_registerForStaticNotificationsIfNecessary, only called from -initWithDisplayConfiguration:forceMainScreen:); the reference display mode
+//             status is set by -[_UIWindowSceneDisplaySettingsDiffAction _performActionsForUIScene:...] 0x1895fd4fc instead.
+//  _UIScreenBasedWindowScene +autoInvalidates 0x1895fe7b0, -_preventAutoInvalidationForReason: 0x1895fea08 (NEW), -_performInvalidationIfNeeded 0x1895fe834 (NEW),
+//             -_removeAutoInvalidationPreventionAssertion: 0x1895fedd0 (NEW), -_detachWindow: 0x18949e658, -_screenDisconnected: 0x1895ff670, +_unassociatedWindowSceneForScreen:create: 0x18908ca30.
+//  Live resize: _UIWindowSceneLiveResizeDiffAction (NEW) 0x189e7a2ac, -[UIWindowScene _isInLiveResize] 0x189dfbe78, -_inLiveResizeDidChange 0x189dfbeb0, -[UIApplicationSceneSettingsDiffInspector
+//             observeInLiveResizeWithBlock:] 0x1898de02c (= _observeOtherSetting:0x28), registered by -[UIApplicationSceneSpecification initialSettingsDiffActions] 0x189253a94 and
+//             -[UIApplicationExternalScreenSceneSpecification initialSettingsDiffActions] 0x1898de2d4 (which also swaps _UIWindowSceneLifecycleSettingsDiffAction for the NEW
+//             _UIWindowSceneNonInteractiveExternalDisplayLifecycleSettingsDiffAction 0x1895fd6f0: the same update block, then [[_UISceneLifecycleMultiplexer sharedInstance]
+//             uiScene:transitionedFromState:withTransitionContext:]).
+// State the 16.0 classes have no ivar for lives in associated objects (UIScreen: the prevention assertion set, needsDisconnection - bit 6 of _screenFlags is hasSetOverscanCompensation in
+// 16.0; scene: _needsInvalidation, the assertion set, the screen assertion); _invalidationHandlerRegistered of 16.0 is the 16.2 _invalidationEvaluatorRegistered.
+// NOT in this port (exact): __UIApplicationSceneDisconnectionHandler_block_invoke_3 0x1895f2db8 / __UIApplicationSceneConnectionHandler_block_invoke 0x1893148b4 (the only caller of
+// -_preventAutoInvalidationForReason: takes the assertion for a disconnecting default scene), so no scene takes an auto invalidation assertion yet; and the debug description builders.
+// The private C functions the NonInteractiveExternalDisplay lifecycle action calls (_UISceneLifecycleSettingsUpdateBlockWithCanvasAndTransitionContext 16.0 0x189144ac4) are found from the
+// exported _UISceneSettingsDiffActionPerformChangesWithTransitionContextAndCompletion (16.0 0x1898216dc) by the fixed offset of the 20A8372 cache; the first 8 instruction words at the target are
+// checked, otherwise that action is NOT installed (logged).
+
+static char kUScreenSet, kUScreenNeedsDisc, kUSceneSet, kUSceneScreenAssertion, kUSceneNeedsInv;
+static unsigned long gUCounter;
+static IMP orig_disconnectScreenU2, orig_dispActionU2, orig_appActionsU2, orig_extActionsU2;
+static ptrdiff_t gUFlagsOff = -1, gUScreenOff = -1, gULookupOff = -1, gUEvalOff = -1;
+static Class gUSceneCls, gULiveCls, gUNonCls;
+static id (*gUUpdateBlock)(id, id, id, id);
+static void (*gUPerformChanges)(id, id, id);
+
+static id UIK_NewSimpleAssertion(NSString *ident, NSString *reason, void (^inv)(id)) {
+    Class c = objc_getClass("BSSimpleAssertion");
+    SEL s = sel_registerName("initWithIdentifier:forReason:queue:invalidationBlock:");
+    id a = [c alloc];
+    return ((id (*)(id, SEL, id, id, id, id))objc_msgSend)(a, s, ident, reason, dispatch_get_main_queue(), inv);
+}
+static BOOL UIK_U2On(void) { return UIK_On(UIK_SW_SCREENLIFE); }
+
+// ---- UIScreen
+static void uik_registerStaticNotifs(id self, SEL _cmd) { (void)self; (void)_cmd; }          // 16.2 has no scene counting: nothing to register
+static void uik_realDisconnect(id screen, SEL cmd) {
+    objc_setAssociatedObject(screen, &kUScreenNeedsDisc, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    UIK_Log("U2 disconnecting screen %p", (__bridge void *)screen);
+    ((void (*)(id, SEL))orig_disconnectScreenU2)(screen, cmd);
+}
+// the only 16.0 caller is +_FBSDisplayIdentityDisconnected: (16.2 0x18949be00: prevention set exists -> needsDisconnection, else disconnect)
+static void uik_disconnectScreenU2(id self, SEL _cmd) {
+    if (!UIK_U2On()) { ((void (*)(id, SEL))orig_disconnectScreenU2)(self, _cmd); return; }
+    if (objc_getAssociatedObject(self, &kUScreenSet)) { objc_setAssociatedObject(self, &kUScreenNeedsDisc, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC); UIK_Log("U2 screen %p: disconnection deferred", (__bridge void *)self); return; }
+    uik_realDisconnect(self, _cmd);
+}
+static id uik_preventDisconnection(id self, SEL _cmd, NSString *reason) {                    // 0x18996babc
+    if (!self || gUFlagsOff < 0) return nil;
+    unsigned short flags = *(unsigned short *)((char *)(__bridge void *)self + gUFlagsOff);
+    if (!(flags & 0x20) || objc_getAssociatedObject(self, &kUScreenNeedsDisc)) return nil;   // connected and not needing disconnection
+    NSMutableSet *set = objc_getAssociatedObject(self, &kUScreenSet);
+    if (!set) { set = [NSMutableSet set]; objc_setAssociatedObject(self, &kUScreenSet, set, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    NSString *ident = [NSString stringWithFormat:@"UIScreen-%p-%lu", (__bridge void *)self, ++gUCounter];
+    __weak id w = self;
+    id a = UIK_NewSimpleAssertion(ident, reason, ^(id as) {                                   // block 0x18996bd28
+        id s = w;
+        if (!s) return;
+        NSMutableSet *st = objc_getAssociatedObject(s, &kUScreenSet);
+        if (![st containsObject:as]) return;
+        [st removeObject:as];
+        if ([st count] == 0 && objc_getAssociatedObject(s, &kUScreenNeedsDisc)) uik_realDisconnect(s, sel_registerName("_disconnectScreen"));
+    });
+    if (a) [set addObject:a];
+    UIK_Log("U2 preventing disconnection of screen %p: %s", (__bridge void *)self, reason.UTF8String);
+    return a;
+}
+// -[_UIWindowSceneDisplaySettingsDiffAction _performActionsForUIScene:withUpdatedFBSScene:settingsDiff:fromSettings:transitionContext:lifecycleActionType:] 16.2 0x1895fd4fc
+static void uik_displayAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {
+    Class ws = objc_getClass("UIWindowScene");
+    if (!UIK_U2On() || !ws || ![uiScene isKindOfClass:ws]) { ((void (*)(id, SEL, id, id, id, id, id, unsigned long long))orig_dispActionU2)(self, _cmd, uiScene, fbs, diff, from, ctx, type); return; }
+    unsigned char flags = from == nil ? 2 : 0;
+    id insp = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("sceneSettingsDisplayDiffInspector"));
+    ((void (*)(id, SEL, id, void *))objc_msgSend)(insp, sel_registerName("inspectDiff:withContext:"), diff, &flags);
+    if (!(flags & 3)) return;
+    id cfg = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(fbs, sel_registerName("settings")), sel_registerName("displayConfiguration"));
+    id ident = ((id (*)(id, SEL))objc_msgSend)(cfg, sel_registerName("identity"));
+    id screen = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("UIScreen"), sel_registerName("_screenWithFBSDisplayIdentity:"), ident);
+    if (!screen) return;
+    if (flags & 1) {
+        id app = [UIApplication sharedApplication];
+        if (!((BOOL (*)(id, SEL))objc_msgSend)(app, sel_registerName("isFrontBoard"))) ((void (*)(id, SEL, id))objc_msgSend)(screen, sel_registerName("_updateDisplayConfiguration:"), cfg);
+    }
+    long long status = ((long long (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(fbs, sel_registerName("uiSettings")), sel_registerName("screenReferenceDisplayModeStatus"));
+    ((void (*)(id, SEL, long long))objc_msgSend)(screen, sel_registerName("_setReferenceDisplayModeStatus:"), status);
+}
+
+// ---- _UIScreenBasedWindowScene
+static BOOL uik_yes(id self, SEL _cmd) { (void)self; (void)_cmd; return YES; }
+static id uik_sceneScreen(id s) { return *(__strong id *)((char *)(__bridge void *)s + gUScreenOff); }
+static BOOL uik_sceneNeedsInv(id s) { return [objc_getAssociatedObject(s, &kUSceneNeedsInv) boolValue]; }
+static BOOL uik_sceneHasInvalidated(id s) { return ((BOOL (*)(id, SEL))objc_msgSend)(s, sel_registerName("_hasInvalidated")); }
+static id uik_preventAutoInvalidation(id self, SEL _cmd, NSString *reason) {                // 0x1895fea08
+    if (!self) return nil;
+    Class c = object_getClass(self);
+    if (!((BOOL (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("autoInvalidates")) || uik_sceneNeedsInv(self)) return nil;
+    NSMutableSet *set = objc_getAssociatedObject(self, &kUSceneSet);
+    if (!set) { set = [NSMutableSet set]; objc_setAssociatedObject(self, &kUSceneSet, set, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+    if (!objc_getAssociatedObject(self, &kUSceneScreenAssertion)) {
+        NSString *r = [NSString stringWithFormat:@"%s: %p: prevent screen disconnection", class_getName(c), (__bridge void *)self];
+        id sa = ((id (*)(id, SEL, id))objc_msgSend)(uik_sceneScreen(self), sel_registerName("_preventDisconnectionForReason:"), r);
+        objc_setAssociatedObject(self, &kUSceneScreenAssertion, sa, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    NSString *ident = [NSString stringWithFormat:@"%s-%p-%lu", class_getName(c), (__bridge void *)self, ++gUCounter];
+    __weak id w = self;
+    id a = UIK_NewSimpleAssertion(ident, reason, ^(id as) {                                   // block 0x1895fed6c
+        id s = w;
+        if (s) ((void (*)(id, SEL, id))objc_msgSend)(s, sel_registerName("_removeAutoInvalidationPreventionAssertion:"), as);
+    });
+    if (a) [set addObject:a];
+    UIK_Log("U2 preventing auto invalidation of scene %p: %s (assertions %lu)", (__bridge void *)self, reason.UTF8String, (unsigned long)[set count]);
+    return a;
+}
+static void uik_performInvalidationIfNeeded(id self, SEL _cmd) {                            // 0x1895fe834
+    if (!self || !uik_sceneNeedsInv(self) || uik_sceneHasInvalidated(self)) return;
+    objc_setAssociatedObject(self, &kUSceneNeedsInv, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    UIK_Log("U2 performing invalidation for scene %p", (__bridge void *)self);
+    ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_invalidate"));
+    Class c = object_getClass(self);
+    id key = *(__strong id *)((char *)(__bridge void *)self + gULookupOff);
+    id q = ((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("unassociationCacheAccessQueue"));
+    dispatch_sync((dispatch_queue_t)q, ^{ ((void (*)(id, SEL, id))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("unassociationCache")), sel_registerName("removeObjectForKey:"), key); });
+}
+static void uik_removeAutoInvalidationAssertion(id self, SEL _cmd, id assertion) {          // 0x1895fedd0
+    NSMutableSet *set = objc_getAssociatedObject(self, &kUSceneSet);
+    if (![set containsObject:assertion]) { UIK_Problem("u2-removeassertion", "U2 _removeAutoInvalidationPreventionAssertion: for an assertion that is not held (16.2 asserts)"); return; }
+    [set removeObject:assertion];
+    if ([set count] == 0) {
+        ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_performInvalidationIfNeeded"));
+        id sa = objc_getAssociatedObject(self, &kUSceneScreenAssertion);
+        if (sa) ((void (*)(id, SEL))objc_msgSend)(sa, sel_registerName("invalidate"));
+        objc_setAssociatedObject(self, &kUSceneScreenAssertion, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+static void uik_screenDisconnected(id self, SEL _cmd, NSNotification *n) {                 // 0x1895ff670
+    id screen = n.object;
+    if (![screen isKindOfClass:objc_getClass("UIScreen")] || uik_sceneScreen(self) != screen) return;
+    id sa = objc_getAssociatedObject(self, &kUSceneScreenAssertion);
+    if (sa) UIK_Problem("u2-disconnect-assertion", "U2 screen is disconnecting while an assertion should prevent it (16.2 logs a fault)");
+    if (sa) ((void (*)(id, SEL))objc_msgSend)(sa, sel_registerName("invalidate"));
+    objc_setAssociatedObject(self, &kUSceneScreenAssertion, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(self, &kUSceneNeedsInv, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_performInvalidationIfNeeded"));
+}
+static IMP orig_detachU2, orig_unassocU2;
+static void uik_detachWindow(id self, SEL _cmd, id window) {                                // 0x18949e658
+    if (!UIK_U2On()) { ((void (*)(id, SEL, id))orig_detachU2)(self, _cmd, window); return; }
+    IMP sup = class_getMethodImplementation(class_getSuperclass(gUSceneCls), _cmd);
+    ((void (*)(id, SEL, id))sup)(self, _cmd, window);
+    Class c = object_getClass(self);
+    if (!((BOOL (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("autoInvalidates"))) return;
+    BOOL *reg = (BOOL *)((char *)(__bridge void *)self + gUEvalOff);
+    if (*reg || uik_sceneHasInvalidated(self)) return;
+    *reg = YES;
+    __weak id w = self;
+    [[NSRunLoop mainRunLoop] performBlock:^{
+        id s = w;
+        if (!s || uik_sceneHasInvalidated(s)) return;
+        __block BOOL hasWindows = NO;
+        void (^each)(id, BOOL *) = ^(id win, BOOL *stop) { hasWindows = YES; if (stop) *stop = YES; };
+        ((void (*)(id, SEL, BOOL, BOOL, BOOL, BOOL *, id))objc_msgSend)(s, sel_registerName("_enumerateWindowsIncludingInternalWindows:onlyVisibleWindows:asCopy:stopped:withBlock:"), YES, NO, NO, NULL, each);
+        if (!hasWindows) {
+            objc_setAssociatedObject(s, &kUSceneNeedsInv, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            UIK_Log("U2 marking scene %p as needing invalidation", (__bridge void *)s);
+            NSSet *set = objc_getAssociatedObject(s, &kUSceneSet);
+            if (!set || [set count] == 0) ((void (*)(id, SEL))objc_msgSend)(s, sel_registerName("_performInvalidationIfNeeded"));
+        }
+        *(BOOL *)((char *)(__bridge void *)s + gUEvalOff) = NO;
+    }];
+}
+// +[_UIScreenBasedWindowScene _unassociatedWindowSceneForScreen:create:] 0x18908ca30: the scene is made OUTSIDE the cache queue block
+static id uik_unassociated(id cls, SEL _cmd, id screen, BOOL create) {
+    if (!UIK_U2On()) return ((id (*)(id, SEL, id, BOOL))orig_unassocU2)(cls, _cmd, screen, create);
+    __block id key = nil, ctx = nil;
+    __block BOOL created = NO;
+    id q = ((id (*)(id, SEL))objc_msgSend)(cls, sel_registerName("unassociationCacheAccessQueue"));
+    dispatch_sync((dispatch_queue_t)q, ^{
+        id k = ((id (*)(id, SEL))objc_msgSend)(screen, sel_registerName("displayIdentity"));
+        if (!k) k = ((id (*)(id, SEL))objc_msgSend)(screen, sel_registerName("_name"));
+        key = k;
+        id cache = ((id (*)(id, SEL))objc_msgSend)(cls, sel_registerName("unassociationCache"));
+        ctx = ((id (*)(id, SEL, id))objc_msgSend)(cache, sel_registerName("objectForKey:"), key);
+        if (ctx || !create) return;
+        created = YES;
+        ctx = [[objc_getClass("_UISceneUnassociatedContext") alloc] init];
+        id sess = ((id (*)(id, SEL, id, id, id))objc_msgSend)([objc_getClass("UISceneSession") alloc], sel_registerName("_initWithPersistentIdentifier:sessionRole:configurationName:"), [[NSUUID UUID] UUIDString], @"_UIScreenBasedSceneSession", nil);
+        id cfg = ((id (*)(id, SEL))objc_msgSend)(sess, sel_registerName("configuration"));
+        ((void (*)(id, SEL, Class))objc_msgSend)(cfg, sel_registerName("setSceneClass:"), Nil);
+        ((void (*)(id, SEL, Class))objc_msgSend)(cfg, sel_registerName("setDelegateClass:"), Nil);
+        ((void (*)(id, SEL, id))objc_msgSend)(cfg, sel_registerName("setStoryboard:"), nil);
+        ((void (*)(id, SEL, id))objc_msgSend)(sess, sel_registerName("_updateConfiguration:"), cfg);
+        ((void (*)(id, SEL, id))objc_msgSend)(ctx, sel_registerName("setSession:"), sess);
+        ((void (*)(id, SEL, id, id))objc_msgSend)(cache, sel_registerName("setObject:forKey:"), ctx, key);
+    });
+    if (created && ctx && key) {
+        id sess = ((id (*)(id, SEL))objc_msgSend)(ctx, sel_registerName("session"));
+        id scene = ((id (*)(id, SEL, id, id, id))objc_msgSend)([cls alloc], sel_registerName("initWithScreen:session:lookupKey:"), screen, sess, key);
+        ((void (*)(id, SEL, id))objc_msgSend)(ctx, sel_registerName("setScene:"), scene);
+        NSString *const *pn = (NSString *const *)dlsym(RTLD_DEFAULT, "_UISceneWillConnectNotification");
+        [[NSNotificationCenter defaultCenter] postNotificationName:pn ? *pn : @"_UISceneWillConnectNotification" object:scene];
+        ((void (*)(id, SEL, id))objc_msgSend)(sess, sel_registerName("_setScene:"), scene);
+    }
+    return ((id (*)(id, SEL))objc_msgSend)(ctx, sel_registerName("scene"));
+}
+
+// ---- live resize
+static void uik_inLiveResizeDidChange(id self, SEL _cmd) {                                  // 0x189dfbeb0
+    if (!self) return;
+    BOOL live = ((BOOL (*)(id, SEL))objc_msgSend)(self, sel_registerName("_isInLiveResize"));
+    [[NSNotificationCenter defaultCenter] postNotificationName:live ? @"UIWindowSceneDidBeginLiveResizeNotification" : @"UIWindowSceneDidEndLiveResizeNotification" object:self];
+}
+static BOOL uik_isInLiveResize(id self, SEL _cmd) {                                         // 0x189dfbe78
+    id s = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_effectiveUISettings"));
+    return ((BOOL (*)(id, SEL))objc_msgSend)(s, sel_registerName("inLiveResize"));
+}
+static void uik_observeInLiveResize(id self, SEL _cmd, id block) { ((void (*)(id, SEL, unsigned long long, id))objc_msgSend)(self, sel_registerName("_observeOtherSetting:withBlock:"), 0x28, block); }
+static char kULiveInsp;
+static id uik_liveInspector(id self, SEL _cmd) {
+    id i = objc_getAssociatedObject(self, &kULiveInsp);
+    if (!i) {
+        i = [[objc_getClass("UIApplicationSceneSettingsDiffInspector") alloc] init];
+        ((void (*)(id, SEL, id))objc_msgSend)(i, sel_registerName("observeInLiveResizeWithBlock:"), ^(void *ctx) { *(unsigned char *)ctx |= 1; });
+        objc_setAssociatedObject(self, &kULiveInsp, i, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return i;
+}
+static void uik_setLiveInspector(id self, SEL _cmd, id i) { objc_setAssociatedObject(self, &kULiveInsp, i, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static void uik_liveAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {   // 0x189e7a2ac
+    if (![uiScene isKindOfClass:objc_getClass("UIWindowScene")]) { UIK_Problem("u2-live", "U2 live resize action for a scene that is not a UIWindowScene (16.2 asserts)"); return; }
+    unsigned char flag = 0;
+    ((void (*)(id, SEL, id, void *))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("sceneSettingsLiveResizeDiffInspector")), sel_registerName("inspectDiff:withContext:"), diff, &flag);
+    if (flag & 1) ((void (*)(id, SEL))objc_msgSend)(uiScene, sel_registerName("_inLiveResizeDidChange"));
+}
+static void uik_nonInteractiveAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {   // 0x1895fd6f0
+    if (!((BOOL (*)(id, SEL))objc_msgSend)(uiScene, sel_registerName("_hasLifecycle"))) return;
+    id settings = ((id (*)(id, SEL))objc_msgSend)(uiScene, sel_registerName("_effectiveSettings"));
+    id blk = gUUpdateBlock(uiScene, from, settings, ctx);
+    if (!blk) return;
+    void (^b)(void) = blk;
+    gUPerformChanges(ctx, ^{                                                                  // block 0x1895fd824
+        b();
+        id mux = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("_UISceneLifecycleMultiplexer"), sel_registerName("sharedInstance"));
+        ((void (*)(id, SEL, id, id, id))objc_msgSend)(mux, sel_registerName("uiScene:transitionedFromState:withTransitionContext:"), uiScene, from, ctx);
+    }, nil);
+}
+static id uik_firstOfClass(NSArray *a, const char *name) { Class c = objc_getClass(name); for (id o in a) if (c && [o isKindOfClass:c]) return o; return nil; }
+static id uik_appActions(id self, SEL _cmd) {
+    NSArray *a = ((id (*)(id, SEL))orig_appActionsU2)(self, _cmd);
+    if (!UIK_U2On() || ![a isKindOfClass:[NSArray class]] || uik_firstOfClass(a, "_UIWindowSceneLiveResizeDiffAction")) return a;
+    NSMutableArray *m = [a mutableCopy];
+    id w = uik_firstOfClass(m, "_UIWindowSceneWindowingModeDiffAction");
+    if (!w) { UIK_Problem("u2-appactions", "U2 initialSettingsDiffActions: no _UIWindowSceneWindowingModeDiffAction in the array, live resize action not added"); return a; }
+    [m insertObject:[[gULiveCls alloc] init] atIndex:[m indexOfObject:w] + 1];
+    return m;
+}
+static id uik_extActions(id self, SEL _cmd) {
+    NSArray *a = ((id (*)(id, SEL))orig_extActionsU2)(self, _cmd);
+    if (!UIK_U2On() || ![a isKindOfClass:[NSArray class]] || !gUNonCls) return a;
+    id d = uik_firstOfClass(a, "_UIWindowSceneDisplaySettingsDiffAction"), g = uik_firstOfClass(a, "_UIWindowSceneGeometrySettingsDiffAction"), o = uik_firstOfClass(a, "_UIWindowSceneOcclusionSettingsDiffAction"), w = uik_firstOfClass(a, "_UIWindowSceneWindowingModeDiffAction");
+    if (!d || !g || !o || !w || !uik_firstOfClass(a, "_UIWindowSceneLifecycleSettingsDiffAction")) { UIK_Problem("u2-extactions", "U2 external screen initialSettingsDiffActions has an unexpected content: left as is"); return a; }
+    return @[d, [[gUNonCls alloc] init], w, [[gULiveCls alloc] init], g, o];                  // 16.2 order
+}
+
+static Class UIK_MakeAction(const char *name, SEL perform, IMP imp) {
+    Class c = objc_getClass(name);
+    if (c) return c;
+    c = objc_allocateClassPair([NSObject class], name, 0);
+    if (!c) return Nil;
+    Protocol *p = objc_getProtocol("_UISceneSettingsDiffAction");
+    if (p) class_addProtocol(c, p);
+    class_addMethod(c, perform, imp, "v64@0:8@16@24@32@40@48Q56");
+    return c;                                                                                 // registered by the caller after adding the rest
+}
+static void UIK_InstallU2(void) {
+    NSMutableArray *missing = [NSMutableArray array];
+    Class screen = objc_getClass("UIScreen");
+    gUSceneCls = objc_getClass("_UIScreenBasedWindowScene");
+    Class kb = objc_getClass("_UIKeyboardWindowScene"), ph = objc_getClass("_UIPlaceholderWindowScene"), win = objc_getClass("UIWindowScene");
+    Class insp = objc_getClass("UIApplicationSceneSettingsDiffInspector"), dispAct = objc_getClass("_UIWindowSceneDisplaySettingsDiffAction");
+    Class appSpec = objc_getClass("UIApplicationSceneSpecification"), extSpec = objc_getClass("UIApplicationExternalScreenSceneSpecification");
+    if (!screen) [missing addObject:@"class UIScreen"];
+    if (!gUSceneCls) [missing addObject:@"class _UIScreenBasedWindowScene"];
+    if (!win) [missing addObject:@"class UIWindowScene"];
+    if (!insp) [missing addObject:@"class UIApplicationSceneSettingsDiffInspector"];
+    if (!dispAct) [missing addObject:@"class _UIWindowSceneDisplaySettingsDiffAction"];
+    if (!appSpec || !extSpec) [missing addObject:@"classes UIApplicationSceneSpecification / UIApplicationExternalScreenSceneSpecification"];
+    if (!objc_getClass("BSSimpleAssertion") || !class_getInstanceMethod(objc_getClass("BSSimpleAssertion"), sel_registerName("initWithIdentifier:forReason:queue:invalidationBlock:"))) [missing addObject:@"-[BSSimpleAssertion initWithIdentifier:forReason:queue:invalidationBlock:]"];
+    if (!objc_getClass("_UISceneUnassociatedContext") || !objc_getClass("UISceneSession")) [missing addObject:@"classes _UISceneUnassociatedContext / UISceneSession"];
+    if (screen) {
+        Ivar f = class_getInstanceVariable(screen, "_screenFlags");
+        if (f) gUFlagsOff = ivar_getOffset(f); else [missing addObject:@"ivar UIScreen._screenFlags"];
+        if (!class_getInstanceMethod(screen, sel_registerName("_disconnectScreen"))) [missing addObject:@"-[UIScreen _disconnectScreen]"];
+        if (!class_getClassMethod(screen, sel_registerName("_registerForStaticNotificationsIfNecessary"))) [missing addObject:@"+[UIScreen _registerForStaticNotificationsIfNecessary]"];
+    }
+    if (gUSceneCls) {
+        Ivar a = class_getInstanceVariable(gUSceneCls, "_screen"), b = class_getInstanceVariable(gUSceneCls, "_lookupKey"), c = class_getInstanceVariable(gUSceneCls, "_invalidationHandlerRegistered");
+        if (a) gUScreenOff = ivar_getOffset(a); else [missing addObject:@"ivar _UIScreenBasedWindowScene._screen"];
+        if (b) gULookupOff = ivar_getOffset(b); else [missing addObject:@"ivar _UIScreenBasedWindowScene._lookupKey"];
+        if (c) gUEvalOff = ivar_getOffset(c); else [missing addObject:@"ivar _UIScreenBasedWindowScene._invalidationHandlerRegistered"];
+        const char *needs[] = { "_hasInvalidated", "_invalidate", "_screenDisconnected:", "_detachWindow:" };
+        for (size_t i = 0; i < sizeof needs / sizeof *needs; i++) if (!class_getInstanceMethod(gUSceneCls, sel_registerName(needs[i]))) [missing addObject:[NSString stringWithFormat:@"-[_UIScreenBasedWindowScene %s]", needs[i]]];
+        if (!class_getClassMethod(gUSceneCls, sel_registerName("_unassociatedWindowSceneForScreen:create:")) || !class_getClassMethod(gUSceneCls, sel_registerName("unassociationCache")) || !class_getClassMethod(gUSceneCls, sel_registerName("unassociationCacheAccessQueue"))) [missing addObject:@"+[_UIScreenBasedWindowScene _unassociatedWindowSceneForScreen:create: / unassociationCache / unassociationCacheAccessQueue]"];
+    }
+    if (win && !class_getInstanceMethod(win, sel_registerName("_effectiveUISettings"))) [missing addObject:@"-[UIWindowScene _effectiveUISettings]"];
+    if (insp && !class_getInstanceMethod(insp, sel_registerName("_observeOtherSetting:withBlock:"))) [missing addObject:@"-[UIApplicationSceneSettingsDiffInspector _observeOtherSetting:withBlock:]"];
+    if (appSpec && !class_getInstanceMethod(appSpec, sel_registerName("initialSettingsDiffActions"))) [missing addObject:@"-[UIApplicationSceneSpecification initialSettingsDiffActions]"];
+    if (extSpec && !class_getInstanceMethod(extSpec, sel_registerName("initialSettingsDiffActions"))) [missing addObject:@"-[UIApplicationExternalScreenSceneSpecification initialSettingsDiffActions]"];
+    SEL perform = sel_registerName("_performActionsForUIScene:withUpdatedFBSScene:settingsDiff:fromSettings:transitionContext:lifecycleActionType:");
+    if (dispAct && !class_getInstanceMethod(dispAct, perform)) [missing addObject:@"-[_UIWindowSceneDisplaySettingsDiffAction _performActionsForUIScene:...]"];
+    if ([missing count]) { UIK_Problem("u2-install", "U2 NOT installed (build 20A8372), needs: %s", [[missing componentsJoinedByString:@", "] UTF8String]); return; }
+
+    // the lifecycle action of the external display scenes needs two functions: the exported one and (by fixed offset) the private one
+    void *ref = dlsym(RTLD_DEFAULT, "_UISceneSettingsDiffActionPerformChangesWithTransitionContextAndCompletion");
+    BOOL haveNon = NO;
+    if (!ref) UIK_Problem("u2-ref", "U2 NonInteractiveExternalDisplay lifecycle action NOT installed: symbol _UISceneSettingsDiffActionPerformChangesWithTransitionContextAndCompletion (UIKitCore) not found");
+    else {
+        uintptr_t r = (uintptr_t)ref;
+#if __has_feature(ptrauth_calls)
+        r = (uintptr_t)ptrauth_strip(ref, ptrauth_key_function_pointer);
+#endif
+        uintptr_t t = r - (0x1898216dcULL - 0x189144ac4ULL);                                 // 20A8372: the exported function minus the private one
+        static const unsigned int want[8] = { 0xd503237f, 0xd10203ff, 0xa9045ff8, 0xa90557f6, 0xa9064ff4, 0xa9077bfd, 0x9101c3fd, 0xaa0303f6 };
+        BOOL same = YES;
+        for (int i = 0; i < 8; i++) if (((const unsigned int *)t)[i] != want[i]) same = NO;
+        if (!same) UIK_Problem("u2-update", "U2 NonInteractiveExternalDisplay lifecycle action NOT installed: the instruction words at _UISceneLifecycleSettingsUpdateBlockWithCanvasAndTransitionContext (exported function - 0x6dcc18 = %p) are not the 20A8372 ones", (void *)t);
+        else {
+            void *tp = (void *)t, *rp = (void *)r;
+#if __has_feature(ptrauth_calls)
+            tp = ptrauth_sign_unauthenticated(tp, ptrauth_key_function_pointer, 0);
+            rp = ref;
+#endif
+            gUUpdateBlock = (id (*)(id, id, id, id))tp;
+            gUPerformChanges = (void (*)(id, id, id))rp;
+            haveNon = YES;
+        }
+    }
+    if (!objc_getClass("_UISceneLifecycleMultiplexer") || !class_getInstanceMethod(win, sel_registerName("_hasLifecycle")) || !class_getInstanceMethod(win, sel_registerName("_effectiveSettings"))) haveNon = NO;
+
+    // UIScreen
+    class_replaceMethod(object_getClass((id)screen), sel_registerName("_registerForStaticNotificationsIfNecessary"), (IMP)uik_registerStaticNotifs, "v16@0:8");
+    UIK_Hook("UIScreen", "_disconnectScreen", "v16@0:8", (IMP)uik_disconnectScreenU2, &orig_disconnectScreenU2);
+    class_addMethod(screen, sel_registerName("_preventDisconnectionForReason:"), (IMP)uik_preventDisconnection, "@24@0:8@16");
+    UIK_Hook("_UIWindowSceneDisplaySettingsDiffAction", "_performActionsForUIScene:withUpdatedFBSScene:settingsDiff:fromSettings:transitionContext:lifecycleActionType:", NULL, (IMP)uik_displayAction, &orig_dispActionU2);
+    // scene
+    Class metas[3] = { gUSceneCls, kb, ph };
+    for (int i = 0; i < 3; i++) if (metas[i]) class_addMethod(object_getClass((id)metas[i]), sel_registerName("autoInvalidates"), (IMP)uik_yes, "B16@0:8");
+    class_addMethod(gUSceneCls, sel_registerName("_preventAutoInvalidationForReason:"), (IMP)uik_preventAutoInvalidation, "@24@0:8@16");
+    class_addMethod(gUSceneCls, sel_registerName("_performInvalidationIfNeeded"), (IMP)uik_performInvalidationIfNeeded, "v16@0:8");
+    class_addMethod(gUSceneCls, sel_registerName("_removeAutoInvalidationPreventionAssertion:"), (IMP)uik_removeAutoInvalidationAssertion, "v24@0:8@16");
+    class_replaceMethod(gUSceneCls, sel_registerName("_screenDisconnected:"), (IMP)uik_screenDisconnected, "v24@0:8@16");
+    UIK_Hook("_UIScreenBasedWindowScene", "_detachWindow:", NULL, (IMP)uik_detachWindow, &orig_detachU2);
+    UIK_HookEx("_UIScreenBasedWindowScene", YES, "_unassociatedWindowSceneForScreen:create:", NULL, (IMP)uik_unassociated, &orig_unassocU2);
+    // live resize
+    class_addMethod(win, sel_registerName("_isInLiveResize"), (IMP)uik_isInLiveResize, "B16@0:8");
+    class_addMethod(win, sel_registerName("_inLiveResizeDidChange"), (IMP)uik_inLiveResizeDidChange, "v16@0:8");
+    class_addMethod(insp, sel_registerName("observeInLiveResizeWithBlock:"), (IMP)uik_observeInLiveResize, "v24@0:8@?16");
+    gULiveCls = UIK_MakeAction("_UIWindowSceneLiveResizeDiffAction", perform, (IMP)uik_liveAction);
+    if (gULiveCls && !objc_getClass("_UIWindowSceneLiveResizeDiffAction")) {
+        class_addMethod(gULiveCls, sel_registerName("sceneSettingsLiveResizeDiffInspector"), (IMP)uik_liveInspector, "@16@0:8");
+        class_addMethod(gULiveCls, sel_registerName("setSceneSettingsLiveResizeDiffInspector:"), (IMP)uik_setLiveInspector, "v24@0:8@16");
+        objc_registerClassPair(gULiveCls);
+    }
+    if (haveNon) {
+        gUNonCls = UIK_MakeAction("_UIWindowSceneNonInteractiveExternalDisplayLifecycleSettingsDiffAction", perform, (IMP)uik_nonInteractiveAction);
+        if (gUNonCls && !objc_getClass("_UIWindowSceneNonInteractiveExternalDisplayLifecycleSettingsDiffAction")) objc_registerClassPair(gUNonCls);
+    }
+    if (!gULiveCls) { UIK_Problem("u2-liveclass", "U2 live resize action class could not be made: registration skipped"); return; }
+    UIK_Hook("UIApplicationSceneSpecification", "initialSettingsDiffActions", NULL, (IMP)uik_appActions, &orig_appActionsU2);
+    UIK_Hook("UIApplicationExternalScreenSceneSpecification", "initialSettingsDiffActions", NULL, (IMP)uik_extActions, &orig_extActionsU2);
+    UIK_Log("U2 installed (non interactive lifecycle action: %d)", (int)haveNon);
+}
+
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
     if (UIK_Debug() && dladdr((void *)&UIK_Init, &di)) UIK_Log("Backport162UIK loaded, image base %p", di.dli_fbase);
     UIK_InstallU1();
     UIK_InstallK1();
+    UIK_InstallU2();
 }
