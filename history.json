@@ -1,12 +1,4 @@
 {
- "0.7.9+298.ea97abc": {
-  "date": "2026-10-31T10:28:07Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+298.ea97abc_iphoneos-arm64.deb",
-  "run": 298,
-  "sha": "ea97abc3c640f1b9b0923b7d422cd58c08bca0c2",
-  "subject": "P1SW p1_orient: the layout state orientation replaces the per-element one whenever it is valid (16.2 has no gate); the window SHAPE rule rejected the Portrait state of an external display (normal in 16.2: UIScreen _connectScreen, unswapped bounds) and rotated windows on the monitor by 90 degrees; shape rule kept as opt-in Backport162.on.p1_orientshape, difference to the window orientation logged once per combination",
-  "version": "0.7.9+298.ea97abc"
- },
  "0.7.9+299.cd5cd7c": {
   "date": "2026-10-31T10:31:00Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+299.cd5cd7c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "bb462cf64c90777db13c451ba5987ead31463ec2",
   "subject": "tools/restore: rebuild the analysis machine without apfs-fuse (minimal sealed APFS reader, decmpfs LZBITMAP, recipe); both dyld caches verified against the old spec addresses",
   "version": "0.7.9+361.bb462cf"
+ },
+ "0.7.9+362.876efe4": {
+  "date": "2026-11-18T20:32:17Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+362.876efe4_iphoneos-arm64.deb",
+  "run": 362,
+  "sha": "876efe42790dd93bf456ced9c615c4861c5a2090",
+  "subject": "Y34: class references answer the REAL class, only allocation is redirected to the runtime subclass",
+  "version": "0.7.9+362.876efe4"
  }
 }
