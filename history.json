@@ -1,12 +1,4 @@
 {
- "0.7.9+300.0cc95e4": {
-  "date": "2026-10-31T10:31:26Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+300.0cc95e4_iphoneos-arm64.deb",
-  "run": 300,
-  "sha": "0cc95e40d99b0acc14774484db957c2f26ecebd5",
-  "subject": "Y21Modifiers: Center Window decline / commit follow the 16.2 clone of the delete modifier (y17_centerwindow), resize gesture hides the strip per item (y17_resizestrip), split item frames use the overlapping model bounding box (y17_splitbounds); DELTA-SWEEP rows",
-  "version": "0.7.9+300.0cc95e4"
- },
  "0.7.9+301.4aa044b": {
   "date": "2026-10-31T10:31:13Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+301.4aa044b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "ca6f9a53c009248c5c1153219a42437c3d6a3241",
   "subject": "a2c tests: mdiff imports a2c from its own tree instead of a session scratch path",
   "version": "0.7.9+363.ca6f9a5"
+ },
+ "0.7.9+364.8d821a3": {
+  "date": "2026-11-18T20:54:40Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+364.8d821a3_iphoneos-arm64.deb",
+  "run": 364,
+  "sha": "8d821a3cf7c302a2576e93bcc782070a0e3d1cc4",
+  "subject": "DELTA-SWEEP pass 4 section 4: the complete decoded UIKit U2 change set (UIScreen disconnection prevention, _UIScreenBasedWindowScene auto invalidation, default scene handlers, live resize) with addresses",
+  "version": "0.7.9+364.8d821a3"
  }
 }
