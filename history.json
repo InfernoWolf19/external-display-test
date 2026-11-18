@@ -1,12 +1,4 @@
 {
- "0.7.9+301.4aa044b": {
-  "date": "2026-10-31T10:31:13Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+301.4aa044b_iphoneos-arm64.deb",
-  "run": 301,
-  "sha": "4aa044b9608c5f90a8f9a88e5ed9964e455e5ee6",
-  "subject": "UIKIT-APP-0.7.9: K1 CI green; U2 section: not done, blocker and work list",
-  "version": "0.7.9+301.4aa044b"
- },
  "0.7.9+302.25197c1": {
   "date": "2026-10-31T10:35:01Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+302.25197c1_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "8d821a3cf7c302a2576e93bcc782070a0e3d1cc4",
   "subject": "DELTA-SWEEP pass 4 section 4: the complete decoded UIKit U2 change set (UIScreen disconnection prevention, _UIScreenBasedWindowScene auto invalidation, default scene handlers, live resize) with addresses",
   "version": "0.7.9+364.8d821a3"
+ },
+ "0.7.9+369.6108bd1": {
+  "date": "2026-11-18T21:03:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+369.6108bd1_iphoneos-arm64.deb",
+  "run": 369,
+  "sha": "6108bd18ed39bc23ab1708724534351fb93ffa19",
+  "subject": "S1 gaps: the 16.2 nil assertions of -sceneWorkspaceControllerForProcessIdentity: (coordinator 0x1c77a9904, controller 0x1c7967488) and the destroy request of a client that is no application (error 2, SBRunningApplicationForAuditToken is an exported SpringBoard symbol)",
+  "version": "0.7.9+369.6108bd1"
  }
 }
