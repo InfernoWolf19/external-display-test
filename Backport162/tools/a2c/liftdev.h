@@ -77,6 +77,8 @@ typedef struct { uint8_t b[128]; } LiftM128;
 #define CALLMSG(kind) do { lift_msg_fix(X); LIFT_CALL_##kind((void *)lift_objc_msgSend); } while (0)
 #define CALLFN(t, i, kind) do { void *f_ = lift_gsym((t)[i]); if (f_) LIFT_CALL_##kind(f_); } while (0)
 
+extern void *__dso_handle;
+#define LIFT_DSO() ((void *)&__dso_handle)
 #define RT_RETAIN(p) lift_objc_retain(p)
 #define RT_RELEASE(p) lift_objc_release(p)
 #define RT_CLAIM(p) lift_objc_retainAutoreleasedReturnValue(p)

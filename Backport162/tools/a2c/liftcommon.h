@@ -59,11 +59,15 @@ static inline uint32_t lift_sdiv32(uint64_t a, uint64_t b) { int32_t x = (int32_
 // The recompiled code signs / authenticates exactly where the machine code does (block isa / invoke / descriptor, helper pointers); keys 0 IA, 1 IB, 2 DA, 3 DB.  Off arm64e (the arm64
 // slice, the Linux test harness) signing is the identity.
 #ifndef LIFT_TEST_HOOKS
+#define LIFT_CSTR(s) (s)
 #define LIFT_DESC(p, sig, size) (p)
 #if defined(__arm64e__) && defined(__has_feature)
 #if __has_feature(ptrauth_intrinsics)
 #define LIFT_HAVE_PTRAUTH 1
 #endif
+#endif
+#if defined(__arm64e__) && !defined(LIFT_HAVE_PTRAUTH)
+#error "arm64e without ptrauth intrinsics: block literals could not be signed"
 #endif
 #if defined(LIFT_HAVE_PTRAUTH)
 #include <ptrauth.h>

@@ -19,6 +19,10 @@ static inline void *lift_gcell(const char *nm) { for (int i = 0; i < lift_ncells
 #define CFSTR_(t, i) ((void *)(t)[i])
 #define IVOFF(t, i) lift_iv((t)[i])
 const char *lift_kind;
+const char *lift_cstrs[256]; int lift_ncstr;
+static inline const char *lift_cstr(const char *s) { for (int i = 0; i < lift_ncstr; i++) if (lift_cstrs[i] == s) return s; if (lift_ncstr < 256) lift_cstrs[lift_ncstr++] = s; return s; }
+#define LIFT_CSTR(s) lift_cstr(s)
+#define LIFT_DSO() ((void *)(uintptr_t)0xd50d50ull)
 #define LIFT_STKINIT(p) memset((p), 0, sizeof (p))
 // ownership / PAC / block events: the python side compares them with the Unicorn emulation of the original (count and order)
 typedef void (*lift_ev_t)(const char *what, uint64_t a, uint64_t b);

@@ -31,7 +31,7 @@ def is_obj_sel(name):
 def ret_values(seed, name, idx, kind):
     r = rnd(seed, name, idx)
     c = r.random()
-    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name in ('F:SBSafeCast', 'F:objc_opt_class'):
+    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name in ('F:SBSafeCast', 'F:objc_opt_class', 'F:objc_msgSendSuper2', 'F:objc_opt_new', 'F:objc_loadWeakRetained'):
         x0 = ('i', 0) if c < 0.3 else ('o', r.randrange(1, 40))
     elif c < 0.3: x0 = ('i', 0)
     elif c < 0.5: x0 = ('i', 1)
@@ -88,7 +88,7 @@ def emu_names(ver, start, end):
     names = {}
     for l in out.splitlines():
         m = re.match(r'^0x([0-9a-f]+): +(bl|b) +0x([0-9a-f]+) +(\S+)', l)
-        if m: names[int(m.group(3), 16)] = m.group(4)
+        if m: names[int(m.group(3), 16)] = m.group(4)[2:] if m.group(4).startswith('j__') else m.group(4)
     return names
 
 def norm_name(n):
@@ -153,7 +153,7 @@ def run_emu(c, names, seed, args, case_mem):
                 if sy_.lstrip('_') == 'NSConcreteStackBlock': return NSB
                 return ('CLS', sy_[len('_OBJC_CLASS_$_'):]) if sy_.startswith('_OBJC_CLASS_$_') else ('CLS', '?')
             if 'cfstring' in sec: return ('STR', ctx.cfstr(v))
-            if 'cstring' in sec or 'methname' in sec: return ('STR', ctx.cstring(v))
+            if 'cstring' in sec or 'methname' in sec or 'oslogstring' in sec: return ('STR', ctx.cstring(v))
             if ctx.a2s2(v)[0].lstrip('_') == 'NSConcreteStackBlock': return NSB
             if 'const' in sec:
                 try:
@@ -185,6 +185,7 @@ def run_emu(c, names, seed, args, case_mem):
         kind = c.kinds_at.get(callout.pc, 'x')
         if n.startswith('msgSend:'): uc.reg_write(UC_ARM64_REG_X1, 0x72000000); x[1] = 0x72000000
         xs_ = tuple(N(v) for v in x)
+        if n.lstrip('_').startswith('os_log') and n.lstrip('_').endswith('_impl'): xs_ = (('DSO',),) + xs_[1:]
         if n.lstrip('_') == 'objc_msgSendSuper2': xs_ = xs_[:1] + (('SEL',),) + xs_[2:]
         sp_ = uc.reg_read(UC_ARM64_REG_SP)
         stk_ = tuple(N(struct.unpack('<Q', bytes(uc.mem_read(sp_ + 8 * j, 8)))[0]) for j in range(12))
@@ -280,6 +281,7 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
         if selp[i]: strmap[selp[i]] = ('SEL',)
     for i in range(ncls):
         if clsp[i]: strmap[clsp[i]] = ('CLS', ctypes.string_at(clsp[i]).decode())
+    cstrs = (ctypes.c_void_p * 256).in_dll(lib, 'lift_cstrs')
     cells = (ctypes.c_uint64 * 128).in_dll(lib, 'lift_cells')
     def cellmap():
         for i in range(ctypes.c_int.in_dll(lib, 'lift_ncells').value):
@@ -291,6 +293,8 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
     tr = Trace(); idx = [0]
     def N(v):
         cellmap()
+        for i_ in range(ctypes.c_int.in_dll(lib, 'lift_ncstr').value):
+            if cstrs[i_] == v: return ('STR', ctypes.string_at(cstrs[i_]).decode())
         for i_ in range(ctypes.c_int.in_dll(lib, 'lift_nfn').value):
             if fnaddrs[2 * i_] == v: return ('LFN', fnnames[i_].decode())
         for i_ in range(ctypes.c_int.in_dll(lib, 'lift_ndesc').value):
@@ -309,6 +313,7 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
             tr.calls.append((nm, tuple(N(X[i]) for i in range(2)), (), ())); return
         d = tuple(VR[i][0] for i in range(8))
         xs_ = tuple(N(X[i]) for i in range(8))
+        if n.lstrip('_').startswith('os_log') and n.lstrip('_').endswith('_impl'): xs_ = (('DSO',),) + xs_[1:]
         if not isMsg and n.lstrip('_') == 'objc_msgSendSuper2': xs_ = xs_[:1] + (('SEL',),) + xs_[2:]
         stk_ = tuple(N(struct.unpack('<Q', ctypes.string_at(X[31] + 8 * j, 8))[0]) for j in range(12))
         blks = tuple(b for b in (blk_snapshot(lambda a_: struct.unpack('<Q', ctypes.string_at(a_, 8))[0], N, X[i]) for i in range(8) if isk(N(X[i]))) if b)

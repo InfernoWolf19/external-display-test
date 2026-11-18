@@ -154,7 +154,7 @@ def rname(n):
 
 class Lift:
     def __init__(s, ver, start, end, cname, sig, retk, kinds, cls=None):
-        s.cls = cls
+        s.selfcls = cls      # the class whose instance method this is (self based raw ivar offsets are resolved to names)
         s.ctx = Ctx(ver); s.ver = ver; s.start = start; s.end = end; s.cname = cname
         s.sig = sig; s.retk = retk; s.kinds = kinds
         code = dump(ver, start & ~0xfff, ((end - (start & ~0xfff)) + 0xfff) & ~0xfff)
@@ -265,7 +265,7 @@ class Lift:
         n = len(ins); idxof = {i.address: k for k, i in enumerate(ins)}
         # ---- flow analysis of the constant registers (adrp / add / table pointers), meet = intersection
         saved = (dict(s.sels), dict(s.cls), dict(s.ivs), dict(s.fns), dict(s.strs), list(s.stats['warn']))
-        states = {0: ({'x0': ('self', s.cls)} if s.cls else {}, set())}
+        states = {0: ({'x0': ('self', s.selfcls)} if s.selfcls else {}, set())}
         work = [0]
         s.dry = True
         def succs(k, i):
@@ -405,9 +405,9 @@ class Lift:
                 if 'methname' in sec_:
                     nmx = s.ctx.cstring(cvalres)
                     E('X[%d] = (uint64_t)SEL(%s_sels, %d); /* direct selector %s */' % (int(d[1:]), s.cname, s.intern(s.sels, nmx), nmx)); s.cval[d] = ('sel', nmx); return
-                if 'cstring' in sec_:
+                if 'cstring' in sec_ or 'oslogstring' in sec_:
                     lit = s.ctx.cstring(cvalres)
-                    E('X[%d] = (uint64_t)(uintptr_t)%s;' % (int(d[1:]), json.dumps(lit))); return
+                    E('X[%d] = (uint64_t)(uintptr_t)LIFT_CSTR(%s);' % (int(d[1:]), json.dumps(lit))); return
             if mn in ('add', 'sub'):
                 E(s.wr(i, d, '(%s) %s (%s)' % (a, '+' if mn == 'add' else '-', b)))
             else:
@@ -920,12 +920,13 @@ class Lift:
     def call(s, idx, i, t):
         E = s.emit
         nm = '' if t in s.locals else s.ctx.stubname(t)
+        if nm.startswith('j__'): nm = nm[2:]          # jump island of the shared cache (j__objc_storeStrong)
         if not nm and t not in s.locals: s.stats['warn'].append('unresolved call %x -> %x' % (i.address, t)); nm = 'UNRESOLVED_%x' % t
         # registers clobbered
         x1tag = s.cval.get('x1')
         for rr in range(0, 18): s.kill('x%d' % rr)
-        if nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel' and x1tag[1].startswith('init') and s.cls:
-            s.cval['x0'] = ('self', s.cls)
+        if nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel' and x1tag[1].startswith('init') and s.selfcls:
+            s.cval['x0'] = ('self', s.selfcls)
         if t in s.locals:
             E('CALLPTR((void *)%s, %s);' % (s.locals[t], s.callkind(idx, 'local'))); return
         if nm.startswith('msgSend:'):
@@ -937,6 +938,8 @@ class Lift:
         if rc is not None:
             E(rc); return
         kind = s.callkind(idx, nm if not (nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel') else 'msgSend:' + x1tag[1])
+        if nm.lstrip('_') in ('os_log_impl', 'os_log_debug_impl', 'os_log_error_impl', 'os_log_info_impl', 'os_log_fault_impl'):
+            E('X[0] = (uint64_t)(uintptr_t)LIFT_DSO(); /* the image of the log call site is OUR image (the format string above is a literal of it) */')
         k = s.intern(s.fns, nm)
         E('CALLFN(%s_fns, %d, %s);' % (s.cname, k, kind)); s.note_call(i, nm, kind)
     def note_call(s, i, nm, kind): s.kinds_at[i.address] = kind
@@ -944,6 +947,7 @@ class Lift:
         if t in s.locals:
             s.emit('CALLPTR((void *)%s, %s); goto Lret;' % (s.locals[t], s.retk)); return
         nm = s.ctx.stubname(t)
+        if nm.startswith('j__'): nm = nm[2:]
         s.emit('/* tail call %s */' % nm)
         if nm.startswith('msgSend:'):
             s.emit('X[1] = (uint64_t)SEL(%s_sels, %d);' % (s.cname, s.intern(s.sels, nm[8:])))
