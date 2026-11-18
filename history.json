@@ -1,12 +1,4 @@
 {
- "0.7.9+299.cd5cd7c": {
-  "date": "2026-10-31T10:31:00Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+299.cd5cd7c_iphoneos-arm64.deb",
-  "run": 299,
-  "sha": "cd5cd7c5640f6068602dbaadb64134203415da35",
-  "subject": "REVIEW-CORE2-0.7.9: second differential review of the core files (P1Drag, P1VC, P1SW, G1/G2 deltas), six defects fixed, end broadcast / ToApps take-over / container hook order answers, interface expectations towards the orientation work",
-  "version": "0.7.9+299.cd5cd7c"
- },
  "0.7.9+300.0cc95e4": {
   "date": "2026-10-31T10:31:26Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+300.0cc95e4_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "876efe42790dd93bf456ced9c615c4861c5a2090",
   "subject": "Y34: class references answer the REAL class, only allocation is redirected to the runtime subclass",
   "version": "0.7.9+362.876efe4"
+ },
+ "0.7.9+363.ca6f9a5": {
+  "date": "2026-11-18T20:42:41Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+363.ca6f9a5_iphoneos-arm64.deb",
+  "run": 363,
+  "sha": "ca6f9a53c009248c5c1153219a42437c3d6a3241",
+  "subject": "a2c tests: mdiff imports a2c from its own tree instead of a session scratch path",
+  "version": "0.7.9+363.ca6f9a5"
  }
 }
