@@ -1,12 +1,4 @@
 {
- "0.7.9+303.953596a": {
-  "date": "2026-10-31T10:37:21Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+303.953596a_iphoneos-arm64.deb",
-  "run": 303,
-  "sha": "953596ab2c401982c8e66769e200a4590cba224f",
-  "subject": "Y16Contingency: Command Tab dealloc hook takes self unretained",
-  "version": "0.7.9+303.953596a"
- },
  "0.7.9+304.7915bb5": {
   "date": "2026-10-31T10:37:04Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+304.7915bb5_iphoneos-arm64.deb",
@@ -462,6 +454,14 @@
   "sha": "8d821a3cf7c302a2576e93bcc782070a0e3d1cc4",
   "subject": "DELTA-SWEEP pass 4 section 4: the complete decoded UIKit U2 change set (UIScreen disconnection prevention, _UIScreenBasedWindowScene auto invalidation, default scene handlers, live resize) with addresses",
   "version": "0.7.9+364.8d821a3"
+ },
+ "0.7.9+368.e4baeee": {
+  "date": "2026-11-18T21:06:39Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+368.e4baeee_iphoneos-arm64.deb",
+  "run": 368,
+  "sha": "e4baeeec9f32f34c1ed748adf7a6e54e29fda91a",
+  "subject": "UIK U2: read the scene's ivars through void ** (ARC rejects a char * to __strong id * cast): fixes builds 365 / 366",
+  "version": "0.7.9+368.e4baeee"
  },
  "0.7.9+369.6108bd1": {
   "date": "2026-11-18T21:03:33Z",
