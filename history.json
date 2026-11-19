@@ -1,12 +1,4 @@
 {
- "0.7.9+323.3d473a5": {
-  "date": "2026-11-01T02:21:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+323.3d473a5_iphoneos-arm64.deb",
-  "run": 323,
-  "sha": "3d473a5ff184536e6ad8dac6e94f9e210c2fedcd",
-  "subject": "Audit class A + card path: type gates announce a rejected non-nil value (BP_KIND), card scale answers follow the same predicate as the pile frames, every pile fallback to the 16.0 scaled-frame body is announced",
-  "version": "0.7.9+323.3d473a5"
- },
  "0.7.9+324.8becfff": {
   "date": "2026-11-01T02:27:38Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+324.8becfff_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "d41d728de75781b1c5565b024f4136812d2d97fc",
   "subject": "P1: always-on ANOMALY p1-attr-regress: an OLDER attribute set written into an interned SBAppLayout (call stack as image offsets) - device log shows the committed resize size is overwritten by the old one before the next transaction",
   "version": "0.7.9+395.d41d728"
+ },
+ "0.7.9+396.b30e7af": {
+  "date": "2026-11-19T18:38:54Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+396.b30e7af_iphoneos-arm64.deb",
+  "run": 396,
+  "sha": "b30e7af5302db04dad4b486e5e779ecf9abee52c",
+  "subject": "UIK K4: always-on ANOMALY k4-state (deduped by rounded values): hostView / old / result, the hosted keyboard view frame in its screen space and converted into the host scene, host window frame, scene bounds, container frame",
+  "version": "0.7.9+396.b30e7af"
  }
 }
