@@ -58,13 +58,19 @@ __attribute__((constructor)) static void Y42Shelf_Setup(void) {
         if (!coord || !overlay) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: SBShelfLiveContentOverlayCoordinator %p / SBShelfLiveContentOverlay %p missing", (__bridge void *)coord, (__bridge void *)overlay); return; }
         const char *miss = y42_shelf_preflight();
         if (miss) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: the recompiled 16.2 body cannot resolve: %s: the 16.0 body keeps running", miss); return; }
-        struct { Class c; const char *s; } need[] = {
-            { NSClassFromString(@"NSArray"), "bs_map:" }, { NSClassFromString(@"NSArray"), "bs_flatten" }, { NSClassFromString(@"NSArray"), "bs_firstObjectPassingTest:" },
-            { NSClassFromString(@"NSArray"), "arrayByAddingObjectsFromArray:" }, { NSClassFromString(@"NSSet"), "containsAnyItemFromSet:" }, { NSClassFromString(@"CALayer"), "setShouldRasterize:" },
+        // every selector the recompiled body sends to a 16.0 class that is not in the 16.0 SpringBoard dumps (BaseBoard / Foundation / QuartzCore categories): ALL misses are named at once
+        struct { const char *c; const char *s; BOOL cls; } need[] = {
+            { "NSArray", "bs_map:", NO }, { "NSArray", "bs_flatten", NO }, { "NSArray", "bs_firstObjectPassingTest:", NO }, { "NSArray", "arrayByAddingObjectsFromArray:", NO },
+            { "NSSet", "setWithArray:", YES }, { "SBAppLayout", "containsAnyItemFromSet:", NO }, { "SBAppLayout", "itemForLayoutRole:", NO }, { "SBAppLayout", "leafAppLayouts", NO }, { "CALayer", "setShouldRasterize:", NO },
         };
-        for (size_t k = 0; k < sizeof need / sizeof need[0]; k++)
-            if (!need[k].c || !class_getInstanceMethod(need[k].c, sel_registerName(need[k].s))) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: -[%s %s] does not exist", need[k].c ? class_getName(need[k].c) : "?", need[k].s); return; }
-        if (!class_getClassMethod(NSClassFromString(@"NSSet"), sel_registerName("setWithArray:"))) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: +[NSSet setWithArray:] does not exist"); return; }
+        NSMutableArray *missing = [NSMutableArray array];
+        for (size_t k = 0; k < sizeof need / sizeof need[0]; k++) {
+            Class nc = NSClassFromString([NSString stringWithUTF8String:need[k].c]);
+            SEL ns = sel_registerName(need[k].s);
+            BOOL ok = nc && (need[k].cls ? class_getClassMethod(nc, ns) != NULL : class_getInstanceMethod(nc, ns) != NULL);
+            if (!ok) [missing addObject:[NSString stringWithFormat:@"%c[%s %s]", need[k].cls ? '+' : '-', need[k].c, need[k].s]];
+        }
+        if (missing.count) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: missing selectors: %@: the 16.0 body keeps running", [missing componentsJoinedByString:@", "]); return; }
         SEL initSel = sel_registerName("initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:livePortalView:isInsetForHomeAffordance:");
         if (!class_getInstanceMethod(coord, sel_registerName("_addOverlaysIfNeededForTransitionContext:"))) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: -[SBShelfLiveContentOverlayCoordinator _addOverlaysIfNeededForTransitionContext:] does not exist"); return; }
         if (!class_getInstanceMethod(overlay, initSel) && !class_addMethod(overlay, initSel, (IMP)y42_shelf_init, "@@:@{CGSize=dd}qq@B")) { BP_Anomaly("y42", @"[y42] y42_shelf NOT installed: class_addMethod of the 16.2 overlay init failed"); return; }
