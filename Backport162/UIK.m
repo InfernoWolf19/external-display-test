@@ -1007,9 +1007,25 @@ static BOOL gK4Ok;
 static const uintptr_t kK4R[][2] = { {0x189086038,0x1890860d0}, {0x189288b08,0x189288b84}, {0x18997e324,0x18997e470}, {0x18997efa0,0x18997f014}, {0x18997f088,0x18997f4a8}, {0x18997f4a8,0x18997f598}, {0x18997f6d0,0x18997f7f0},
     {0x18997fc78,0x18997fdb8}, {0x1899805c0,0x189980790}, {0x18998170c,0x1899817e0}, {0x18998306c,0x1899831a4}, {0x1899831a4,0x1899832f4}, {0x1899832f4,0x189983394}, {0x1899840a0,0x1899841e4}, {0x189984824,0x189984978},
     {0x18998788c,0x1899879b4}, {0x189988b0c,0x189988bc8}, {0x189c612b8,0x189c614e4} };
-static id K4_O(id o, const char *s) { return ((id (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)); }
-static BOOL K4_B(id o, const char *s) { return ((BOOL (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)); }
-static CGRect K4_R(id o, const char *s) { return ((CGRect (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)); }
+// every send of the K4 port is answered only when the receiver implements the selector: a selector that exists in 16.2 but not in the app's 16.0 UIKit must not raise doesNotRecognizeSelector
+// inside the app (Reynard 20:12:05 crashed in -[UIInputWindowController viewWillLayoutSubviews] through an unguarded send); a miss answers nil / NO / CGRectZero and is logged once as ANOMALY k4-missing
+static BOOL K4_Can(id o, const char *s) {
+    SEL sel = sel_registerName(s);
+    if (o && [o respondsToSelector:sel]) return YES;
+    if (o) {
+        static NSMutableSet *seen;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ seen = [NSMutableSet set]; });
+        NSString *key = [NSString stringWithFormat:@"%s %s", object_getClassName(o), s];
+        @synchronized (seen) {
+            if (![seen containsObject:key]) { [seen addObject:key]; UIK_Problem("k4-missing", "K4 selector %s is not implemented by %s (build 20A8372): nil / NO / zero answered", s, object_getClassName(o)); }
+        }
+    }
+    return NO;
+}
+static id K4_O(id o, const char *s) { return K4_Can(o, s) ? ((id (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : nil; }
+static BOOL K4_B(id o, const char *s) { return K4_Can(o, s) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : NO; }
+static CGRect K4_R(id o, const char *s) { return K4_Can(o, s) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : CGRectZero; }
 static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {                                      // 0x189ac7ba0
     id p = K4_O(self, "placement");
     if (p && !K4_B(p, "isVisible")) return CGRectZero;
@@ -1027,11 +1043,11 @@ static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {                        
     id space = K4_O(K4_O(K4_O(host, "window"), "windowScene"), "coordinateSpace");
     CGRect f = K4_R(sv2, "frame");
     id sspace = K4_O(K4_O(K4_O(sv2, "window"), "screen"), "coordinateSpace");
-    CGRect r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(space, sel_registerName("convertRect:fromCoordinateSpace:"), f, sspace);
+    CGRect r = K4_Can(space, "convertRect:fromCoordinateSpace:") ? ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(space, sel_registerName("convertRect:fromCoordinateSpace:"), f, sspace) : f;
     CGRect hf = K4_R(K4_O(self, "hostView"), "frame");
     if (CGRectIsEmpty(CGRectIntersection(r, hf))) {
         id h2 = K4_O(self, "hostView");
-        CGPoint o = ((CGPoint (*)(id, SEL))objc_msgSend)(h2, sel_registerName("origin"));
+        CGPoint o = K4_Can(h2, "origin") ? ((CGPoint (*)(id, SEL))objc_msgSend)(h2, sel_registerName("origin")) : K4_R(h2, "frame").origin;      // 16.2 UIView(Geometry) origin = frame origin
         r.origin.y = o.y;
         if (CGRectIsEmpty(CGRectIntersection(r, K4_R(K4_O(self, "hostView"), "frame")))) return K4_R(K4_O(self, "hostView"), "frame");
         return r;
