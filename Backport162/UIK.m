@@ -1055,6 +1055,28 @@ static CGRect uik_notificationsFrameK4(id self, SEL _cmd) {                     
     if (CGRectIsEmpty(CGRectIntersection(r, hf))) return r;
     return K4_R(K4_O(self, "hostView"), "frame");
 }
+static void K4_Diag(id self, CGRect old, CGRect nf) {
+    id host = K4_O(self, "hostView");
+    id win = K4_O(host, "window");
+    id scene = K4_O(win, "windowScene");
+    id space = K4_O(scene, "coordinateSpace");
+    id ph = K4_O(K4_O(K4_O(self, "inputViewSet"), "inputView"), "placeheldView");
+    id sv = K4_O(ph, "superview");
+    id sw = K4_O(sv, "window");
+    id screen = K4_O(sw, "screen");
+    CGRect svf = sv ? K4_R(sv, "frame") : CGRectZero;
+    CGRect cont = K4_R(K4_O(self, "containerView"), "frame");
+    CGRect svwin = sw ? K4_R(sw, "frame") : CGRectZero;
+    CGRect sceneB = space ? ((CGRect (*)(id, SEL))objc_msgSend)(space, sel_registerName("bounds")) : CGRectZero;
+    CGRect screenB = screen ? ((CGRect (*)(id, SEL))objc_msgSend)(K4_O(screen, "coordinateSpace"), sel_registerName("bounds")) : CGRectZero;
+    CGRect winF = win ? K4_R(win, "frame") : CGRectZero;
+    CGRect hostF = K4_R(host, "frame");
+    CGRect conv = sv ? ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(space, sel_registerName("convertRect:fromCoordinateSpace:"), svf, K4_O(screen, "coordinateSpace")) : CGRectZero;
+    char key_[64]; snprintf(key_, sizeof key_, "k4s%ld_%ld_%ld_%ld", (long)(svf.origin.y / 8), (long)(svf.size.height / 8), (long)(hostF.origin.y / 8), (long)(winF.size.height / 8));
+    UIK_Problem(key_, "K4 input: hostView %s old %s -> result %s | placeheld superview frame %s (its window frame %s, screen bounds %s) converted into the host scene %s | host window frame %s, scene bounds %s, container frame %s (build 20A8372)",
+        NSStringFromCGRect(hostF).UTF8String, NSStringFromCGRect(old).UTF8String, NSStringFromCGRect(nf).UTF8String, NSStringFromCGRect(svf).UTF8String, NSStringFromCGRect(svwin).UTF8String, NSStringFromCGRect(screenB).UTF8String,
+        NSStringFromCGRect(conv).UTF8String, NSStringFromCGRect(winF).UTF8String, NSStringFromCGRect(sceneB).UTF8String, NSStringFromCGRect(cont).UTF8String);
+}
 static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
     if (!gK4Ok || !UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
     uintptr_t ra = (uintptr_t)__builtin_return_address(0) & 0x7fffffffffULL;
@@ -1063,6 +1085,7 @@ static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
     CGRect old = ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
     if (!hit) return old;
     CGRect nf = uik_notificationsFrameK4(self, _cmd);
+    static int nd; if (nd < 40) { nd++; K4_Diag(self, old, nf); }
     static int n;
     if (n < 6 && !CGRectEqualToRect(old, nf)) {
         n++;
