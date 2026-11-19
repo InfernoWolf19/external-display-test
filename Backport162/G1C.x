@@ -5683,7 +5683,8 @@ static void G1C_CloseTraceTransition(id root, id event, long long phase) {
 %hook SBItemResizeGestureSwitcherModifier
 - (id)_responseForSceneSizeUpdateToSize:(CGSize)size center:(CGPoint)center sceneUpdatesOnly:(BOOL)only {
     id r = %orig;
-    if (!G1C_ON() || !r || !gOrientRespCls) return r;
+    extern volatile int gY42ResizeLifted;               // Y42Resize.x: the recompiled 16.2 body appends the orientation response itself
+    if (gY42ResizeLifted || !G1C_ON() || !r || !gOrientRespCls) return r;
     id layout = G1C_IvarObj(self, "_currentAppLayout");
     id item = (layout && G1C_Resp(layout, @selector(itemForLayoutRole:))) ? G1C_SendLL1(layout, @selector(itemForLayoutRole:), G1C_IvarLL(self, "_selectedLayoutRole")) : nil;
     SEL li = NSSelectorFromString(@"layoutRestrictionInfoForItem:");

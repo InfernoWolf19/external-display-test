@@ -154,6 +154,29 @@ const char *y42_traits_preflight(void) {
 void y42_svc_viewdidload(uint64_t self, uint64_t cmd) { svcvdl(self, cmd); }
 const char *y42_scenevc_preflight(void) { return svcvdl_preflight(); }
 '''),
+ 'resize': dict(file='Y42ResizeLift.c',
+  head='''// Y42ResizeLift.c : the item resize gesture modifier of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py:
+//   SBItemResizeGestureSwitcherModifier  -handleGestureEvent: 0x1c76be31c, -_responseForGestureUpdateAtGestureEnd: 0x1c76be610 (+ block invoke 0x1c76bed0c), -_responseForSceneSizeUpdateToSize:center:sceneUpdatesOnly:
+//   0x1c76bed98, -_initialScaledFrameInScreenCoordinatesForSelectedDisplayItemInAppLayout: 0x1c76bfa80, -_anyItemExceedsWidthThresholdToHideStrip 0x1c76bfd40.
+// Plain C, no ARC.  Installed by Y42Resize.x (switch y42_resize).  Verified with tools/a2c/tests/tracecmp.py (calls, ownership events, PAC logs, block images).  NOT device tested.
+''',
+  bodies=[('162', 0x1c76bed0c, 0x1c76bed98, 'rsblk', 'x,d,d', 'size', 'SBItemResizeGestureSwitcherModifier', 'fn:BSUIConstrainValueToIntervalWithRubberBand=d,fn:SBRectWithSize=rect,frameForIndex:=rect,locationInContainerView=size,normalizedPointForPoint:inBounds:=size,fn:SBDisplayItemSizingPolicyAllowingSmallestSize=x,fn:SBDisplayItemSizingPolicyAllowingLargestSize=x,fn:BSFloatGreaterThanFloat=x,fn:SBDisplayItemAttributedSizeInfer=m56,fn:UIRectCenteredAboutPoint=rect', {}),
+          ('162', 0x1c76be610, 0x1c76bed0c, 'rsend', 'x,x,x', 'x', 'SBItemResizeGestureSwitcherModifier', 'fn:BSUIConstrainValueToIntervalWithRubberBand=d,fn:SBRectWithSize=rect,frameForIndex:=rect,locationInContainerView=size,normalizedPointForPoint:inBounds:=size,fn:SBDisplayItemSizingPolicyAllowingSmallestSize=x,fn:SBDisplayItemSizingPolicyAllowingLargestSize=x,fn:BSFloatGreaterThanFloat=x,fn:SBDisplayItemAttributedSizeInfer=m56,fn:UIRectCenteredAboutPoint=rect', {0x1c76bed0c: 'rsblk'}),
+          ('162', 0x1c76be31c, 0x1c76be610, 'rsevent', 'x,x,x', 'x', 'SBItemResizeGestureSwitcherModifier', 'fn:BSUIConstrainValueToIntervalWithRubberBand=d,fn:SBRectWithSize=rect,frameForIndex:=rect,locationInContainerView=size,normalizedPointForPoint:inBounds:=size,fn:SBDisplayItemSizingPolicyAllowingSmallestSize=x,fn:SBDisplayItemSizingPolicyAllowingLargestSize=x,fn:BSFloatGreaterThanFloat=x,fn:SBDisplayItemAttributedSizeInfer=m56,fn:UIRectCenteredAboutPoint=rect', {}),
+          ('162', 0x1c76bed98, 0x1c76bf134, 'rsscene', 'x,x,d,d,d,d,x', 'x', 'SBItemResizeGestureSwitcherModifier', 'fn:BSUIConstrainValueToIntervalWithRubberBand=d,fn:SBRectWithSize=rect,frameForIndex:=rect,locationInContainerView=size,normalizedPointForPoint:inBounds:=size,fn:SBDisplayItemSizingPolicyAllowingSmallestSize=x,fn:SBDisplayItemSizingPolicyAllowingLargestSize=x,fn:BSFloatGreaterThanFloat=x,fn:SBDisplayItemAttributedSizeInfer=m56,fn:UIRectCenteredAboutPoint=rect', {}),
+          ('162', 0x1c76bfa80, 0x1c76bfbe8, 'rsinit', 'x,x,x', 'rect', 'SBItemResizeGestureSwitcherModifier', 'fn:BSUIConstrainValueToIntervalWithRubberBand=d,fn:SBRectWithSize=rect,frameForIndex:=rect,locationInContainerView=size,normalizedPointForPoint:inBounds:=size,fn:SBDisplayItemSizingPolicyAllowingSmallestSize=x,fn:SBDisplayItemSizingPolicyAllowingLargestSize=x,fn:BSFloatGreaterThanFloat=x,fn:SBDisplayItemAttributedSizeInfer=m56,fn:UIRectCenteredAboutPoint=rect', {}),
+          ('162', 0x1c76bfd40, 0x1c76bfd84, 'rsany', 'x,x', 'x', 'SBItemResizeGestureSwitcherModifier', 'fn:BSUIConstrainValueToIntervalWithRubberBand=d,fn:SBRectWithSize=rect,frameForIndex:=rect,locationInContainerView=size,normalizedPointForPoint:inBounds:=size,fn:SBDisplayItemSizingPolicyAllowingSmallestSize=x,fn:SBDisplayItemSizingPolicyAllowingLargestSize=x,fn:BSFloatGreaterThanFloat=x,fn:SBDisplayItemAttributedSizeInfer=m56,fn:UIRectCenteredAboutPoint=rect', {})],
+  tail='''
+uint64_t y42_rs_event(uint64_t self, uint64_t cmd, uint64_t event) { return rsevent(self, cmd, event); }
+uint64_t y42_rs_end(uint64_t self, uint64_t cmd, uint64_t end) { return rsend(self, cmd, end & 1); }
+uint64_t y42_rs_scene(uint64_t self, uint64_t cmd, double w, double h, double cx, double cy, uint64_t only) { return rsscene(self, cmd, w, h, cx, cy, only & 1); }
+uint64_t y42_rs_any(uint64_t self, uint64_t cmd) { return rsany(self, cmd) & 1; }
+void y42_rs_init(double out[4], uint64_t self, uint64_t cmd, uint64_t layout) { LiftRect r = rsinit(self, cmd, layout); out[0] = r.x; out[1] = r.y; out[2] = r.w; out[3] = r.h; }
+const char *y42_resize_preflight(void) {
+    const char *m;
+    if ((m = rsend_preflight())) return m; if ((m = rsevent_preflight())) return m; if ((m = rsscene_preflight())) return m; if ((m = rsinit_preflight())) return m; return rsany_preflight();
+}
+'''),
  'sceneview': dict(file='Y42SceneViewLift.c',
   head='''// Y42SceneViewLift.c : the 16.2 init chain of the scene views of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py:
 //   -[SBDeviceApplicationSceneView initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester:]  0x1c773c654 (+ three block invokes 0x1c773caf4, 0x1c773cc40, 0x1c773ccb8)

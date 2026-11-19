@@ -88,9 +88,35 @@ static uint64_t lift_bi_SBFIsChamoisWindowingUIAvailable(void) {
     uint64_t (*fn)(void) = (uint64_t (*)(void))dlsym(RTLD_DEFAULT, "SBFFeatureFlagsIsChamoisWindowingUIEnabled");
     return fn ? (fn() & 1) : 1;
 }
+// _SBDisplayItemAttributedSizeInfer(size, bounds, defaultSize, screenEdgePadding) (SpringBoard 16.2 0x1c75cedfc, 78 instructions; 16.0 has no such function): the semantic size type of an absolute size
+// (0 none, 1 full width, 2 full height, 3 full both, 4 default width, 5 default height, 6 default size, 7 padded width, 8 padded height, 9 padded both) with the normalized size; the 56 byte result
+// SBDisplayItemAttributedSize {CGSize normalizedSize; CGRect referenceBounds; long long semanticSizeType} is returned through x8.  Same body as BP2B_AttrSizeInfer of G2B.m (decoded line by line there).
+typedef struct { double nw, nh, bx, by, bw, bh; long long type; } LiftBuiltinAttrSize;
+static int lift_bi_feq(double a, double b) {
+    static int (*fn)(double, double); static int done;
+    if (!done) { done = 1; fn = (int (*)(double, double))dlsym(RTLD_DEFAULT, "BSFloatEqualToFloat"); }
+    if (fn) return fn(a, b) & 1;
+    double d = a - b; return (d < 0 ? -d : d) < 1e-9;
+}
+static LiftBuiltinAttrSize lift_bi_SBDisplayItemAttributedSizeInfer(double w, double h, double bx, double by, double bw, double bh, double dw, double dh, double pad) {
+    int fw = lift_bi_feq(w, bw), fh = lift_bi_feq(h, bh);
+    long long t = fw ? ((fw && fh) ? 3 : 1) : 2;
+    if (!fw && !fh) {
+        int ew = lift_bi_feq(w, dw), eh = lift_bi_feq(h, dh);
+        t = ew ? ((ew && eh) ? 6 : 4) : 5;
+        if (!ew && !eh) {
+            double p2 = pad + pad;
+            int pw = lift_bi_feq(w, bw - p2), ph = lift_bi_feq(h, bh - p2);
+            t = pw ? ((pw && ph) ? 9 : 7) : (ph ? 8 : 0);
+        }
+    }
+    LiftBuiltinAttrSize r = { w / bw, h / bh, bx, by, bw, bh, t };
+    return r;
+}
 void *lift_builtin(const char *bare) {
     // class symbols (_OBJC_CLASS_$_Name, the receiver class of an objc_msgSendSuper2) are the Class object itself; dlsym of them fails for classes of the shared cache images on some builds
     if (strncmp(bare, "OBJC_CLASS_$_", 13) == 0) return lift_objc_getClass(bare + 13);
+    if (strcmp(bare, "SBDisplayItemAttributedSizeInfer") == 0) return (void *)lift_bi_SBDisplayItemAttributedSizeInfer;
     if (strcmp(bare, "BSSizeSwap") == 0) return (void *)lift_bi_BSSizeSwap;
     if (strcmp(bare, "SBFIsChamoisWindowingUIAvailable") == 0) return (void *)lift_bi_SBFIsChamoisWindowingUIAvailable;
     return 0;

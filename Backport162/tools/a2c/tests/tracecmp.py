@@ -215,9 +215,10 @@ def run_emu(c, names, seed, args, case_mem):
             return
         x0, ds = ret_values(seed, norm_name(n), k, kind)
         if kind == 'v': return
-        if kind in ('m48', 'm128'):
+        if kind in ('m48', 'm56', 'm128'):
             nb = int(kind[1:]); buf = b''.join(struct.pack('<d', ds[j % 4]) for j in range(nb // 8))
             uc.mem_write(uc.reg_read(UC_ARM64_REG_X8), buf); return
+        if n.lstrip('_') == 'objc_retainBlock': return      # the copy of a block is the block itself here (x0 keeps the argument)
         if kind == 'x':
             uc.reg_write(UC_ARM64_REG_X0, enc(x0, OBJ_EMU))
         else:
@@ -348,8 +349,9 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
             return
         x0, ds = ret_values(seed, nm, k, kind)
         if kind == 'v': return
-        if kind in ('m48', 'm128'):
+        if kind in ('m48', 'm56', 'm128'):
             nb = int(kind[1:]); ctypes.memmove(X[8], b''.join(struct.pack('<d', ds[j % 4]) for j in range(nb // 8)), nb); return
+        if (not isMsg) and n.lstrip('_') == 'objc_retainBlock': return
         if kind == 'x': X[0] = enc(x0, objb)
         else:
             nd = {'d': 1, 'size': 2, 'rect': 4}[kind]
@@ -386,7 +388,7 @@ def main():
     kinds_ = {}
     if '--kinds' in sys.argv:
         for kv in sys.argv[sys.argv.index('--kinds') + 1].split(','):
-            k_, v_ = kv.split('='); kinds_['msgSend:' + k_] = v_
+            k_, v_ = kv.split('='); kinds_[k_ if k_.startswith('fn:') else 'msgSend:' + k_] = v_
     if '--datasyms' in sys.argv:
         for kv in sys.argv[sys.argv.index('--datasyms') + 1].split(','):
             k_, v_ = kv.split('='); DATASYM[k_] = v_

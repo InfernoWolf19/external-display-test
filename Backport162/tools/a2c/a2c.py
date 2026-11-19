@@ -775,7 +775,7 @@ class Lift:
             if ops[1].type == A.ARM64_OP_FP: b = '0.0'
             else: b = s.frd(nm(ops[1]))
             E('FCMP(%s, %s);' % (s.frd(a), b)); return
-        if mn in ('fadd', 'fsub', 'fmul', 'fdiv', 'fmax', 'fmin', 'fmaxnm', 'fminnm', 'fnmul'):
+        if mn in ('fadd', 'fsub', 'fmul', 'fdiv', 'fmax', 'fmin', 'fmaxnm', 'fminnm', 'fnmul', 'fabd'):
             d = nm(ops[0])
             if s.vec(i):
                 return s.vecop(i)
@@ -784,6 +784,7 @@ class Lift:
             if mn in ('fmax', 'fmaxnm'): E(s.fwr(d, 'FMAXF_(%s, %s)' % (a, b))); return
             if mn in ('fmin', 'fminnm'): E(s.fwr(d, 'FMINF_(%s, %s)' % (a, b))); return
             if mn == 'fnmul': E(s.fwr(d, '-(%s * %s)' % (a, b))); return
+            if mn == 'fabd': E(s.fwr(d, 'fabs(%s - %s)' % (a, b))); return
             E(s.fwr(d, '%s %s %s' % (a, op, b))); return
         if mn in ('fmadd', 'fmsub', 'fnmadd', 'fnmsub'):
             d = nm(ops[0]); a = s.frd(nm(ops[1])); b = s.frd(nm(ops[2])); c = s.frd(nm(ops[3]))
