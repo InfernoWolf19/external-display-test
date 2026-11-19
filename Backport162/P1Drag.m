@@ -1098,6 +1098,58 @@ static __attribute__((ns_returns_retained)) id P1_AppLayoutInit(__attribute__((n
     return r;
 }
 
+// ------------------------------------------------------------------------------------------------ L1: the layout state writes the attributes of its app layout back (16.2 tail of -_layoutStateForApplicationTransitionContext:)
+// 16.0 builds the SBMainDisplayLayoutState from the requested attributes / the previous state's element dictionary and caches the SBAppLayout derived from it (_cachedAppLayoutIfAny): the size a resize committed
+// lives only in the INTERNED SBAppLayout (the attribute dictionary of the cached instance is overwritten by the last writer, G3C.x).  Any later derivation of the layout from the state's own dictionary brings the OLD
+// attributes back: the transaction that begins right after a resize captures the old layout (device log: p1-resize-race captured size {0.942,0.652} / interaction time 228 vs committed {0.547,0.542} / 233), and a
+// layout transition that fails (a gesture interrupting the resize's layout transaction) restores that state: the window snaps back.
+// 16.2 (-[SBMainDisplayLayoutStateManager _layoutStateForApplicationTransitionContext:] 0x1c72952ec, tail 0x1c7298d50 .. 0x1c7298e88) after the sizing policies: when the switcher controller has a window scene
+// and the state has an app layout, a SBDisplayItemLayoutAttributesCalculator runs frameForLayoutRole:SBLayoutRolePrimary inAppLayout: containerOrientation: windowScene: (the auto layout), then for EVERY item of the
+// app layout: [state _setLayoutAttributes:[appLayout layoutAttributesForItem:item] forLayoutElement:[state elementWithRole:[appLayout layoutRoleForItem:item]]]
+// -[SBMainDisplayLayoutState _setLayoutAttributes:forLayoutElement:] (new in 16.2, 0x1c7721fd0): copies _elementIdentifiersToLayoutAttributes, sets / removes the entry of the element's uniqueIdentifier, stores the copy,
+// then invalidateAppLayout / invalidateFloatingAppLayout (new 0x1c77227e0 / 0x1c7722838: nil the cached app layouts, after the SBLayoutState no-op super call).   Switch p1_statesync, ANOMALY p1-statesync.
+static IMP sOrigStateForCtx;
+static void L1_SetAttrs(id self, SEL _cmd, id attrs, id element) {
+    Ivar iv = class_getInstanceVariable(object_getClass(self), "_elementIdentifiersToLayoutAttributes");
+    id dict = iv ? object_getIvar(self, iv) : nil;
+    if (!dict) return;
+    id uid = P1_S0(element, "uniqueIdentifier");
+    if (!uid) return;
+    NSMutableDictionary *md = [dict mutableCopy];
+    if (attrs) [md addEntriesFromDictionary:@{ uid: attrs }]; else [md removeObjectForKey:uid];
+    object_setIvar(self, iv, md);
+    ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("invalidateAppLayout"));
+    ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("invalidateFloatingAppLayout"));
+}
+static void L1_InvAppLayout(id self, SEL _cmd) { Ivar iv = class_getInstanceVariable(object_getClass(self), "_cachedAppLayoutIfAny"); if (iv) object_setIvar(self, iv, nil); }
+static void L1_InvFloating(id self, SEL _cmd) { Ivar iv = class_getInstanceVariable(object_getClass(self), "_cachedFloatingAppLayoutIfAny"); if (iv) object_setIvar(self, iv, nil); }
+static id L1_StateForCtx(id self, SEL _cmd, id ctx) {
+    id st = ((id (*)(id, SEL, id))sOrigStateForCtx)(self, _cmd, ctx);
+    if (!st || !BP_OnName("p1_statesync")) return st;
+    Class sc = NSClassFromString(@"SBMainDisplayLayoutState");
+    if (!sc || ![st isKindOfClass:sc]) return st;
+    id scene = P1_SceneForDisplay(P1_S0(P1_S0(ctx, "request"), "displayIdentity"));
+    id appLayout = P1_S0(st, "appLayout");
+    if (!scene || !appLayout) return st;
+    id calc = [[NSClassFromString(@"SBDisplayItemLayoutAttributesCalculator") alloc] init];
+    SEL fl = sel_registerName("frameForLayoutRole:inAppLayout:containerOrientation:windowScene:");
+    if (!calc || ![calc respondsToSelector:fl]) return st;
+    long long *rp = (long long *)dlsym(RTLD_DEFAULT, "SBLayoutRolePrimary");
+    ((CGRect (*)(id, SEL, long long, id, long long, id))objc_msgSend)(calc, fl, rp ? *rp : 1, appLayout, P1_L0(st, "interfaceOrientation"), scene);
+    int n = 0, changed = 0;
+    for (id item in [appLayout allItems]) {
+        id attrs = ((id (*)(id, SEL, id))objc_msgSend)(appLayout, sel_registerName("layoutAttributesForItem:"), item);
+        long long role = ((long long (*)(id, SEL, id))objc_msgSend)(appLayout, sel_registerName("layoutRoleForItem:"), item);
+        id elem = ((id (*)(id, SEL, long long))objc_msgSend)(st, sel_registerName("elementWithRole:"), role);
+        id old = ((id (*)(id, SEL, id))objc_msgSend)(st, sel_registerName("layoutAttributesForElement:"), elem);
+        if (old != attrs && ![old isEqual:attrs]) changed++;
+        ((void (*)(id, SEL, id, id))objc_msgSend)(st, sel_registerName("_setLayoutAttributes:forLayoutElement:"), attrs, elem);
+        n++;
+    }
+    if (changed) BP_Anomaly("p1-statesync", @"p1: a layout state took %d changed attribute set(s) from its app layout (16.2 write back, build 20A8372; 16.0 kept the old ones): %@", changed, P1_Short(appLayout));
+    return st;
+}
+
 // ------------------------------------------------------------------------------------------------ installation
 static IMP P1_Replace(const char *cls, const char *sel, IMP imp, IMP *orig) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
@@ -1121,6 +1173,15 @@ extern void P1SW_Setup(void);
 void P1Drag_Setup(void) {
     if (!BP_OnName("p1_drag")) { BP_Log(@"p1: switch p1_drag is off at launch: the 16.0 gesture transaction stays (transactions created later still honour the switches)"); }
     const char *T = "SBFluidSwitcherGestureWorkspaceTransaction", *M = "SBFluidSwitcherGestureManager", *C = "SBMainSwitcherControllerCoordinator", *S = "SBSwitcherController", *V = "SBFluidSwitcherViewController";
+    {
+        Class ls = NSClassFromString(@"SBMainDisplayLayoutState");
+        if (ls && !class_getInstanceMethod(ls, sel_registerName("_setLayoutAttributes:forLayoutElement:"))) {
+            class_addMethod(ls, sel_registerName("_setLayoutAttributes:forLayoutElement:"), (IMP)L1_SetAttrs, "v32@0:8@16@24");
+            class_addMethod(ls, sel_registerName("invalidateAppLayout"), (IMP)L1_InvAppLayout, "v16@0:8");
+            class_addMethod(ls, sel_registerName("invalidateFloatingAppLayout"), (IMP)L1_InvFloating, "v16@0:8");
+        }
+        P1_Replace("SBMainDisplayLayoutStateManager", "_layoutStateForApplicationTransitionContext:", (IMP)L1_StateForCtx, &sOrigStateForCtx);
+    }
     P1_Replace("SBAppLayout", "initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:centerConfiguration:environment:hidden:preferredDisplayOrdinal:", (IMP)P1_AppLayoutInit, &sOrigAppLayoutInit);
     P1_Replace(T, "initWithTransitionRequest:fluidSwitcherViewController:delegate:", (IMP)P1_Init, &sOrigInit);
     P1_Replace(T, "_beginWithGesture:", (IMP)P1_Begin, &sOrigBegin);
