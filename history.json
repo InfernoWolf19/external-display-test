@@ -1,12 +1,4 @@
 {
- "0.7.9+321.5aa8f91": {
-  "date": "2026-11-01T02:00:15Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+321.5aa8f91_iphoneos-arm64.deb",
-  "run": 321,
-  "sha": "5aa8f91474a192ff8c5dd015382e4b12e0aea425",
-  "subject": "Diagnostics (Backport162.debug only, no behaviour change): log when a card's role frame falls back to the 16.0 bounds derived body (G1C pile floor, P1SW default roles) and the inputs of the home slide fly out distance, to pin the tiny card and quick dismiss causes",
-  "version": "0.7.9+321.5aa8f91"
- },
  "0.7.9+322.bd3bb46": {
   "date": "2026-11-01T02:16:47Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+322.bd3bb46_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "404f96ec067b9504a3259d73d2c0a20406e2cd76",
   "subject": "Y42SelfTest: no instances any more (build 387 died in the release of a bare allocated instance of a runtime subclass 15 s after launch); the class structure of every runtime subclass is checked instead",
   "version": "0.7.9+390.404f96e"
+ },
+ "0.7.9+394.f311d4c": {
+  "date": "2026-11-19T18:13:23Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+394.f311d4c_iphoneos-arm64.deb",
+  "run": 394,
+  "sha": "f311d4ca4c211216cf9a68f581944943cd75abcb",
+  "subject": "a2c: 'Lret: ;' (a label before the declaration of the size / rect result is a C23 extension, -Werror in the CI build 393); Y42ResizeLift.c regenerated",
+  "version": "0.7.9+394.f311d4c"
  }
 }
