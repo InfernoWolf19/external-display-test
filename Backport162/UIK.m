@@ -36,8 +36,8 @@
 
 // ---------------------------------------------------------------- switches
 
-enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_COUNT };
-static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe" };
+enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_COUNT };
+static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace" };
 static const char kUIKTmp[] = "/var/jb/tmp";
 static const char *const kUIKDirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile", "/var/mobile/Library/Caches", "/var/mobile" };
 #define UIK_DIR_COUNT ((int)(sizeof kUIKDirs / sizeof kUIKDirs[0]))
@@ -1095,6 +1095,70 @@ static void UIK_InstallK4(void) {
     UIK_Log("K4 installed (slide %#lx)", (unsigned long)slide);
 }
 
+// ---------------------------------------------------------------- K5: placements of the assistant bar / accessory view of a windowed keyboard (16.2 UIInputViewSetPlacement*)
+//
+// Device test of K4: Telegram in a window shifted too far up when only the assistant bar (shortcut bar) was visible.  The keyboard rect of the notification is the frame of the placeholder view's superview
+// (K4), whose position inside the hosting container comes from the placements.  16.2 changed two of them for the windowed visual mode:
+//  * -[UIInputViewSetPlacementAssistantOnScreen subPlacements] 16.0 0x189972e54: when useVisualModeWindowed ALWAYS [AccessoryOnScreen placement] (cached in _cachedSecondaryPlacement) as the single sub placement.
+//    16.2 0x189ab2c58 asks [[KSD active] inputViews] and calls the new -subPlacementsForInputViewSet: (AssistantOnScreen 0x189ab2cd0): the sub placement exists only when useVisualModeWindowed AND the input view
+//    set has an inputAccessoryView, else nil (base class -subPlacementsForInputViewSet: 0x189ab0e4c = [self subPlacements]).
+//  * -[UIInputViewSetPlacementAccessoryOnScreen verticalConstraintForInputViewSet:hostView:containerView:] 16.0 0x1899711bc / 16.2 0x189ab0f18: the item whose bottom / top is pinned to the container bottom is
+//    the accessory view, else the input view, else the host view; 16.2 uses the HOST VIEW when [[[[container _rootInputWindowController] placement] subPlacements] firstObject] is this placement.
+// Switch uik_kbplace.  (-[UIInputWindowControllerHosting reloadForPlacementForInputViewSet:] 0x189ac6208 passes the new input view set explicitly; the 16.0 reloadForPlacement reads the scene delegate's
+// current one through subPlacements: documented difference.)
+static IMP orig_aosSubK5, orig_vcK5;
+static id uik_aosSubForSetK5(id self, SEL _cmd, id ivs) {                                  // 0x189ab2cd0
+    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+    id vm = d ? K4_O(d, "visualModeManager") : nil;
+    if (!(vm && K4_B(vm, "useVisualModeWindowed"))) return nil;
+    if (!ivs || !K4_O(ivs, "inputAccessoryView")) return nil;
+    Ivar iv = class_getInstanceVariable(object_getClass(self), "_cachedSecondaryPlacement");
+    id cached = iv ? object_getIvar(self, iv) : nil;
+    if (!cached) {
+        cached = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIInputViewSetPlacementAccessoryOnScreen"), sel_registerName("placement"));
+        if (iv) object_setIvar(self, iv, cached);
+    }
+    return cached ? @[cached] : nil;
+}
+static id uik_aosSubK5(id self, SEL _cmd) {                                                 // 0x189ab2c58
+    if (!UIK_On(UIK_SW_KBPLACE)) return ((id (*)(id, SEL))orig_aosSubK5)(self, _cmd);
+    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+    return uik_aosSubForSetK5(self, _cmd, d ? K4_O(d, "inputViews") : nil);
+}
+static id uik_baseSubForSetK5(id self, SEL _cmd, id ivs) { return K4_O(self, "subPlacements"); }   // 0x189ab0e4c
+static id uik_vcK5(id self, SEL _cmd, id ivs, id host, id container) {                      // 0x189ab0f18
+    if (!UIK_On(UIK_SW_KBPLACE)) return ((id (*)(id, SEL, id, id, id))orig_vcK5)(self, _cmd, ivs, host, container);
+    id root = K4_O(container, "_rootInputWindowController");
+    id first = [K4_O(K4_O(root, "placement"), "subPlacements") firstObject];
+    id item;
+    if (first == self) item = host;
+    else {
+        item = K4_O(ivs, "inputAccessoryView");
+        if (!item) { id iv = K4_O(ivs, "inputView"); item = iv ?: host; }
+    }
+    if (!item) return nil;
+    if (!((BOOL (*)(id, SEL, id))objc_msgSend)(item, sel_registerName("isDescendantOfView:"), container)) return nil;
+    BOOL hasAcc = K4_O(ivs, "inputAccessoryView") != nil;
+    return ((id (*)(id, SEL, id, long long, long long, id, long long, double, double))objc_msgSend)((id)objc_getClass("NSLayoutConstraint"),
+        sel_registerName("constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:"), item, hasAcc ? 4 : 3, 0, container, 4, 1.0, 0.0);
+}
+static void UIK_InstallK5(void) {
+    Class aos = objc_getClass("UIInputViewSetPlacementAssistantOnScreen"), acc = objc_getClass("UIInputViewSetPlacementAccessoryOnScreen"), base = objc_getClass("UIInputViewSetPlacement");
+    NSMutableArray *missing = [NSMutableArray array];
+    if (!aos || !class_getInstanceMethod(aos, sel_registerName("subPlacements"))) [missing addObject:@"-[UIInputViewSetPlacementAssistantOnScreen subPlacements]"];
+    if (!acc || !class_getInstanceMethod(acc, sel_registerName("verticalConstraintForInputViewSet:hostView:containerView:"))) [missing addObject:@"-[UIInputViewSetPlacementAccessoryOnScreen verticalConstraintForInputViewSet:hostView:containerView:]"];
+    if (!base) [missing addObject:@"class UIInputViewSetPlacement"];
+    if (aos && !class_getInstanceVariable(aos, "_cachedSecondaryPlacement")) [missing addObject:@"ivar _cachedSecondaryPlacement"];
+    if (![UIView instancesRespondToSelector:sel_registerName("_rootInputWindowController")]) [missing addObject:@"-[UIView _rootInputWindowController]"];
+    if ([missing count]) { UIK_Problem("k5-install", "K5 NOT installed (build 20A8372), needs: %s", [[missing componentsJoinedByString:@", "] UTF8String]); return; }
+    class_addMethod(base, sel_registerName("subPlacementsForInputViewSet:"), (IMP)uik_baseSubForSetK5, "@24@0:8@16");
+    class_addMethod(aos, sel_registerName("subPlacementsForInputViewSet:"), (IMP)uik_aosSubForSetK5, "@24@0:8@16");
+    BOOL a = UIK_Hook("UIInputViewSetPlacementAssistantOnScreen", "subPlacements", NULL, (IMP)uik_aosSubK5, &orig_aosSubK5);
+    BOOL b = UIK_Hook("UIInputViewSetPlacementAccessoryOnScreen", "verticalConstraintForInputViewSet:hostView:containerView:", NULL, (IMP)uik_vcK5, &orig_vcK5);
+    UIK_Log("K5 installed (sub placements %d, vertical constraint %d)", (int)a, (int)b);
+    if (UIK_On(UIK_SW_KBPLACE)) UIK_Problem("k5-active", "K5 active (build 20A8372): the assistant bar sub placement exists only with an accessory view, accessory constraint as 16.2 (bundle %s)", [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+}
+
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
@@ -1105,4 +1169,5 @@ __attribute__((constructor)) static void UIK_Init(void) {
     UIK_InstallK2();
     UIK_InstallK3();
     UIK_InstallK4();
+    UIK_InstallK5();
 }
