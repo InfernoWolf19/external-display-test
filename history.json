@@ -1,12 +1,4 @@
 {
- "0.7.9+304.7915bb5": {
-  "date": "2026-10-31T10:37:04Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+304.7915bb5_iphoneos-arm64.deb",
-  "run": 304,
-  "sha": "7915bb5edde9dfc010109b2d41c2303badfdf2c0",
-  "subject": "REVIEW-Y-0.7.9: differential review of the Y1..Y16 hooks (table per hook, answers to the y5 / y8 / y10 / y13 / y16 / y6 questions, defects D1..D7)",
-  "version": "0.7.9+304.7915bb5"
- },
  "0.7.9+305.4b72fbf": {
   "date": "2026-10-31T10:38:01Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+305.4b72fbf_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "fa67cd0bf19aef70559d59e7fdd066921396583a",
   "subject": "Y42Shelf: SBShelfLiveContentOverlayCoordinator -_addOverlaysIfNeededForTransitionContext: (16.2 0x1c798ac94, stack block, invoke 0x1c798b338) and SBShelfLiveContentOverlay's 16.2 init (0x1c798b6b8), recompiled from the 16.2 machine code",
   "version": "0.7.9+370.fa67cd0"
+ },
+ "0.7.9+371.cd7e112": {
+  "date": "2026-11-19T01:30:57Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+371.cd7e112_iphoneos-arm64.deb",
+  "run": 371,
+  "sha": "cd7e112c1a21157c723c0210c22ab5ffa6988c65",
+  "subject": "Y42Peek: SBPeekSplitViewRoutingSwitcherModifier -responseForProposedChildResponse:childModifier:event: (16.2 0x1c74e7210) and -routingModifier:event:forModifier: (0x1c74e7a88), recompiled with their stack blocks",
+  "version": "0.7.9+371.cd7e112"
  }
 }
