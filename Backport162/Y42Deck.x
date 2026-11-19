@@ -11,7 +11,9 @@
 //   SBDeckSwitcherViewController allocation produces (+allocWithZone: of the base class swapped, as Y34ClassicSupport.x does); the recompiled bodies find the ivar BY NAME through the subclass).
 //   The three methods are NOT re-typed: Y42DeckLift.c is the 16.2 machine code recompiled by tools/a2c (stack blocks with arm64e pointer signing included); verified with tools/a2c/tests/tracecmp.py
 //   (calls, ownership events in order, PAC logs, block images) on 24 seeds per body.  The 16.0 init (dataSource:debugName:) gets the one step 16.2 adds: the weak manager.
-//   NOT ported here (other rows / not reachable from a 16.0 caller): the 16.2 init selector with shouldObserveChamoisWindowingChanges:, -invalidate, -handleFluidSwitcherGestureManager:didBeginGesture:.
+//   Also: -invalidate 0x1c77c96a0 (recompiled, added: the manager stops listening, then [super invalidate]) and the gesture begin (16.2 -handleFluidSwitcherGestureManager:didBeginGesture: 0x1c77c9ccc, hand ported into the
+//   16.0 -handleGestureDidBegin: the 16.0 gesture manager still sends: see Y42_DeckGesture).  NOT ported: the 16.2 init selector with shouldObserveChamoisWindowingChanges: (16.0 callers send the 16.0 init selector,
+//   which is hooked above; nothing in 16.0 sends the 16.2 selector; the 16.2 init is the 16.0 init plus the manager step, 0x1c77c95e8).
 //   What can break on a device: the runtime subclass (class identity is shimmed, KVO / archiving do not apply to the deck), signed stack blocks (arm64e pacda / pacia), the weak ivar teardown.
 //   An instance that is not of the subclass (a subclass of the deck allocated by its own +alloc) runs the 16.0 methods.
 // Switch y42_deck (kill file Backport162.off.y42_deck).  Installed only on build 20A8372; ANOMALY y42-deck (always on) names the build.
@@ -33,11 +35,12 @@ extern void y42_deck_end(uint64_t self, uint64_t cmd, uint64_t coordinator, uint
 extern uint64_t y42_deck_reason(uint64_t self, uint64_t cmd);
 extern uint64_t y42_deck_getmanager(uint64_t self, uint64_t cmd);
 extern void y42_deck_setmanager(uint64_t self, uint64_t cmd, uint64_t manager);
+extern void y42_deck_invalidate(uint64_t self, uint64_t cmd);
 extern const char *y42_deck_preflight(void);
 
 static Class gDeckBase, gDeckExt;
 static Ivar gIvManager;
-static IMP gOrigAlloc, gOrigInit, gOrigPerform, gOrigBegin, gOrigEnd;
+static IMP gOrigAlloc, gOrigInit, gOrigPerform, gOrigBegin, gOrigEnd, gOrigGesture;
 
 #define Y42_P(o) ((uint64_t)(uintptr_t)(__bridge void *)(o))
 #define Y42_C(c) ((uint64_t)(uintptr_t)(void *)(c))
@@ -63,6 +66,28 @@ static id Y42_DeckGetManager(id self, SEL _cmd) {
 }
 static void Y42_DeckSetManager(id self, SEL _cmd, id manager) { if (Y42_Mine(self)) y42_deck_setmanager(Y42_P(self), Y42_C(_cmd), Y42_P(manager)); }
 
+// -invalidate: NEW in the 16.2 deck (0x1c77c96a0: the manager stops listening for the reason, then [super invalidate]); the 16.0 deck inherits SBFluidSwitcherViewController's
+static void Y42_DeckInvalidate(id self, SEL _cmd) {
+    if (BP_OnName("y42_deck") && Y42_Mine(self)) { y42_deck_invalidate(Y42_P(self), Y42_C(_cmd)); return; }
+    struct objc_super sup = { self, class_getSuperclass(gDeckBase) };
+    ((void (*)(struct objc_super *, SEL))objc_msgSendSuper)(&sup, _cmd);
+}
+// 16.2 -handleFluidSwitcherGestureManager:didBeginGesture: 0x1c77c9ccc (50 instructions, read from the machine code: retain manager / gesture, [_appSuggestionController setShowSuggestions:NO],
+// manager = weak _appSuggestionManager, [manager disableListeningForUpdatesForReason:[self _assertionReason]], release, [super handleFluidSwitcherGestureManager:didBeginGesture:]).
+// The 16.0 gesture manager still sends -handleGestureDidBegin: (16.0 0x1c6328db4: setShowSuggestions:NO, [super handleGestureDidBegin:]) to the deck; the protocol was renamed in 16.2, so the 16.2 steps are
+// done in this 16.0 entry point and the super call keeps the 16.0 selector (the 16.0 superclass has no 16.2 selector).  Hand ported (the super selector differs, the recompiled body cannot be used).
+static void Y42_DeckGesture(id self, SEL _cmd, id gesture) {
+    if (!BP_OnName("y42_deck") || !Y42_Mine(self)) { ((void (*)(id, SEL, id))gOrigGesture)(self, _cmd, gesture); return; }
+    id keep = gesture;
+    Ivar ic = class_getInstanceVariable(gDeckBase, "_appSuggestionController");
+    id controller = BP_ObjIvar(self, ic);
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(controller, sel_registerName("setShowSuggestions:"), NO);
+    id manager = (__bridge id)(void *)(uintptr_t)y42_deck_getmanager(Y42_P(self), sel_registerName("appSuggestionManager"));
+    id reason = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_assertionReason"));
+    ((void (*)(id, SEL, id))objc_msgSend)(manager, sel_registerName("disableListeningForUpdatesForReason:"), reason);
+    struct objc_super sup = { self, class_getSuperclass(gDeckBase) };
+    ((void (*)(struct objc_super *, SEL, id))objc_msgSendSuper)(&sup, _cmd, keep);
+}
 static id Y42_DeckAlloc(id self, SEL _cmd, void *zone) {
     Class use = (self == (id)gDeckBase) ? gDeckExt : (Class)self;
     return ((id (*)(id, SEL, void *))gOrigAlloc)((id)use, _cmd, zone);
@@ -115,6 +140,9 @@ __attribute__((constructor)) static void Y42Deck_Setup(void) {
         gOrigPerform = BPX_Replace(gDeckBase, sels[0], (IMP)Y42_DeckPerform);
         gOrigBegin = BPX_Replace(gDeckBase, sels[1], (IMP)Y42_DeckBegin);
         gOrigEnd = BPX_Replace(gDeckBase, sels[2], (IMP)Y42_DeckEnd);
+        class_addMethod(gDeckBase, sel_registerName("invalidate"), (IMP)Y42_DeckInvalidate, "v@:");
+        if (class_getInstanceMethod(gDeckBase, sel_registerName("handleGestureDidBegin:"))) gOrigGesture = BPX_Replace(gDeckBase, "handleGestureDidBegin:", (IMP)Y42_DeckGesture);
+        else BP_Anomaly("y42", @"[y42] y42_deck: -[SBDeckSwitcherViewController handleGestureDidBegin:] does not exist: the 16.2 gesture begin step is not installed");
         gOrigInit = BPX_Replace(gDeckBase, "initWithSwitcherController:rootModifier:liveContentOverlayCoordinator:delegate:dataSource:debugName:", (IMP)Y42_DeckInit);
         Class meta = object_getClass((id)gDeckBase);
         class_replaceMethod(meta, @selector(allocWithZone:), (IMP)Y42_DeckAlloc, method_getTypeEncoding(am));

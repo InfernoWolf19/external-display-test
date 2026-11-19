@@ -62,7 +62,8 @@ const char *y42_peek_preflight(void) { const char *m = pk1_preflight(); return m
           ('162', 0x1c77c99cc, 0x1c77c9c40, 'dk3', 'x,x,x,x', 'v', 'SBDeckSwitcherViewController', '', {0x1c77c9c40: 'dkblk3a', 0x1c77c9c4c: 'dkblk3b'}),
           ('162', 0x1c77c9e2c, 0x1c77c9ea8, 'dkreason', 'x,x', 'x', 'SBDeckSwitcherViewController', '', {}),
           ('162', 0x1c77c9ecc, 0x1c77c9f00, 'dkget', 'x,x', 'x', 'SBDeckSwitcherViewController', '', {}),
-          ('162', 0x1c77c9f00, 0x1c77c9f14, 'dkset', 'x,x,x', 'v', 'SBDeckSwitcherViewController', '', {})],
+          ('162', 0x1c77c9f00, 0x1c77c9f14, 'dkset', 'x,x,x', 'v', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c77c96a0, 0x1c77c9724, 'dkinval', 'x,x', 'v', 'SBDeckSwitcherViewController', '', {})],
   tail='''
 void y42_deck_perform(uint64_t self, uint64_t cmd, uint64_t context, uint64_t animated, uint64_t completion) { dk1(self, cmd, context, animated & 1, completion); }
 void y42_deck_begin(uint64_t self, uint64_t cmd, uint64_t coordinator, uint64_t context) { dk2(self, cmd, coordinator, context); }
@@ -70,12 +71,13 @@ void y42_deck_end(uint64_t self, uint64_t cmd, uint64_t coordinator, uint64_t co
 uint64_t y42_deck_reason(uint64_t self, uint64_t cmd) { return dkreason(self, cmd); }
 uint64_t y42_deck_getmanager(uint64_t self, uint64_t cmd) { return dkget(self, cmd); }
 void y42_deck_setmanager(uint64_t self, uint64_t cmd, uint64_t manager) { dkset(self, cmd, manager); }
+void y42_deck_invalidate(uint64_t self, uint64_t cmd) { dkinval(self, cmd); }
 const char *y42_deck_preflight(void) {
     const char *m = dk1_preflight(); if (m) return m;
     m = dk2_preflight(); if (m) return m;
     m = dk3_preflight(); if (m) return m;
     m = dkreason_preflight(); if (m) return m;
-    m = dkget_preflight(); return m ? m : dkset_preflight();
+    if ((m = dkget_preflight())) return m; if ((m = dkset_preflight())) return m; return dkinval_preflight();
 }
 '''),
  'traits': dict(file='Y42TraitsLift.c',
