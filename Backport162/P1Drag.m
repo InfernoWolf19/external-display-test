@@ -1136,15 +1136,14 @@ static id L1_StateForCtx(id self, SEL _cmd, id ctx) {
     if (!calc || ![calc respondsToSelector:fl]) return st;
     long long *rp = (long long *)dlsym(RTLD_DEFAULT, "SBLayoutRolePrimary");
     ((CGRect (*)(id, SEL, long long, id, long long, id))objc_msgSend)(calc, fl, rp ? *rp : 1, appLayout, P1_L0(st, "interfaceOrientation"), scene);
-    int n = 0, changed = 0;
-    for (id item in [appLayout allItems]) {
+    int changed = 0;
+    for (id item in (NSArray *)P1_S0(appLayout, "allItems")) {
         id attrs = ((id (*)(id, SEL, id))objc_msgSend)(appLayout, sel_registerName("layoutAttributesForItem:"), item);
         long long role = ((long long (*)(id, SEL, id))objc_msgSend)(appLayout, sel_registerName("layoutRoleForItem:"), item);
         id elem = ((id (*)(id, SEL, long long))objc_msgSend)(st, sel_registerName("elementWithRole:"), role);
         id old = ((id (*)(id, SEL, id))objc_msgSend)(st, sel_registerName("layoutAttributesForElement:"), elem);
         if (old != attrs && ![old isEqual:attrs]) changed++;
         ((void (*)(id, SEL, id, id))objc_msgSend)(st, sel_registerName("_setLayoutAttributes:forLayoutElement:"), attrs, elem);
-        n++;
     }
     if (changed) BP_Anomaly("p1-statesync", @"p1: a layout state took %d changed attribute set(s) from its app layout (16.2 write back, build 20A8372; 16.0 kept the old ones): %@", changed, P1_Short(appLayout));
     return st;
