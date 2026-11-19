@@ -139,6 +139,17 @@ const char *y42_traits_preflight(void) {
     if ((m = tdreset_preflight())) return m; return tddid_preflight();
 }
 '''),
+ 'scenevc': dict(file='Y42SceneVCLift.c',
+  head='''// Y42SceneVCLift.c : -[SBSceneViewController viewDidLoad] of iPadOS 16.2 (20C65, 0x1c72e7db8 .. 0x1c72e8060, 170 instructions), recompiled from the 16.2 machine code by tools/a2c/a2c.py: the scene view is created with
+// newSceneViewWithReferenceSize:contentOrientation:containerOrientation:hostRequester: of the scene handle (16.0 asked for orientation: only).  Plain C, no ARC.  Installed by Y42SceneVC.x (switch y42_scenevc).
+// Verified with tools/a2c/tests/tracecmp.py (calls, ownership events).  NOT device tested.
+''',
+  tcargs=['--safemem'],
+  bodies=[('162', 0x1c72e7db8, 0x1c72e8060, 'svcvdl', 'x,x', 'v', 'SBSceneViewController', '', {})],
+  tail='''
+void y42_svc_viewdidload(uint64_t self, uint64_t cmd) { svcvdl(self, cmd); }
+const char *y42_scenevc_preflight(void) { return svcvdl_preflight(); }
+'''),
 }
 
 def gen(name):

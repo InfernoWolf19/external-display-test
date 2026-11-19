@@ -1588,7 +1588,7 @@ static char kBPG3BGuideKey;
 // the scene view (-_updateReferenceSize:andOrientation:); the container orientation is just a new stored ivar read by SBAppContainerViewController /
 // transient overlays. 16.0 already has the content/container transform split in SBOrientationTransformWrapperView, so the adapter stores the container
 // orientation per object (associated object) and forwards the content orientation to the 16.0 selector. Container orientation defaults to the content one.
-static char kBPG3BContainerOri;
+char kBPG3BContainerOri;      // external: Y42SceneVC.x stores the 16.2 default through the same key
 static long long BPG3BO_ContentOri(id self, SEL _cmd) { return BP_G3B_SendLL(self, BPS("contentInterfaceOrientation")); }
 static long long BPG3BO_ContainerOri(id self, SEL _cmd) {
     NSNumber *n = objc_getAssociatedObject(self, &kBPG3BContainerOri);
