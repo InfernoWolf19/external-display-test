@@ -46,6 +46,37 @@ uint64_t y42_peek_response(uint64_t self, uint64_t cmd, uint64_t response, uint6
 uint64_t y42_peek_routing(uint64_t self, uint64_t cmd, uint64_t routing, uint64_t event, uint64_t forModifier) { return pk2(self, cmd, routing, event, forModifier); }
 const char *y42_peek_preflight(void) { const char *m = pk1_preflight(); return m ? m : pk2_preflight(); }
 '''),
+ 'deck': dict(file='Y42DeckLift.c',
+  head='''// Y42DeckLift.c : the app suggestion handling of the card deck switcher (SBDeckSwitcherViewController) of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py:
+//   -performTransitionWithContext:animated:completion:  0x1c73151d8 (+ block invoke 0x1c77c9724)        -layoutStateTransitionCoordinator:transitionDidBeginWithTransitionContext:  0x1c77c97c0
+//   -layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:  0x1c77c99cc (+ block invokes 0x1c77c9c40, 0x1c77c9c4c)          -_assertionReason 0x1c77c9e2c
+//   -appSuggestionManager 0x1c77c9ecc, -setAppSuggestionManager: 0x1c77c9f00 (the weak ivar _appSuggestionManager lives in a runtime subclass, Y42Deck.x)
+// Plain C, no ARC.  Installed by Y42Deck.x (switch y42_deck).  Verified with tools/a2c/tests/tracecmp.py (calls, ownership events, PAC logs, block images).  NOT device tested.
+''',
+  bodies=[('162', 0x1c77c9724, 0x1c77c97c0, 'dkblk1', 'x,x', 'v', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c73151d8, 0x1c731530c, 'dk1', 'x,x,x,x,x', 'v', 'SBDeckSwitcherViewController', '', {0x1c77c9724: 'dkblk1'}),
+          ('162', 0x1c77c97c0, 0x1c77c99cc, 'dk2', 'x,x,x,x', 'v', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c77c9c40, 0x1c77c9c4c, 'dkblk3a', 'x,x', 'v', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c77c9c4c, 0x1c77c9ccc, 'dkblk3b', 'x,x', 'v', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c77c99cc, 0x1c77c9c40, 'dk3', 'x,x,x,x', 'v', 'SBDeckSwitcherViewController', '', {0x1c77c9c40: 'dkblk3a', 0x1c77c9c4c: 'dkblk3b'}),
+          ('162', 0x1c77c9e2c, 0x1c77c9ea8, 'dkreason', 'x,x', 'x', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c77c9ecc, 0x1c77c9f00, 'dkget', 'x,x', 'x', 'SBDeckSwitcherViewController', '', {}),
+          ('162', 0x1c77c9f00, 0x1c77c9f14, 'dkset', 'x,x,x', 'v', 'SBDeckSwitcherViewController', '', {})],
+  tail='''
+void y42_deck_perform(uint64_t self, uint64_t cmd, uint64_t context, uint64_t animated, uint64_t completion) { dk1(self, cmd, context, animated & 1, completion); }
+void y42_deck_begin(uint64_t self, uint64_t cmd, uint64_t coordinator, uint64_t context) { dk2(self, cmd, coordinator, context); }
+void y42_deck_end(uint64_t self, uint64_t cmd, uint64_t coordinator, uint64_t context) { dk3(self, cmd, coordinator, context); }
+uint64_t y42_deck_reason(uint64_t self, uint64_t cmd) { return dkreason(self, cmd); }
+uint64_t y42_deck_getmanager(uint64_t self, uint64_t cmd) { return dkget(self, cmd); }
+void y42_deck_setmanager(uint64_t self, uint64_t cmd, uint64_t manager) { dkset(self, cmd, manager); }
+const char *y42_deck_preflight(void) {
+    const char *m = dk1_preflight(); if (m) return m;
+    m = dk2_preflight(); if (m) return m;
+    m = dk3_preflight(); if (m) return m;
+    m = dkreason_preflight(); if (m) return m;
+    m = dkget_preflight(); return m ? m : dkset_preflight();
+}
+'''),
 }
 
 def gen(name):
