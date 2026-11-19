@@ -29,6 +29,7 @@ for job, d in gen_y42.JOBS.items():
         if kinds: cmd += ['--kinds', kinds]
         if locs: cmd += ['--locals', ','.join('%x:%x:%s:%s:%s' % (a, ends[a], c, names[a][4].replace(',', '+'), names[a][5]) for a, c in locs.items())]
         cmd += d.get('tcargs', [])
+        if any(st in b[8] for b in d['bodies']): cmd += ['--objwords', '4,5,6,7']       # a block invoke: its captured variables live at x0 + 0x20
         o = subprocess.run(cmd, capture_output=True, text=True)
         last = (o.stdout.strip().splitlines() or ['(no output) ' + o.stderr.strip()[-300:]])[-1]
         ok = ' mismatches 0,' in last

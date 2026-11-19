@@ -64,6 +64,7 @@ NSB = ('SYM', 'NSConcreteStackBlock')
 def n_mod(N, m):
     hi = (m >> 48) & 0xffff
     return (N(m & 0xffffffffffff), hi) if hi else N(m)
+OBJWORDS = []
 DATASYM = {}      # data symbol -> the NSString constant it holds (--datasyms kCAFilterBox=box): the Unicorn side reads the real CFString, the lifted side a cell
 def isk(n): return isinstance(n, tuple) and n[0] == 'K'
 def blk_snapshot(rd, N2, addr):
@@ -373,6 +374,7 @@ def main():
     if '--datasyms' in sys.argv:
         for kv in sys.argv[sys.argv.index('--datasyms') + 1].split(','):
             k_, v_ = kv.split('='); DATASYM[k_] = v_
+    if '--objwords' in sys.argv: OBJWORDS.extend(int(x) for x in sys.argv[sys.argv.index('--objwords') + 1].split(','))
     locs = {}; lbody = ''
     if '--locals' in sys.argv:
         for spec in sys.argv[sys.argv.index('--locals') + 1].split(','):
@@ -418,6 +420,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
     for seed in range(nseeds):
         r = random.Random(seed)
         selfw = mem_words(seed, SELF_SZ // 8, 'self'); objw = mem_words(seed, OBJ_SZ // 8, 'obj')
+        for iw_ in OBJWORDS: selfw[iw_] = ('o', 3 + iw_)      # captured variables of a block (x0 + 0x20 ..): always objects
         args = []
         for kind in c.sig:
             if kind == 'd': args.append(r.choice(DVALS))

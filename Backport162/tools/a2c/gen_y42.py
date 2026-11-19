@@ -27,6 +27,25 @@ uint64_t y42_shelf_init(uint64_t self, uint64_t cmd, uint64_t handle, double w, 
 }
 const char *y42_shelf_preflight(void) { const char *m = shelf162_preflight(); return m ? m : shelfinit_preflight(); }
 '''),
+ 'peek': dict(file='Y42PeekLift.c',
+  head='''// Y42PeekLift.c : two methods of SBPeekSplitViewRoutingSwitcherModifier of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py together with their stack blocks and block invokes:
+//   -responseForProposedChildResponse:childModifier:event:   0x1c74e7210 (16.0 0x1c6065a50): the 16.2 body adds itemForLayoutRole: before setPeekConfiguration:   (blocks 0x1c74e77ac, 0x1c74e7878)
+//   -routingModifier:event:forModifier:                      0x1c74e7a88 (16.0 0x1c6066294): routes one more event type (0xf)                                      (blocks 0x1c74e8018, 0x1c74e8024, 0x1c74e8030, 0x1c74e8054)
+// Plain C, no ARC.  Installed by Y42Peek.x (switch y42_peek).  Verified with tools/a2c/tests/tracecmp.py (calls, ownership events, PAC logs, block images).  NOT device tested.
+''',
+  bodies=[('162', 0x1c74e77ac, 0x1c74e7878, 'pkblk3', 'x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {}),
+          ('162', 0x1c74e7878, 0x1c74e7a88, 'pkblk4', 'x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {}),
+          ('162', 0x1c74e7210, 0x1c74e7714, 'pk1', 'x,x,x,x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {0x1c74e77ac: 'pkblk3', 0x1c74e7878: 'pkblk4'}),
+          ('162', 0x1c74e8018, 0x1c74e8024, 'pkb0', 'x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {}),
+          ('162', 0x1c74e8024, 0x1c74e8030, 'pkb1', 'x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {}),
+          ('162', 0x1c74e8030, 0x1c74e8054, 'pkb2', 'x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {}),
+          ('162', 0x1c74e8054, 0x1c74e8078, 'pkb3', 'x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {}),
+          ('162', 0x1c74e7a88, 0x1c74e8018, 'pk2', 'x,x,x,x,x', 'x', 'SBPeekSplitViewRoutingSwitcherModifier', '', {0x1c74e8018: 'pkb0', 0x1c74e8024: 'pkb1', 0x1c74e8030: 'pkb2', 0x1c74e8054: 'pkb3'})],
+  tail='''
+uint64_t y42_peek_response(uint64_t self, uint64_t cmd, uint64_t response, uint64_t child, uint64_t event) { return pk1(self, cmd, response, child, event); }
+uint64_t y42_peek_routing(uint64_t self, uint64_t cmd, uint64_t routing, uint64_t event, uint64_t forModifier) { return pk2(self, cmd, routing, event, forModifier); }
+const char *y42_peek_preflight(void) { const char *m = pk1_preflight(); return m ? m : pk2_preflight(); }
+'''),
 }
 
 def gen(name):
