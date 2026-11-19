@@ -1,12 +1,4 @@
 {
- "0.7.9+305.4b72fbf": {
-  "date": "2026-10-31T10:38:01Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+305.4b72fbf_iphoneos-arm64.deb",
-  "run": 305,
-  "sha": "4b72fbf37d9a03f443b6537b984830f00cf0930e",
-  "subject": "Y22Modifiers: Expose grid / floor taps build their request from the tap event (y17_gridtap, y17_floortap), home gesture fly-in only while cards fly in (y17_homeflyin), no window drag pin override (y17_windragpin); DELTA-SWEEP rows, root modifier level shift documented",
-  "version": "0.7.9+305.4b72fbf"
- },
  "0.7.9+306.5d92cb5": {
   "date": "2026-10-31T18:15:08Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+306.5d92cb5_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "cd7e112c1a21157c723c0210c22ab5ffa6988c65",
   "subject": "Y42Peek: SBPeekSplitViewRoutingSwitcherModifier -responseForProposedChildResponse:childModifier:event: (16.2 0x1c74e7210) and -routingModifier:event:forModifier: (0x1c74e7a88), recompiled with their stack blocks",
   "version": "0.7.9+371.cd7e112"
+ },
+ "0.7.9+372.466d2c0": {
+  "date": "2026-11-19T01:37:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+372.466d2c0_iphoneos-arm64.deb",
+  "run": 372,
+  "sha": "466d2c0aff2170e97bb86f07f9c4dff07b059065",
+  "subject": "Y42Deck: SBDeckSwitcherViewController performTransitionWithContext:animated:completion: (16.2 0x1c73151d8), transitionDidBegin (0x1c77c97c0), transitionDidEnd (0x1c77c99cc), -_assertionReason / -appSuggestionManager / -setAppSuggestionManager:, recompiled with their stack blocks",
+  "version": "0.7.9+372.466d2c0"
  }
 }
