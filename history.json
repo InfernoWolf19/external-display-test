@@ -1,12 +1,4 @@
 {
- "0.7.9+326.b6b4928": {
-  "date": "2026-11-01T08:23:05Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+326.b6b4928_iphoneos-arm64.deb",
-  "run": 326,
-  "sha": "b6b4928470b35222fd17a003e90d6b6c7eca43c5",
-  "subject": "Fix the build of 911693f: Group4Connect.m has its own standalone infrastructure and does not see BP.h, its two ivar reads stay raw class_getInstanceVariable",
-  "version": "0.7.9+326.b6b4928"
- },
  "0.7.9+327.0267b3d": {
   "date": "2026-11-01T08:23:51Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+327.0267b3d_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "9d234e7a5856c3dd4c675222fb2b496ca18b056e",
   "subject": "P1 L1: allItems through the helper, no unused counter (fixes build 397)",
   "version": "0.7.9+398.9d234e7"
+ },
+ "0.7.9+399.3c3dd60": {
+  "date": "2026-11-19T20:20:47Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+399.3c3dd60_iphoneos-arm64.deb",
+  "run": 399,
+  "sha": "3c3dd60bbe2b01ef72092f9d496089f436f6dd1b",
+  "subject": "UIK K4: every send answers only when the receiver implements the selector (a 16.2 only selector raised doesNotRecognizeSelector inside Reynard: crash in -[UIInputWindowController viewWillLayoutSubviews] 20:12:05); a miss answers nil / zero and logs ANOMALY k4-missing once; origin falls back to frame.origin",
+  "version": "0.7.9+399.3c3dd60"
  }
 }
