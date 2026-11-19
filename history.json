@@ -1,12 +1,4 @@
 {
- "0.7.9+311.50bd5e8": {
-  "date": "2026-10-31T19:22:08Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+311.50bd5e8_iphoneos-arm64.deb",
-  "run": 311,
-  "sha": "50bd5e8c357bcadcb333cd97308031be151374b6",
-  "subject": "Y28Keyboard / Y29Blur / Y30Snapshot / Y31Misc: keyboard home grabber per scene, cross blur rasterization and root blur early out, classic snapshot stretch, centre window presentation animation, minimum viable switcher mode, classic jail status bar on every display; DELTA-SWEEP rows",
-  "version": "0.7.9+311.50bd5e8"
- },
  "0.7.9+312.96a92ad": {
   "date": "2026-10-31T19:28:12Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+312.96a92ad_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "4bd853583a8dde56df71ccdabf6b87e58f104a71",
   "subject": "UIK K3: 16.2 -[UIInputWindowController convertRectFromContainerCoordinateSpaceToScreenSpace:] (keyboard frames of a Stage Manager window in real screen coordinates, the actual cause of Reynard / Telegram not shifting in a window); kill file uik_kbframe; README + DELTA-SWEEP",
   "version": "0.7.9+377.4bd8535"
+ },
+ "0.7.9+378.b6ceec2": {
+  "date": "2026-11-19T02:08:23Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+378.b6ceec2_iphoneos-arm64.deb",
+  "run": 378,
+  "sha": "b6ceec2426335ffe16cf98a8f4b7337ff4e7be8f",
+  "subject": "Y42Traits: SBTraitsSceneOrientationRequestAssistant (16.2 only class, 12 functions from 0x1c78246e0) and six SBTraitsSceneParticipantDelegate rows (_supportedOrientations 0x1c77736b8, actuateOrientationSettingsWithContext: 0x1c7773c68, needsActuationForUpdateReasons: 0x1c77743e4, scene:didUpdateClientSettingsWithDiff:... 0x1c7774a98, _resetToInitialState 0x1c77750bc, didChangeSettingsForParticipant:context: 0x1c77752c8), recompiled from the 16.2 machine code",
+  "version": "0.7.9+378.b6ceec2"
  }
 }
