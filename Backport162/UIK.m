@@ -912,7 +912,13 @@ static void uik_ncPost(id self, SEL _cmd, NSString *name, id object, id info) {
     if (s && name && (s == name || [s isEqualToString:name])) { tK2Suppress = nil; return; }
     ((void (*)(id, SEL, id, id, id))orig_ncPostK2)(self, _cmd, name, object, info);
 }
+// K2 is WITHDRAWN until proven (coordinator order after a device report: with K2 the UI no longer shifts for the keyboard in a full screen app either).  Decode so far: 16.0
+// -postToCorrespondingWindowSceneWithNotification:userInfo: (0x18997ecc8) posts one extra notification per name BEFORE the caller's plain [nc post...object:screen] : object = nil, userInfo converted to the
+// scene when (linked >= 16.0 SDK && windowing mode && !useVisualModeWindowed && scene.screen == keyboard window screen), else the unconverted info (object nil).  16.2 posts exactly ONE
+// (-postNotificationName:userInfo: object = screen).  Full screen apps evidently depend on the 16.0 extra notification; the K2 port dropped it.  The K2 code stays compiled but is not installed (UIK_K2_PROVEN 0).
+#define UIK_K2_PROVEN 0
 static void UIK_InstallK2(void) {
+    if (!UIK_K2_PROVEN) { UIK_Log("K2 not installed: withdrawn until the full screen keyboard behaviour is proven (16.0 behaviour kept)"); return; }
     NSMutableArray *missing = [NSMutableArray array];
     Class iwc = objc_getClass("UIInputWindowController"), ksd = objc_getClass("UIKeyboardSceneDelegate"), nc = objc_getClass("NSNotificationCenter");
     if (!iwc) [missing addObject:@"class UIInputWindowController"];
