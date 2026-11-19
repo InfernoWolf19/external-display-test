@@ -1,12 +1,4 @@
 {
- "0.7.9+318.9c9f21a": {
-  "date": "2026-11-01T00:42:15Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+318.9c9f21a_iphoneos-arm64.deb",
-  "run": 318,
-  "sha": "9c9f21afff6cccd3d5ee74e4d1bd60b8f22e86f3",
-  "subject": "Y30Snapshot: -setImage: and the non stretch -layoutSubviews run the 16.0 bodies unchanged (identical to the 16.2 result, disassembled); only the stretch mode is re-implemented",
-  "version": "0.7.9+318.9c9f21a"
- },
  "0.7.9+319.0efa07d": {
   "date": "2026-11-01T01:00:01Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+319.0efa07d_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "db2c3a4bcc8cb1dda356da4e457bc333fdf486e2",
   "subject": "Y42Deck: pass the selector to the recompiled getter as an integer through (void *) (-Wint-conversion): fixes build 384",
   "version": "0.7.9+387.db2c3a4"
+ },
+ "0.7.9+389.0ad7443": {
+  "date": "2026-11-19T17:45:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+389.0ad7443_iphoneos-arm64.deb",
+  "run": 389,
+  "sha": "0ad7443ef58203a9364d7c96bb0580dbe2e186db",
+  "subject": "Y42Deck: the 16.2 init selector (shouldObserveChamoisWindowingChanges:, 0x1c77c95e8) added; it does the steps of the hooked 16.0 init (read from the 16.2 machine code); the Fluid chamois observer of the super init is the documented gap",
+  "version": "0.7.9+389.0ad7443"
  }
 }
