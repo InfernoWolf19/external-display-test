@@ -1,12 +1,4 @@
 {
- "0.7.9+317.d8344ff": {
-  "date": "2026-11-01T00:35:00Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+317.d8344ff_iphoneos-arm64.deb",
-  "run": 317,
-  "sha": "d8344ff80caa6d632d7f8bfb9c925d2165aa3be2",
-  "subject": "BOOTGUARD: tiny pure C loader is the only SpringBoard dylib; the tweak is Backport162Core.dylib, skipped for one launch when the previous launch never finished booting",
-  "version": "0.7.9+317.d8344ff"
- },
  "0.7.9+318.9c9f21a": {
   "date": "2026-11-01T00:42:15Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+318.9c9f21a_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b63bce9f3e89a1b2fe2f17323ba7d3d48436a076",
   "subject": "Y42FullScreen: SBFullScreenAlwaysLiveLiveContentOverlay -initWithSceneHandle:referenceSize:containerOrientation: (16.2 0x1c74d0d24), recompiled; needs the 16.2 scene view init of Y42SceneView",
   "version": "0.7.9+383.b63bce9"
+ },
+ "0.7.9+387.db2c3a4": {
+  "date": "2026-11-19T17:38:06Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+387.db2c3a4_iphoneos-arm64.deb",
+  "run": 387,
+  "sha": "db2c3a4bcc8cb1dda356da4e457bc333fdf486e2",
+  "subject": "Y42Deck: pass the selector to the recompiled getter as an integer through (void *) (-Wint-conversion): fixes build 384",
+  "version": "0.7.9+387.db2c3a4"
  }
 }
