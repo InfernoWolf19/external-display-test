@@ -139,7 +139,7 @@ static void UIK_Problem(const char *key, const char *fmt, ...) {
 // that logs ANOMALY uik-exception once per hook and answers with the original 16.0 implementation (or the zero value for an added method).
 typedef void (*uik_fn)(void);
 extern void uik_missing_imp(void) __asm__("_uik_missing_imp");
-__asm__(".text\n.p2align 2\n_uik_missing_imp:\n movi v0.2d, #0\n movi v1.2d, #0\n movi v2.2d, #0\n movi v3.2d, #0\n mov x0, #0\n mov x1, #0\n ret\n");
+__asm__(".text\n.p2align 2\n_uik_missing_imp:\n movi d0, #0\n movi d1, #0\n movi d2, #0\n movi d3, #0\n mov x0, #0\n mov x1, #0\n ret\n");
 static inline uik_fn UIK_Imp(id o, const char *s) {
     if (!o) return (uik_fn)objc_msgSend;
     return class_getInstanceMethod(object_getClass(o), sel_registerName(s)) ? (uik_fn)objc_msgSend : (uik_fn)uik_missing_imp;
