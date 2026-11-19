@@ -88,6 +88,17 @@ static void Y42_DeckGesture(id self, SEL _cmd, id gesture) {
     struct objc_super sup = { self, class_getSuperclass(gDeckBase) };
     ((void (*)(struct objc_super *, SEL, id))objc_msgSendSuper)(&sup, _cmd, keep);
 }
+// 16.2 -initWithSwitcherController:rootModifier:liveContentOverlayCoordinator:delegate:dataSource:shouldObserveChamoisWindowingChanges:debugName:  0x1c77c95e8 (46 instructions, read from the machine code):
+// [super init...shouldObserveChamoisWindowingChanges:...] , _appSuggestionController = [[SBSwitcherAppSuggestionViewController alloc] initWithNibName:nil bundle:nil], setDelegate:self,
+// _appSuggestionManager (weak) = [SBAppSuggestionManager sharedInstance].  The 16.0 init (hooked above, Y42_DeckInit) does exactly the same steps for the 16.0 selector, so the 16.2 selector is added and
+// forwards to it.  NOT ported: what the 16.2 SBFluidSwitcherViewController init (0x1c7433b24) does with shouldObserveChamoisWindowingChanges: (the chamois windowing observer, six new ivars 0x4b8 .. 0x508
+// in the middle of the layout of the iPad's own switcher class, a state capture block): the argument is dropped here.
+typedef void *(*Y42DeckInit16)(void *, SEL, id, id, id, id, id, id);
+__attribute__((ns_returns_retained)) static id Y42_DeckInit162(id __attribute__((ns_consumed)) self, SEL _cmd, id controller, id modifier, id coordinator, id delegate, id source, BOOL observe, id name) {
+    void *raw = (__bridge_retained void *)self;
+    void *r = ((Y42DeckInit16)objc_msgSend)(raw, sel_registerName("initWithSwitcherController:rootModifier:liveContentOverlayCoordinator:delegate:dataSource:debugName:"), controller, modifier, coordinator, delegate, source, name);
+    return (__bridge_transfer id)r;
+}
 static id Y42_DeckAlloc(id self, SEL _cmd, void *zone) {
     Class use = (self == (id)gDeckBase) ? gDeckExt : (Class)self;
     return ((id (*)(id, SEL, void *))gOrigAlloc)((id)use, _cmd, zone);
@@ -144,6 +155,7 @@ __attribute__((constructor)) static void Y42Deck_Setup(void) {
         if (class_getInstanceMethod(gDeckBase, sel_registerName("handleGestureDidBegin:"))) gOrigGesture = BPX_Replace(gDeckBase, "handleGestureDidBegin:", (IMP)Y42_DeckGesture);
         else BP_Anomaly("y42", @"[y42] y42_deck: -[SBDeckSwitcherViewController handleGestureDidBegin:] does not exist: the 16.2 gesture begin step is not installed");
         gOrigInit = BPX_Replace(gDeckBase, "initWithSwitcherController:rootModifier:liveContentOverlayCoordinator:delegate:dataSource:debugName:", (IMP)Y42_DeckInit);
+        { SEL i162 = sel_registerName("initWithSwitcherController:rootModifier:liveContentOverlayCoordinator:delegate:dataSource:shouldObserveChamoisWindowingChanges:debugName:"); if (!class_getInstanceMethod(gDeckBase, i162)) class_addMethod(gDeckBase, i162, (IMP)Y42_DeckInit162, "@@:@@@@@B@"); }
         Class meta = object_getClass((id)gDeckBase);
         class_replaceMethod(meta, @selector(allocWithZone:), (IMP)Y42_DeckAlloc, method_getTypeEncoding(am));
         BP_Log(@"[y42] installed y42_deck");
