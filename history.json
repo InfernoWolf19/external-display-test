@@ -1,12 +1,4 @@
 {
- "0.7.9+316.a905444": {
-  "date": "2026-11-01T00:04:48Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+316.a905444_iphoneos-arm64.deb",
-  "run": 316,
-  "sha": "a905444cb9490a531224941923767ccc83d986bb",
-  "subject": "Y29Blur: the root blur early out delivers its completion on the next main queue turn like the 16.0 body (it never completes synchronously)",
-  "version": "0.7.9+316.a905444"
- },
  "0.7.9+317.d8344ff": {
   "date": "2026-11-01T00:35:00Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+317.d8344ff_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "9d7f746ff805ccef0803be0088d9106267a26045",
   "subject": "UIK K4: 16.2 UIInputWindowControllerHostingItem notificationsFrame / fullScreenFrame: the keyboard notification frame is the real hosted keyboard view (16.0 used hostView.frame, below a Stage Manager window); visibleFrame calls of the 16.0 notification code answer it; ANOMALY k4-frame / k4-install",
   "version": "0.7.9+381.9d7f746"
+ },
+ "0.7.9+382.5980a4a": {
+  "date": "2026-11-19T02:31:33Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+382.5980a4a_iphoneos-arm64.deb",
+  "run": 382,
+  "sha": "5980a4ab6466a2b019a6b8a92eafbb7ff0f4d284",
+  "subject": "Y42SceneView: the 16.2 init chain of the scene views (SBDeviceApplicationSceneView 0x1c773c654 with three signed stack blocks, SBApplicationSceneView 0x1c7962f44, SpringBoardUI SBSceneView init 0x1f2cca72c) plus SBSceneView invalidate 0x1f2cc5f28, sceneHandle:didUpdateContentState: 0x1f2ccb3e0, _configureLiveHostView 0x1f2ccb470, recompiled from the 16.2 machine code",
+  "version": "0.7.9+382.5980a4a"
  },
  "0.7.9+383.b63bce9": {
   "date": "2026-11-19T02:31:17Z",
