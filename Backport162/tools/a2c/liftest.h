@@ -3,6 +3,7 @@
 #ifndef BP_LIFTEST_H
 #define BP_LIFTEST_H
 #define LIFT_TEST_HOOKS 1
+#include <stdio.h>
 #include "liftcommon.h"
 typedef void (*lift_cb_t)(int isMsg, const char *name, uint64_t *X, uint64_t (*VR)[2]);
 typedef long (*lift_iv_t)(const char *name);
@@ -16,7 +17,10 @@ void lift_set(lift_cb_t cb, lift_iv_t iv) { lift_cb = cb; lift_iv = iv; }
 uint64_t lift_cells[64][2]; int lift_ncells;
 static inline void *lift_gcell(const char *nm) { for (int i = 0; i < lift_ncells; i++) if (lift_cells[i][1] == (uint64_t)(uintptr_t)nm) return &lift_cells[i][0]; lift_cells[lift_ncells][0] = (uint64_t)(uintptr_t)nm; lift_cells[lift_ncells][1] = (uint64_t)(uintptr_t)nm; return &lift_cells[lift_ncells++][0]; }
 #define GSYM(t, i) lift_gcell((t)[i])
-#define CFSTR_(t, i) ((void *)(t)[i])
+// a CFString constant: a pointer of its own (a string literal identical to a selector name must not share the selector's address)
+char *lift_cfs_tab[256]; int lift_ncfs;
+static inline void *lift_cfs(const char *s) { for (int i = 0; i < lift_ncfs; i++) if (strcmp(lift_cfs_tab[i], s) == 0) return lift_cfs_tab[i]; lift_cfs_tab[lift_ncfs] = strdup(s); return lift_cfs_tab[lift_ncfs++]; }
+#define CFSTR_(t, i) lift_cfs((t)[i])
 #define IVOFF(t, i) lift_iv((t)[i])
 const char *lift_kind;
 const char *lift_cstrs[256]; int lift_ncstr;
@@ -37,10 +41,13 @@ uint64_t lift_fnaddrs[16][2]; const char *lift_fnnames[16]; int lift_nfn;
 static inline uint64_t lift_fnaddr(void *fn, const char *nm) { for (int i = 0; i < lift_nfn; i++) if (lift_fnaddrs[i][0] == (uint64_t)(uintptr_t)fn) return (uint64_t)(uintptr_t)fn; lift_fnaddrs[lift_nfn][0] = (uint64_t)(uintptr_t)fn; lift_fnnames[lift_nfn++] = nm; return (uint64_t)(uintptr_t)fn; }
 #define LIFT_FNADDR(fn) lift_fnaddr((void *)(fn), #fn)
 #define LIFT_CALLPTR(p, key, m) ((void *)(uintptr_t)(p))
+static char lift_pn[64];
+static inline const char *lift_ptrname(void *p) { for (int i = 0; i < lift_nfn; i++) if (lift_fnaddrs[i][0] == (uint64_t)(uintptr_t)p) { snprintf(lift_pn, sizeof lift_pn, "L:%s", lift_fnnames[i]); return lift_pn; } return "indirect"; }
 uint64_t lift_descs[16][3]; int lift_ndesc;
 static inline uint64_t *lift_desc(uint64_t *p, const char *sig, uint64_t size) { for (int i = 0; i < lift_ndesc; i++) if (lift_descs[i][0] == (uint64_t)(uintptr_t)p) return p; lift_descs[lift_ndesc][0] = (uint64_t)(uintptr_t)p; lift_descs[lift_ndesc][1] = (uint64_t)(uintptr_t)sig; lift_descs[lift_ndesc++][2] = size; return p; }
 #define LIFT_DESC(p, sig, size) lift_desc((p), (sig), (size))
-#define CALLPTR(fn, kind) (lift_kind = #kind, lift_cb(0, "indirect", X, VR))
+#define CALLLOCAL(fn, kind) (lift_kind = #kind, lift_cb(0, "L:" #fn, X, VR))
+#define CALLPTR(fn, kind) (lift_kind = #kind, lift_cb(0, lift_ptrname((void *)(fn)), X, VR))
 #define CALLMSG(kind) (lift_kind = #kind, lift_cb(1, (const char *)(uintptr_t)X[1], X, VR))
 #define CALLFN(t, i, kind) (lift_kind = #kind, lift_cb(0, (t)[i], X, VR))
 #define LIFT_PREFLIGHT(f, c, i) ((const char *)0)

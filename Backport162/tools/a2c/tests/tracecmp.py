@@ -31,7 +31,7 @@ def is_obj_sel(name):
 def ret_values(seed, name, idx, kind):
     r = rnd(seed, name, idx)
     c = r.random()
-    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name in ('F:SBSafeCast', 'F:objc_opt_class', 'F:objc_msgSendSuper2', 'F:objc_opt_new', 'F:objc_loadWeakRetained'):
+    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name.startswith('F:L:') or name in ('F:SBSafeCast', 'F:objc_opt_class', 'F:objc_msgSendSuper2', 'F:objc_opt_new', 'F:objc_loadWeakRetained'):
         x0 = ('i', 0) if c < 0.3 else ('o', r.randrange(1, 40))
     elif c < 0.3: x0 = ('i', 0)
     elif c < 0.5: x0 = ('i', 1)
@@ -40,11 +40,15 @@ def ret_values(seed, name, idx, kind):
     ds = [r.choice(DVALS) for _ in range(4)]
     return x0, ds
 
+INDIRECT_STUB = 0x73000000
+SAFEMEM = []
 def mem_words(seed, n, tag):
     r = random.Random(seed * 7919 + __import__('zlib').crc32(tag.encode()) % 1000)
     out = []
     for i in range(n):
         c = r.random()
+        if SAFEMEM:          # every word is a pointer or zero: bodies that dereference unknown ivars (captured self, ivar chains)
+            out.append(('i', 0) if (c < 0.45 and len(SAFEMEM) == 1) else ('o', r.randrange(1, 40))); continue
         if c < 0.5: out.append(('i', 0))
         elif c < 0.7: out.append(('o', r.randrange(1, 40)))
         elif c < 0.8: out.append(('i', r.choice([1, 2, 3, 4])))
@@ -65,6 +69,7 @@ def n_mod(N, m):
     hi = (m >> 48) & 0xffff
     return (N(m & 0xffffffffffff), hi) if hi else N(m)
 OBJWORDS = []
+PTRARGS = []
 DATASYM = {}      # data symbol -> the NSString constant it holds (--datasyms kCAFilterBox=box): the Unicorn side reads the real CFString, the lifted side a cell
 def isk(n): return isinstance(n, tuple) and n[0] == 'K'
 def blk_snapshot(rd, N2, addr):
@@ -105,7 +110,7 @@ def run_emu(c, names, seed, args, case_mem):
     uc.reg_write(UC_ARM64_REG_CPACR_EL1, 0x300000)
     base = c.start & ~0xfff
     uc.mem_map(base, len(code)); uc.mem_write(base, code)
-    uc.mem_map(SELF_EMU, SELF_SZ); uc.mem_map(OBJ_EMU, OBJ_SZ); uc.mem_map(STK_EMU, 0x100000)
+    uc.mem_map(INDIRECT_STUB, 0x1000); uc.mem_map(SELF_EMU, SELF_SZ); uc.mem_map(OBJ_EMU, OBJ_SZ); uc.mem_map(STK_EMU, 0x100000)
     selfw, objw = case_mem
     uc.mem_write(SELF_EMU, b''.join(struct.pack('<Q', enc(w, OBJ_EMU)) for w in selfw))
     uc.mem_write(OBJ_EMU, b''.join(struct.pack('<Q', enc(w, OBJ_EMU)) for w in objw))
@@ -113,6 +118,10 @@ def run_emu(c, names, seed, args, case_mem):
     from capstone import Cs, CS_ARCH_ARM64, CS_MODE_ARM
     md = Cs(CS_ARCH_ARM64, CS_MODE_ARM)
     for i_ in md.disasm(bytes(code[c.start - base:c.end - base]), c.start):
+        if i_.mnemonic in ('braa', 'braaz', 'brab', 'brabz'):
+            uc.mem_write(i_.address, struct.pack('<I', 0xd61f0000 | (int(i_.op_str.split(',')[0].strip()[1:]) << 5))); continue
+        if i_.mnemonic in ('blraa', 'blraaz', 'blrab', 'blrabz'):      # authenticated block / function call: the harness calls the (stub) target plainly
+            uc.mem_write(i_.address, struct.pack('<I', 0xd63f0000 | (int(i_.op_str.split(',')[0].strip()[1:]) << 5))); continue
         if PACRE.match(i_.mnemonic):
             pacs[i_.address] = (i_.mnemonic, [x.strip() for x in i_.op_str.split(',')])
             uc.mem_write(i_.address, struct.pack('<I', 0xd503201f))      # nop: signing is the identity, the operands are logged (the lifted LIFT_PAC logs the same)
@@ -232,6 +241,8 @@ def run_emu(c, names, seed, args, case_mem):
             # the call came from the instruction before: its address is lr - 4
             callout.pc = uc.reg_read(UC_ARM64_REG_X30) - 4
             callout(names[addr], addr)
+            if names[addr].lstrip('_') == 'assert_rtn' or names[addr].endswith('cold'):       # noreturn (assertion failure paths): the function ends here
+                tr.ret = (0, 0, 0); uc.emu_stop(); return
             lr_ = uc.reg_read(UC_ARM64_REG_X30)
             if lr_ == 0xdead0000:    # tail call out of the function
                 tr.ret = (uc.reg_read(UC_ARM64_REG_X0), uc.reg_read(UC_ARM64_REG_D0), uc.reg_read(UC_ARM64_REG_D1)); uc.emu_stop(); return
@@ -273,7 +284,8 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
     sp0 = ctypes.c_uint64.in_dll(lib, 'lift_sp0')
     nstr = ctypes.c_int.in_dll(lib, 'lift_dbg_nstrs').value
     strp = ctypes.POINTER(ctypes.c_void_p).in_dll(lib, 'lift_dbg_strs')
-    strmap = {strp[i]: ('STR', ctypes.string_at(strp[i]).decode()) for i in range(nstr) if strp[i]}
+    strmap = {}
+    cfst = (ctypes.c_void_p * 256).in_dll(lib, 'lift_cfs_tab')
     ncls = ctypes.c_int.in_dll(lib, 'lift_dbg_ncls').value
     clsp = ctypes.POINTER(ctypes.c_void_p).in_dll(lib, 'lift_dbg_cls')
     nsel = ctypes.c_int.in_dll(lib, 'lift_dbg_nsels').value
@@ -294,6 +306,9 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
     tr = Trace(); idx = [0]
     def N(v):
         cellmap()
+        for i_ in range(ctypes.c_int.in_dll(lib, 'lift_ncfs').value):
+            if cfst[i_] == v: return ('STR', ctypes.string_at(cfst[i_]).decode())
+        if v == 0x5a17c0de5a17c0de: return 0          # the stack guard value of the lifted code (the emulated cache page holds 0)
         for i_ in range(ctypes.c_int.in_dll(lib, 'lift_ncstr').value):
             if cstrs[i_] == v: return ('STR', ctypes.string_at(cstrs[i_]).decode())
         for i_ in range(ctypes.c_int.in_dll(lib, 'lift_nfn').value):
@@ -375,11 +390,14 @@ def main():
         for kv in sys.argv[sys.argv.index('--datasyms') + 1].split(','):
             k_, v_ = kv.split('='); DATASYM[k_] = v_
     if '--objwords' in sys.argv: OBJWORDS.extend(int(x) for x in sys.argv[sys.argv.index('--objwords') + 1].split(','))
+    if '--ptrargs' in sys.argv: PTRARGS.extend(int(x) for x in sys.argv[sys.argv.index('--ptrargs') + 1].split(','))
+    if '--safemem' in sys.argv: SAFEMEM.append(1)
+    if '--ptrmem' in sys.argv: SAFEMEM.append(2)          # every word of the modelled objects is a pointer (a block invoke that calls a captured block without a nil test)
     locs = {}; lbody = ''
     if '--locals' in sys.argv:
         for spec in sys.argv[sys.argv.index('--locals') + 1].split(','):
             a_, e_, cn_, sg_, rk_ = spec.split(':'); sg_ = sg_.replace('+', ',')
-            LL = a2c.Lift(ver, int(a_, 16), int(e_, 16), cn_, sg_, rk_, {}, cls)
+            LL = a2c.Lift(ver, int(a_, 16), int(e_, 16), cn_, sg_, rk_, dict(kinds_), cls)
             LL.locals = dict(locs)
             hh, ff = LL.generate(); lbody += hh + '\n' + ff + '\n'; locs[int(a_, 16)] = cn_
             for w in LL.stats['warn']: print('WARN', cn_, w)
@@ -415,11 +433,15 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
             ivmap[spec] = -1
     print('ivmap', ivmap)
     names = emu_names(ver, st, en)
+    for a_, n_ in locs.items(): names[a_] = 'L:' + n_
+    names[INDIRECT_STUB] = 'indirect'
     c = Case(ver, st, en, cname, sig, retk, cls, L.kinds_at, locs)
     bad = 0; ncalls = 0; paths = set()
     for seed in range(nseeds):
         r = random.Random(seed)
         selfw = mem_words(seed, SELF_SZ // 8, 'self'); objw = mem_words(seed, OBJ_SZ // 8, 'obj')
+        for k_ in range(0x40):
+            if (0x100 * k_ + 0x10) // 8 < len(objw): objw[(0x100 * k_ + 0x10) // 8] = ('i', INDIRECT_STUB)     # the invoke slot of a block object: a stub the harness answers like any callee
         for iw_ in OBJWORDS: selfw[iw_] = ('o', 3 + iw_)      # captured variables of a block (x0 + 0x20 ..): always objects
         args = []
         for kind in c.sig:
@@ -427,6 +449,8 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
             elif kind in ('b', 'w', 'q'): args.append(r.choice([0, 1]))
             else: args.append(r.choice([SELF_EMU, OBJ_EMU + 0x100 * r.randrange(1, 40), 0, 1]))
         args[0:1] = [SELF_EMU] if c.sig and c.sig[0] == 'x' else args[0:1]
+        for pi_ in PTRARGS:
+            if pi_ < len(args): args[pi_] = OBJ_EMU + 0x100 * (30 + pi_)      # out parameters: a pointer to writable modelled memory
         te, Ne = run_emu(c, names, seed, args, (selfw, objw))
         tl, Nl = run_lifted(c, lib, L.kinds_at, seed, args, (selfw, objw), ivmap)
         ncalls += len(te.calls)

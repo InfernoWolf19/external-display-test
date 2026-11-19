@@ -142,7 +142,7 @@ FN_KINDS = {'BSRectWithSize': 'rect', 'BSSizeSwap': 'size', 'BSSizeRoundForScale
             'SBClassicUtilitiesScaleFactorForPhoneAppZoomedIn': 'd', 'SBFAngleForRotationFromInterfaceOrientationToInterfaceOrientation': 'd', 'SBScreenDisplayCornerRadius': 'd',
             'SBClassicUtilitiesInsetAndTranslateLayerForPresentationWithHomeAffordance': 'v'}
 # C functions whose result is an integer / pointer / BOOL / void (x register or nothing): anything else must be listed above or given with --kinds fn:NAME=kind
-X_FNS = {'NSStringFromClass', 'Block_object_dispose', 'Block_object_assign', 'SBAppendSwitcherModifierResponse', 'SBAppLayoutConfigurationFromMainDisplayLayoutStateSpaceConfiguration', 'os_log_impl', 'SBLogShelfLiveContent', 'os_log_error_impl', 'os_log_fault_impl', 'os_log_info_impl', 'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
+X_FNS = {'SBTraitsSceneParticipantDelegateOrientationChangeInspector.cold.1', 'BSRunLoopPerformRelativeToCACommit', 'BSRunLoopPerformAfterCACommit', 'assert_rtn', 'SBEqualObjects', 'SBTraitsArbiterOrientationActuationEnabledForRole', 'BSFloatEqualToFloat', 'BSDispatchQueueAssertMain', 'NSStringFromClass', 'Block_object_dispose', 'Block_object_assign', 'SBAppendSwitcherModifierResponse', 'SBAppLayoutConfigurationFromMainDisplayLayoutStateSpaceConfiguration', 'os_log_impl', 'SBLogShelfLiveContent', 'os_log_error_impl', 'os_log_fault_impl', 'os_log_info_impl', 'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
          'sb__runningInSpringBoard', 'MGCopyAnswer', 'SBFIsChamoisWindowingUIAvailable', 'os_log_type_enabled', 'os_log_debug_impl', 'SBLogCommon', 'objc_alloc', 'objc_opt_class',
          'objc_opt_isKindOfClass', 'objc_opt_new', 'objc_initWeak', 'objc_copyWeak', 'objc_destroyWeak', 'objc_loadWeakRetained', 'objc_storeWeak', 'objc_msgSendSuper2', 'Unwind_Resume',
          'j__objc_storeStrong', 'dispatch_async', 'SBFLoggingMethodProem', 'CGRectGetNull'}
@@ -339,6 +339,7 @@ class Lift:
             kind = s.callkind(idx, 'indirect')
             if mn.startswith('bl'):
                 for rr in range(0, 18): s.kill('x%d' % rr)
+                s.note_call(i, 'indirect', kind)
                 E('CALLPTR(%s, %s);' % (ptr, kind))
             else:
                 E('CALLPTR(%s, %s); goto Lret;' % (ptr, s.retk))
@@ -829,6 +830,12 @@ class Lift:
                 E('VR[%d][0] = 0x%xull; VR[%d][1] = %s;' % (d, imm, d, '0x%xull' % imm if ops[0].vas == A.ARM64_VAS_2D else '0')); return
             if imm == 0:
                 E('VR[%d][0] = 0; VR[%d][1] = 0;' % (d, d)); return
+        if mn == 'cnt' and ops[0].vas == A.ARM64_VAS_8B:
+            d = int(s.reg(ops[0].reg, i)[1:]); n = int(s.reg(ops[1].reg, i)[1:])
+            E('VR[%d][0] = lift_cnt8(VR[%d][0]); VR[%d][1] = 0;' % (d, n, d)); return
+        if mn == 'uaddlv' and ops[1].vas == A.ARM64_VAS_8B:
+            d = int(s.reg(ops[0].reg, i)[1:]); n = int(s.reg(ops[1].reg, i)[1:])
+            E('VR[%d][0] = lift_addv8(VR[%d][0]); VR[%d][1] = 0;' % (d, n, d)); return
         raise Exception('vector op %x %s %s' % (i.address, i.mnemonic, i.op_str))
 
     # ---------------- calls
@@ -928,7 +935,7 @@ class Lift:
         if nm.lstrip('_') == 'objc_msgSendSuper2' and isinstance(x1tag, tuple) and x1tag[0] == 'sel' and x1tag[1].startswith('init') and s.selfcls:
             s.cval['x0'] = ('self', s.selfcls)
         if t in s.locals:
-            E('CALLPTR((void *)%s, %s);' % (s.locals[t], s.callkind(idx, 'local'))); return
+            E('CALLLOCAL(%s, %s);' % (s.locals[t], s.callkind(idx, 'local'))); return
         if nm.startswith('msgSend:'):
             sel = nm[8:]
             kind = s.callkind(idx, nm)
@@ -945,7 +952,7 @@ class Lift:
     def note_call(s, i, nm, kind): s.kinds_at[i.address] = kind
     def tailcall(s, i, t):
         if t in s.locals:
-            s.emit('CALLPTR((void *)%s, %s); goto Lret;' % (s.locals[t], s.retk)); return
+            s.emit('CALLLOCAL(%s, %s); goto Lret;' % (s.locals[t], s.retk)); return
         nm = s.ctx.stubname(t)
         if nm.startswith('j__'): nm = nm[2:]
         s.emit('/* tail call %s */' % nm)

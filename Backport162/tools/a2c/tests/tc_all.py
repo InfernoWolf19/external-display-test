@@ -26,10 +26,18 @@ for job, d in gen_y42.JOBS.items():
     names = {b[1]: b for b in d['bodies']}
     for (ver, st, en, cn, sig, ret, cls, kinds, locs) in d['bodies']:
         cmd = [sys.executable, os.path.join(HERE, 'tracecmp.py'), ver, '%x' % st, '%x' % en, cn, sig, ret, cls or '-', seeds]
-        if kinds: cmd += ['--kinds', kinds]
-        if locs: cmd += ['--locals', ','.join('%x:%x:%s:%s:%s' % (a, ends[a], c, names[a][4].replace(',', '+'), names[a][5]) for a, c in locs.items())]
-        cmd += d.get('tcargs', [])
-        if any(st in b[8] for b in d['bodies']): cmd += ['--objwords', '4,5,6,7']       # a block invoke: its captured variables live at x0 + 0x20
+        kk = ','.join(x for x in (kinds, gen_y42.KINDS_ALL) if x)
+        if kk: cmd += ['--kinds', kk]
+        if locs:
+            need = set(); todo = list(locs)
+            while todo:
+                a = todo.pop()
+                if a in need: continue
+                need.add(a); todo += list(names[a][8])
+            order = [b[1] for b in d['bodies'] if b[1] in need]
+            cmd += ['--locals', ','.join('%x:%x:%s:%s:%s' % (a, ends[a], names[a][3], names[a][4].replace(',', '+'), names[a][5]) for a in order)]
+        cmd += d.get('tcargs', []) + d.get('tcbody', {}).get(cn, [])
+        if any(st in b[8] for b in d['bodies']): cmd += ['--objwords', '4,5,6,7', '--ptrmem']       # a block invoke: its captured variables live at x0 + 0x20
         o = subprocess.run(cmd, capture_output=True, text=True)
         last = (o.stdout.strip().splitlines() or ['(no output) ' + o.stderr.strip()[-300:]])[-1]
         ok = ' mismatches 0,' in last

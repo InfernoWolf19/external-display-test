@@ -55,6 +55,9 @@ static inline uint32_t lift_sdiv32(uint64_t a, uint64_t b) { int32_t x = (int32_
 #define SDIV64(a, b) lift_sdiv64((a), (b))
 #define SDIV32(a, b) lift_sdiv32((a), (b))
 
+static inline uint64_t lift_cnt8(uint64_t v) { uint64_t r = 0; for (int i = 0; i < 8; i++) r |= (uint64_t)__builtin_popcount((unsigned)((v >> (8 * i)) & 0xff)) << (8 * i); return r; }
+static inline uint64_t lift_addv8(uint64_t v) { uint64_t r = 0; for (int i = 0; i < 8; i++) r += (v >> (8 * i)) & 0xff; return r; }
+
 // ---- pointer authentication (arm64e) -------------------------------------------------------------------------------------------------------------------------------
 // The recompiled code signs / authenticates exactly where the machine code does (block isa / invoke / descriptor, helper pointers); keys 0 IA, 1 IB, 2 DA, 3 DB.  Off arm64e (the arm64
 // slice, the Linux test harness) signing is the identity.

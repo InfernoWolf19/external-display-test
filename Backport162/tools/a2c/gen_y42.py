@@ -8,6 +8,7 @@ sys.path.insert(0, HERE)
 import a2c
 
 OUT = os.path.join(HERE, '..', '..')
+KINDS_ALL = 'invalidate=v'      # selectors whose return kind differs between classes of the dumps: the receivers here return void
 JOBS = {
  'shelf': dict(file='Y42ShelfLift.c',
   head='''// Y42ShelfLift.c : -[SBShelfLiveContentOverlayCoordinator _addOverlaysIfNeededForTransitionContext:] of iPadOS 16.2 (20C65, 0x1c798ac94 .. 0x1c798b330) and its block invoke
@@ -77,6 +78,67 @@ const char *y42_deck_preflight(void) {
     m = dkget_preflight(); return m ? m : dkset_preflight();
 }
 '''),
+ 'traits': dict(file='Y42TraitsLift.c',
+  head='''// Y42TraitsLift.c : the orientation request handling of the traits scene participant of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py:
+//   SBTraitsSceneOrientationRequestAssistant (a class that only exists in 16.2, it replaces the alter ego of SBTraitsSceneParticipantDelegate): -initWithTraitsSceneDelegate:errorDomain: 0x1c78246e0, -invalidate
+//   0x1c782476c, -checkValidityAgainstUpdateReasons: 0x1c7824818, -setUpForTransitionContextIfNeeded: 0x1c7824a00, -_startSceneOrientationRequestWithDesiredOrientations:error: 0x1c7824cfc,
+//   -_performCoalescedBroadcastArbitrationUpdateWithReason: 0x1c7824f3c, -traitsDelegate 0x1c7825078, -errorDomain 0x1c78250a4, -.cxx_destruct 0x1c78250d0 and the blocks 0x1c78249ac 0x1c7824cd8 0x1c7825008;
+//   SBTraitsSceneParticipantDelegate rows: -_supportedOrientations 0x1c77736b8, -actuateOrientationSettingsWithContext: 0x1c7773c68, -needsActuationForUpdateReasons: 0x1c77743e4,
+//   -scene:didUpdateClientSettingsWithDiff:oldClientSettings:transitionContext: 0x1c7774a98, -_resetToInitialState 0x1c77750bc, -didChangeSettingsForParticipant:context: 0x1c77752c8 with their blocks and the
+//   16.2 C function SBTraitsSceneParticipantDelegateOrientationChangeInspector 0x1c7772d24 (+ its cold path 0x1c7a08fd0) that is not exported by 16.0.
+// Plain C, no ARC.  Installed by Y42Traits.x (switch y42_traits).  Verified with tools/a2c/tests/tracecmp.py (calls, ownership events, PAC logs, block images).  NOT device tested.
+''',
+  tcargs=['--safemem', '--datasyms', 'NSLocalizedDescriptionKey=NSLocalizedDescription'],
+  tcbody={'tri': ['--ptrargs', '2,3,4'], 'tdneedb': ['--ptrargs', '3'], 'asstart': ['--ptrargs', '3']},
+  bodies=[
+          ('162', 0x1c7a08fd0, 0x1c7a08ffc, 'tricold', 'x', 'v', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c7772d24, 0x1c7772f48, 'tri', 'x,x,x,x,x', 'x', 'SBTraitsSceneParticipantDelegate', '', {0x1c7a08fd0: 'tricold'}),
+          ('162', 0x1c77736b8, 0x1c7773768, 'tdsupp', 'x,x', 'x', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c7773f0c, 0x1c7773fac, 'tdactb1', 'x,x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c7773fac, 0x1c7773fc4, 'tdactb2', 'x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c7773c68, 0x1c7773f0c, 'tdact', 'x,x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {0x1c7773f0c: 'tdactb1', 0x1c7773fac: 'tdactb2', 0x1c7772d24: 'tri'}),
+          ('162', 0x1c7774600, 0x1c7774704, 'tdneedb', 'x,x,x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c77743e4, 0x1c7774600, 'tdneed', 'x,x,x', 'x', 'SBTraitsSceneParticipantDelegate', '', {0x1c7774600: 'tdneedb'}),
+          ('162', 0x1c7774d28, 0x1c7774d78, 'tdscenb', 'x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c7774a98, 0x1c7774d28, 'tdscene', 'x,x,x,x,x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {0x1c7774d28: 'tdscenb', 0x1c7772d24: 'tri'}),
+          ('162', 0x1c77750bc, 0x1c7775158, 'tdreset', 'x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {}),
+          ('162', 0x1c77752c8, 0x1c77754bc, 'tddid', 'x,x,x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {0x1c7772d24: 'tri'}),
+          ('162', 0x1c78246e0, 0x1c782476c, 'asinit', 'x,x,x,x', 'x', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c782476c, 0x1c7824818, 'asinval', 'x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c78249ac, 0x1c7824a00, 'ascheckb', 'x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c7824818, 0x1c78249ac, 'ascheck', 'x,x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {0x1c78249ac: 'ascheckb'}),
+          ('162', 0x1c7824cd8, 0x1c7824cfc, 'assetb', 'x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c7824a00, 0x1c7824cd8, 'asset', 'x,x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {0x1c7824cd8: 'assetb'}),
+          ('162', 0x1c7824cfc, 0x1c7824f3c, 'asstart', 'x,x,x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c7825008, 0x1c7825078, 'asperb', 'x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c7824f3c, 0x1c7825008, 'asper', 'x,x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {0x1c7825008: 'asperb'}),
+          ('162', 0x1c7825078, 0x1c78250a4, 'asdel', 'x,x', 'x', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c78250a4, 0x1c78250d0, 'asdom', 'x,x', 'x', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c78250d0, 0x1c782510c, 'asdestr', 'x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {})],
+  tail='''
+uint64_t y42_as_init(uint64_t self, uint64_t cmd, uint64_t delegate, uint64_t domain) { return asinit(self, cmd, delegate, domain); }
+void y42_as_invalidate(uint64_t self, uint64_t cmd) { asinval(self, cmd); }
+void y42_as_check(uint64_t self, uint64_t cmd, uint64_t reasons) { ascheck(self, cmd, reasons); }
+void y42_as_setup(uint64_t self, uint64_t cmd, uint64_t context) { asset(self, cmd, context); }
+void y42_as_start(uint64_t self, uint64_t cmd, uint64_t orientations, uint64_t errorOut) { asstart(self, cmd, orientations, errorOut); }
+void y42_as_perform(uint64_t self, uint64_t cmd, uint64_t reason) { asper(self, cmd, reason); }
+uint64_t y42_as_delegate(uint64_t self, uint64_t cmd) { return asdel(self, cmd); }
+uint64_t y42_as_errordomain(uint64_t self, uint64_t cmd) { return asdom(self, cmd); }
+void y42_as_destruct(uint64_t self, uint64_t cmd) { asdestr(self, cmd); }
+uint64_t y42_td_supported(uint64_t self, uint64_t cmd) { return tdsupp(self, cmd); }
+void y42_td_actuate(uint64_t self, uint64_t cmd, uint64_t context) { tdact(self, cmd, context); }
+uint64_t y42_td_needs(uint64_t self, uint64_t cmd, uint64_t reasons) { return tdneed(self, cmd, reasons) & 1; }
+void y42_td_scene(uint64_t self, uint64_t cmd, uint64_t scene, uint64_t diff, uint64_t old, uint64_t context) { tdscene(self, cmd, scene, diff, old, context); }
+void y42_td_reset(uint64_t self, uint64_t cmd) { tdreset(self, cmd); }
+void y42_td_didchange(uint64_t self, uint64_t cmd, uint64_t participant, uint64_t context) { tddid(self, cmd, participant, context); }
+const char *y42_traits_preflight(void) {
+    const char *m;
+    if ((m = asinit_preflight())) return m; if ((m = asinval_preflight())) return m; if ((m = ascheck_preflight())) return m; if ((m = asset_preflight())) return m;
+    if ((m = asstart_preflight())) return m; if ((m = asper_preflight())) return m; if ((m = asdel_preflight())) return m; if ((m = asdom_preflight())) return m; if ((m = asdestr_preflight())) return m;
+    if ((m = tdsupp_preflight())) return m; if ((m = tdact_preflight())) return m; if ((m = tdneed_preflight())) return m; if ((m = tdscene_preflight())) return m;
+    if ((m = tdreset_preflight())) return m; return tddid_preflight();
+}
+'''),
 }
 
 def gen(name):
@@ -84,7 +146,7 @@ def gen(name):
     parts = [j['head'], '#include "tools/a2c/liftdev.h"\n']
     for ver, st, en, cname, sig, ret, cls, kinds, locs in j['bodies']:
         kd = {}
-        for kv in [x for x in kinds.split(',') if x]:
+        for kv in [x for x in (kinds + ',' + KINDS_ALL).split(',') if x]:
             k, v = kv.split('=')
             kd[k if k.startswith('fn:') else 'msgSend:' + k] = v
         L = a2c.Lift(ver, st, en, cname, sig, ret, kd, cls)
