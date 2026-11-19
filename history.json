@@ -1,12 +1,4 @@
 {
- "0.7.9+314.6ce66cd": {
-  "date": "2026-10-31T19:38:34Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+314.6ce66cd_iphoneos-arm64.deb",
-  "run": 314,
-  "sha": "6ce66cd60a7599ee48ec235934c2d59eb20a25d4",
-  "subject": "DELTA-SWEEP: sha of the wrapper view row",
-  "version": "0.7.9+314.6ce66cd"
- },
  "0.7.9+315.b6d6599": {
   "date": "2026-11-01T00:07:47Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+315.b6d6599_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "3ba8f7d5f3a858b45e58589331560cfa851961fe",
   "subject": "P1: always-on ANOMALY p1-resize-race when a gesture transaction begins within 2 s after an item resize end (layout captured by the new transaction vs the layout committed by the resize)",
   "version": "0.7.9+380.3ba8f7d"
+ },
+ "0.7.9+381.9d7f746": {
+  "date": "2026-11-19T02:25:16Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+381.9d7f746_iphoneos-arm64.deb",
+  "run": 381,
+  "sha": "9d7f746ff805ccef0803be0088d9106267a26045",
+  "subject": "UIK K4: 16.2 UIInputWindowControllerHostingItem notificationsFrame / fullScreenFrame: the keyboard notification frame is the real hosted keyboard view (16.0 used hostView.frame, below a Stage Manager window); visibleFrame calls of the 16.0 notification code answer it; ANOMALY k4-frame / k4-install",
+  "version": "0.7.9+381.9d7f746"
  }
 }
