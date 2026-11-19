@@ -170,6 +170,12 @@ static IMP sOrigReqForCtx, sOrigDigitizer;
 static IMP sOrigMgrUpdate, sOrigMgrComplete, sOrigMgrSetActive;
 static IMP sOrigAncillary, sOrigCurrentLayoutState, sOrigGestureModUpdate, sOrigAsyncRendering;
 
+// Resize commit race diagnostic (always on): a gesture transaction that is created within 2 s after the end of an item resize (type 10) captures the switcher controller layout state of its creation
+// (above); when the committed size of the resize has not reached that state yet, the new transaction works on the OLD size and the window snaps back.  One ANOMALY per distinct (types, layouts) pair.
+static CFAbsoluteTime gP1ResizeEndT;
+static NSString *gP1ResizeCommitted;
+static NSString *P1_Short(id o) { NSString *d = o ? [o description] : @"nil"; return d.length > 700 ? [d substringToIndex:700] : d; }
+
 // ------------------------------------------------------------------------------------------------ init (16.2 0x1c74ae6f4)
 // 16.2 additionally: both state maps get the layout state of EVERY connected window scene's switcher controller (original and active), plus the two sets.
 static __attribute__((ns_returns_retained)) id P1_Init(__attribute__((ns_consumed)) id self, SEL _cmd, id request, id vc, id delegate) {
@@ -185,6 +191,11 @@ static __attribute__((ns_returns_retained)) id P1_Init(__attribute__((ns_consume
             if (sc && ls) { [orig setObject:ls forKey:sc]; [act setObject:ls forKey:sc]; }
         }
         (void)P1_Anc(r); (void)P1_Comp(r);
+        if (gP1ResizeEndT > 0 && CFAbsoluteTimeGetCurrent() - gP1ResizeEndT < 2.0) {
+            id own = P1_S0(vc, "switcherController");
+            NSString *cap = P1_Short(P1_S0(P1_S0(own, "layoutState"), "appLayout"));
+            BP_Anomaly("p1-resize-race", @"p1: gesture transaction type %lld begins %.1f s after the end of an item resize (build 20A8372); layout captured by the new transaction: %@ ; committed by the resize: %@ ; %@", P1_L0(r, "_gestureType"), round((CFAbsoluteTimeGetCurrent() - gP1ResizeEndT) * 2.0) / 2.0, cap, gP1ResizeCommitted ?: @"nil", [cap isEqualToString:gP1ResizeCommitted ?: @""] ? @"same layout (commit already visible)" : @"DIFFERENT layout: the new transaction starts from the old size");
+        }
         if (BP_LogEnabled()) BP_Log(@"p1: txn %p created (16.2 mode), type %lld, own display %@, %lu switcher controller layout states captured", (__bridge void *)r, P1_L0(r, "_gestureType"), P1_Disp(P1_S0(vc, "switcherController")), (unsigned long)orig.count);
     }
     return r;
@@ -730,6 +741,7 @@ static void P1_HandleCompleteBody(id self, SEL _cmd, id request, id manager) {
     id pending = P1_Ivar(self, "_pendingSceneUpdateTransactionsBySceneIdentifier");
     if ([pending respondsToSelector:@selector(removeAllObjects)]) [pending removeAllObjects];
     id sc = P1_S0(manager, "switcherController");
+    if (P1_L0(self, "_gestureType") == 10) { gP1ResizeEndT = CFAbsoluteTimeGetCurrent(); gP1ResizeCommitted = P1_Short(appLayout); }
     if (BP_LogEnabled()) BP_Log(@"p1: txn %p complete from the manager of %@ (own display %@), request layout %@ mode %lld interrupted %d", (__bridge void *)self, P1_Disp(sc), P1_Disp(P1_S0(P1_S0(self, "switcherViewController"), "switcherController")), appLayout, mode, (int)P1_B0(self, "isInterrupted"));
     if (P1_B0(self, "isInterrupted")) return;
     id wreq = P1_WorkspaceRequest(self, 0, request, manager, @"FinalFluidSwitcherGestureAction");
