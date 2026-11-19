@@ -1070,7 +1070,7 @@ class Lift:
         fn.append('    LIFT_ENTRY(); LIFT_STKINIT(stk_);')
         for p in pre: fn.append('    ' + p)
         fn.append(body)
-        fn.append('Lret:')
+        fn.append('Lret: ;')
         fn.append('    ' + ret)
         fn.append('}')
         return head, '\n'.join(fn)

@@ -96,7 +96,7 @@ L1c76bed90:
     VR[1][0] = LD64((X[0]) + IVOFF(rsblk_ivs, 6) + (0)); VR[1][1] = 0;
     /* 1c76bed94: ret  */
     goto Lret;
-Lret:
+Lret: ;
     LiftSize r_ = { FD(VR[0][0]), FD(VR[1][0]) }; return r_;
 }
 
@@ -1110,7 +1110,7 @@ L1c76becd4:
     RT_RELEASE((void *)X[20]);
     /* 1c76bed08: b #0x1c76bec84 */
     goto L1c76bec84;
-Lret:
+Lret: ;
     return X[0];
 }
 
@@ -1561,7 +1561,7 @@ L1c76be5d4:
     RT_RELEASE((void *)X[25]);
     /* 1c76be60c: b #0x1c76be3d0 */
     goto L1c76be3d0;
-Lret:
+Lret: ;
     return X[0];
 }
 
@@ -2125,7 +2125,7 @@ L1c76bf0d8:
     X[31] = (uint64_t)((X[31]) + (0x130ull));
     /* 1c76bf130: retab  */
     goto Lret;
-Lret:
+Lret: ;
     return X[0];
 }
 
@@ -2351,7 +2351,7 @@ L1c76bfb18:
     X[31] = (uint64_t)((X[31]) + (0x90ull));
     /* 1c76bfbe4: retab  */
     goto Lret;
-Lret:
+Lret: ;
     LiftRect r_ = { FD(VR[0][0]), FD(VR[1][0]), FD(VR[2][0]), FD(VR[3][0]) }; return r_;
 }
 
@@ -2413,7 +2413,7 @@ static uint64_t rsany(uint64_t a0, uint64_t a1) {
     X[31] = (uint64_t)(X[31]) + (32);
     /* 1c76bfd80: retab  */
     goto Lret;
-Lret:
+Lret: ;
     return X[0];
 }
 
