@@ -30,6 +30,9 @@ Y42DeckLift.c                dk2      SBDeckSwitcherViewController              
 Y42DeckLift.c                dk3      SBDeckSwitcherViewController                     other
 Y42DeckLift.c                dk3      UIView                                           other
 Y42DeckLift.c                dkreason NSString                                         C function argument (objc_opt_class)
+Y42FullScreenLift.c          fsalinit SBFullScreenAlwaysLiveLiveContentOverlay         C function argument (objc_msgSendSuper2)
+Y42FullScreenLift.c          fsalinit SBDeviceApplicationSceneView                     alloc
+Y42FullScreenLift.c          fsalinit SBOrientationTransformWrapperView                alloc
 Y42PeekLift.c                pkblk4   SBPerformTransitionSwitcherEventResponse         C function argument (objc_opt_class)
 Y42PeekLift.c                pkblk4   SBAppLayout                                      class method receiver (homeScreenAppLayout)
 Y42PeekLift.c                pkblk4   SBPerformTransitionSwitcherEventResponse         alloc

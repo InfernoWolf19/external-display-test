@@ -181,6 +181,17 @@ const char *y42_sceneview_preflight(void) {
     if ((m = asvinit_preflight())) return m; return dsvinit_preflight();
 }
 '''),
+ 'fsal': dict(file='Y42FullScreenLift.c',
+  head='''// Y42FullScreenLift.c : -[SBFullScreenAlwaysLiveLiveContentOverlay initWithSceneHandle:referenceSize:containerOrientation:] of iPadOS 16.2 (20C65, 0x1c74d0d24 .. 0x1c74d0efc; 16.0 0x1c6053fdc), recompiled from the 16.2
+// machine code by tools/a2c/a2c.py: it creates the scene view with the 16.2 init that carries content AND container orientation (Y42SceneView.x), asks the handle for _supportsMixedOrientation and sets
+// content / container orientation of the transform wrapper.  Plain C, no ARC.  Installed by Y42FullScreen.x (switch y42_fullscreen).  Verified with tools/a2c/tests/tracecmp.py.  NOT device tested.
+''',
+  tcargs=['--safemem'],
+  bodies=[('162', 0x1c74d0d24, 0x1c74d0efc, 'fsalinit', 'x,x,x,d,d,x', 'x', 'SBFullScreenAlwaysLiveLiveContentOverlay', '', {})],
+  tail='''
+uint64_t y42_fsal_init(uint64_t self, uint64_t cmd, uint64_t handle, double w, double h, uint64_t containerOrientation) { return fsalinit(self, cmd, handle, w, h, containerOrientation); }
+const char *y42_fullscreen_preflight(void) { return fsalinit_preflight(); }
+'''),
 }
 
 def gen(name):
