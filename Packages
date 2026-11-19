@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 403, commit 739434e: P1: p1_attrguard (documented deviation, user approved): an older attribute set never replaces a newer one in an interned SBAppLayout; 16.0 / 16.2 writer chain compared instruction by instruction (identical); ANOMALY p1-attrguard / p1-attr-regress
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+403.739434e
+Installed-Size: 5932
+Filename: debs/com.infernowolf19.backport162_0.7.9+403.739434e_iphoneos-arm64.deb
+Size: 1894142
+MD5sum: 7fe7bd5be62558f145b8a3807505f2c1
+SHA1: db5450cc369a9648023c4d904933458eb3a29c0e
+SHA256: d80ae7208c49a91361934de1b2e9825f82a8b0d456132398134ea7f78c8d4cfa
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 402, commit b8361f1: UIK: uik_missing_imp with movi d0..d3 (the .2d form is an inline asm error in the CI clang; fixes build 401)
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1295,25 +1317,3 @@ Size: 1502004
 MD5sum: dfa54f07abfefe80af8a2642ae6ca14b
 SHA1: e7b5f9d9fd0a9e93b830deccd42b38bcb43a4b89
 SHA256: bf3bb63ec70a1d6e4406a9bd66e65370dbfcfc85cec7f052525c46906d8d71e9
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 329, commit 1c7cce6: G1C: a dismiss that lands while the swipe-up open is still in flight (main transition 1->1, effective mode 2, no stock modifier) gets the ToHome fly out like the settled 2->1 dismiss (g1c_quickdismiss); it fell to the default quick animation
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Recommends: preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+329.1c7cce6
-Installed-Size: 4780
-Filename: debs/com.infernowolf19.backport162_0.7.9+329.1c7cce6_iphoneos-arm64.deb
-Size: 1501492
-MD5sum: d810594aeb3f042bee6237539b5ab293
-SHA1: 81bcd5a69bc6b68ea252cf9764c1419ce456eb9a
-SHA256: 67e7c988b1fe29665c41b07dacf5fdfc64f60c271c6d00afc03e1d61938d58c8

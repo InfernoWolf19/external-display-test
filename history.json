@@ -1,12 +1,4 @@
 {
- "0.7.9+329.1c7cce6": {
-  "date": "2026-11-01T08:28:33Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+329.1c7cce6_iphoneos-arm64.deb",
-  "run": 329,
-  "sha": "1c7cce6c3597e4ba8f5549f592c4aa30f07b5dcc",
-  "subject": "G1C: a dismiss that lands while the swipe-up open is still in flight (main transition 1->1, effective mode 2, no stock modifier) gets the ToHome fly out like the settled 2->1 dismiss (g1c_quickdismiss); it fell to the default quick animation",
-  "version": "0.7.9+329.1c7cce6"
- },
  "0.7.9+330.9ec11ad": {
   "date": "2026-11-01T08:33:33Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+330.9ec11ad_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b8361f1fc6ad475e4ffa769f0baf35ca9837a00e",
   "subject": "UIK: uik_missing_imp with movi d0..d3 (the .2d form is an inline asm error in the CI clang; fixes build 401)",
   "version": "0.7.9+402.b8361f1"
+ },
+ "0.7.9+403.739434e": {
+  "date": "2026-11-19T20:41:11Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+403.739434e_iphoneos-arm64.deb",
+  "run": 403,
+  "sha": "739434ecaf4c7431c34b5ab2679bb45b48339b6c",
+  "subject": "P1: p1_attrguard (documented deviation, user approved): an older attribute set never replaces a newer one in an interned SBAppLayout; 16.0 / 16.2 writer chain compared instruction by instruction (identical); ANOMALY p1-attrguard / p1-attr-regress",
+  "version": "0.7.9+403.739434e"
  }
 }
