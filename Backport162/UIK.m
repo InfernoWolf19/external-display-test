@@ -36,8 +36,8 @@
 
 // ---------------------------------------------------------------- switches
 
-enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_COUNT };
-static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife" };
+enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_COUNT };
+static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe" };
 static const char kUIKTmp[] = "/var/jb/tmp";
 static const char *const kUIKDirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile", "/var/mobile/Library/Caches", "/var/mobile" };
 #define UIK_DIR_COUNT ((int)(sizeof kUIKDirs / sizeof kUIKDirs[0]))
@@ -937,6 +937,58 @@ static void UIK_InstallK2(void) {
     UIK_Log("K2 installed");
 }
 
+// ---------------------------------------------------------------- K3: keyboard frame of a Stage Manager WINDOW in real UIScreen coordinates (16.2 -[UIInputWindowController convertRectFromContainerCoordinateSpaceToScreenSpace:])
+//
+// Source of every UIKeyboard*UserInfoKey frame (generateNotificationsForStart: / the post*Notifications paths).  16.0 0x189131f50: r = [view convertRect:r toView:nil]; r = [_window convertRect:r toWindow:nil]; then,
+// only when windowing mode is OFF on an iPad app, an actualSceneFrame adjustment of text effects windows.  With Stage Manager on, an app window that is not at the screen origin therefore got a frame
+// that is NOT in screen coordinates; an app converting it from the screen to its window (Reynard, Telegram) finds no overlap and does not move its UI (full screen: window == screen, no error).
+// 16.2 0x189267db0: r = [view convertRect:r toView:nil]; then  SpringBoard                                  -> [_window convertRect:r toWindow:nil]
+//                                                            windowing mode off && text effects window && hosted in another process -> the same
+//                                                            everything else (every app with windowing mode on)  -> [_window.windowScene.coordinateSpace convertRect:r toCoordinateSpace:_window.screen.coordinateSpace]
+static IMP orig_cr3;
+static CGRect uik_convertRectK3(id self, SEL _cmd, CGRect r) {
+    if (!UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL, CGRect))orig_cr3)(self, _cmd, r);
+    id view = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
+    CGRect in = r;
+    r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(view, sel_registerName("convertRect:toView:"), r, nil);
+    BOOL viaWindow = NO;
+    if ([(id)[UIApplication sharedApplication] respondsToSelector:sel_registerName("_isSpringBoard")] && ((BOOL (*)(id, SEL))objc_msgSend)([UIApplication sharedApplication], sel_registerName("_isSpringBoard"))) viaWindow = YES;
+    else {
+        id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+        id vm = ((id (*)(id, SEL))objc_msgSend)(d, sel_registerName("visualModeManager"));
+        BOOL wm = vm && ((BOOL (*)(id, SEL))objc_msgSend)(vm, sel_registerName("windowingModeEnabled"));
+        if (!wm) {
+            id w = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_window"));
+            if (((BOOL (*)(id, SEL))objc_msgSend)(w, sel_registerName("_isTextEffectsWindow")) && ((BOOL (*)(id, SEL))objc_msgSend)(w, sel_registerName("_isHostedInAnotherProcess"))) viaWindow = YES;
+        }
+    }
+    id win = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_window"));
+    if (viaWindow) r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(win, sel_registerName("convertRect:toWindow:"), r, nil);
+    else {
+        id sp = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("windowScene")), sel_registerName("coordinateSpace"));
+        id tp = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("screen")), sel_registerName("coordinateSpace"));
+        r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(sp, sel_registerName("convertRect:toCoordinateSpace:"), r, tp);
+    }
+    static int n;
+    if (n < 3 && !CGRectEqualToRect(r, in) && !viaWindow) {
+        n++;
+        UIK_Problem("k3-frame", "K3 keyboard frame converted to UIScreen coordinates as 16.2 (build 20A8372 converted it with convertRect:toWindow:nil): %s -> %s (bundle %s)", NSStringFromCGRect(in).UTF8String, NSStringFromCGRect(r).UTF8String, [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+    }
+    return r;
+}
+static void UIK_InstallK3(void) {
+    Class iwc = objc_getClass("UIInputWindowController");
+    const char *n[] = { "convertRectFromContainerCoordinateSpaceToScreenSpace:", "_window", "view" };
+    NSMutableArray *missing = [NSMutableArray array];
+    if (!iwc) [missing addObject:@"class UIInputWindowController"];
+    else for (size_t i = 0; i < sizeof n / sizeof *n; i++) if (!class_getInstanceMethod(iwc, sel_registerName(n[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIInputWindowController %s]", n[i]]];
+    if (![UIApplication instancesRespondToSelector:sel_registerName("_isSpringBoard")]) [missing addObject:@"-[UIApplication _isSpringBoard]"];
+    if (![UIWindow instancesRespondToSelector:sel_registerName("_isHostedInAnotherProcess")]) [missing addObject:@"-[UIWindow _isHostedInAnotherProcess]"];
+    if ([missing count]) { UIK_Problem("k3-install", "K3 NOT installed (build 20A8372), needs: %s", [[missing componentsJoinedByString:@", "] UTF8String]); return; }
+    UIK_Hook("UIInputWindowController", "convertRectFromContainerCoordinateSpaceToScreenSpace:", NULL, (IMP)uik_convertRectK3, &orig_cr3);
+    UIK_Log("K3 installed");
+}
+
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
@@ -945,4 +997,5 @@ __attribute__((constructor)) static void UIK_Init(void) {
     UIK_InstallK1();
     UIK_InstallU2();
     UIK_InstallK2();
+    UIK_InstallK3();
 }
