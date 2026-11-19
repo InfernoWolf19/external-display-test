@@ -989,6 +989,112 @@ static void UIK_InstallK3(void) {
     UIK_Log("K3 installed");
 }
 
+// ---------------------------------------------------------------- K4: the frame of the keyboard notifications is the REAL keyboard view (16.2 -[UIInputWindowControllerHostingItem notificationsFrame] 0x189ac79e4)
+//
+// 16.0 gives every notification path (generateNotificationsForStart:, its block, didEndTransitionWithController:, the viewDidLayoutSubviews / moveFromPlacement: blocks, _visibleFrame, prepareKeyboardHeightChange...,
+// constructNotificationInfoForScrollWithMode:, completeTransition block, camera presentation, postTransitionEndNotification, willRotate block, _forcePreLayoutHostViewFrame, viewWillLayoutSubviews)
+// -[HostingItem visibleFrame] = hostView.frame: the app side input container, which in a Stage Manager window lies BELOW the window (Telegram {0,1042,786,212} for a 786x1042 window: the keyboard is reported under the
+// window, no overlap).  16.2 calls -notificationsFrame at every one of those sites (the only remaining visibleFrame callers are -[UIInputWindowControllerHosting visibleFrame] and notificationsFrame itself):
+//   windowing mode off -> visibleFrame;  on -> -fullScreenFrame (0x189ac7ba0): placement invisible -> CGRectZero; floating keyboard / floating assistant without accessory -> applicator popoverFrame;
+//   input view not a placeholder or an accessory view exists -> hostView.frame; else the frame of placeheldView.superview (the view of the hosted system keyboard scene) converted FROM its screen coordinate space
+//   INTO the coordinate space of the host window's scene, repaired when it misses hostView.frame (y := hostView.origin.y, else hostView.frame) or lies below the container (y += height when it meets the container);
+//   then, only for a text effects notification owner window hosted in another process, hostView.frame when the result meets it.
+// Port: -visibleFrame of the item is replaced; calls made from the 16.0 code ranges of the notification sites (fixed addresses from the anchor -[UIInputWindowController didEndTransitionWithController:]
+// 0x18997e324, every range start checked for pacibsp) answer notificationsFrame, every other caller keeps the 16.0 answer; -notificationsFrame and -fullScreenFrame are added.  Switch uik_kbframe.
+static IMP orig_vfK4;
+static uintptr_t gK4Slide;
+static BOOL gK4Ok;
+static const uintptr_t kK4R[][2] = { {0x189086038,0x1890860d0}, {0x189288b08,0x189288b84}, {0x18997e324,0x18997e470}, {0x18997efa0,0x18997f014}, {0x18997f088,0x18997f4a8}, {0x18997f4a8,0x18997f598}, {0x18997f6d0,0x18997f7f0},
+    {0x18997fc78,0x18997fdb8}, {0x1899805c0,0x189980790}, {0x18998170c,0x1899817e0}, {0x18998306c,0x1899831a4}, {0x1899831a4,0x1899832f4}, {0x1899832f4,0x189983394}, {0x1899840a0,0x1899841e4}, {0x189984824,0x189984978},
+    {0x18998788c,0x1899879b4}, {0x189988b0c,0x189988bc8}, {0x189c612b8,0x189c614e4} };
+static id K4_O(id o, const char *s) { return ((id (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)); }
+static BOOL K4_B(id o, const char *s) { return ((BOOL (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)); }
+static CGRect K4_R(id o, const char *s) { return ((CGRect (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)); }
+static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {                                      // 0x189ac7ba0
+    id p = K4_O(self, "placement");
+    if (p && !K4_B(p, "isVisible")) return CGRectZero;
+    BOOL popover = NO;
+    if (((BOOL (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardImpl"), sel_registerName("isFloating"))) popover = YES;
+    else if (K4_B(p, "isFloatingAssistantView") && !K4_O(K4_O(self, "inputViewSet"), "inputAccessoryView")) popover = YES;
+    if (popover) return K4_R(K4_O(self, "applicator"), "popoverFrame");
+    id host = K4_O(self, "hostView");
+    id ivs = K4_O(self, "inputViewSet");
+    if (!K4_B(ivs, "isInputViewPlaceholder") || K4_O(K4_O(self, "inputViewSet"), "inputAccessoryView")) return K4_R(host, "frame");
+    id ph = K4_O(K4_O(K4_O(self, "inputViewSet"), "inputView"), "placeheldView");
+    id sv = K4_O(ph, "superview");
+    if (!sv) return K4_R(host, "frame");
+    id sv2 = K4_O(ph, "superview");
+    id space = K4_O(K4_O(K4_O(host, "window"), "windowScene"), "coordinateSpace");
+    CGRect f = K4_R(sv2, "frame");
+    id sspace = K4_O(K4_O(K4_O(sv2, "window"), "screen"), "coordinateSpace");
+    CGRect r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(space, sel_registerName("convertRect:fromCoordinateSpace:"), f, sspace);
+    CGRect hf = K4_R(K4_O(self, "hostView"), "frame");
+    if (CGRectIsEmpty(CGRectIntersection(r, hf))) {
+        id h2 = K4_O(self, "hostView");
+        CGPoint o = ((CGPoint (*)(id, SEL))objc_msgSend)(h2, sel_registerName("origin"));
+        r.origin.y = o.y;
+        if (CGRectIsEmpty(CGRectIntersection(r, K4_R(K4_O(self, "hostView"), "frame")))) return K4_R(K4_O(self, "hostView"), "frame");
+        return r;
+    }
+    CGFloat hy = K4_R(K4_O(self, "hostView"), "frame").origin.y;
+    CGRect cf = K4_R(K4_O(self, "containerView"), "frame");
+    if (hy >= CGRectGetMaxY(cf)) {
+        if (CGRectIntersectsRect(K4_R(K4_O(self, "containerView"), "frame"), r)) r.origin.y = r.origin.y + r.size.height;
+    }
+    return r;
+}
+static CGRect uik_notificationsFrameK4(id self, SEL _cmd) {                                   // 0x189ac79e4
+    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+    id vm = d ? K4_O(d, "visualModeManager") : nil;
+    if (!(vm && K4_B(vm, "windowingModeEnabled"))) return ((CGRect (*)(id, SEL))orig_vfK4)(self, sel_registerName("visibleFrame"));
+    CGRect r = uik_fullScreenFrameK4(self, 0);
+    id w = K4_O(K4_O(self, "hostView"), "window");
+    if (!K4_B(w, "_isHostedInAnotherProcess")) return r;
+    if (!K4_B(K4_O(K4_O(self, "hostView"), "window"), "_isTextEffectsWindowNotificationOwner")) return r;
+    CGRect hf = K4_R(K4_O(self, "hostView"), "frame");
+    if (CGRectIsEmpty(CGRectIntersection(r, hf))) return r;
+    return K4_R(K4_O(self, "hostView"), "frame");
+}
+static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
+    if (!gK4Ok || !UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
+    uintptr_t ra = (uintptr_t)__builtin_return_address(0) & 0x7fffffffffULL;
+    BOOL hit = NO;
+    for (size_t i = 0; i < sizeof kK4R / sizeof *kK4R; i++) if (ra >= kK4R[i][0] + gK4Slide && ra < kK4R[i][1] + gK4Slide) { hit = YES; break; }
+    CGRect old = ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
+    if (!hit) return old;
+    CGRect nf = uik_notificationsFrameK4(self, _cmd);
+    static int n;
+    if (n < 6 && !CGRectEqualToRect(old, nf)) {
+        n++;
+        UIK_Problem(n == 1 ? "k4-frame-1" : n == 2 ? "k4-frame-2" : n == 3 ? "k4-frame-3" : n == 4 ? "k4-frame-4" : n == 5 ? "k4-frame-5" : "k4-frame-6", "K4 keyboard notification frame is the real keyboard view as 16.2 notificationsFrame (build 20A8372 used hostView.frame): %s -> %s (bundle %s)", NSStringFromCGRect(old).UTF8String, NSStringFromCGRect(nf).UTF8String, [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+    }
+    return nf;
+}
+static void UIK_InstallK4(void) {
+    Class iwc = objc_getClass("UIInputWindowController"), item = objc_getClass("UIInputWindowControllerHostingItem");
+    NSMutableArray *missing = [NSMutableArray array];
+    if (!item) [missing addObject:@"class UIInputWindowControllerHostingItem"];
+    else {
+        const char *n[] = { "visibleFrame", "placement", "inputViewSet", "hostView", "containerView", "applicator" };
+        for (size_t i = 0; i < sizeof n / sizeof *n; i++) if (!class_getInstanceMethod(item, sel_registerName(n[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIInputWindowControllerHostingItem %s]", n[i]]];
+    }
+    Method am = iwc ? class_getInstanceMethod(iwc, sel_registerName("didEndTransitionWithController:")) : NULL;
+    if (!am) [missing addObject:@"-[UIInputWindowController didEndTransitionWithController:] (address anchor)"];
+    if ([missing count]) { UIK_Problem("k4-install", "K4 NOT installed (build 20A8372), needs: %s", [[missing componentsJoinedByString:@", "] UTF8String]); return; }
+    uintptr_t anchor = (uintptr_t)method_getImplementation(am) & 0x7fffffffffULL;
+    uintptr_t slide = anchor - 0x18997e324;
+    for (size_t i = 0; i < sizeof kK4R / sizeof *kK4R; i++) {
+        uint32_t w = *(const uint32_t *)(kK4R[i][0] + slide);
+        if (w != 0xd503237f) { UIK_Problem("k4-install", "K4 NOT installed (build 20A8372): the code at %#lx is not a function start (word %#x, slide %#lx)", (unsigned long)kK4R[i][0], w, (unsigned long)slide); return; }
+    }
+    gK4Slide = slide;
+    class_addMethod(item, sel_registerName("fullScreenFrame"), (IMP)uik_fullScreenFrameK4, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8");
+    class_addMethod(item, sel_registerName("notificationsFrame"), (IMP)uik_notificationsFrameK4, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8");
+    if (!UIK_Hook("UIInputWindowControllerHostingItem", "visibleFrame", NULL, (IMP)uik_visibleFrameK4, &orig_vfK4)) return;
+    gK4Ok = YES;
+    UIK_Log("K4 installed (slide %#lx)", (unsigned long)slide);
+}
+
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
@@ -998,4 +1104,5 @@ __attribute__((constructor)) static void UIK_Init(void) {
     UIK_InstallU2();
     UIK_InstallK2();
     UIK_InstallK3();
+    UIK_InstallK4();
 }
