@@ -133,6 +133,23 @@ static void UIK_Problem(const char *key, const char *fmt, ...) {
     va_end(ap);
 }
 
+// ---------------------------------------------------------------- guarded sends and the exception barrier of every hook
+// The dylib is injected into every app: an exception raised inside a hook is a crash of that app.  UIK_SEND sends the selector only when the receiver implements it (nil receiver: like ObjC; a miss answers
+// nil / NO / 0 / CGRectZero through uik_missing_imp), so a selector of 16.2 that 16.0 does not have can never raise doesNotRecognizeSelector.  Every hook IMP below is wrapped in a narrow @try / @catch
+// that logs ANOMALY uik-exception once per hook and answers with the original 16.0 implementation (or the zero value for an added method).
+typedef void (*uik_fn)(void);
+extern void uik_missing_imp(void) __asm__("_uik_missing_imp");
+__asm__(".text\n.p2align 2\n_uik_missing_imp:\n movi v0.2d, #0\n movi v1.2d, #0\n movi v2.2d, #0\n movi v3.2d, #0\n mov x0, #0\n mov x1, #0\n ret\n");
+static inline uik_fn UIK_Imp(id o, const char *s) {
+    if (!o) return (uik_fn)objc_msgSend;
+    return class_getInstanceMethod(object_getClass(o), sel_registerName(s)) ? (uik_fn)objc_msgSend : (uik_fn)uik_missing_imp;
+}
+#define UIK_SEND(T, recv, name, ...) ({ id uik_r_ = (recv); ((T)UIK_Imp(uik_r_, name))(uik_r_, sel_registerName(name), ##__VA_ARGS__); })
+static void uik_exc(const char *hook, NSException *e) {
+    char key[64]; snprintf(key, sizeof key, "uikexc_%s", hook);
+    UIK_Problem(key, "uik-exception in hook %s (build 20A8372): %s: %s; the original 16.0 implementation answered instead", hook, e.name.UTF8String, e.reason.UTF8String ?: "-");
+}
+
 // ---------------------------------------------------------------- hook installation
 
 // Type encodings are compared without the frame offsets (digits): only the argument / return types have to match.
@@ -208,11 +225,26 @@ static inline BOOL UIK_NoSwap(id self, long long o, const char *what) {
     if (!logged && UIK_Debug()) { logged = YES; UIK_Log("U1 %s: main-like external screen %p, orientation %lld not applied to the bounds (16.2)", what, (__bridge void *)self, o); }
     return YES;
 }
-static CGRect uik_boundsFor(id self, SEL _cmd, long long o) { return orig_boundsFor(self, _cmd, UIK_NoSwap(self, o, "_boundsForInterfaceOrientation:") ? 1 : o); }
-static CGRect uik_unjailedFor(id self, SEL _cmd, long long o) { return orig_unjailedFor(self, _cmd, UIK_NoSwap(self, o, "_unjailedReferenceBoundsForInterfaceOrientation:") ? 1 : o); }
-static CGRect uik_mainSceneFor(id self, SEL _cmd, long long o) { return orig_mainSceneFor(self, _cmd, UIK_NoSwap(self, o, "_mainSceneBoundsForInterfaceOrientation:") ? 1 : o); }
+static CGRect uik_boundsFor_body(id self, SEL _cmd, long long o) { return orig_boundsFor(self, _cmd, UIK_NoSwap(self, o, "_boundsForInterfaceOrientation:") ? 1 : o); }
+static CGRect uik_boundsFor(id self, SEL _cmd, long long o) {
+    @try { return uik_boundsFor_body(self, _cmd, o); }
+    @catch (NSException *e_) { uik_exc("uik_boundsFor", e_); if (orig_boundsFor) { return ((CGRect (*)(id, SEL, long long))(uik_fn)orig_boundsFor)(self, _cmd, o); } return CGRectZero; }
+}
 
-static void uik_connectScreen(id self, SEL _cmd) {
+static CGRect uik_unjailedFor_body(id self, SEL _cmd, long long o) { return orig_unjailedFor(self, _cmd, UIK_NoSwap(self, o, "_unjailedReferenceBoundsForInterfaceOrientation:") ? 1 : o); }
+static CGRect uik_unjailedFor(id self, SEL _cmd, long long o) {
+    @try { return uik_unjailedFor_body(self, _cmd, o); }
+    @catch (NSException *e_) { uik_exc("uik_unjailedFor", e_); if (orig_unjailedFor) { return ((CGRect (*)(id, SEL, long long))(uik_fn)orig_unjailedFor)(self, _cmd, o); } return CGRectZero; }
+}
+
+static CGRect uik_mainSceneFor_body(id self, SEL _cmd, long long o) { return orig_mainSceneFor(self, _cmd, UIK_NoSwap(self, o, "_mainSceneBoundsForInterfaceOrientation:") ? 1 : o); }
+static CGRect uik_mainSceneFor(id self, SEL _cmd, long long o) {
+    @try { return uik_mainSceneFor_body(self, _cmd, o); }
+    @catch (NSException *e_) { uik_exc("uik_mainSceneFor", e_); if (orig_mainSceneFor) { return ((CGRect (*)(id, SEL, long long))(uik_fn)orig_mainSceneFor)(self, _cmd, o); } return CGRectZero; }
+}
+
+
+static void uik_connectScreen_body(id self, SEL _cmd) {
     orig_connectScreen(self, _cmd);                         // 16.0 body: _updateUserInterfaceIdiom, _updateCapabilities, _updateTraits, connected flag
     if (gUIKOrientationOffset < 0 || !UIK_On(UIK_SW_SCREENBOUNDS) || !UIK_ExternalMainLike(self)) return;
     // 16.2: [self _setInterfaceOrientation:UIInterfaceOrientationPortrait andNotify:NO] (no notification): orientation 1, then _updateTraits and _computeMetrics when it changed
@@ -223,6 +255,11 @@ static void uik_connectScreen(id self, SEL _cmd) {
     [(UIScreen *)self _computeMetrics];
     UIK_Log("U1 _connectScreen: main-like external screen %p put at portrait without notification (16.2)", (__bridge void *)self);
 }
+static void uik_connectScreen(id self, SEL _cmd) {
+    @try { uik_connectScreen_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_connectScreen", e_); if (orig_connectScreen) { ((void (*)(id, SEL))(uik_fn)orig_connectScreen)(self, _cmd); }  }
+}
+
 
 static void UIK_InstallU1(void) {
     if (!UIK_Has("UIScreen", "_isExternal") || !UIK_Has("UIScreen", "_isMainLikeScreen")) return;
@@ -275,15 +312,15 @@ static int (*orig_visualMode)(id, SEL);
 static BOOL UIK_Responds(id o, SEL s) { return o && class_getInstanceMethod(object_getClass(o), s) != NULL; }
 static id UIK_Id(id o, SEL s) { return UIK_Responds(o, s) ? ((id (*)(id, SEL))objc_msgSend)(o, s) : nil; }
 static BOOL UIK_B(id o, SEL s) { return UIK_Responds(o, s) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, s) : NO; }
-static id UIK_ClsId(Class c, SEL s) { return ((id (*)(id, SEL))objc_msgSend)((id)c, s); }
-static BOOL UIK_ClsB(Class c, SEL s) { return ((BOOL (*)(id, SEL))objc_msgSend)((id)c, s); }
+static id UIK_ClsId(Class c, SEL s) { return (c && class_getClassMethod(c, s)) ? ((id (*)(id, SEL))objc_msgSend)((id)c, s) : nil; }
+static BOOL UIK_ClsB(Class c, SEL s) { return (c && class_getClassMethod(c, s)) ? ((BOOL (*)(id, SEL))objc_msgSend)((id)c, s) : NO; }
 
 // +[UIKeyboardVisualModeManager softwareKeyboardAllowedOnExternalScreen]
 static BOOL UIK_ExternalSWKeyboardFlag(void) {
     static BOOL value, done;
     if (!done) {
         id pc = UIK_ClsId(gKPC, sSharedPrefs);
-        id v = pc ? ((id (*)(id, SEL, id))objc_msgSend)(pc, sPrefValue, @"ChamoisExternalSWKeyboard") : nil;
+        id v = UIK_Responds(pc, sPrefValue) ? ((id (*)(id, SEL, id))objc_msgSend)(pc, sPrefValue, @"ChamoisExternalSWKeyboard") : nil;
         value = (v && [v respondsToSelector:sBoolValue]) ? UIK_B(v, sBoolValue) : NO;
         done = YES;
         UIK_Log("K1 ChamoisExternalSWKeyboard preference = %d", (int)value);
@@ -300,14 +337,34 @@ static BOOL UIK_SWKeyboardAllowed(void) {
     if (embedded || !allowed) return embedded && allowed;
     return UIK_ExternalSWKeyboardFlag();
 }
-static BOOL uik_cls_swAllowedExternal(id self, SEL _cmd) { return UIK_ExternalSWKeyboardFlag(); }
-static BOOL uik_cls_swAllowedActive(id self, SEL _cmd) { return UIK_SWKeyboardAllowed(); }
+static BOOL uik_cls_swAllowedExternal_body(id self, SEL _cmd) { return UIK_ExternalSWKeyboardFlag(); }
+static BOOL uik_cls_swAllowedExternal(id self, SEL _cmd) {
+    @try { return uik_cls_swAllowedExternal_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_cls_swAllowedExternal", e_); return 0; }
+}
+
+static BOOL uik_cls_swAllowedActive_body(id self, SEL _cmd) { return UIK_SWKeyboardAllowed(); }
+static BOOL uik_cls_swAllowedActive(id self, SEL _cmd) {
+    @try { return uik_cls_swAllowedActive_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_cls_swAllowedActive", e_); return 0; }
+}
+
 
 // -[UIKeyboardSceneDelegate keyboardScreen] / -textEntryFocusOnExternalDisplay
-static id uik_ksd_keyboardScreen(id self, SEL _cmd) { return UIK_Id(UIK_Id(self, sScene), sScreen); }
-static BOOL uik_ksd_externalFocus(id self, SEL _cmd) { return !UIK_B(UIK_Id(UIK_Id(self, sScene), sScreen), sIsEmbeddedScreen); }
+static id uik_ksd_keyboardScreen_body(id self, SEL _cmd) { return UIK_Id(UIK_Id(self, sScene), sScreen); }
+static id uik_ksd_keyboardScreen(id self, SEL _cmd) {
+    @try { return uik_ksd_keyboardScreen_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_ksd_keyboardScreen", e_); return nil; }
+}
+
+static BOOL uik_ksd_externalFocus_body(id self, SEL _cmd) { return !UIK_B(UIK_Id(UIK_Id(self, sScene), sScreen), sIsEmbeddedScreen); }
+static BOOL uik_ksd_externalFocus(id self, SEL _cmd) {
+    @try { return uik_ksd_externalFocus_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_ksd_externalFocus", e_); return 0; }
+}
+
 // -[UIKeyboardSceneDelegate expectedInputViewSetIsCustom]: the responder has an input view controller, or an input view with a positive height
-static BOOL uik_ksd_expectCustom(id self, SEL _cmd) {
+static BOOL uik_ksd_expectCustom_body(id self, SEL _cmd) {
     if (!gKHaveResponder) return NO;
     id r = UIK_Id(self, sResponder);
     if (UIK_Id(r, sInputVC)) return YES;
@@ -316,50 +373,95 @@ static BOOL uik_ksd_expectCustom(id self, SEL _cmd) {
     CGRect f = ((CGRect (*)(id, SEL))objc_msgSend)(iv, sFrame);
     return f.size.height > 0;
 }
+static BOOL uik_ksd_expectCustom(id self, SEL _cmd) {
+    @try { return uik_ksd_expectCustom_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_ksd_expectCustom", e_); return 0; }
+}
+
 // -[UIKeyboardSceneDelegate expectedInputModeIsSpecialized]: [[[UIKeyboardInputModeController sharedInputModeController] currentInputMode] isSpecializedInputMode]
-static BOOL uik_ksd_expectSpecialized(id self, SEL _cmd) {
+static BOOL uik_ksd_expectSpecialized_body(id self, SEL _cmd) {
     if (!gKHaveSpecialized) return NO;
     id ctl = UIK_ClsId(objc_getClass("UIKeyboardInputModeController"), sInputModeCtl);
     return UIK_B(UIK_Id(ctl, sCurrentInputMode), sIsSpecialized);
 }
+static BOOL uik_ksd_expectSpecialized(id self, SEL _cmd) {
+    @try { return uik_ksd_expectSpecialized_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_ksd_expectSpecialized", e_); return 0; }
+}
+
 // -[UIKeyboardSceneDelegate _windowHostingScene:didMoveFromScreen:toScreen:]
-static void uik_ksd_didMove(id self, SEL _cmd, id scene, id from, id to) {
+static void uik_ksd_didMove_body(id self, SEL _cmd, id scene, id from, id to) {
     if (!UIK_On(UIK_SW_KEYBOARD)) return;
     UIK_Log("K1 keyboard scene delegate %p: window hosting scene %p moved from screen %p to screen %p, forceReloadInputViews", (__bridge void *)self, (__bridge void *)scene, (__bridge void *)from, (__bridge void *)to);
     if ([self respondsToSelector:sForceReload]) ((void (*)(id, SEL))objc_msgSend)(self, sForceReload);
 }
+static void uik_ksd_didMove(id self, SEL _cmd, id scene, id from, id to) {
+    @try { uik_ksd_didMove_body(self, _cmd, scene, from, to); }
+    @catch (NSException *e_) { uik_exc("uik_ksd_didMove", e_);  }
+}
+
 // -[UIKeyboardVisualModeManager textEntryFocusOnExternalDisplay] / -expectedInputModeIsSpecialized (forward to the delegate, NO without one)
-static BOOL uik_vmm_externalFocus(id self, SEL _cmd) { id d = UIK_Id(self, sDelegate); return d ? UIK_B(d, sTextEntryExt) : NO; }
-static BOOL uik_vmm_expectSpecialized(id self, SEL _cmd) { id d = UIK_Id(self, sDelegate); return d ? UIK_B(d, sExpectSpecialized) : NO; }
+static BOOL uik_vmm_externalFocus_body(id self, SEL _cmd) { id d = UIK_Id(self, sDelegate); return d ? UIK_B(d, sTextEntryExt) : NO; }
+static BOOL uik_vmm_externalFocus(id self, SEL _cmd) {
+    @try { return uik_vmm_externalFocus_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_vmm_externalFocus", e_); return 0; }
+}
+
+static BOOL uik_vmm_expectSpecialized_body(id self, SEL _cmd) { id d = UIK_Id(self, sDelegate); return d ? UIK_B(d, sExpectSpecialized) : NO; }
+static BOOL uik_vmm_expectSpecialized(id self, SEL _cmd) {
+    @try { return uik_vmm_expectSpecialized_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_vmm_expectSpecialized", e_); return 0; }
+}
+
 
 static void UIK_Rate(const char *what, BOOL allowed) {
     static int n;
     if (n < 40 && UIK_Debug()) { n++; UIK_Log("K1 %s: software keyboard %s for the active keyboard scene delegate", what, allowed ? "allowed" : "NOT allowed (text entry focus on the external display)"); }
 }
-static void uik_showKeyboard(id self, SEL _cmd, BOOL ignore) {
+static void uik_showKeyboard_body(id self, SEL _cmd, BOOL ignore) {
     if (UIK_On(UIK_SW_KEYBOARD) && !UIK_SWKeyboardAllowed()) {
         UIK_Rate("_showKeyboardIgnoringPolicyDelegate: returns without showing", NO);
         return;
     }
     orig_showKeyboard(self, _cmd, ignore);
 }
-static BOOL uik_shouldMinimizeHW(id self, SEL _cmd) {
+static void uik_showKeyboard(id self, SEL _cmd, BOOL ignore) {
+    @try { uik_showKeyboard_body(self, _cmd, ignore); }
+    @catch (NSException *e_) { uik_exc("uik_showKeyboard", e_); if (orig_showKeyboard) { ((void (*)(id, SEL, BOOL))(uik_fn)orig_showKeyboard)(self, _cmd, ignore); }  }
+}
+
+static BOOL uik_shouldMinimizeHW_body(id self, SEL _cmd) {
     if (UIK_On(UIK_SW_KEYBOARD) && !UIK_SWKeyboardAllowed()) { UIK_Rate("_shouldMinimizeForHardwareKeyboard answers YES", NO); return YES; }
     return orig_shouldMinimizeHW(self, _cmd);
 }
-static BOOL uik_scribble(id self, SEL _cmd) {
+static BOOL uik_shouldMinimizeHW(id self, SEL _cmd) {
+    @try { return uik_shouldMinimizeHW_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_shouldMinimizeHW", e_); if (orig_shouldMinimizeHW) { return ((BOOL (*)(id, SEL))(uik_fn)orig_shouldMinimizeHW)(self, _cmd); } return 0; }
+}
+
+static BOOL uik_scribble_body(id self, SEL _cmd) {
     BOOL r = orig_scribble(self, _cmd);
     if (r && UIK_On(UIK_SW_KEYBOARD) && !UIK_SWKeyboardAllowed()) return NO;
     return r;
 }
-static BOOL uik_showKeyboardButton(id self, SEL _cmd) {
+static BOOL uik_scribble(id self, SEL _cmd) {
+    @try { return uik_scribble_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_scribble", e_); if (orig_scribble) { return ((BOOL (*)(id, SEL))(uik_fn)orig_scribble)(self, _cmd); } return 0; }
+}
+
+static BOOL uik_showKeyboardButton_body(id self, SEL _cmd) {
     if (!UIK_On(UIK_SW_KEYBOARD)) return orig_showKeyboardButton(self, _cmd);
     id ki = UIK_ClsId(gKImpl, sActiveInstance);
     BOOL x = UIK_B(ki, sIsMinimized) || UIK_B(UIK_Id(ki, sDelegateAsResponder), sSuppressSW) || UIK_B(ki, sScribble);
     return x && UIK_SWKeyboardAllowed();
 }
+static BOOL uik_showKeyboardButton(id self, SEL _cmd) {
+    @try { return uik_showKeyboardButton_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_showKeyboardButton", e_); if (orig_showKeyboardButton) { return ((BOOL (*)(id, SEL))(uik_fn)orig_showKeyboardButton)(self, _cmd); } return 0; }
+}
+
 // -[UIKeyboardVisualModeManager visualMode] 16.2 0x1898b574c (1 = regular, 2 = minimized), without the keyboard camera term
-static int uik_visualMode(id self, SEL _cmd) {
+static int uik_visualMode_body(id self, SEL _cmd) {
     if (!UIK_On(UIK_SW_KEYBOARD)) return orig_visualMode(self, _cmd);
     BOOL chamois = UIK_B(self, sWindowingEnabled);
     id ki = UIK_ClsId(gKImpl, sActiveInstance);
@@ -377,6 +479,11 @@ static int uik_visualMode(id self, SEL _cmd) {
     else mode = minimized ? 2 : 1;
     return mode;
 }
+static int uik_visualMode(id self, SEL _cmd) {
+    @try { return uik_visualMode_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_visualMode", e_); if (orig_visualMode) { return ((int (*)(id, SEL))(uik_fn)orig_visualMode)(self, _cmd); } return 0; }
+}
+
 
 static void UIK_AddMethod(Class c, BOOL meta, const char *sn, const char *enc, IMP imp) {
     Class target = meta ? object_getClass((id)c) : c;
@@ -489,24 +596,35 @@ static id UIK_NewSimpleAssertion(NSString *ident, NSString *reason, void (^inv)(
     Class c = objc_getClass("BSSimpleAssertion");
     SEL s = sel_registerName("initWithIdentifier:forReason:queue:invalidationBlock:");
     id a = [c alloc];
+    if (!UIK_Responds(a, s)) return nil;
     return ((id (*)(id, SEL, id, id, id, id))objc_msgSend)(a, s, ident, reason, dispatch_get_main_queue(), inv);
 }
 static BOOL UIK_U2On(void) { return UIK_On(UIK_SW_SCREENLIFE); }
 
 // ---- UIScreen
-static void uik_registerStaticNotifs(id self, SEL _cmd) { (void)self; (void)_cmd; }          // 16.2 has no scene counting: nothing to register
+static void uik_registerStaticNotifs_body(id self, SEL _cmd) { (void)self; (void)_cmd; }
+static void uik_registerStaticNotifs(id self, SEL _cmd) {
+    @try { uik_registerStaticNotifs_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_registerStaticNotifs", e_);  }
+}
+          // 16.2 has no scene counting: nothing to register
 static void uik_realDisconnect(id screen, SEL cmd) {
     objc_setAssociatedObject(screen, &kUScreenNeedsDisc, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     UIK_Log("U2 disconnecting screen %p", (__bridge void *)screen);
     ((void (*)(id, SEL))orig_disconnectScreenU2)(screen, cmd);
 }
 // the only 16.0 caller is +_FBSDisplayIdentityDisconnected: (16.2 0x18949be00: prevention set exists -> needsDisconnection, else disconnect)
-static void uik_disconnectScreenU2(id self, SEL _cmd) {
+static void uik_disconnectScreenU2_body(id self, SEL _cmd) {
     if (!UIK_U2On()) { ((void (*)(id, SEL))orig_disconnectScreenU2)(self, _cmd); return; }
     if (objc_getAssociatedObject(self, &kUScreenSet)) { objc_setAssociatedObject(self, &kUScreenNeedsDisc, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC); UIK_Log("U2 screen %p: disconnection deferred", (__bridge void *)self); return; }
     uik_realDisconnect(self, _cmd);
 }
-static id uik_preventDisconnection(id self, SEL _cmd, NSString *reason) {                    // 0x18996babc
+static void uik_disconnectScreenU2(id self, SEL _cmd) {
+    @try { uik_disconnectScreenU2_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_disconnectScreenU2", e_); if (orig_disconnectScreenU2) { ((void (*)(id, SEL))(uik_fn)orig_disconnectScreenU2)(self, _cmd); }  }
+}
+
+static id uik_preventDisconnection_body(id self, SEL _cmd, NSString *reason) {                    // 0x18996babc
     if (!self || gUFlagsOff < 0) return nil;
     unsigned short flags = *(unsigned short *)((char *)(__bridge void *)self + gUFlagsOff);
     if (!(flags & 0x20) || objc_getAssociatedObject(self, &kUScreenNeedsDisc)) return nil;   // connected and not needing disconnection
@@ -526,90 +644,120 @@ static id uik_preventDisconnection(id self, SEL _cmd, NSString *reason) {       
     UIK_Log("U2 preventing disconnection of screen %p: %s", (__bridge void *)self, reason.UTF8String);
     return a;
 }
+static id uik_preventDisconnection(id self, SEL _cmd, NSString *reason) {
+    @try { return uik_preventDisconnection_body(self, _cmd, reason); }
+    @catch (NSException *e_) { uik_exc("uik_preventDisconnection", e_); return nil; }
+}
+
 // -[_UIWindowSceneDisplaySettingsDiffAction _performActionsForUIScene:withUpdatedFBSScene:settingsDiff:fromSettings:transitionContext:lifecycleActionType:] 16.2 0x1895fd4fc
-static void uik_displayAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {
+static void uik_displayAction_body(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {
     Class ws = objc_getClass("UIWindowScene");
     if (!UIK_U2On() || !ws || ![uiScene isKindOfClass:ws]) { ((void (*)(id, SEL, id, id, id, id, id, unsigned long long))orig_dispActionU2)(self, _cmd, uiScene, fbs, diff, from, ctx, type); return; }
     unsigned char flags = from == nil ? 2 : 0;
-    id insp = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("sceneSettingsDisplayDiffInspector"));
-    ((void (*)(id, SEL, id, void *))objc_msgSend)(insp, sel_registerName("inspectDiff:withContext:"), diff, &flags);
+    id insp = UIK_SEND(id (*)(id, SEL), self, "sceneSettingsDisplayDiffInspector");
+    UIK_SEND(void (*)(id, SEL, id, void *), insp, "inspectDiff:withContext:", diff, &flags);
     if (!(flags & 3)) return;
-    id cfg = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(fbs, sel_registerName("settings")), sel_registerName("displayConfiguration"));
-    id ident = ((id (*)(id, SEL))objc_msgSend)(cfg, sel_registerName("identity"));
-    id screen = ((id (*)(id, SEL, id))objc_msgSend)((id)objc_getClass("UIScreen"), sel_registerName("_screenWithFBSDisplayIdentity:"), ident);
+    id cfg = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), fbs, "settings"), "displayConfiguration");
+    id ident = UIK_SEND(id (*)(id, SEL), cfg, "identity");
+    id screen = UIK_SEND(id (*)(id, SEL, id), (id)objc_getClass("UIScreen"), "_screenWithFBSDisplayIdentity:", ident);
     if (!screen) return;
     if (flags & 1) {
         id app = [UIApplication sharedApplication];
-        if (!((BOOL (*)(id, SEL))objc_msgSend)(app, sel_registerName("isFrontBoard"))) ((void (*)(id, SEL, id))objc_msgSend)(screen, sel_registerName("_updateDisplayConfiguration:"), cfg);
+        if (!UIK_SEND(BOOL (*)(id, SEL), app, "isFrontBoard")) UIK_SEND(void (*)(id, SEL, id), screen, "_updateDisplayConfiguration:", cfg);
     }
-    long long status = ((long long (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(fbs, sel_registerName("uiSettings")), sel_registerName("screenReferenceDisplayModeStatus"));
-    ((void (*)(id, SEL, long long))objc_msgSend)(screen, sel_registerName("_setReferenceDisplayModeStatus:"), status);
+    long long status = UIK_SEND(long long (*)(id, SEL), UIK_SEND(id (*)(id, SEL), fbs, "uiSettings"), "screenReferenceDisplayModeStatus");
+    UIK_SEND(void (*)(id, SEL, long long), screen, "_setReferenceDisplayModeStatus:", status);
 }
+static void uik_displayAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {
+    @try { uik_displayAction_body(self, _cmd, uiScene, fbs, diff, from, ctx, type); }
+    @catch (NSException *e_) { uik_exc("uik_displayAction", e_); if (orig_dispActionU2) { ((void (*)(id, SEL, id, id, id, id, id, unsigned long long))(uik_fn)orig_dispActionU2)(self, _cmd, uiScene, fbs, diff, from, ctx, type); }  }
+}
+
 
 // ---- _UIScreenBasedWindowScene
 static BOOL uik_yes(id self, SEL _cmd) { (void)self; (void)_cmd; return YES; }
 static id uik_sceneScreen(id s) { return (__bridge id)*(void **)((char *)(__bridge void *)s + gUScreenOff); }
 static BOOL uik_sceneNeedsInv(id s) { return [objc_getAssociatedObject(s, &kUSceneNeedsInv) boolValue]; }
-static BOOL uik_sceneHasInvalidated(id s) { return ((BOOL (*)(id, SEL))objc_msgSend)(s, sel_registerName("_hasInvalidated")); }
-static id uik_preventAutoInvalidation(id self, SEL _cmd, NSString *reason) {                // 0x1895fea08
+static BOOL uik_sceneHasInvalidated(id s) { return UIK_SEND(BOOL (*)(id, SEL), s, "_hasInvalidated"); }
+static id uik_preventAutoInvalidation_body(id self, SEL _cmd, NSString *reason) {                // 0x1895fea08
     if (!self) return nil;
     Class c = object_getClass(self);
-    if (!((BOOL (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("autoInvalidates")) || uik_sceneNeedsInv(self)) return nil;
+    if (!UIK_SEND(BOOL (*)(id, SEL), (id)c, "autoInvalidates") || uik_sceneNeedsInv(self)) return nil;
     NSMutableSet *set = objc_getAssociatedObject(self, &kUSceneSet);
     if (!set) { set = [NSMutableSet set]; objc_setAssociatedObject(self, &kUSceneSet, set, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
     if (!objc_getAssociatedObject(self, &kUSceneScreenAssertion)) {
         NSString *r = [NSString stringWithFormat:@"%s: %p: prevent screen disconnection", class_getName(c), (__bridge void *)self];
-        id sa = ((id (*)(id, SEL, id))objc_msgSend)(uik_sceneScreen(self), sel_registerName("_preventDisconnectionForReason:"), r);
+        id sa = UIK_SEND(id (*)(id, SEL, id), uik_sceneScreen(self), "_preventDisconnectionForReason:", r);
         objc_setAssociatedObject(self, &kUSceneScreenAssertion, sa, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     NSString *ident = [NSString stringWithFormat:@"%s-%p-%lu", class_getName(c), (__bridge void *)self, ++gUCounter];
     __weak id w = self;
     id a = UIK_NewSimpleAssertion(ident, reason, ^(id as) {                                   // block 0x1895fed6c
         id s = w;
-        if (s) ((void (*)(id, SEL, id))objc_msgSend)(s, sel_registerName("_removeAutoInvalidationPreventionAssertion:"), as);
+        if (s) UIK_SEND(void (*)(id, SEL, id), s, "_removeAutoInvalidationPreventionAssertion:", as);
     });
     if (a) [set addObject:a];
     UIK_Log("U2 preventing auto invalidation of scene %p: %s (assertions %lu)", (__bridge void *)self, reason.UTF8String, (unsigned long)[set count]);
     return a;
 }
-static void uik_performInvalidationIfNeeded(id self, SEL _cmd) {                            // 0x1895fe834
+static id uik_preventAutoInvalidation(id self, SEL _cmd, NSString *reason) {
+    @try { return uik_preventAutoInvalidation_body(self, _cmd, reason); }
+    @catch (NSException *e_) { uik_exc("uik_preventAutoInvalidation", e_); return nil; }
+}
+
+static void uik_performInvalidationIfNeeded_body(id self, SEL _cmd) {                            // 0x1895fe834
     if (!self || !uik_sceneNeedsInv(self) || uik_sceneHasInvalidated(self)) return;
     objc_setAssociatedObject(self, &kUSceneNeedsInv, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     UIK_Log("U2 performing invalidation for scene %p", (__bridge void *)self);
-    ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_invalidate"));
+    UIK_SEND(void (*)(id, SEL), self, "_invalidate");
     Class c = object_getClass(self);
     id key = (__bridge id)*(void **)((char *)(__bridge void *)self + gULookupOff);
-    id q = ((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("unassociationCacheAccessQueue"));
-    dispatch_sync((dispatch_queue_t)q, ^{ ((void (*)(id, SEL, id))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("unassociationCache")), sel_registerName("removeObjectForKey:"), key); });
+    id q = UIK_SEND(id (*)(id, SEL), (id)c, "unassociationCacheAccessQueue");
+    dispatch_sync((dispatch_queue_t)q, ^{ UIK_SEND(void (*)(id, SEL, id), UIK_SEND(id (*)(id, SEL), (id)c, "unassociationCache"), "removeObjectForKey:", key); });
 }
-static void uik_removeAutoInvalidationAssertion(id self, SEL _cmd, id assertion) {          // 0x1895fedd0
+static void uik_performInvalidationIfNeeded(id self, SEL _cmd) {
+    @try { uik_performInvalidationIfNeeded_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_performInvalidationIfNeeded", e_);  }
+}
+
+static void uik_removeAutoInvalidationAssertion_body(id self, SEL _cmd, id assertion) {          // 0x1895fedd0
     NSMutableSet *set = objc_getAssociatedObject(self, &kUSceneSet);
     if (![set containsObject:assertion]) { UIK_Problem("u2-removeassertion", "U2 _removeAutoInvalidationPreventionAssertion: for an assertion that is not held (16.2 asserts)"); return; }
     [set removeObject:assertion];
     if ([set count] == 0) {
-        ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_performInvalidationIfNeeded"));
+        UIK_SEND(void (*)(id, SEL), self, "_performInvalidationIfNeeded");
         id sa = objc_getAssociatedObject(self, &kUSceneScreenAssertion);
-        if (sa) ((void (*)(id, SEL))objc_msgSend)(sa, sel_registerName("invalidate"));
+        if (sa) UIK_SEND(void (*)(id, SEL), sa, "invalidate");
         objc_setAssociatedObject(self, &kUSceneScreenAssertion, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 }
-static void uik_screenDisconnected(id self, SEL _cmd, NSNotification *n) {                 // 0x1895ff670
+static void uik_removeAutoInvalidationAssertion(id self, SEL _cmd, id assertion) {
+    @try { uik_removeAutoInvalidationAssertion_body(self, _cmd, assertion); }
+    @catch (NSException *e_) { uik_exc("uik_removeAutoInvalidationAssertion", e_);  }
+}
+
+static void uik_screenDisconnected_body(id self, SEL _cmd, NSNotification *n) {                 // 0x1895ff670
     id screen = n.object;
     if (![screen isKindOfClass:objc_getClass("UIScreen")] || uik_sceneScreen(self) != screen) return;
     id sa = objc_getAssociatedObject(self, &kUSceneScreenAssertion);
     if (sa) UIK_Problem("u2-disconnect-assertion", "U2 screen is disconnecting while an assertion should prevent it (16.2 logs a fault)");
-    if (sa) ((void (*)(id, SEL))objc_msgSend)(sa, sel_registerName("invalidate"));
+    if (sa) UIK_SEND(void (*)(id, SEL), sa, "invalidate");
     objc_setAssociatedObject(self, &kUSceneScreenAssertion, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(self, &kUSceneNeedsInv, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    ((void (*)(id, SEL))objc_msgSend)(self, sel_registerName("_performInvalidationIfNeeded"));
+    UIK_SEND(void (*)(id, SEL), self, "_performInvalidationIfNeeded");
 }
+static void uik_screenDisconnected(id self, SEL _cmd, NSNotification *n) {
+    @try { uik_screenDisconnected_body(self, _cmd, n); }
+    @catch (NSException *e_) { uik_exc("uik_screenDisconnected", e_);  }
+}
+
 static IMP orig_detachU2, orig_unassocU2;
-static void uik_detachWindow(id self, SEL _cmd, id window) {                                // 0x18949e658
+static void uik_detachWindow_body(id self, SEL _cmd, id window) {                                // 0x18949e658
     if (!UIK_U2On()) { ((void (*)(id, SEL, id))orig_detachU2)(self, _cmd, window); return; }
     IMP sup = class_getMethodImplementation(class_getSuperclass(gUSceneCls), _cmd);
     ((void (*)(id, SEL, id))sup)(self, _cmd, window);
     Class c = object_getClass(self);
-    if (!((BOOL (*)(id, SEL))objc_msgSend)((id)c, sel_registerName("autoInvalidates"))) return;
+    if (!UIK_SEND(BOOL (*)(id, SEL), (id)c, "autoInvalidates")) return;
     BOOL *reg = (BOOL *)((char *)(__bridge void *)self + gUEvalOff);
     if (*reg || uik_sceneHasInvalidated(self)) return;
     *reg = YES;
@@ -619,93 +767,138 @@ static void uik_detachWindow(id self, SEL _cmd, id window) {                    
         if (!s || uik_sceneHasInvalidated(s)) return;
         __block BOOL hasWindows = NO;
         void (^each)(id, BOOL *) = ^(id win, BOOL *stop) { hasWindows = YES; if (stop) *stop = YES; };
-        ((void (*)(id, SEL, BOOL, BOOL, BOOL, BOOL *, id))objc_msgSend)(s, sel_registerName("_enumerateWindowsIncludingInternalWindows:onlyVisibleWindows:asCopy:stopped:withBlock:"), YES, NO, NO, NULL, each);
+        UIK_SEND(void (*)(id, SEL, BOOL, BOOL, BOOL, BOOL *, id), s, "_enumerateWindowsIncludingInternalWindows:onlyVisibleWindows:asCopy:stopped:withBlock:", YES, NO, NO, NULL, each);
         if (!hasWindows) {
             objc_setAssociatedObject(s, &kUSceneNeedsInv, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             UIK_Log("U2 marking scene %p as needing invalidation", (__bridge void *)s);
             NSSet *set = objc_getAssociatedObject(s, &kUSceneSet);
-            if (!set || [set count] == 0) ((void (*)(id, SEL))objc_msgSend)(s, sel_registerName("_performInvalidationIfNeeded"));
+            if (!set || [set count] == 0) UIK_SEND(void (*)(id, SEL), s, "_performInvalidationIfNeeded");
         }
         *(BOOL *)((char *)(__bridge void *)s + gUEvalOff) = NO;
     }];
 }
+static void uik_detachWindow(id self, SEL _cmd, id window) {
+    @try { uik_detachWindow_body(self, _cmd, window); }
+    @catch (NSException *e_) { uik_exc("uik_detachWindow", e_); if (orig_detachU2) { ((void (*)(id, SEL, id))(uik_fn)orig_detachU2)(self, _cmd, window); }  }
+}
+
 // +[_UIScreenBasedWindowScene _unassociatedWindowSceneForScreen:create:] 0x18908ca30: the scene is made OUTSIDE the cache queue block
-static id uik_unassociated(id cls, SEL _cmd, id screen, BOOL create) {
+static id uik_unassociated_body(id cls, SEL _cmd, id screen, BOOL create) {
     if (!UIK_U2On()) return ((id (*)(id, SEL, id, BOOL))orig_unassocU2)(cls, _cmd, screen, create);
     __block id key = nil, ctx = nil;
     __block BOOL created = NO;
-    id q = ((id (*)(id, SEL))objc_msgSend)(cls, sel_registerName("unassociationCacheAccessQueue"));
+    id q = UIK_SEND(id (*)(id, SEL), cls, "unassociationCacheAccessQueue");
     dispatch_sync((dispatch_queue_t)q, ^{
-        id k = ((id (*)(id, SEL))objc_msgSend)(screen, sel_registerName("displayIdentity"));
-        if (!k) k = ((id (*)(id, SEL))objc_msgSend)(screen, sel_registerName("_name"));
+        id k = UIK_SEND(id (*)(id, SEL), screen, "displayIdentity");
+        if (!k) k = UIK_SEND(id (*)(id, SEL), screen, "_name");
         key = k;
-        id cache = ((id (*)(id, SEL))objc_msgSend)(cls, sel_registerName("unassociationCache"));
-        ctx = ((id (*)(id, SEL, id))objc_msgSend)(cache, sel_registerName("objectForKey:"), key);
+        id cache = UIK_SEND(id (*)(id, SEL), cls, "unassociationCache");
+        ctx = UIK_SEND(id (*)(id, SEL, id), cache, "objectForKey:", key);
         if (ctx || !create) return;
         created = YES;
         ctx = [[objc_getClass("_UISceneUnassociatedContext") alloc] init];
-        id sess = ((id (*)(id, SEL, id, id, id))objc_msgSend)([objc_getClass("UISceneSession") alloc], sel_registerName("_initWithPersistentIdentifier:sessionRole:configurationName:"), [[NSUUID UUID] UUIDString], @"_UIScreenBasedSceneSession", nil);
-        id cfg = ((id (*)(id, SEL))objc_msgSend)(sess, sel_registerName("configuration"));
-        ((void (*)(id, SEL, Class))objc_msgSend)(cfg, sel_registerName("setSceneClass:"), Nil);
-        ((void (*)(id, SEL, Class))objc_msgSend)(cfg, sel_registerName("setDelegateClass:"), Nil);
-        ((void (*)(id, SEL, id))objc_msgSend)(cfg, sel_registerName("setStoryboard:"), nil);
-        ((void (*)(id, SEL, id))objc_msgSend)(sess, sel_registerName("_updateConfiguration:"), cfg);
-        ((void (*)(id, SEL, id))objc_msgSend)(ctx, sel_registerName("setSession:"), sess);
-        ((void (*)(id, SEL, id, id))objc_msgSend)(cache, sel_registerName("setObject:forKey:"), ctx, key);
+        id sess = UIK_SEND(id (*)(id, SEL, id, id, id), [objc_getClass("UISceneSession") alloc], "_initWithPersistentIdentifier:sessionRole:configurationName:", [[NSUUID UUID] UUIDString], @"_UIScreenBasedSceneSession", nil);
+        id cfg = UIK_SEND(id (*)(id, SEL), sess, "configuration");
+        UIK_SEND(void (*)(id, SEL, Class), cfg, "setSceneClass:", Nil);
+        UIK_SEND(void (*)(id, SEL, Class), cfg, "setDelegateClass:", Nil);
+        UIK_SEND(void (*)(id, SEL, id), cfg, "setStoryboard:", nil);
+        UIK_SEND(void (*)(id, SEL, id), sess, "_updateConfiguration:", cfg);
+        UIK_SEND(void (*)(id, SEL, id), ctx, "setSession:", sess);
+        UIK_SEND(void (*)(id, SEL, id, id), cache, "setObject:forKey:", ctx, key);
     });
     if (created && ctx && key) {
-        id sess = ((id (*)(id, SEL))objc_msgSend)(ctx, sel_registerName("session"));
-        id scene = ((id (*)(id, SEL, id, id, id))objc_msgSend)([cls alloc], sel_registerName("initWithScreen:session:lookupKey:"), screen, sess, key);
-        ((void (*)(id, SEL, id))objc_msgSend)(ctx, sel_registerName("setScene:"), scene);
+        id sess = UIK_SEND(id (*)(id, SEL), ctx, "session");
+        id scene = UIK_SEND(id (*)(id, SEL, id, id, id), [cls alloc], "initWithScreen:session:lookupKey:", screen, sess, key);
+        UIK_SEND(void (*)(id, SEL, id), ctx, "setScene:", scene);
         NSString *const *pn = (NSString *const *)dlsym(RTLD_DEFAULT, "_UISceneWillConnectNotification");
         [[NSNotificationCenter defaultCenter] postNotificationName:pn ? *pn : @"_UISceneWillConnectNotification" object:scene];
-        ((void (*)(id, SEL, id))objc_msgSend)(sess, sel_registerName("_setScene:"), scene);
+        UIK_SEND(void (*)(id, SEL, id), sess, "_setScene:", scene);
     }
-    return ((id (*)(id, SEL))objc_msgSend)(ctx, sel_registerName("scene"));
+    return UIK_SEND(id (*)(id, SEL), ctx, "scene");
+}
+static id uik_unassociated(id cls, SEL _cmd, id screen, BOOL create) {
+    @try { return uik_unassociated_body(cls, _cmd, screen, create); }
+    @catch (NSException *e_) { uik_exc("uik_unassociated", e_); if (orig_unassocU2) { return ((id (*)(id, SEL, id, BOOL))(uik_fn)orig_unassocU2)(cls, _cmd, screen, create); } return nil; }
 }
 
+
 // ---- live resize
-static void uik_inLiveResizeDidChange(id self, SEL _cmd) {                                  // 0x189dfbeb0
+static void uik_inLiveResizeDidChange_body(id self, SEL _cmd) {                                  // 0x189dfbeb0
     if (!self) return;
-    BOOL live = ((BOOL (*)(id, SEL))objc_msgSend)(self, sel_registerName("_isInLiveResize"));
+    BOOL live = UIK_SEND(BOOL (*)(id, SEL), self, "_isInLiveResize");
     [[NSNotificationCenter defaultCenter] postNotificationName:live ? @"UIWindowSceneDidBeginLiveResizeNotification" : @"UIWindowSceneDidEndLiveResizeNotification" object:self];
 }
-static BOOL uik_isInLiveResize(id self, SEL _cmd) {                                         // 0x189dfbe78
-    id s = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_effectiveUISettings"));
-    return ((BOOL (*)(id, SEL))objc_msgSend)(s, sel_registerName("inLiveResize"));
+static void uik_inLiveResizeDidChange(id self, SEL _cmd) {
+    @try { uik_inLiveResizeDidChange_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_inLiveResizeDidChange", e_);  }
 }
-static void uik_observeInLiveResize(id self, SEL _cmd, id block) { ((void (*)(id, SEL, unsigned long long, id))objc_msgSend)(self, sel_registerName("_observeOtherSetting:withBlock:"), 0x28, block); }
+
+static BOOL uik_isInLiveResize_body(id self, SEL _cmd) {                                         // 0x189dfbe78
+    id s = UIK_SEND(id (*)(id, SEL), self, "_effectiveUISettings");
+    return UIK_SEND(BOOL (*)(id, SEL), s, "inLiveResize");
+}
+static BOOL uik_isInLiveResize(id self, SEL _cmd) {
+    @try { return uik_isInLiveResize_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_isInLiveResize", e_); return 0; }
+}
+
+static void uik_observeInLiveResize_body(id self, SEL _cmd, id block) { UIK_SEND(void (*)(id, SEL, unsigned long long, id), self, "_observeOtherSetting:withBlock:", 0x28, block); }
+static void uik_observeInLiveResize(id self, SEL _cmd, id block) {
+    @try { uik_observeInLiveResize_body(self, _cmd, block); }
+    @catch (NSException *e_) { uik_exc("uik_observeInLiveResize", e_);  }
+}
+
 static char kULiveInsp;
-static id uik_liveInspector(id self, SEL _cmd) {
+static id uik_liveInspector_body(id self, SEL _cmd) {
     id i = objc_getAssociatedObject(self, &kULiveInsp);
     if (!i) {
         i = [[objc_getClass("UIApplicationSceneSettingsDiffInspector") alloc] init];
-        ((void (*)(id, SEL, id))objc_msgSend)(i, sel_registerName("observeInLiveResizeWithBlock:"), ^(void *ctx) { *(unsigned char *)ctx |= 1; });
+        UIK_SEND(void (*)(id, SEL, id), i, "observeInLiveResizeWithBlock:", ^(void *ctx) { *(unsigned char *)ctx |= 1; });
         objc_setAssociatedObject(self, &kULiveInsp, i, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return i;
 }
-static void uik_setLiveInspector(id self, SEL _cmd, id i) { objc_setAssociatedObject(self, &kULiveInsp, i, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
-static void uik_liveAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {   // 0x189e7a2ac
+static id uik_liveInspector(id self, SEL _cmd) {
+    @try { return uik_liveInspector_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_liveInspector", e_); return nil; }
+}
+
+static void uik_setLiveInspector_body(id self, SEL _cmd, id i) { objc_setAssociatedObject(self, &kULiveInsp, i, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+static void uik_setLiveInspector(id self, SEL _cmd, id i) {
+    @try { uik_setLiveInspector_body(self, _cmd, i); }
+    @catch (NSException *e_) { uik_exc("uik_setLiveInspector", e_);  }
+}
+
+static void uik_liveAction_body(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {   // 0x189e7a2ac
     if (![uiScene isKindOfClass:objc_getClass("UIWindowScene")]) { UIK_Problem("u2-live", "U2 live resize action for a scene that is not a UIWindowScene (16.2 asserts)"); return; }
     unsigned char flag = 0;
-    ((void (*)(id, SEL, id, void *))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("sceneSettingsLiveResizeDiffInspector")), sel_registerName("inspectDiff:withContext:"), diff, &flag);
-    if (flag & 1) ((void (*)(id, SEL))objc_msgSend)(uiScene, sel_registerName("_inLiveResizeDidChange"));
+    UIK_SEND(void (*)(id, SEL, id, void *), UIK_SEND(id (*)(id, SEL), self, "sceneSettingsLiveResizeDiffInspector"), "inspectDiff:withContext:", diff, &flag);
+    if (flag & 1) UIK_SEND(void (*)(id, SEL), uiScene, "_inLiveResizeDidChange");
 }
-static void uik_nonInteractiveAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {   // 0x1895fd6f0
-    if (!((BOOL (*)(id, SEL))objc_msgSend)(uiScene, sel_registerName("_hasLifecycle"))) return;
-    id settings = ((id (*)(id, SEL))objc_msgSend)(uiScene, sel_registerName("_effectiveSettings"));
+static void uik_liveAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {
+    @try { uik_liveAction_body(self, _cmd, uiScene, fbs, diff, from, ctx, type); }
+    @catch (NSException *e_) { uik_exc("uik_liveAction", e_);  }
+}
+
+static void uik_nonInteractiveAction_body(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {   // 0x1895fd6f0
+    if (!UIK_SEND(BOOL (*)(id, SEL), uiScene, "_hasLifecycle")) return;
+    id settings = UIK_SEND(id (*)(id, SEL), uiScene, "_effectiveSettings");
     id blk = gUUpdateBlock(uiScene, from, settings, ctx);
     if (!blk) return;
     void (^b)(void) = blk;
     gUPerformChanges(ctx, ^{                                                                  // block 0x1895fd824
         b();
-        id mux = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("_UISceneLifecycleMultiplexer"), sel_registerName("sharedInstance"));
-        ((void (*)(id, SEL, id, id, id))objc_msgSend)(mux, sel_registerName("uiScene:transitionedFromState:withTransitionContext:"), uiScene, from, ctx);
+        id mux = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("_UISceneLifecycleMultiplexer"), "sharedInstance");
+        UIK_SEND(void (*)(id, SEL, id, id, id), mux, "uiScene:transitionedFromState:withTransitionContext:", uiScene, from, ctx);
     }, nil);
 }
+static void uik_nonInteractiveAction(id self, SEL _cmd, id uiScene, id fbs, id diff, id from, id ctx, unsigned long long type) {
+    @try { uik_nonInteractiveAction_body(self, _cmd, uiScene, fbs, diff, from, ctx, type); }
+    @catch (NSException *e_) { uik_exc("uik_nonInteractiveAction", e_);  }
+}
+
 static id uik_firstOfClass(NSArray *a, const char *name) { Class c = objc_getClass(name); for (id o in a) if (c && [o isKindOfClass:c]) return o; return nil; }
-static id uik_appActions(id self, SEL _cmd) {
+static id uik_appActions_body(id self, SEL _cmd) {
     NSArray *a = ((id (*)(id, SEL))orig_appActionsU2)(self, _cmd);
     if (!UIK_U2On() || ![a isKindOfClass:[NSArray class]] || uik_firstOfClass(a, "_UIWindowSceneLiveResizeDiffAction")) return a;
     NSMutableArray *m = [a mutableCopy];
@@ -714,13 +907,23 @@ static id uik_appActions(id self, SEL _cmd) {
     [m insertObject:[[gULiveCls alloc] init] atIndex:[m indexOfObject:w] + 1];
     return m;
 }
-static id uik_extActions(id self, SEL _cmd) {
+static id uik_appActions(id self, SEL _cmd) {
+    @try { return uik_appActions_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_appActions", e_); if (orig_appActionsU2) { return ((id (*)(id, SEL))(uik_fn)orig_appActionsU2)(self, _cmd); } return nil; }
+}
+
+static id uik_extActions_body(id self, SEL _cmd) {
     NSArray *a = ((id (*)(id, SEL))orig_extActionsU2)(self, _cmd);
     if (!UIK_U2On() || ![a isKindOfClass:[NSArray class]] || !gUNonCls) return a;
     id d = uik_firstOfClass(a, "_UIWindowSceneDisplaySettingsDiffAction"), g = uik_firstOfClass(a, "_UIWindowSceneGeometrySettingsDiffAction"), o = uik_firstOfClass(a, "_UIWindowSceneOcclusionSettingsDiffAction"), w = uik_firstOfClass(a, "_UIWindowSceneWindowingModeDiffAction");
     if (!d || !g || !o || !w || !uik_firstOfClass(a, "_UIWindowSceneLifecycleSettingsDiffAction")) { UIK_Problem("u2-extactions", "U2 external screen initialSettingsDiffActions has an unexpected content: left as is"); return a; }
     return @[d, [[gUNonCls alloc] init], w, [[gULiveCls alloc] init], g, o];                  // 16.2 order
 }
+static id uik_extActions(id self, SEL _cmd) {
+    @try { return uik_extActions_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_extActions", e_); if (orig_extActionsU2) { return ((id (*)(id, SEL))(uik_fn)orig_extActionsU2)(self, _cmd); } return nil; }
+}
+
 
 static Class UIK_MakeAction(const char *name, SEL perform, IMP imp) {
     Class c = objc_getClass(name);
@@ -850,7 +1053,7 @@ static BOOL UIK_K2Cached(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         Class tp = objc_getClass("TIPreferencesController");
-        id pc = tp ? ((id (*)(id, SEL))objc_msgSend)((id)tp, sel_registerName("sharedPreferencesController")) : nil;
+        id pc = tp ? UIK_SEND(id (*)(id, SEL), (id)tp, "sharedPreferencesController") : nil;
         SEL vf = sel_registerName("valueForPreferenceKey:");
         id v = (pc && [pc respondsToSelector:vf]) ? ((id (*)(id, SEL, id))objc_msgSend)(pc, vf, @"AlwaysConvertToSceneCoordinates") : nil;
         cached = [v respondsToSelector:@selector(boolValue)] && [v boolValue];
@@ -871,27 +1074,42 @@ static BOOL UIK_K2Cached(void) {
     });
     return cached;
 }
-static BOOL uik_needsConvert(id self, SEL _cmd) {                                          // 0x189abed7c
+static BOOL uik_needsConvert_body(id self, SEL _cmd) {                                          // 0x189abed7c
     if (!UIK_K2Cached()) return NO;
-    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
-    id vm = ((id (*)(id, SEL))objc_msgSend)(d, sel_registerName("visualModeManager"));
-    return vm && ((BOOL (*)(id, SEL))objc_msgSend)(vm, sel_registerName("windowingModeEnabled"));
+    id d = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIKeyboardSceneDelegate"), "activeKeyboardSceneDelegate");
+    id vm = UIK_SEND(id (*)(id, SEL), d, "visualModeManager");
+    return vm && UIK_SEND(BOOL (*)(id, SEL), vm, "windowingModeEnabled");
 }
-static id uik_convertUserInfoK2(id self, SEL _cmd, id info) {                               // 0x189abefa4 (the 16.0 conversion towards the controller's own window scene)
-    id win = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_window"));
-    id scene = ((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("windowScene"));
-    return ((id (*)(id, SEL, id, id))objc_msgSend)(self, sel_registerName("convertUserInfo:toWindowScene:"), info, scene);
+static BOOL uik_needsConvert(id self, SEL _cmd) {
+    @try { return uik_needsConvert_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_needsConvert", e_); return 0; }
 }
-static void uik_postNotification(id self, SEL _cmd, NSString *name, id info) {              // 0x189abf33c
-    id view = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
-    id win = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("window"));
-    id screen = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("windowScene")), sel_registerName("screen"));
-    if (!screen) screen = ((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("screen"));
+
+static id uik_convertUserInfoK2_body(id self, SEL _cmd, id info) {                               // 0x189abefa4 (the 16.0 conversion towards the controller's own window scene)
+    id win = UIK_SEND(id (*)(id, SEL), self, "_window");
+    id scene = UIK_SEND(id (*)(id, SEL), win, "windowScene");
+    return UIK_SEND(id (*)(id, SEL, id, id), self, "convertUserInfo:toWindowScene:", info, scene);
+}
+static id uik_convertUserInfoK2(id self, SEL _cmd, id info) {
+    @try { return uik_convertUserInfoK2_body(self, _cmd, info); }
+    @catch (NSException *e_) { uik_exc("uik_convertUserInfoK2", e_); return nil; }
+}
+
+static void uik_postNotification_body(id self, SEL _cmd, NSString *name, id info) {              // 0x189abf33c
+    id view = UIK_SEND(id (*)(id, SEL), self, "view");
+    id win = UIK_SEND(id (*)(id, SEL), view, "window");
+    id screen = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), win, "windowScene"), "screen");
+    if (!screen) screen = UIK_SEND(id (*)(id, SEL), win, "screen");
     id out = info;
-    if (uik_needsConvert(self, 0)) out = ((id (*)(id, SEL, id))objc_msgSend)(self, sel_registerName("convertUserInfo:"), info);
+    if (uik_needsConvert(self, 0)) out = UIK_SEND(id (*)(id, SEL, id), self, "convertUserInfo:", info);
     [[NSNotificationCenter defaultCenter] postNotificationName:name object:screen userInfo:out];
 }
-static void uik_postCorresp(id self, SEL _cmd, NSString *name, id info) {
+static void uik_postNotification(id self, SEL _cmd, NSString *name, id info) {
+    @try { uik_postNotification_body(self, _cmd, name, info); }
+    @catch (NSException *e_) { uik_exc("uik_postNotification", e_);  }
+}
+
+static void uik_postCorresp_body(id self, SEL _cmd, NSString *name, id info) {
     if (!UIK_On(UIK_SW_KEYBOARD)) { ((void (*)(id, SEL, id, id))orig_postCorrespK2)(self, _cmd, name, info); return; }
     BOOL conv = uik_needsConvert(self, 0);
     static BOOL seen[2];
@@ -907,11 +1125,21 @@ static void uik_postCorresp(id self, SEL _cmd, NSString *name, id info) {
     uik_postNotification(self, _cmd, name, info);
     tK2Suppress = name;                                                                     // ... and the plain post that follows is not a 16.2 notification
 }
-static void uik_ncPost(id self, SEL _cmd, NSString *name, id object, id info) {
+static void uik_postCorresp(id self, SEL _cmd, NSString *name, id info) {
+    @try { uik_postCorresp_body(self, _cmd, name, info); }
+    @catch (NSException *e_) { uik_exc("uik_postCorresp", e_); if (orig_postCorrespK2) { ((void (*)(id, SEL, NSString *, id))(uik_fn)orig_postCorrespK2)(self, _cmd, name, info); }  }
+}
+
+static void uik_ncPost_body(id self, SEL _cmd, NSString *name, id object, id info) {
     NSString *s = tK2Suppress;
     if (s && name && (s == name || [s isEqualToString:name])) { tK2Suppress = nil; return; }
     ((void (*)(id, SEL, id, id, id))orig_ncPostK2)(self, _cmd, name, object, info);
 }
+static void uik_ncPost(id self, SEL _cmd, NSString *name, id object, id info) {
+    @try { uik_ncPost_body(self, _cmd, name, object, info); }
+    @catch (NSException *e_) { uik_exc("uik_ncPost", e_); if (orig_ncPostK2) { ((void (*)(id, SEL, NSString *, id, id))(uik_fn)orig_ncPostK2)(self, _cmd, name, object, info); }  }
+}
+
 // K2 is WITHDRAWN until proven (coordinator order after a device report: with K2 the UI no longer shifts for the keyboard in a full screen app either).  Decode so far: 16.0
 // -postToCorrespondingWindowSceneWithNotification:userInfo: (0x18997ecc8) posts one extra notification per name BEFORE the caller's plain [nc post...object:screen] : object = nil, userInfo converted to the
 // scene when (linked >= 16.0 SDK && windowing mode && !useVisualModeWindowed && scene.screen == keyboard window screen), else the unconverted info (object nil).  16.2 posts exactly ONE
@@ -946,28 +1174,28 @@ static void UIK_InstallK2(void) {
 //                                                            windowing mode off && text effects window && hosted in another process -> the same
 //                                                            everything else (every app with windowing mode on)  -> [_window.windowScene.coordinateSpace convertRect:r toCoordinateSpace:_window.screen.coordinateSpace]
 static IMP orig_cr3;
-static CGRect uik_convertRectK3(id self, SEL _cmd, CGRect r) {
+static CGRect uik_convertRectK3_body(id self, SEL _cmd, CGRect r) {
     if (!UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL, CGRect))orig_cr3)(self, _cmd, r);
-    id view = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
+    id view = UIK_SEND(id (*)(id, SEL), self, "view");
     CGRect in = r;
-    r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(view, sel_registerName("convertRect:toView:"), r, nil);
+    r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), view, "convertRect:toView:", r, nil);
     BOOL viaWindow = NO;
-    if ([(id)[UIApplication sharedApplication] respondsToSelector:sel_registerName("_isSpringBoard")] && ((BOOL (*)(id, SEL))objc_msgSend)([UIApplication sharedApplication], sel_registerName("_isSpringBoard"))) viaWindow = YES;
+    if ([(id)[UIApplication sharedApplication] respondsToSelector:sel_registerName("_isSpringBoard")] && UIK_SEND(BOOL (*)(id, SEL), [UIApplication sharedApplication], "_isSpringBoard")) viaWindow = YES;
     else {
-        id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
-        id vm = ((id (*)(id, SEL))objc_msgSend)(d, sel_registerName("visualModeManager"));
-        BOOL wm = vm && ((BOOL (*)(id, SEL))objc_msgSend)(vm, sel_registerName("windowingModeEnabled"));
+        id d = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIKeyboardSceneDelegate"), "activeKeyboardSceneDelegate");
+        id vm = UIK_SEND(id (*)(id, SEL), d, "visualModeManager");
+        BOOL wm = vm && UIK_SEND(BOOL (*)(id, SEL), vm, "windowingModeEnabled");
         if (!wm) {
-            id w = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_window"));
-            if (((BOOL (*)(id, SEL))objc_msgSend)(w, sel_registerName("_isTextEffectsWindow")) && ((BOOL (*)(id, SEL))objc_msgSend)(w, sel_registerName("_isHostedInAnotherProcess"))) viaWindow = YES;
+            id w = UIK_SEND(id (*)(id, SEL), self, "_window");
+            if (UIK_SEND(BOOL (*)(id, SEL), w, "_isTextEffectsWindow") && UIK_SEND(BOOL (*)(id, SEL), w, "_isHostedInAnotherProcess")) viaWindow = YES;
         }
     }
-    id win = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_window"));
-    if (viaWindow) r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(win, sel_registerName("convertRect:toWindow:"), r, nil);
+    id win = UIK_SEND(id (*)(id, SEL), self, "_window");
+    if (viaWindow) r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), win, "convertRect:toWindow:", r, nil);
     else {
-        id sp = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("windowScene")), sel_registerName("coordinateSpace"));
-        id tp = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("screen")), sel_registerName("coordinateSpace"));
-        r = ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(sp, sel_registerName("convertRect:toCoordinateSpace:"), r, tp);
+        id sp = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), win, "windowScene"), "coordinateSpace");
+        id tp = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), win, "screen"), "coordinateSpace");
+        r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), sp, "convertRect:toCoordinateSpace:", r, tp);
     }
     static int n;
     if (n < 3 && !CGRectEqualToRect(r, in) && !viaWindow) {
@@ -976,6 +1204,11 @@ static CGRect uik_convertRectK3(id self, SEL _cmd, CGRect r) {
     }
     return r;
 }
+static CGRect uik_convertRectK3(id self, SEL _cmd, CGRect r) {
+    @try { return uik_convertRectK3_body(self, _cmd, r); }
+    @catch (NSException *e_) { uik_exc("uik_convertRectK3", e_); if (orig_cr3) { return ((CGRect (*)(id, SEL, CGRect))(uik_fn)orig_cr3)(self, _cmd, r); } return CGRectZero; }
+}
+
 static void UIK_InstallK3(void) {
     Class iwc = objc_getClass("UIInputWindowController");
     const char *n[] = { "convertRectFromContainerCoordinateSpaceToScreenSpace:", "_window", "view" };
@@ -1026,11 +1259,11 @@ static BOOL K4_Can(id o, const char *s) {
 static id K4_O(id o, const char *s) { return K4_Can(o, s) ? ((id (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : nil; }
 static BOOL K4_B(id o, const char *s) { return K4_Can(o, s) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : NO; }
 static CGRect K4_R(id o, const char *s) { return K4_Can(o, s) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : CGRectZero; }
-static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {                                      // 0x189ac7ba0
+static CGRect uik_fullScreenFrameK4_body(id self, SEL _cmd) {                                      // 0x189ac7ba0
     id p = K4_O(self, "placement");
     if (p && !K4_B(p, "isVisible")) return CGRectZero;
     BOOL popover = NO;
-    if (((BOOL (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardImpl"), sel_registerName("isFloating"))) popover = YES;
+    if (UIK_SEND(BOOL (*)(id, SEL), (id)objc_getClass("UIKeyboardImpl"), "isFloating")) popover = YES;
     else if (K4_B(p, "isFloatingAssistantView") && !K4_O(K4_O(self, "inputViewSet"), "inputAccessoryView")) popover = YES;
     if (popover) return K4_R(K4_O(self, "applicator"), "popoverFrame");
     id host = K4_O(self, "hostView");
@@ -1043,11 +1276,11 @@ static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {                        
     id space = K4_O(K4_O(K4_O(host, "window"), "windowScene"), "coordinateSpace");
     CGRect f = K4_R(sv2, "frame");
     id sspace = K4_O(K4_O(K4_O(sv2, "window"), "screen"), "coordinateSpace");
-    CGRect r = K4_Can(space, "convertRect:fromCoordinateSpace:") ? ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(space, sel_registerName("convertRect:fromCoordinateSpace:"), f, sspace) : f;
+    CGRect r = K4_Can(space, "convertRect:fromCoordinateSpace:") ? UIK_SEND(CGRect (*)(id, SEL, CGRect, id), space, "convertRect:fromCoordinateSpace:", f, sspace) : f;
     CGRect hf = K4_R(K4_O(self, "hostView"), "frame");
     if (CGRectIsEmpty(CGRectIntersection(r, hf))) {
         id h2 = K4_O(self, "hostView");
-        CGPoint o = K4_Can(h2, "origin") ? ((CGPoint (*)(id, SEL))objc_msgSend)(h2, sel_registerName("origin")) : K4_R(h2, "frame").origin;      // 16.2 UIView(Geometry) origin = frame origin
+        CGPoint o = K4_Can(h2, "origin") ? UIK_SEND(CGPoint (*)(id, SEL), h2, "origin") : K4_R(h2, "frame").origin;      // 16.2 UIView(Geometry) origin = frame origin
         r.origin.y = o.y;
         if (CGRectIsEmpty(CGRectIntersection(r, K4_R(K4_O(self, "hostView"), "frame")))) return K4_R(K4_O(self, "hostView"), "frame");
         return r;
@@ -1059,8 +1292,13 @@ static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {                        
     }
     return r;
 }
-static CGRect uik_notificationsFrameK4(id self, SEL _cmd) {                                   // 0x189ac79e4
-    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+static CGRect uik_fullScreenFrameK4(id self, SEL _cmd) {
+    @try { return uik_fullScreenFrameK4_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_fullScreenFrameK4", e_); return CGRectZero; }
+}
+
+static CGRect uik_notificationsFrameK4_body(id self, SEL _cmd) {                                   // 0x189ac79e4
+    id d = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIKeyboardSceneDelegate"), "activeKeyboardSceneDelegate");
     id vm = d ? K4_O(d, "visualModeManager") : nil;
     if (!(vm && K4_B(vm, "windowingModeEnabled"))) return ((CGRect (*)(id, SEL))orig_vfK4)(self, sel_registerName("visibleFrame"));
     CGRect r = uik_fullScreenFrameK4(self, 0);
@@ -1071,6 +1309,11 @@ static CGRect uik_notificationsFrameK4(id self, SEL _cmd) {                     
     if (CGRectIsEmpty(CGRectIntersection(r, hf))) return r;
     return K4_R(K4_O(self, "hostView"), "frame");
 }
+static CGRect uik_notificationsFrameK4(id self, SEL _cmd) {
+    @try { return uik_notificationsFrameK4_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_notificationsFrameK4", e_); return CGRectZero; }
+}
+
 static void K4_Diag(id self, CGRect old, CGRect nf) {
     id host = K4_O(self, "hostView");
     id win = K4_O(host, "window");
@@ -1083,17 +1326,17 @@ static void K4_Diag(id self, CGRect old, CGRect nf) {
     CGRect svf = sv ? K4_R(sv, "frame") : CGRectZero;
     CGRect cont = K4_R(K4_O(self, "containerView"), "frame");
     CGRect svwin = sw ? K4_R(sw, "frame") : CGRectZero;
-    CGRect sceneB = space ? ((CGRect (*)(id, SEL))objc_msgSend)(space, sel_registerName("bounds")) : CGRectZero;
-    CGRect screenB = screen ? ((CGRect (*)(id, SEL))objc_msgSend)(K4_O(screen, "coordinateSpace"), sel_registerName("bounds")) : CGRectZero;
+    CGRect sceneB = space ? UIK_SEND(CGRect (*)(id, SEL), space, "bounds") : CGRectZero;
+    CGRect screenB = screen ? UIK_SEND(CGRect (*)(id, SEL), K4_O(screen, "coordinateSpace"), "bounds") : CGRectZero;
     CGRect winF = win ? K4_R(win, "frame") : CGRectZero;
     CGRect hostF = K4_R(host, "frame");
-    CGRect conv = sv ? ((CGRect (*)(id, SEL, CGRect, id))objc_msgSend)(space, sel_registerName("convertRect:fromCoordinateSpace:"), svf, K4_O(screen, "coordinateSpace")) : CGRectZero;
+    CGRect conv = sv ? UIK_SEND(CGRect (*)(id, SEL, CGRect, id), space, "convertRect:fromCoordinateSpace:", svf, K4_O(screen, "coordinateSpace")) : CGRectZero;
     char key_[64]; snprintf(key_, sizeof key_, "k4s%ld_%ld_%ld_%ld", (long)(svf.origin.y / 8), (long)(svf.size.height / 8), (long)(hostF.origin.y / 8), (long)(winF.size.height / 8));
     UIK_Problem(key_, "K4 input: hostView %s old %s -> result %s | placeheld superview frame %s (its window frame %s, screen bounds %s) converted into the host scene %s | host window frame %s, scene bounds %s, container frame %s (build 20A8372)",
         NSStringFromCGRect(hostF).UTF8String, NSStringFromCGRect(old).UTF8String, NSStringFromCGRect(nf).UTF8String, NSStringFromCGRect(svf).UTF8String, NSStringFromCGRect(svwin).UTF8String, NSStringFromCGRect(screenB).UTF8String,
         NSStringFromCGRect(conv).UTF8String, NSStringFromCGRect(winF).UTF8String, NSStringFromCGRect(sceneB).UTF8String, NSStringFromCGRect(cont).UTF8String);
 }
-static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
+static CGRect uik_visibleFrameK4_body(id self, SEL _cmd) {
     if (!gK4Ok || !UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
     uintptr_t ra = (uintptr_t)__builtin_return_address(0) & 0x7fffffffffULL;
     BOOL hit = NO;
@@ -1109,6 +1352,11 @@ static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
     }
     return nf;
 }
+static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
+    @try { return uik_visibleFrameK4_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_visibleFrameK4", e_); if (orig_vfK4) { return ((CGRect (*)(id, SEL))(uik_fn)orig_vfK4)(self, _cmd); } return CGRectZero; }
+}
+
 static void UIK_InstallK4(void) {
     Class iwc = objc_getClass("UIInputWindowController"), item = objc_getClass("UIInputWindowControllerHostingItem");
     NSMutableArray *missing = [NSMutableArray array];
@@ -1146,26 +1394,41 @@ static void UIK_InstallK4(void) {
 // Switch uik_kbplace.  (-[UIInputWindowControllerHosting reloadForPlacementForInputViewSet:] 0x189ac6208 passes the new input view set explicitly; the 16.0 reloadForPlacement reads the scene delegate's
 // current one through subPlacements: documented difference.)
 static IMP orig_aosSubK5, orig_vcK5;
-static id uik_aosSubForSetK5(id self, SEL _cmd, id ivs) {                                  // 0x189ab2cd0
-    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+static id uik_aosSubForSetK5_body(id self, SEL _cmd, id ivs) {                                  // 0x189ab2cd0
+    id d = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIKeyboardSceneDelegate"), "activeKeyboardSceneDelegate");
     id vm = d ? K4_O(d, "visualModeManager") : nil;
     if (!(vm && K4_B(vm, "useVisualModeWindowed"))) return nil;
     if (!ivs || !K4_O(ivs, "inputAccessoryView")) return nil;
     Ivar iv = class_getInstanceVariable(object_getClass(self), "_cachedSecondaryPlacement");
     id cached = iv ? object_getIvar(self, iv) : nil;
     if (!cached) {
-        cached = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIInputViewSetPlacementAccessoryOnScreen"), sel_registerName("placement"));
+        cached = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIInputViewSetPlacementAccessoryOnScreen"), "placement");
         if (iv) object_setIvar(self, iv, cached);
     }
     return cached ? @[cached] : nil;
 }
-static id uik_aosSubK5(id self, SEL _cmd) {                                                 // 0x189ab2c58
+static id uik_aosSubForSetK5(id self, SEL _cmd, id ivs) {
+    @try { return uik_aosSubForSetK5_body(self, _cmd, ivs); }
+    @catch (NSException *e_) { uik_exc("uik_aosSubForSetK5", e_); return nil; }
+}
+
+static id uik_aosSubK5_body(id self, SEL _cmd) {                                                 // 0x189ab2c58
     if (!UIK_On(UIK_SW_KBPLACE)) return ((id (*)(id, SEL))orig_aosSubK5)(self, _cmd);
-    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+    id d = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIKeyboardSceneDelegate"), "activeKeyboardSceneDelegate");
     return uik_aosSubForSetK5(self, _cmd, d ? K4_O(d, "inputViews") : nil);
 }
-static id uik_baseSubForSetK5(id self, SEL _cmd, id ivs) { return K4_O(self, "subPlacements"); }   // 0x189ab0e4c
-static id uik_vcK5(id self, SEL _cmd, id ivs, id host, id container) {                      // 0x189ab0f18
+static id uik_aosSubK5(id self, SEL _cmd) {
+    @try { return uik_aosSubK5_body(self, _cmd); }
+    @catch (NSException *e_) { uik_exc("uik_aosSubK5", e_); if (orig_aosSubK5) { return ((id (*)(id, SEL))(uik_fn)orig_aosSubK5)(self, _cmd); } return nil; }
+}
+
+static id uik_baseSubForSetK5_body(id self, SEL _cmd, id ivs) { return K4_O(self, "subPlacements"); }
+static id uik_baseSubForSetK5(id self, SEL _cmd, id ivs) {
+    @try { return uik_baseSubForSetK5_body(self, _cmd, ivs); }
+    @catch (NSException *e_) { uik_exc("uik_baseSubForSetK5", e_); return nil; }
+}
+   // 0x189ab0e4c
+static id uik_vcK5_body(id self, SEL _cmd, id ivs, id host, id container) {                      // 0x189ab0f18
     if (!UIK_On(UIK_SW_KBPLACE)) return ((id (*)(id, SEL, id, id, id))orig_vcK5)(self, _cmd, ivs, host, container);
     id root = K4_O(container, "_rootInputWindowController");
     id first = [K4_O(K4_O(root, "placement"), "subPlacements") firstObject];
@@ -1176,11 +1439,15 @@ static id uik_vcK5(id self, SEL _cmd, id ivs, id host, id container) {          
         if (!item) { id iv = K4_O(ivs, "inputView"); item = iv ?: host; }
     }
     if (!item) return nil;
-    if (!((BOOL (*)(id, SEL, id))objc_msgSend)(item, sel_registerName("isDescendantOfView:"), container)) return nil;
+    if (!UIK_SEND(BOOL (*)(id, SEL, id), item, "isDescendantOfView:", container)) return nil;
     BOOL hasAcc = K4_O(ivs, "inputAccessoryView") != nil;
-    return ((id (*)(id, SEL, id, long long, long long, id, long long, double, double))objc_msgSend)((id)objc_getClass("NSLayoutConstraint"),
-        sel_registerName("constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:"), item, hasAcc ? 4 : 3, 0, container, 4, 1.0, 0.0);
+    return UIK_SEND(id (*)(id, SEL, id, long long, long long, id, long long, double, double), (id)objc_getClass("NSLayoutConstraint"), "constraintWithItem:attribute:relatedBy:toItem:attribute:multiplier:constant:", item, hasAcc ? 4 : 3, 0, container, 4, 1.0, 0.0);
 }
+static id uik_vcK5(id self, SEL _cmd, id ivs, id host, id container) {
+    @try { return uik_vcK5_body(self, _cmd, ivs, host, container); }
+    @catch (NSException *e_) { uik_exc("uik_vcK5", e_); if (orig_vcK5) { return ((id (*)(id, SEL, id, id, id))(uik_fn)orig_vcK5)(self, _cmd, ivs, host, container); } return nil; }
+}
+
 static void UIK_InstallK5(void) {
     Class aos = objc_getClass("UIInputViewSetPlacementAssistantOnScreen"), acc = objc_getClass("UIInputViewSetPlacementAccessoryOnScreen"), base = objc_getClass("UIInputViewSetPlacement");
     NSMutableArray *missing = [NSMutableArray array];
