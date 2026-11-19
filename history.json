@@ -1,12 +1,4 @@
 {
- "0.7.9+327.0267b3d": {
-  "date": "2026-11-01T08:23:51Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+327.0267b3d_iphoneos-arm64.deb",
-  "run": 327,
-  "sha": "0267b3da3dd675f31b6690f04fe9aa02331cc586",
-  "subject": "Y29Blur: the root blur early out only runs when the content layer is not rasterized (the 16.0 completion clears the rasterization its blur start set; 16.2 never sets it), otherwise the 16.0 body runs: home icons stayed rasterized / missing after a quick dismiss",
-  "version": "0.7.9+327.0267b3d"
- },
  "0.7.9+328.dbf1ddf": {
   "date": "2026-11-01T08:29:13Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+328.dbf1ddf_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "3c3dd60bbe2b01ef72092f9d496089f436f6dd1b",
   "subject": "UIK K4: every send answers only when the receiver implements the selector (a 16.2 only selector raised doesNotRecognizeSelector inside Reynard: crash in -[UIInputWindowController viewWillLayoutSubviews] 20:12:05); a miss answers nil / zero and logs ANOMALY k4-missing once; origin falls back to frame.origin",
   "version": "0.7.9+399.3c3dd60"
+ },
+ "0.7.9+400.52491f2": {
+  "date": "2026-11-19T20:21:26Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+400.52491f2_iphoneos-arm64.deb",
+  "run": 400,
+  "sha": "52491f25ebe725000474b55f026753923197d474",
+  "subject": "CI: symbolicate the Backport162Core.dylib offsets listed in tools/symoffsets.txt against the dSYM of the build (device log: p1-attr-regress stack frames 0x10a614 0xe0708 0xb3f4c 0xbfec8)",
+  "version": "0.7.9+400.52491f2"
  }
 }
