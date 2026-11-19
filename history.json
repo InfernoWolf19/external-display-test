@@ -1,12 +1,4 @@
 {
- "0.7.9+308.5681d4b": {
-  "date": "2026-10-31T18:30:24Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+308.5681d4b_iphoneos-arm64.deb",
-  "run": 308,
-  "sha": "5681d4b191fd45eb6253a48c40564a41e1b33755",
-  "subject": "Y24Drag: drop session tracking of the switcher follows 16.2 (point inside the view inset by 0.5, strip hit only while the strips are unoccluded, content drag over a full screen container, y24_droptrack); DELTA-SWEEP row",
-  "version": "0.7.9+308.5681d4b"
- },
  "0.7.9+309.7439c69": {
   "date": "2026-10-31T18:41:52Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+309.7439c69_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "79a42f501a4d5a0d9bea5bf98d06855d39610136",
   "subject": "Y42Shelf: the install check asked NSSet for -containsAnyItemFromSet: (a method of SBAppLayout, present in 16.0); all missing selectors are now named at once",
   "version": "0.7.9+373.79a42f5"
+ },
+ "0.7.9+374.fea6599": {
+  "date": "2026-11-19T01:45:12Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+374.fea6599_iphoneos-arm64.deb",
+  "run": 374,
+  "sha": "fea6599734155b884ba0fc7600fa437b47cff7eb",
+  "subject": "Y43HomeBar: deliberate deviation (requested): the home bar and the corner resize marks of every app window auto hide after 2 s without touch and return on a tap; hook on wantsHomeAffordanceAutoHideForAppLayout: (stock 16.0 / 16.2 identical, only apps that ask for it hid); kill file Backport162.off.homebar_autohide; NOT device tested",
+  "version": "0.7.9+374.fea6599"
  },
  "0.7.9+375.877dbe0": {
   "date": "2026-11-19T01:43:43Z",
