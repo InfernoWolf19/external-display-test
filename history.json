@@ -1,12 +1,4 @@
 {
- "0.7.9+320.a0f1c00": {
-  "date": "2026-11-01T01:07:42Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+320.a0f1c00_iphoneos-arm64.deb",
-  "run": 320,
-  "sha": "a0f1c0005d85f0183752097b6d7bb2a78b9b851e",
-  "subject": "Y30Snapshot: debug line per snapshot layout (image frame size vs view and superview bounds) to pin the tiny card input; no behaviour change",
-  "version": "0.7.9+320.a0f1c00"
- },
  "0.7.9+321.5aa8f91": {
   "date": "2026-11-01T02:00:15Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+321.5aa8f91_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "0ad7443ef58203a9364d7c96bb0580dbe2e186db",
   "subject": "Y42Deck: the 16.2 init selector (shouldObserveChamoisWindowingChanges:, 0x1c77c95e8) added; it does the steps of the hooked 16.0 init (read from the 16.2 machine code); the Fluid chamois observer of the super init is the documented gap",
   "version": "0.7.9+389.0ad7443"
+ },
+ "0.7.9+390.404f96e": {
+  "date": "2026-11-19T17:58:50Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+390.404f96e_iphoneos-arm64.deb",
+  "run": 390,
+  "sha": "404f96ec067b9504a3259d73d2c0a20406e2cd76",
+  "subject": "Y42SelfTest: no instances any more (build 387 died in the release of a bare allocated instance of a runtime subclass 15 s after launch); the class structure of every runtime subclass is checked instead",
+  "version": "0.7.9+390.404f96e"
  }
 }

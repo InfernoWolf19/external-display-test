@@ -6,16 +6,16 @@ Codename: ios
 Architectures: iphoneos-arm64
 Components: main
 Description: Backport162 CI builds (iPadOS 16.2 Stage Manager / external display backport for iPadOS 16.0)
-Date: Thu, 19 Nov 2026 17:46:02 GMT
+Date: Thu, 19 Nov 2026 17:58:51 GMT
 MD5Sum:
- 181209c91078a3f96f7b697809fe1dd3 119944 Packages
- c2c7693bec0bacc2ca331ef6a36afc32 15690 Packages.gz
- becf200c8503c9e7b5008e4c37068828 14348 Packages.bz2
+ 2b280722524fee5cbb23adc0c93c1837 120006 Packages
+ eb9e07552f688402203021685c608cf7 15731 Packages.gz
+ 85ed26de623c80b997e8c0116f509d27 14381 Packages.bz2
 SHA1:
- 661a2cc3edb431b1574e388d626d16a40d41e3ff 119944 Packages
- 499a5cb4c103a5606de0e9f00c4eab2a0f61a9f5 15690 Packages.gz
- cd655509eb22fda79490fa5bccb758ae51ac4d07 14348 Packages.bz2
+ 01a4978547f58829e0ab03ec78c8b5458b8f89d0 120006 Packages
+ 0aa2985c817bd17ccb1c40b0f50b40815b305a95 15731 Packages.gz
+ 46109ae7cd491defd3ce7fa2b4753508a67a86b4 14381 Packages.bz2
 SHA256:
- 255faf8b0126a7dad91238e1ea29d88126b2935baf21b510e3062bf0216bbe0a 119944 Packages
- c302e57acd459782b128f6cc132dbaade27f040a4d533c110cd1a602307ca296 15690 Packages.gz
- a848e3b792d246f6875d76536cab3e0b58c3cb0d5c3b31eba41003890c3ddde2 14348 Packages.bz2
+ adc45106fe9094fcbb9197deb592fc7df9f0500a0a96660f3f5147bcfe3a700b 120006 Packages
+ 4ff4dbb33cee1ea646535f78f6ae3fbd90adcaa736acc58897bf30ed15f6ad9c 15731 Packages.gz
+ 67e4916b7ae2dc89807c54c18ed749b7331900d15b1450e2b0a1634ce18bc53a 14381 Packages.bz2
