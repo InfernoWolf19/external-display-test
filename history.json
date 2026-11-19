@@ -1,12 +1,4 @@
 {
- "0.7.9+322.bd3bb46": {
-  "date": "2026-11-01T02:16:47Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+322.bd3bb46_iphoneos-arm64.deb",
-  "run": 322,
-  "sha": "bd3bb4600801eff0dce5cf31413c57445c36d1f8",
-  "subject": "Always-on anomaly channel: BP_Anomaly writes \"ANOMALY <tag>: <message>\" to Backport162.log without Backport162.debug (de-duplicated, 300 lines / 40 per tag cap); every GUARD(...) line and Y17_GuardOnce route through it",
-  "version": "0.7.9+322.bd3bb46"
- },
  "0.7.9+323.3d473a5": {
   "date": "2026-11-01T02:21:42Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+323.3d473a5_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "f311d4ca4c211216cf9a68f581944943cd75abcb",
   "subject": "a2c: 'Lret: ;' (a label before the declaration of the size / rect result is a C23 extension, -Werror in the CI build 393); Y42ResizeLift.c regenerated",
   "version": "0.7.9+394.f311d4c"
+ },
+ "0.7.9+395.d41d728": {
+  "date": "2026-11-19T18:36:08Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+395.d41d728_iphoneos-arm64.deb",
+  "run": 395,
+  "sha": "d41d728de75781b1c5565b024f4136812d2d97fc",
+  "subject": "P1: always-on ANOMALY p1-attr-regress: an OLDER attribute set written into an interned SBAppLayout (call stack as image offsets) - device log shows the committed resize size is overwritten by the old one before the next transaction",
+  "version": "0.7.9+395.d41d728"
  }
 }
