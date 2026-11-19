@@ -1,12 +1,4 @@
 {
- "0.7.9+319.0efa07d": {
-  "date": "2026-11-01T01:00:01Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+319.0efa07d_iphoneos-arm64.deb",
-  "run": 319,
-  "sha": "0efa07d085333fc8368afeb2a497091192077fc6",
-  "subject": "G1C: the cross display window drag reads the dragging / proposed layouts as any collection (the coordinator answers an NSCountedSet, the VC an NSMutableSet; the NSArray only check rejected them and every drag to the other display fell back to the default window size instead of the source window's size, 16.2 0x1c74f406c); debug line per dragged-in window",
-  "version": "0.7.9+319.0efa07d"
- },
  "0.7.9+320.a0f1c00": {
   "date": "2026-11-01T01:07:42Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+320.a0f1c00_iphoneos-arm64.deb",
@@ -470,6 +462,14 @@
   "sha": "db2c3a4bcc8cb1dda356da4e457bc333fdf486e2",
   "subject": "Y42Deck: pass the selector to the recompiled getter as an integer through (void *) (-Wint-conversion): fixes build 384",
   "version": "0.7.9+387.db2c3a4"
+ },
+ "0.7.9+388.7b804e7": {
+  "date": "2026-11-19T17:46:00Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+388.7b804e7_iphoneos-arm64.deb",
+  "run": 388,
+  "sha": "7b804e76470821d873ae226028b58557ecf61e48",
+  "subject": "Y42Traits: -participantWillInvalidate: (16.2 0x1c77754bc), recompiled and added to the runtime subclass of the traits delegate",
+  "version": "0.7.9+388.7b804e7"
  },
  "0.7.9+389.0ad7443": {
   "date": "2026-11-19T17:45:32Z",
