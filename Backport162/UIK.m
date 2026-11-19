@@ -831,6 +831,106 @@ static void UIK_InstallU2(void) {
     UIK_Log("U2 installed (non interactive lifecycle action: %d)", (int)haveNon);
 }
 
+// ---------------------------------------------------------------- K2: keyboard notification frames in a Stage Manager window (16.2 UIInputWindowController)
+//
+// 16.0 (UIKitCore 0x18997ecc8 -postToCorrespondingWindowSceneWithNotification:userInfo:, called by the blocks of -postValidatedStartNotifications:withInfo: 0x1891b1434 / End 0x1891b0adc right before
+// the plain [nc postNotificationName:object:screen userInfo:]): when the app was linked against the iOS 16.0 SDK (_dyld_program_sdk_at_least 0x0010000000000002) AND the keyboard windowing mode is enabled AND
+// the visual mode is not windowed, a SECOND notification with the keyboard frames CONVERTED into the scene's coordinate space is posted.  An app that reads UIKeyboardFrameEndUserInfoKey and converts it
+// from the screen to its own window then gets a frame that is already window relative, finds no overlap with its window and does not move its UI (Reynard, Telegram windowed).
+// 16.2 (-postNotificationName:userInfo: 0x189abf33c, -needsConvertToSceneCoordinates 0x189abed7c, -convertUserInfo: 0x189abefa4): ONE notification per name; the frames are converted only when
+// needsConvertToSceneCoordinates (windowing mode enabled AND the app opted in: TextInput pref AlwaysConvertToSceneCoordinates, or the bundle id is in {com.apple.MobileAddressBook, com.apple.mobilenotes},
+// or in {com.tinyspeck.chatlyio, com.hammerandchisel.discord, com.apple.Pages, com.apple.Numbers, com.apple.Keynote} while the app is NOT linked against the 16.0 SDK; pref AlwaysNotConvertToSceneCoordinates
+// vetoes), otherwise they stay in UIScreen coordinates ("Warning - Keyboard frames in keyboard notifications are in UIScreen coordinates").
+// Port (switch uik_keyboard): the 16.0 method posts nothing unless needsConvert (the caller's plain post is then the one 16.2 notification) and otherwise posts the converted one with object = the screen and
+// drops the plain post that follows it (thread local, narrow hook of -[NSNotificationCenter postNotificationName:object:userInfo:]); the three 16.2 methods are added.
+static IMP orig_postCorrespK2, orig_ncPostK2;
+static __thread __unsafe_unretained NSString *tK2Suppress;
+static BOOL UIK_K2Cached(void) {
+    static BOOL cached;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        Class tp = objc_getClass("TIPreferencesController");
+        id pc = tp ? ((id (*)(id, SEL))objc_msgSend)((id)tp, sel_registerName("sharedPreferencesController")) : nil;
+        SEL vf = sel_registerName("valueForPreferenceKey:");
+        id v = (pc && [pc respondsToSelector:vf]) ? ((id (*)(id, SEL, id))objc_msgSend)(pc, vf, @"AlwaysConvertToSceneCoordinates") : nil;
+        cached = [v respondsToSelector:@selector(boolValue)] && [v boolValue];
+        NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
+        if (!cached) {
+            cached = [@[@"com.apple.MobileAddressBook", @"com.apple.mobilenotes"] containsObject:bid];
+            if (!cached) {
+                BOOL (*sdk)(unsigned long long) = (BOOL (*)(unsigned long long))dlsym(RTLD_DEFAULT, "_dyld_program_sdk_at_least");
+                BOOL linkedNew = sdk ? sdk(0x0010000000000002ULL) : YES;
+                cached = [@[@"com.tinyspeck.chatlyio", @"com.hammerandchisel.discord", @"com.apple.Pages", @"com.apple.Numbers", @"com.apple.Keynote"] containsObject:bid];
+                if (cached && linkedNew) { cached = NO; NSLog(@"Warning - Keyboard frames in keyboard notifications are in UIScreen coordinates"); }
+            }
+        }
+        if (cached) {
+            id n = (pc && [pc respondsToSelector:vf]) ? ((id (*)(id, SEL, id))objc_msgSend)(pc, vf, @"AlwaysNotConvertToSceneCoordinates") : nil;
+            if ([n respondsToSelector:@selector(boolValue)] && [n boolValue]) cached = NO;
+        }
+    });
+    return cached;
+}
+static BOOL uik_needsConvert(id self, SEL _cmd) {                                          // 0x189abed7c
+    if (!UIK_K2Cached()) return NO;
+    id d = ((id (*)(id, SEL))objc_msgSend)((id)objc_getClass("UIKeyboardSceneDelegate"), sel_registerName("activeKeyboardSceneDelegate"));
+    id vm = ((id (*)(id, SEL))objc_msgSend)(d, sel_registerName("visualModeManager"));
+    return vm && ((BOOL (*)(id, SEL))objc_msgSend)(vm, sel_registerName("windowingModeEnabled"));
+}
+static id uik_convertUserInfoK2(id self, SEL _cmd, id info) {                               // 0x189abefa4 (the 16.0 conversion towards the controller's own window scene)
+    id win = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_window"));
+    id scene = ((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("windowScene"));
+    return ((id (*)(id, SEL, id, id))objc_msgSend)(self, sel_registerName("convertUserInfo:toWindowScene:"), info, scene);
+}
+static void uik_postNotification(id self, SEL _cmd, NSString *name, id info) {              // 0x189abf33c
+    id view = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("view"));
+    id win = ((id (*)(id, SEL))objc_msgSend)(view, sel_registerName("window"));
+    id screen = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("windowScene")), sel_registerName("screen"));
+    if (!screen) screen = ((id (*)(id, SEL))objc_msgSend)(win, sel_registerName("screen"));
+    id out = info;
+    if (uik_needsConvert(self, 0)) out = ((id (*)(id, SEL, id))objc_msgSend)(self, sel_registerName("convertUserInfo:"), info);
+    [[NSNotificationCenter defaultCenter] postNotificationName:name object:screen userInfo:out];
+}
+static void uik_postCorresp(id self, SEL _cmd, NSString *name, id info) {
+    if (!UIK_On(UIK_SW_KEYBOARD)) { ((void (*)(id, SEL, id, id))orig_postCorrespK2)(self, _cmd, name, info); return; }
+    BOOL conv = uik_needsConvert(self, 0);
+    static BOOL seen[2];
+    if (!seen[conv]) {
+        seen[conv] = YES;
+        id fv = [info isKindOfClass:[NSDictionary class]] ? info[UIKeyboardFrameEndUserInfoKey] : nil;
+        NSString *fs = [fv respondsToSelector:@selector(CGRectValue)] ? NSStringFromCGRect([fv CGRectValue]) : @"-";
+        UIK_Problem(conv ? "k2-converted" : "k2-screen", "K2 keyboard notification %s: frames %s (bundle %s, windowing mode %d, end frame %s)", name.UTF8String, conv ? "converted to the scene (16.2 allowlist)" : "left in UIScreen coordinates (16.2)",
+            [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?", (int)uik_needsConvert(self, 0),
+            fs.UTF8String);
+    }
+    if (!conv) return;                                                                      // the caller's plain post is the only 16.2 notification
+    uik_postNotification(self, _cmd, name, info);
+    tK2Suppress = name;                                                                     // ... and the plain post that follows is not a 16.2 notification
+}
+static void uik_ncPost(id self, SEL _cmd, NSString *name, id object, id info) {
+    NSString *s = tK2Suppress;
+    if (s && name && (s == name || [s isEqualToString:name])) { tK2Suppress = nil; return; }
+    ((void (*)(id, SEL, id, id, id))orig_ncPostK2)(self, _cmd, name, object, info);
+}
+static void UIK_InstallK2(void) {
+    NSMutableArray *missing = [NSMutableArray array];
+    Class iwc = objc_getClass("UIInputWindowController"), ksd = objc_getClass("UIKeyboardSceneDelegate"), nc = objc_getClass("NSNotificationCenter");
+    if (!iwc) [missing addObject:@"class UIInputWindowController"];
+    else {
+        const char *n[] = { "postToCorrespondingWindowSceneWithNotification:userInfo:", "convertUserInfo:toWindowScene:", "_window", "view" };
+        for (size_t i = 0; i < sizeof n / sizeof *n; i++) if (!class_getInstanceMethod(iwc, sel_registerName(n[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIInputWindowController %s]", n[i]]];
+    }
+    if (!ksd || !class_getClassMethod(ksd, sel_registerName("activeKeyboardSceneDelegate"))) [missing addObject:@"+[UIKeyboardSceneDelegate activeKeyboardSceneDelegate]"];
+    if (!nc || !class_getInstanceMethod(nc, sel_registerName("postNotificationName:object:userInfo:"))) [missing addObject:@"-[NSNotificationCenter postNotificationName:object:userInfo:]"];
+    if ([missing count]) { UIK_Problem("k2-install", "K2 NOT installed (build 20A8372), needs: %s", [[missing componentsJoinedByString:@", "] UTF8String]); return; }
+    class_addMethod(iwc, sel_registerName("needsConvertToSceneCoordinates"), (IMP)uik_needsConvert, "B16@0:8");
+    class_addMethod(iwc, sel_registerName("convertUserInfo:"), (IMP)uik_convertUserInfoK2, "@24@0:8@16");
+    class_addMethod(iwc, sel_registerName("postNotificationName:userInfo:"), (IMP)uik_postNotification, "v32@0:8@16@24");
+    UIK_Hook("UIInputWindowController", "postToCorrespondingWindowSceneWithNotification:userInfo:", NULL, (IMP)uik_postCorresp, &orig_postCorrespK2);
+    UIK_Hook("NSNotificationCenter", "postNotificationName:object:userInfo:", NULL, (IMP)uik_ncPost, &orig_ncPostK2);
+    UIK_Log("K2 installed");
+}
+
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
@@ -838,4 +938,5 @@ __attribute__((constructor)) static void UIK_Init(void) {
     UIK_InstallU1();
     UIK_InstallK1();
     UIK_InstallU2();
+    UIK_InstallK2();
 }

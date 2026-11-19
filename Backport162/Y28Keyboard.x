@@ -45,7 +45,7 @@ static void Y28_Get(id self, SEL _cmd, id __autoreleasing *outView, BOOL *outPor
     BOOL portrait = NO;
     id ctlr = Y17_Obj0("kbgrabber", scene, "medusaHostedKeyboardWindowController");
     if (ctlr && BPY_Responds(ctlr, "isUsingMedusaHostedKeyboardWindow") && BPY_SEND(BOOL, (), ctlr, "isUsingMedusaHostedKeyboardWindow")) {
-        view = Y17_Obj0("kbgrabber", Y17_Obj0("kbgrabber", Y17_Obj0("kbgrabber", ctlr, "medusaHostedKeyboardWindow"), "rootViewController"), "view");
+        { id mw = Y17_Obj0("kbgrabber", ctlr, "medusaHostedKeyboardWindow"); id rvc = mw ? Y17_Obj0("kbgrabber", mw, "rootViewController") : nil; view = rvc ? Y17_Obj0("kbgrabber", rvc, "view") : nil; }       // 16.2 messages nil here (no keyboard window yet): no anomaly
         portrait = BPX_Bool0(scene, "isMainDisplayWindowScene");
     } else if (BPY_Responds((id)NSClassFromString(@"UIKeyboard"), "usesInputSystemUI") && BPY_SEND(BOOL, (), (id)NSClassFromString(@"UIKeyboard"), "usesInputSystemUI")) {
         id host = Y17_Obj0("kbgrabber", Y17_Obj0("kbgrabber", Y17_Obj0("kbgrabber", BPX_App(), "systemUIScenesCoordinator"), "inputUISceneController"), "hostingWindow");
@@ -55,7 +55,7 @@ static void Y28_Get(id self, SEL _cmd, id __autoreleasing *outView, BOOL *outPor
         id arbiterCls = (id)NSClassFromString(@"UIKeyboardArbiterManager");
         id arbiter = BPY_Responds(arbiterCls, "sharedArbiterManager") ? BPY_SEND(id, (), arbiterCls, "sharedArbiterManager") : nil;
         id kw = BPY_Responds(arbiter, "keyboardWindow") ? BPY_SEND(id, (), arbiter, "keyboardWindow") : nil;
-        view = Y17_Obj0("kbgrabber", Y17_Obj0("kbgrabber", kw, "rootViewController"), "view");
+        { id rvc = kw ? Y17_Obj0("kbgrabber", kw, "rootViewController") : nil; view = rvc ? Y17_Obj0("kbgrabber", rvc, "view") : nil; }       // no keyboard window: nil is the 16.2 answer
         portrait = NO;
     }
     if (outView) *outView = view;
