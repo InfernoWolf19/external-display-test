@@ -1,12 +1,4 @@
 {
- "0.7.9+307.8372845": {
-  "date": "2026-10-31T18:14:05Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+307.8372845_iphoneos-arm64.deb",
-  "run": 307,
-  "sha": "837284577e484aa8b42a78e7f4e26f603cf468f4",
-  "subject": "DELTA-SWEEP: pass 2 shas, summary, note on the red run 290",
-  "version": "0.7.9+307.8372845"
- },
  "0.7.9+308.5681d4b": {
   "date": "2026-10-31T18:30:24Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+308.5681d4b_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "79a42f501a4d5a0d9bea5bf98d06855d39610136",
   "subject": "Y42Shelf: the install check asked NSSet for -containsAnyItemFromSet: (a method of SBAppLayout, present in 16.0); all missing selectors are now named at once",
   "version": "0.7.9+373.79a42f5"
+ },
+ "0.7.9+375.877dbe0": {
+  "date": "2026-11-19T01:43:43Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+375.877dbe0_iphoneos-arm64.deb",
+  "run": 375,
+  "sha": "877dbe0dce855fbeda94a06e676300799a468e9a",
+  "subject": "UIK K2: keyboard notification frames of a windowed app as in 16.2 (no scene converted second notification for apps linked against the 16.0 SDK, allowlist conversion, 16.2 UIInputWindowController methods); Y28_Get no longer guards the nil keyboard window",
+  "version": "0.7.9+375.877dbe0"
  }
 }
