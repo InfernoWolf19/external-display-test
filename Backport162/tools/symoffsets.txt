@@ -1,0 +1,5 @@
+# image offsets (hex) of Backport162Core.dylib to symbolicate in the CI log of the build (device log frames "Backport162Core.dylib+0x...")
+0x10a614
+0xe0708
+0xb3f4c
+0xbfec8

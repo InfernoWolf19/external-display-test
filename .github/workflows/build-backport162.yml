@@ -39,6 +39,19 @@ jobs:
           make all FINALPACKAGE=1 ARCHS=arm64e BP_ONLY_PREFS=1 2>&1 | grep -E "error:|warning: .*(incompatible|undeclared)|^make.*Error|undefined symbol|ld: |framework not found" | head -60 || true
           rm -rf .theos
           make package FINALPACKAGE=1
+      - name: Symbolicate the image offsets of Backport162/tools/symoffsets.txt (device stack frames of Backport162Core.dylib)
+        continue-on-error: true
+        working-directory: Backport162
+        run: |
+          # a device log frame 'Backport162Core.dylib+0x10a614' is resolved against the dSYM of THIS build (same sources = same layout); one hex offset per line in tools/symoffsets.txt
+          D=$(find .theos -name "Backport162Core.dylib.dSYM" -maxdepth 4 | head -1)
+          echo "dSYM: $D"
+          B=$(find .theos -path "*arm64e*" -name "Backport162Core.dylib" -maxdepth 4 | head -1)
+          echo "dylib: $B"
+          if [ -n "$D" ] && [ -f tools/symoffsets.txt ]; then
+            DW=$(find "$D" -type f -path "*DWARF*" | head -1)
+            xcrun atos -o "$DW" -arch arm64e -l 0x0 $(grep -E '^0x[0-9a-fA-F]+' tools/symoffsets.txt | tr '\n' ' ') 2>&1 | head -80 || true
+          fi
       - name: Verify the boot guard packaging (specs/BOOTGUARD-0.7.9.md)
         working-directory: Backport162
         run: |
