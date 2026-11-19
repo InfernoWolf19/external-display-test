@@ -82,7 +82,7 @@ static void Y42_DeckGesture(id self, SEL _cmd, id gesture) {
     Ivar ic = class_getInstanceVariable(gDeckBase, "_appSuggestionController");
     id controller = BP_ObjIvar(self, ic);
     ((void (*)(id, SEL, BOOL))objc_msgSend)(controller, sel_registerName("setShowSuggestions:"), NO);
-    id manager = (__bridge id)(void *)(uintptr_t)y42_deck_getmanager(Y42_P(self), sel_registerName("appSuggestionManager"));
+    id manager = (__bridge id)(void *)(uintptr_t)y42_deck_getmanager(Y42_P(self), (uint64_t)(uintptr_t)(void *)sel_registerName("appSuggestionManager"));
     id reason = ((id (*)(id, SEL))objc_msgSend)(self, sel_registerName("_assertionReason"));
     ((void (*)(id, SEL, id))objc_msgSend)(manager, sel_registerName("disableListeningForUpdatesForReason:"), reason);
     struct objc_super sup = { self, class_getSuperclass(gDeckBase) };
