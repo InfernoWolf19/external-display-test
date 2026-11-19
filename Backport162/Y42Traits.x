@@ -14,6 +14,7 @@
 //   SBTraitsSceneParticipantDelegate allocation produces (+allocWithZone: of the base class swapped, as Y34ClassicSupport.x does).  The 16.0 alter ego ivars / methods stay where they are (the other
 //   delegate methods are the 16.0 ones, the rows above no longer use them).  The scene handle state the assistant reads and writes (-_setSettingUpSceneOrientationRequest: and the initial / supported
 //   orientation accessors, -_setInterfaceOrientationFromUserResizing:) is G3.x; the install is refused (ANOMALY y42, all misses named) when a piece is missing.
+//   Also -participantWillInvalidate: (16.2 0x1c77754bc, new): recompiled and added to the runtime subclass (tracecmp equal, 212 calls / 24 seeds).
 //   What can break on a device: the runtime subclass of a class created for EVERY scene (identity shimmed; an instance that is not of the subclass runs the 16.0 methods), signed stack blocks (arm64e),
 //   the run time created assistant class (ARC ivar layout of runtime-added ivars is not known to the runtime: the recompiled destructor releases them), a scene that rotates differently (16.2 request flow).
 // Switch y42_traits (kill file Backport162.off.y42_traits).  Installed only on build 20A8372; ANOMALY y42-traits (always on) names the build.
@@ -44,6 +45,7 @@ extern uint64_t y42_td_needs(uint64_t self, uint64_t cmd, uint64_t reasons);
 extern void y42_td_scene(uint64_t self, uint64_t cmd, uint64_t scene, uint64_t diff, uint64_t old, uint64_t context);
 extern void y42_td_reset(uint64_t self, uint64_t cmd);
 extern void y42_td_didchange(uint64_t self, uint64_t cmd, uint64_t participant, uint64_t context);
+extern void y42_td_willinvalidate(uint64_t self, uint64_t cmd, uint64_t participant);
 extern const char *y42_traits_preflight(void);
 
 static Class gTdBase, gTdExt;
@@ -148,6 +150,8 @@ __attribute__((constructor)) static void Y42Traits_Setup(void) {
         const char *miss = y42_traits_preflight();
         if (miss) { BP_Anomaly("y42", @"[y42] y42_traits NOT installed: unresolved names of the recompiled 16.2 bodies: %s: the 16.0 delegate stays (the assistant class and the delegate subclass exist but are unused)", miss); gTdExt = Nil; return; }
         class_addMethod(gTdExt, sel_registerName(".cxx_destruct"), (IMP)Y42_TdDestruct, "v@:");
+        // 16.2 -participantWillInvalidate: 0x1c77754bc (new, recompiled: asserts participant == _participant and sends -invalidate): added to the runtime subclass; the 16.0 arbiter does not send it, the 16.2 callers (and anything that does) get the 16.2 behaviour
+        if (!class_getInstanceMethod(gTdBase, sel_registerName("participantWillInvalidate:"))) class_addMethod(gTdExt, sel_registerName("participantWillInvalidate:"), (IMP)y42_td_willinvalidate, "v@:@");
         gOrigSupported = BPX_Replace(gTdBase, dsel[0].s, (IMP)Y42_TdSupported);
         gOrigActuate = BPX_Replace(gTdBase, dsel[1].s, (IMP)Y42_TdActuate);
         gOrigNeeds = BPX_Replace(gTdBase, dsel[2].s, (IMP)Y42_TdNeeds);

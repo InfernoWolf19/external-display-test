@@ -116,7 +116,8 @@ const char *y42_deck_preflight(void) {
           ('162', 0x1c7824f3c, 0x1c7825008, 'asper', 'x,x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {0x1c7825008: 'asperb'}),
           ('162', 0x1c7825078, 0x1c78250a4, 'asdel', 'x,x', 'x', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
           ('162', 0x1c78250a4, 0x1c78250d0, 'asdom', 'x,x', 'x', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
-          ('162', 0x1c78250d0, 0x1c782510c, 'asdestr', 'x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {})],
+          ('162', 0x1c78250d0, 0x1c782510c, 'asdestr', 'x,x', 'v', 'SBTraitsSceneOrientationRequestAssistant', '', {}),
+          ('162', 0x1c77754bc, 0x1c7775574, 'tdwill', 'x,x,x', 'v', 'SBTraitsSceneParticipantDelegate', '', {})],
   tail='''
 uint64_t y42_as_init(uint64_t self, uint64_t cmd, uint64_t delegate, uint64_t domain) { return asinit(self, cmd, delegate, domain); }
 void y42_as_invalidate(uint64_t self, uint64_t cmd) { asinval(self, cmd); }
@@ -133,12 +134,13 @@ uint64_t y42_td_needs(uint64_t self, uint64_t cmd, uint64_t reasons) { return td
 void y42_td_scene(uint64_t self, uint64_t cmd, uint64_t scene, uint64_t diff, uint64_t old, uint64_t context) { tdscene(self, cmd, scene, diff, old, context); }
 void y42_td_reset(uint64_t self, uint64_t cmd) { tdreset(self, cmd); }
 void y42_td_didchange(uint64_t self, uint64_t cmd, uint64_t participant, uint64_t context) { tddid(self, cmd, participant, context); }
+void y42_td_willinvalidate(uint64_t self, uint64_t cmd, uint64_t participant) { tdwill(self, cmd, participant); }
 const char *y42_traits_preflight(void) {
     const char *m;
     if ((m = asinit_preflight())) return m; if ((m = asinval_preflight())) return m; if ((m = ascheck_preflight())) return m; if ((m = asset_preflight())) return m;
     if ((m = asstart_preflight())) return m; if ((m = asper_preflight())) return m; if ((m = asdel_preflight())) return m; if ((m = asdom_preflight())) return m; if ((m = asdestr_preflight())) return m;
     if ((m = tdsupp_preflight())) return m; if ((m = tdact_preflight())) return m; if ((m = tdneed_preflight())) return m; if ((m = tdscene_preflight())) return m;
-    if ((m = tdreset_preflight())) return m; return tddid_preflight();
+    if ((m = tdreset_preflight())) return m; if ((m = tddid_preflight())) return m; return tdwill_preflight();
 }
 '''),
  'scenevc': dict(file='Y42SceneVCLift.c',
