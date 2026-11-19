@@ -155,8 +155,9 @@ def run_emu(c, names, seed, args, case_mem):
         if v >= (1 << 44) and (v >> 60) == 0 and (v >> 52) == 0:
             sy_ = ctx.a2s2(v & 0x7ffffffffff)[0]
             if sy_.lstrip('_') == 'NSConcreteStackBlock': return NSB
-            return ('CLS', sy_[len('_OBJC_CLASS_$_'):]) if sy_.startswith('_OBJC_CLASS_$_') else ('CLS', '?')   # chained (PAC / diversity) class reference read from the cache data: class identity is not decoded here
-        if 0x180000000 <= v < 0x200000000:
+            if sy_.startswith('_OBJC_CLASS_$_'): return ('CLS', sy_[len('_OBJC_CLASS_$_'):])
+            if sy_: return ('CLS', '?')   # chained (PAC / diversity) class reference read from the cache data: class identity is not decoded here
+        if 0x180000000 <= v < 0x300000000:
             sec = ctx.a2s2(v)[1]
             if 'objc_data' in sec:
                 sy_ = ctx.a2s2(v)[0]
@@ -452,6 +453,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
         for pi_ in PTRARGS:
             if pi_ < len(args): args[pi_] = OBJ_EMU + 0x100 * (30 + pi_)      # out parameters: a pointer to writable modelled memory
         te, Ne = run_emu(c, names, seed, args, (selfw, objw))
+        for cell_ in re.findall(r'\b(\w+_bss\d+)\[64\]', lbody + head): ctypes.memset((ctypes.c_uint8 * 64).in_dll(lib, cell_), 0, 64)
         tl, Nl = run_lifted(c, lib, L.kinds_at, seed, args, (selfw, objw), ivmap)
         ncalls += len(te.calls)
         if os.environ.get('TCDUMP') and seed == 0:

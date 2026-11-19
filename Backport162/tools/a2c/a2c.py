@@ -142,7 +142,7 @@ FN_KINDS = {'BSRectWithSize': 'rect', 'BSSizeSwap': 'size', 'BSSizeRoundForScale
             'SBClassicUtilitiesScaleFactorForPhoneAppZoomedIn': 'd', 'SBFAngleForRotationFromInterfaceOrientationToInterfaceOrientation': 'd', 'SBScreenDisplayCornerRadius': 'd',
             'SBClassicUtilitiesInsetAndTranslateLayerForPresentationWithHomeAffordance': 'v'}
 # C functions whose result is an integer / pointer / BOOL / void (x register or nothing): anything else must be listed above or given with --kinds fn:NAME=kind
-X_FNS = {'SBApplicationMightHaveTransparentBackground', 'SBTraitsSceneParticipantDelegateOrientationChangeInspector.cold.1', 'BSRunLoopPerformRelativeToCACommit', 'BSRunLoopPerformAfterCACommit', 'assert_rtn', 'SBEqualObjects', 'SBTraitsArbiterOrientationActuationEnabledForRole', 'BSFloatEqualToFloat', 'BSDispatchQueueAssertMain', 'NSStringFromClass', 'Block_object_dispose', 'Block_object_assign', 'SBAppendSwitcherModifierResponse', 'SBAppLayoutConfigurationFromMainDisplayLayoutStateSpaceConfiguration', 'os_log_impl', 'SBLogShelfLiveContent', 'os_log_error_impl', 'os_log_fault_impl', 'os_log_info_impl', 'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
+X_FNS = {'SBFInterfaceOrientationDescription', 'SBApplicationMightHaveTransparentBackground', 'SBTraitsSceneParticipantDelegateOrientationChangeInspector.cold.1', 'BSRunLoopPerformRelativeToCACommit', 'BSRunLoopPerformAfterCACommit', 'assert_rtn', 'SBEqualObjects', 'SBTraitsArbiterOrientationActuationEnabledForRole', 'BSFloatEqualToFloat', 'BSDispatchQueueAssertMain', 'NSStringFromClass', 'Block_object_dispose', 'Block_object_assign', 'SBAppendSwitcherModifierResponse', 'SBAppLayoutConfigurationFromMainDisplayLayoutStateSpaceConfiguration', 'os_log_impl', 'SBLogShelfLiveContent', 'os_log_error_impl', 'os_log_fault_impl', 'os_log_info_impl', 'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
          'sb__runningInSpringBoard', 'MGCopyAnswer', 'SBFIsChamoisWindowingUIAvailable', 'os_log_type_enabled', 'os_log_debug_impl', 'SBLogCommon', 'objc_alloc', 'objc_opt_class',
          'objc_opt_isKindOfClass', 'objc_opt_new', 'objc_initWeak', 'objc_copyWeak', 'objc_destroyWeak', 'objc_loadWeakRetained', 'objc_storeWeak', 'objc_msgSendSuper2', 'Unwind_Resume',
          'j__objc_storeStrong', 'dispatch_async', 'SBFLoggingMethodProem', 'CGRectGetNull'}
@@ -167,7 +167,7 @@ class Lift:
         s.globals = {}   # addr -> description
         s.stats = {'warn': []}
         s.callseq = 0
-        s.sels = {}; s.cls = {}; s.ivs = {}; s.dbls = {}; s.strs = {}
+        s.bss = {}; s.sels = {}; s.cls = {}; s.ivs = {}; s.dbls = {}; s.strs = {}
         s.fns = {}
     # ---------------- operand helpers
     def reg(s, r, i):  # register name via capstone
@@ -244,7 +244,7 @@ class Lift:
         sym, sec = c.a2s2(addr)
         if sym.startswith('_OBJC_IVAR_$_'): sym = sym[1:]
         if sym.startswith('OBJC_IVAR_$_'): return ('ivar', sym[len('OBJC_IVAR_$_'):])
-        if sym.startswith('_ptr._OBJC_CLASS_$_') and 'classrefs' in sec: return ('cls', sym[len('_ptr._OBJC_CLASS_$_'):])
+        if sym.startswith('_ptr._OBJC_CLASS_$_') and ('classrefs' in sec or 'superrefs' in sec): return ('cls', sym[len('_ptr._OBJC_CLASS_$_'):])
         if 'selrefs' in sec:
             sl = c.sel(addr)
             if sl: return ('sel', sl)
@@ -578,6 +578,12 @@ class Lift:
         if post:
             ea = '%s' % s.rdreg(base)
             const_addr = s.cval.get(base) if isinstance(s.cval.get(base), int) else None
+        if const_addr is not None and not post and not pair:
+            sym_b, sec_b = s.ctx.a2s2(const_addr)
+            if '__bss' in sec_b and sym_b and sym_b not in ('?',):
+                # a mutable static of the 16.2 image (e.g. a request counter): the lifted code has a zero initialised cell of its own (what .bss holds before the first use)
+                k_b = s.intern(s.bss, sym_b)
+                ea = '(uint64_t)(uintptr_t)%s_bss%d' % (s.cname, k_b)
         if selfcls:
             ivs = s.ivmap(selfcls, disp, sz)
             if ivs:
@@ -1009,6 +1015,7 @@ class Lift:
                 dbody.append('    d_[2] = (uint64_t)(uintptr_t)%s;' % json.dumps(dd['sig']))
             dbody.append('    return d_;'); dbody.append('}')
             dtext.append('\n'.join(dbody))
+        for sym_b, k_b in sorted(s.bss.items(), key=lambda kv: kv[1]): dtext.append('LIFT_BSS uint8_t %s_bss%d[64] __attribute__((aligned(8))); /* mutable static %s of the 16.2 image */' % (s.cname, k_b, sym_b))
         head = '\n'.join(h + tabs + dtext)
         fn = []
         fn.append('static %s %s(%s) {' % (rt, s.cname, ', '.join(params) or 'void'))

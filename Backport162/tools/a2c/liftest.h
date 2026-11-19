@@ -3,6 +3,7 @@
 #ifndef BP_LIFTEST_H
 #define BP_LIFTEST_H
 #define LIFT_TEST_HOOKS 1
+#define LIFT_BSS            /* the mutable statics of the 16.2 image are visible to the harness: it zeroes them before every run (the emulated .bss is fresh) */
 #include <stdio.h>
 #include "liftcommon.h"
 typedef void (*lift_cb_t)(int isMsg, const char *name, uint64_t *X, uint64_t (*VR)[2]);

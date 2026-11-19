@@ -8,7 +8,7 @@ sys.path.insert(0, HERE)
 import a2c
 
 OUT = os.path.join(HERE, '..', '..')
-KINDS_ALL = 'invalidate=v'      # selectors whose return kind differs between classes of the dumps: the receivers here return void
+KINDS_ALL = 'invalidate=v,addObserver:=v'      # selectors whose return kind differs between classes of the dumps: the receivers here return void
 JOBS = {
  'shelf': dict(file='Y42ShelfLift.c',
   head='''// Y42ShelfLift.c : -[SBShelfLiveContentOverlayCoordinator _addOverlaysIfNeededForTransitionContext:] of iPadOS 16.2 (20C65, 0x1c798ac94 .. 0x1c798b330) and its block invoke
@@ -149,6 +149,37 @@ const char *y42_traits_preflight(void) {
   tail='''
 void y42_svc_viewdidload(uint64_t self, uint64_t cmd) { svcvdl(self, cmd); }
 const char *y42_scenevc_preflight(void) { return svcvdl_preflight(); }
+'''),
+ 'sceneview': dict(file='Y42SceneViewLift.c',
+  head='''// Y42SceneViewLift.c : the 16.2 init chain of the scene views of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py:
+//   -[SBDeviceApplicationSceneView initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester:]  0x1c773c654 (+ three block invokes 0x1c773caf4, 0x1c773cc40, 0x1c773ccb8)
+//   -[SBApplicationSceneView initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester:]         0x1c7962f44
+//   SpringBoardUI (SBSceneView): -initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester: 0x1f2cca72c, -invalidate 0x1f2cc5f28, -sceneHandle:didUpdateContentState: 0x1f2ccb3e0,
+//   -_configureLiveHostView 0x1f2ccb470 (16.0 name _configureHostView)
+// Plain C, no ARC.  Installed by Y42SceneView.x (switch y42_sceneview).  Verified with tools/a2c/tests/tracecmp.py (calls, ownership events, PAC logs, block images).  NOT device tested.
+''',
+  tcargs=['--safemem'],
+  bodies=[('162', 0x1f2cca72c, 0x1f2cca9f0, 'sbsinit', 'x,x,x,d,d,x,x,x', 'x', 'SBSceneView', '', {}),
+          ('162', 0x1f2cc5f28, 0x1f2cc6070, 'sbsinval', 'x,x', 'v', 'SBSceneView', '', {}),
+          ('162', 0x1f2ccb3e0, 0x1f2ccb428, 'sbsstate', 'x,x,x,x', 'v', 'SBSceneView', '', {}),
+          ('162', 0x1f2ccb470, 0x1f2ccb588, 'sbslive', 'x,x', 'v', 'SBSceneView', '', {}),
+          ('162', 0x1c7962f44, 0x1c7963004, 'asvinit', 'x,x,x,d,d,x,x,x', 'x', 'SBApplicationSceneView', '', {}),
+          ('162', 0x1c773caf4, 0x1c773cc40, 'dsvb0', 'x,x,x', 'v', 'SBDeviceApplicationSceneView', '', {}),
+          ('162', 0x1c773cc40, 0x1c773ccb8, 'dsvb1', 'x,x,x,x', 'v', 'SBDeviceApplicationSceneView', '', {}),
+          ('162', 0x1c773ccb8, 0x1c773cd30, 'dsvb2', 'x,x,x,x', 'v', 'SBDeviceApplicationSceneView', '', {}),
+          ('162', 0x1c773c654, 0x1c773caf4, 'dsvinit', 'x,x,x,d,d,x,x,x', 'x', 'SBDeviceApplicationSceneView', '', {0x1c773caf4: 'dsvb0', 0x1c773cc40: 'dsvb1', 0x1c773ccb8: 'dsvb2'})],
+  tail='''
+uint64_t y42_sbs_init(uint64_t self, uint64_t cmd, uint64_t handle, double w, double h, uint64_t content, uint64_t container, uint64_t requester) { return sbsinit(self, cmd, handle, w, h, content, container, requester); }
+void y42_sbs_invalidate(uint64_t self, uint64_t cmd) { sbsinval(self, cmd); }
+void y42_sbs_state(uint64_t self, uint64_t cmd, uint64_t handle, uint64_t state) { sbsstate(self, cmd, handle, state); }
+void y42_sbs_live(uint64_t self, uint64_t cmd) { sbslive(self, cmd); }
+uint64_t y42_asv_init(uint64_t self, uint64_t cmd, uint64_t handle, double w, double h, uint64_t content, uint64_t container, uint64_t requester) { return asvinit(self, cmd, handle, w, h, content, container, requester); }
+uint64_t y42_dsv_init(uint64_t self, uint64_t cmd, uint64_t handle, double w, double h, uint64_t content, uint64_t container, uint64_t requester) { return dsvinit(self, cmd, handle, w, h, content, container, requester); }
+const char *y42_sceneview_preflight(void) {
+    const char *m;
+    if ((m = sbsinit_preflight())) return m; if ((m = sbsinval_preflight())) return m; if ((m = sbsstate_preflight())) return m; if ((m = sbslive_preflight())) return m;
+    if ((m = asvinit_preflight())) return m; return dsvinit_preflight();
+}
 '''),
 }
 

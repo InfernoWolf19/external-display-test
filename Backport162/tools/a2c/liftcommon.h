@@ -62,6 +62,7 @@ static inline uint64_t lift_addv8(uint64_t v) { uint64_t r = 0; for (int i = 0; 
 // The recompiled code signs / authenticates exactly where the machine code does (block isa / invoke / descriptor, helper pointers); keys 0 IA, 1 IB, 2 DA, 3 DB.  Off arm64e (the arm64
 // slice, the Linux test harness) signing is the identity.
 #ifndef LIFT_TEST_HOOKS
+#define LIFT_BSS static
 #define LIFT_CSTR(s) (s)
 #define LIFT_DESC(p, sig, size) (p)
 #if defined(__arm64e__) && defined(__has_feature)
