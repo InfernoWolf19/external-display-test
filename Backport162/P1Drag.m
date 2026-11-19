@@ -1057,6 +1057,47 @@ static void P1_VCAsync(id self, SEL _cmd) {
     }
 }
 
+// ------------------------------------------------------------------------------------------------ attribute regress diagnostic (always on, ANOMALY p1-attr-regress)
+// -[SBAppLayout initWithItems:...itemsToLayoutAttributes:...] interns the layout and OVERWRITES the attribute dictionary of the cached instance (G3C.x notes).  Device log of the resize snap back: the layout
+// committed by a resize (lastInteractionTime 233, size 0.547 x 0.542) was OLD again (lastInteractionTime 228, size 0.942 x 0.652) when the next gesture transaction was created, so a later writer put an OLDER
+// attribute set into the shared instance.  This hook reports every such write (older lastInteractionTime than the one the instance held) with the call stack as image offsets.
+#include <execinfo.h>
+#include <dlfcn.h>
+static IMP sOrigAppLayoutInit;
+static NSMapTable *sAttrSeen;               // interned layout (weak) -> NSString "interaction|attrDescription" of the last write
+static double P1_AttrTime(NSString *d) {
+    NSRange r = [d rangeOfString:@"lastInteractionTime: "];
+    return r.location == NSNotFound ? -1 : [[d substringFromIndex:r.location + r.length] doubleValue];
+}
+static NSString *P1_AttrSize(NSString *d) {
+    NSRange r = [d rangeOfString:@"size: {"];
+    if (r.location == NSNotFound) return @"?";
+    NSString *t = [d substringFromIndex:r.location + 6];
+    NSRange e = [t rangeOfString:@"}"];
+    return e.location == NSNotFound ? @"?" : [t substringToIndex:e.location + 1];
+}
+static __attribute__((ns_returns_retained)) id P1_AppLayoutInit(__attribute__((ns_consumed)) id self, SEL _cmd, id items, id center, id floating, long long cfg, id attrs, long long ccfg, long long env, BOOL hidden, long long ord) {
+    id r = ((__attribute__((ns_returns_retained)) id (*)(__attribute__((ns_consumed)) id, SEL, id, id, id, long long, id, long long, long long, BOOL, long long))sOrigAppLayoutInit)(self, _cmd, items, center, floating, cfg, attrs, ccfg, env, hidden, ord);
+    if (!r || ![attrs isKindOfClass:[NSDictionary class]] || ![(NSDictionary *)attrs count]) return r;
+    @synchronized ([NSNull null]) {
+        if (!sAttrSeen) sAttrSeen = [NSMapTable weakToStrongObjectsMapTable];
+        NSArray *prev = [sAttrSeen objectForKey:r];
+        if (prev && prev.count > 2 && [prev[2] pointerValue] == (__bridge void *)attrs) return r;            // the same dictionary object as at the last write: nothing to compare
+        NSMutableString *now = [NSMutableString string];
+        double newest = -1;
+        for (id k in [(NSDictionary *)attrs allKeys]) { NSString *d = [[(NSDictionary *)attrs objectForKey:k] description]; double t = P1_AttrTime(d); if (t > newest) newest = t; [now appendFormat:@"%@ size %@ t %.0f; ", k, P1_AttrSize(d), t]; }
+        NSArray *old = [sAttrSeen objectForKey:r];
+        if (old && [old[0] doubleValue] > newest && ![old[1] isEqualToString:now]) {
+            void *fr[10]; int n = backtrace(fr, 10);
+            NSMutableString *st = [NSMutableString string];
+            for (int i = 1; i < n; i++) { Dl_info di; if (dladdr(fr[i], &di) && di.dli_fname) [st appendFormat:@"%s+%#lx ", strrchr(di.dli_fname, '/') ? strrchr(di.dli_fname, '/') + 1 : di.dli_fname, (unsigned long)((uintptr_t)fr[i] & 0x7fffffffffULL) - (unsigned long)((uintptr_t)di.dli_fbase & 0x7fffffffffULL)]; }
+            BP_Anomaly("p1-attr-regress", @"p1: the attribute set of the interned layout %p was overwritten by an OLDER one (build 20A8372): held [%@] t %.0f, written [%@] t %.0f; stack: %@", (__bridge void *)r, old[1], [old[0] doubleValue], now, newest, st);
+        }
+        if (!old || newest >= [old[0] doubleValue] || ![old[1] isEqualToString:now]) [sAttrSeen setObject:@[@(newest), [now copy], [NSValue valueWithPointer:(__bridge void *)attrs]] forKey:r];
+    }
+    return r;
+}
+
 // ------------------------------------------------------------------------------------------------ installation
 static IMP P1_Replace(const char *cls, const char *sel, IMP imp, IMP *orig) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
@@ -1080,6 +1121,7 @@ extern void P1SW_Setup(void);
 void P1Drag_Setup(void) {
     if (!BP_OnName("p1_drag")) { BP_Log(@"p1: switch p1_drag is off at launch: the 16.0 gesture transaction stays (transactions created later still honour the switches)"); }
     const char *T = "SBFluidSwitcherGestureWorkspaceTransaction", *M = "SBFluidSwitcherGestureManager", *C = "SBMainSwitcherControllerCoordinator", *S = "SBSwitcherController", *V = "SBFluidSwitcherViewController";
+    P1_Replace("SBAppLayout", "initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:centerConfiguration:environment:hidden:preferredDisplayOrdinal:", (IMP)P1_AppLayoutInit, &sOrigAppLayoutInit);
     P1_Replace(T, "initWithTransitionRequest:fluidSwitcherViewController:delegate:", (IMP)P1_Init, &sOrigInit);
     P1_Replace(T, "_beginWithGesture:", (IMP)P1_Begin, &sOrigBegin);
     P1_Replace(T, "_transitionRequestForApplicationTransitionContext:eventLabel:", (IMP)P1_ReqForContext, &sOrigReqForCtx);
