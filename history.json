@@ -1,12 +1,4 @@
 {
- "0.7.9+310.c8bf6ae": {
-  "date": "2026-10-31T19:07:04Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+310.c8bf6ae_iphoneos-arm64.deb",
-  "run": 310,
-  "sha": "c8bf6ae97d3e0be300c51d0dbf3e3626c56673c2",
-  "subject": "Y26Classic / Y27Views: classic mode decision tree of 16.2 (generated from the machine code), Stage Manager title dots and icon overlay footer follow 16.2; DELTA-SWEEP rows (classic screen type remap and overlay prepareForReuse decoded as equivalent)",
-  "version": "0.7.9+310.c8bf6ae"
- },
  "0.7.9+311.50bd5e8": {
   "date": "2026-10-31T19:22:08Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+311.50bd5e8_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "f02df8afbaf5b55d06fc35ad86716a34a10704d5",
   "subject": "UIK K2 withdrawn (not installed): the 16.0 keyboard notification behaviour is back until the full screen behaviour is proven; decode of the 16.0 extra notification noted",
   "version": "0.7.9+376.f02df8a"
+ },
+ "0.7.9+377.4bd8535": {
+  "date": "2026-11-19T02:04:37Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+377.4bd8535_iphoneos-arm64.deb",
+  "run": 377,
+  "sha": "4bd853583a8dde56df71ccdabf6b87e58f104a71",
+  "subject": "UIK K3: 16.2 -[UIInputWindowController convertRectFromContainerCoordinateSpaceToScreenSpace:] (keyboard frames of a Stage Manager window in real screen coordinates, the actual cause of Reynard / Telegram not shifting in a window); kill file uik_kbframe; README + DELTA-SWEEP",
+  "version": "0.7.9+377.4bd8535"
  }
 }
