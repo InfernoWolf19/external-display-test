@@ -1,12 +1,4 @@
 {
- "0.7.9+328.dbf1ddf": {
-  "date": "2026-11-01T08:29:13Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+328.dbf1ddf_iphoneos-arm64.deb",
-  "run": 328,
-  "sha": "dbf1ddf2e4fc743412a8b77ebd7099b8e4807a22",
-  "subject": "Audit class E + F: IMP / send signatures checked against the 16.0 and 16.2 type dumps (1178 IMPs, 590 encodings, 3196 sends); Y31 statusBarFrame BOOL argument, P1 void send and Y15 / Y6 types fixed; caller / callee findings, summary table and README logging section of the audit",
-  "version": "0.7.9+328.dbf1ddf"
- },
  "0.7.9+329.1c7cce6": {
   "date": "2026-11-01T08:28:33Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+329.1c7cce6_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "52491f25ebe725000474b55f026753923197d474",
   "subject": "CI: symbolicate the Backport162Core.dylib offsets listed in tools/symoffsets.txt against the dSYM of the build (device log: p1-attr-regress stack frames 0x10a614 0xe0708 0xb3f4c 0xbfec8)",
   "version": "0.7.9+400.52491f2"
+ },
+ "0.7.9+402.b8361f1": {
+  "date": "2026-11-19T20:33:24Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+402.b8361f1_iphoneos-arm64.deb",
+  "run": 402,
+  "sha": "b8361f1fc6ad475e4ffa769f0baf35ca9837a00e",
+  "subject": "UIK: uik_missing_imp with movi d0..d3 (the .2d form is an inline asm error in the CI clang; fixes build 401)",
+  "version": "0.7.9+402.b8361f1"
  }
 }
