@@ -1,12 +1,4 @@
 {
- "0.7.9+324.8becfff": {
-  "date": "2026-11-01T02:27:38Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+324.8becfff_iphoneos-arm64.deb",
-  "run": 324,
-  "sha": "8becfffe5ddf67ef8f536ca81e9e665066e65faa",
-  "subject": "Audit class D: every thread-local armed override (62 wrappers: Y3 active controller, Y2, Y10..Y17, Y25, Y31, X2/X5/X7/X9, G1D, G3B, G4B focus lock, P1 re-entrancy depth, ...) is restored in @finally, so an exception of the stock body cannot leave it armed",
-  "version": "0.7.9+324.8becfff"
- },
  "0.7.9+326.b6b4928": {
   "date": "2026-11-01T08:23:05Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+326.b6b4928_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "b30e7af5302db04dad4b486e5e779ecf9abee52c",
   "subject": "UIK K4: always-on ANOMALY k4-state (deduped by rounded values): hostView / old / result, the hosted keyboard view frame in its screen space and converted into the host scene, host window frame, scene bounds, container frame",
   "version": "0.7.9+396.b30e7af"
+ },
+ "0.7.9+398.9d234e7": {
+  "date": "2026-11-19T19:59:35Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+398.9d234e7_iphoneos-arm64.deb",
+  "run": 398,
+  "sha": "9d234e7a5856c3dd4c675222fb2b496ca18b056e",
+  "subject": "P1 L1: allItems through the helper, no unused counter (fixes build 397)",
+  "version": "0.7.9+398.9d234e7"
  }
 }
