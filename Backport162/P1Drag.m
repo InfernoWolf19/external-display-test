@@ -1088,12 +1088,22 @@ static __attribute__((ns_returns_retained)) id P1_AppLayoutInit(__attribute__((n
         for (id k in [(NSDictionary *)attrs allKeys]) { NSString *d = [[(NSDictionary *)attrs objectForKey:k] description]; double t = P1_AttrTime(d); if (t > newest) newest = t; [now appendFormat:@"%@ size %@ t %.0f; ", k, P1_AttrSize(d), t]; }
         NSArray *old = [sAttrSeen objectForKey:r];
         if (old && [old[0] doubleValue] > newest && ![old[1] isEqualToString:now]) {
+            BOOL guarded = NO;
+            if (BP_OnName("p1_attrguard") && old.count > 3) {                // DEVIATION (user approved): an older attribute set must not replace a newer one of the interned layout
+                Ivar iv = class_getInstanceVariable(object_getClass(r), "_itemsToLayoutAttributes");
+                if (iv) { object_setIvar(r, iv, old[3]); guarded = YES; }
+            }
             void *fr[10]; int n = backtrace(fr, 10);
             NSMutableString *st = [NSMutableString string];
             for (int i = 1; i < n; i++) { Dl_info di; if (dladdr(fr[i], &di) && di.dli_fname) [st appendFormat:@"%s+%#lx ", strrchr(di.dli_fname, '/') ? strrchr(di.dli_fname, '/') + 1 : di.dli_fname, (unsigned long)((uintptr_t)fr[i] & 0x7fffffffffULL) - (unsigned long)((uintptr_t)di.dli_fbase & 0x7fffffffffULL)]; }
-            BP_Anomaly("p1-attr-regress", @"p1: the attribute set of the interned layout %p was overwritten by an OLDER one (build 20A8372): held [%@] t %.0f, written [%@] t %.0f; stack: %@", (__bridge void *)r, old[1], [old[0] doubleValue], now, newest, st);
+            BP_Anomaly("p1-attr-regress", @"p1: the attribute set of the interned layout %p was overwritten by an OLDER one (build 20A8372): held [%@] t %.0f, written [%@] t %.0f; %@; stack: %@", (__bridge void *)r, old[1], [old[0] doubleValue], now, newest, guarded ? @"p1_attrguard restored the newer set" : @"not guarded", st);
+            if (guarded) {
+                static BOOL once;
+                if (!once) { once = YES; BP_Anomaly("p1-attrguard", @"p1: p1_attrguard is active (DEVIATION from 16.2, build 20A8372): the first prevented overwrite kept [%@] t %.0f against [%@] t %.0f", old[1], [old[0] doubleValue], now, newest); }
+                return r;
+            }
         }
-        if (!old || newest >= [old[0] doubleValue] || ![old[1] isEqualToString:now]) [sAttrSeen setObject:@[@(newest), [now copy], [NSValue valueWithPointer:(__bridge void *)attrs]] forKey:r];
+        if (!old || newest >= [old[0] doubleValue] || ![old[1] isEqualToString:now]) [sAttrSeen setObject:@[@(newest), [now copy], [NSValue valueWithPointer:(__bridge void *)attrs], attrs] forKey:r];
     }
     return r;
 }
