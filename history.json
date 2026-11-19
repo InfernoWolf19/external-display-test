@@ -1,12 +1,4 @@
 {
- "0.7.9+315.b6d6599": {
-  "date": "2026-11-01T00:07:47Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+315.b6d6599_iphoneos-arm64.deb",
-  "run": 315,
-  "sha": "b6d6599c434c3824ed639d9d0369ac2c8cb17a6f",
-  "subject": "Y28Keyboard: constructor no longer messages +[SBSceneManagerCoordinator mainDisplaySceneManager] (reached the coordinator singleton while SpringBoard was loading images); the scene manager class is looked up by name",
-  "version": "0.7.9+315.b6d6599"
- },
  "0.7.9+316.a905444": {
   "date": "2026-11-01T00:04:48Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+316.a905444_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "9d7f746ff805ccef0803be0088d9106267a26045",
   "subject": "UIK K4: 16.2 UIInputWindowControllerHostingItem notificationsFrame / fullScreenFrame: the keyboard notification frame is the real hosted keyboard view (16.0 used hostView.frame, below a Stage Manager window); visibleFrame calls of the 16.0 notification code answer it; ANOMALY k4-frame / k4-install",
   "version": "0.7.9+381.9d7f746"
+ },
+ "0.7.9+383.b63bce9": {
+  "date": "2026-11-19T02:31:17Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+383.b63bce9_iphoneos-arm64.deb",
+  "run": 383,
+  "sha": "b63bce9f3e89a1b2fe2f17323ba7d3d48436a076",
+  "subject": "Y42FullScreen: SBFullScreenAlwaysLiveLiveContentOverlay -initWithSceneHandle:referenceSize:containerOrientation: (16.2 0x1c74d0d24), recompiled; needs the 16.2 scene view init of Y42SceneView",
+  "version": "0.7.9+383.b63bce9"
  }
 }
