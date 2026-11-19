@@ -72,7 +72,7 @@ static BOOL Y42R_Any(id self, SEL _cmd) {
 __attribute__((constructor(101))) static void Y42Resize_Setup(void) {
     if (!BPY_BuildOK()) return;
     @autoreleasepool {
-        if (!BP_OnName("y42_resize") || !Y42R_Ready(self)) return;
+        if (!BP_OnName("y42_resize")) return;
         Class c = NSClassFromString(@"SBItemResizeGestureSwitcherModifier");
         if (!c) { BP_Anomaly("y42", @"[y42] y42_resize NOT installed: SBItemResizeGestureSwitcherModifier missing"); return; }
         const char *miss = y42_resize_preflight();
