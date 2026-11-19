@@ -1,12 +1,4 @@
 {
- "0.7.9+309.7439c69": {
-  "date": "2026-10-31T18:41:52Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+309.7439c69_iphoneos-arm64.deb",
-  "run": 309,
-  "sha": "7439c693d0429458dcc37e47443aa4aa8e856b16",
-  "subject": "Y25Workspace: accelerated Home press reads the main display switcher mode, retainsSiri on request copies, suspended launches build their transition context for every display, gesture manager observes the banner manager (no tap-to-front while a call banner shows); DELTA-SWEEP: languageChanged / HomeHardwareButtonActions / recents validation / transactionDidComplete decoded as equivalent",
-  "version": "0.7.9+309.7439c69"
- },
  "0.7.9+310.c8bf6ae": {
   "date": "2026-10-31T19:07:04Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+310.c8bf6ae_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "877dbe0dce855fbeda94a06e676300799a468e9a",
   "subject": "UIK K2: keyboard notification frames of a windowed app as in 16.2 (no scene converted second notification for apps linked against the 16.0 SDK, allowlist conversion, 16.2 UIInputWindowController methods); Y28_Get no longer guards the nil keyboard window",
   "version": "0.7.9+375.877dbe0"
+ },
+ "0.7.9+376.f02df8a": {
+  "date": "2026-11-19T01:56:28Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+376.f02df8a_iphoneos-arm64.deb",
+  "run": 376,
+  "sha": "f02df8afbaf5b55d06fc35ad86716a34a10704d5",
+  "subject": "UIK K2 withdrawn (not installed): the 16.0 keyboard notification behaviour is back until the full screen behaviour is proven; decode of the 16.0 extra notification noted",
+  "version": "0.7.9+376.f02df8a"
  }
 }

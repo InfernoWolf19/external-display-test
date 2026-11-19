@@ -2,6 +2,28 @@ Package: com.infernowolf19.backport162
 Name: Backport162
 Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
  .
+ Build 376, commit f02df8a: UIK K2 withdrawn (not installed): the 16.0 keyboard notification behaviour is back until the full screen behaviour is proven; decode of the 16.0 extra notification noted
+Maintainer: infernowolf19
+Author: infernowolf19
+Section: Tweaks
+Depends: mobilesubstrate
+Recommends: preferenceloader
+Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
+Provides: com.infernowolf19.extendeddisplayenabler
+Architecture: iphoneos-arm64
+Version: 0.7.9+376.f02df8a
+Installed-Size: 5556
+Filename: debs/com.infernowolf19.backport162_0.7.9+376.f02df8a_iphoneos-arm64.deb
+Size: 1768130
+MD5sum: a71029f285f41b7f812c40b8791bd754
+SHA1: d89d4bb82b7e06bc868d2141e5e360beea1fbce4
+SHA256: ee3e0df96d048a72c09de0280d972fe4fbf0c86ea2d014c984c752b914b3a72f
+
+Package: com.infernowolf19.backport162
+Name: Backport162
+Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
+ .
  Build 375, commit 877dbe0: UIK K2: keyboard notification frames of a windowed app as in 16.2 (no scene converted second notification for apps linked against the 16.0 SDK, allowlist conversion, 16.2 UIInputWindowController methods); Y28_Get no longer guards the nil keyboard window
 Maintainer: infernowolf19
 Author: infernowolf19
@@ -1295,25 +1317,3 @@ Size: 1509032
 MD5sum: 579fb6eb313e38f3a39438632dfa5c11
 SHA1: 79172e03ba2ebc04c7391d7ac58adccd707ca125
 SHA256: 1dfdab17b58df9beb06712b841dcf07cc367e531eb022552d613b4bf00d230f3
-
-Package: com.infernowolf19.backport162
-Name: Backport162
-Description: Backports iPadOS 16.2 Stage Manager and external display fixes to iPadOS 16.0 (20A8372): SpringBoard, AVKit (apps), backboardd, pointeruid, Control Centre / Settings and audio daemon parts in one package. Includes the former ExtendedDisplayEnabler package (Extended display provider registration, saved mirror / extended choice), StageManagerToggle (the Control Centre button and the Settings switch toggle Stage Manager directly, without the first-run introduction) and SpeakerPicker (the iPad speaker stays selectable in the audio picker while a monitor or wired headphones are connected, also when picked while nothing plays). Reboot userspace after installing (backboardd, audio daemons).
- .
- Build 309, commit 7439c69: Y25Workspace: accelerated Home press reads the main display switcher mode, retainsSiri on request copies, suspended launches build their transition context for every display, gesture manager observes the banner manager (no tap-to-front while a call banner shows); DELTA-SWEEP: languageChanged / HomeHardwareButtonActions / recents validation / transactionDidComplete decoded as equivalent
-Maintainer: infernowolf19
-Author: infernowolf19
-Section: Tweaks
-Depends: mobilesubstrate
-Recommends: preferenceloader
-Conflicts: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Replaces: com.infernowolf19.backport162bbd, com.infernowolf19.extendeddisplayenabler, com.infernowolf19.stagemanagertoggle, com.infernowolf19.speakerpicker, com.infernowolf19.audiorouteprobe, com.infernowolf19.switcherdismissfix
-Provides: com.infernowolf19.extendeddisplayenabler
-Architecture: iphoneos-arm64
-Version: 0.7.9+309.7439c69
-Installed-Size: 4612
-Filename: debs/com.infernowolf19.backport162_0.7.9+309.7439c69_iphoneos-arm64.deb
-Size: 1496250
-MD5sum: d6d83bfe855f1eda306de11e5884312d
-SHA1: b2675285e0691de79c0df66d941f3fe2f1ba2d80
-SHA256: c93bf6b8b06f7011b96aadf554ea711f918245806db0dd04beead8bfda5390e2
