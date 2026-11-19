@@ -71,16 +71,31 @@ __attribute__((ns_returns_retained)) static id Y42_DsvInit(id __attribute__((ns_
     return me;
 }
 
+// Result lines that say WHAT holds a view that is not deallocated: a plain UIView is created and released the same way as a CONTROL (if the control is still alive right after the release, the delay is the
+// timing of UIKit / the run loop, not the ports), the view under test is re-checked after 1 s and 5 s, and a survivor is described with its retain count, superview / window, layer delegate and the
+// associated objects the ports keep (G3B.x container orientation key).
+static NSString *Y42_Describe(id strong) {
+    NSMutableString *d = [NSMutableString string];
+    [d appendFormat:@"retain count %ld", (long)CFGetRetainCount((__bridge CFTypeRef)strong) - 1];
+    if ([strong respondsToSelector:@selector(superview)]) [d appendFormat:@", superview %@, window %@", [strong superview] ? @"yes" : @"no", [strong window] ? @"yes" : @"no"];
+    if ([strong respondsToSelector:@selector(layer)]) { id l = [strong layer]; [d appendFormat:@", layer delegate is the view %@, layer superlayer %@", [l delegate] == strong ? @"yes" : @"no", [l superlayer] ? @"yes" : @"no"]; }
+    [d appendFormat:@", container orientation associated object %@", objc_getAssociatedObject(strong, &kBPG3BContainerOri) ? @"set" : @"none"];
+    return d;
+}
 static void Y42_SelfTest(void) {
     @autoreleasepool {
         Class base = NSClassFromString(@"SBDeviceApplicationSceneView");
         if (!base) return;
         Class ext = NSClassFromString(@"Y34DeviceApplicationSceneView");
-        __weak id weak = nil;
-        NSString *res;
+        __weak id weak = nil, weakControl = nil;
+        NSString *res = nil;
         @autoreleasepool {
-            id v = ((id (*)(id, SEL))objc_msgSend)((id)base, sel_registerName("alloc"));
-            v = ((id (*)(id, SEL, CGRect))objc_msgSend)(v, sel_registerName("initWithFrame:"), CGRectZero);
+            UIView *c = [[UIView alloc] initWithFrame:CGRectZero];
+            weakControl = c;
+        }
+        @autoreleasepool {
+            // ARC owns the +1 of alloc / init by their selector family (a cast objc_msgSend call would leave the +1 of alloc unbalanced and make the self test itself leak the view)
+            UIView *v = [[(Class)base alloc] initWithFrame:CGRectZero];
             if (!v) { BP_Anomaly("y42-sceneview-selftest", @"[y42] self test FAILED: alloc / initWithFrame: of SBDeviceApplicationSceneView answered nil"); return; }
             BOOL classOK = ([v class] == base) && [v isKindOfClass:base];
             BOOL isExt = ext && object_getClass(v) == ext;
@@ -91,8 +106,20 @@ static void Y42_SelfTest(void) {
             weak = v;
             if (!(classOK && ivOK && responds)) res = [@"FAILED: " stringByAppendingString:res];
         }
-        // the instance went out of scope above: the dealloc of the whole recompiled / hand ported chain has run when the weak reference is nil
-        BP_Anomaly("y42-sceneview-selftest", @"[y42] self test %@ ; teardown %@ (OS build 20A8372)", res, weak == nil ? @"OK: the view was deallocated" : @"NOT DONE: the view is still alive");
+        NSString *ctl = weakControl == nil ? @"control UIView deallocated at once" : @"control UIView ALSO still alive right after the release (timing of UIKit / the run loop, not the ports)";
+        if (weak == nil) { BP_Anomaly("y42-sceneview-selftest", @"[y42] self test %@ ; teardown OK: the view was deallocated; %@ (OS build 20A8372)", res, ctl); return; }
+        NSString *now = Y42_Describe(weak);
+        BP_Anomaly("y42-sceneview-selftest", @"[y42] self test %@ ; teardown NOT YET: the view is still alive right after the release (%@); %@ ; re-checked after 1 s and 5 s (OS build 20A8372)", res, now, ctl);
+        for (int k = 0; k < 2; k++) {
+            int secs = k == 0 ? 1 : 5;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(secs * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                @autoreleasepool {
+                    id s = weak;
+                    if (!s) BP_Anomaly("y42-sceneview-selftest", @"[y42] self test teardown OK after %d s: the view was deallocated (the delay was UIKit / run loop timing; control UIView %@)", secs, weakControl == nil ? @"gone" : @"alive");
+                    else BP_Anomaly("y42-sceneview-selftest", @"[y42] self test teardown FAILED after %d s: the view is a LEAK (%@; control UIView %@): something still holds an instance of %s", secs, Y42_Describe(s), weakControl == nil ? @"gone" : @"alive", class_getName(object_getClass(s)));
+                }
+            });
+        }
     }
 }
 

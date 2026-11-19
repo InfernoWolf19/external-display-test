@@ -19,9 +19,10 @@ static void Y42ST_One(const char *extName, const char *baseName, const char *con
     __weak id weak = nil;
     NSString *res = nil;
     @autoreleasepool {
-        id v = ((id (*)(id, SEL))objc_msgSend)((id)ext, sel_registerName("alloc"));
-        if (isView) v = ((id (*)(id, SEL, CGRect))objc_msgSend)(v, sel_registerName("initWithFrame:"), CGRectZero);
-        else { IMP ni = class_getMethodImplementation([NSObject class], sel_registerName("init")); v = ((id (*)(id, SEL))ni)(v, sel_registerName("init")); }
+        // alloc / init through ARC's own family rules (a cast objc_msgSend call leaves the +1 of alloc unbalanced: the test itself would leak the object); non views are not init'ed (a bare alloc is a valid object
+        // for dealloc and the 16.0 designated initialisers must not run here)
+        id v = [(Class)ext alloc];
+        if (isView) v = [(UIView *)v initWithFrame:CGRectZero];
         if (!v) { BP_Anomaly("y42-selftest", @"[y42] self test %s FAILED: alloc / init answered nil", extName); return; }
         BOOL isExt = object_getClass(v) == ext;
         Class shown = [v class];
@@ -35,7 +36,12 @@ static void Y42ST_One(const char *extName, const char *baseName, const char *con
         if (!(classOK && ivOK)) res = [@"FAILED: " stringByAppendingString:res];
         weak = v;
     }
-    BP_Anomaly("y42-selftest", @"[y42] self test %s: %@ ; teardown %@ (OS build 20A8372)", extName, res, weak == nil ? @"OK: deallocated" : @"NOT DONE: still alive");
+    if (weak == nil) { BP_Anomaly("y42-selftest", @"[y42] self test %s: %@ ; teardown OK: deallocated (OS build 20A8372)", extName, res); return; }
+    BP_Anomaly("y42-selftest", @"[y42] self test %s: %@ ; teardown NOT YET: still alive right after the release (retain count %ld), re-checked after 1 s (OS build 20A8372)", extName, res, (long)CFGetRetainCount((__bridge CFTypeRef)weak) - 1);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        id s = weak;
+        BP_Anomaly("y42-selftest", @"[y42] self test %s after 1 s: %@", extName, s ? [NSString stringWithFormat:@"FAILED: still alive, retain count %ld: a LEAK of the runtime subclass (what holds it is not visible from here)", (long)CFGetRetainCount((__bridge CFTypeRef)s) - 1] : @"teardown OK: deallocated");
+    });
 }
 
 __attribute__((constructor)) static void Y42SelfTest_Setup(void) {
