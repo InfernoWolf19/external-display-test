@@ -31,7 +31,8 @@ def is_obj_sel(name):
 def ret_values(seed, name, idx, kind):
     r = rnd(seed, name, idx)
     c = r.random()
-    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name.startswith('F:L:') or name in ('F:SBSafeCast', 'F:objc_opt_class', 'F:objc_msgSendSuper2', 'F:objc_opt_new', 'F:objc_loadWeakRetained'):
+    if name == 'F:UILogGetCategoryCachedImpl': return ('o', r.randrange(1, 40)), [0.0] * 4        # a log object: the caller reads a field of it without a nil test
+    if is_obj_sel(name) or name.startswith('F:objc_alloc') or name.startswith('F:L:') or name in ('F:SBSafeCast', 'F:objc_opt_class', 'F:objc_msgSendSuper2', 'F:objc_opt_new', 'F:objc_loadWeakRetained', 'F:UILogGetCategoryCachedImpl'):
         x0 = ('i', 0) if c < 0.3 else ('o', r.randrange(1, 40))
     elif c < 0.3: x0 = ('i', 0)
     elif c < 0.5: x0 = ('i', 1)
@@ -302,7 +303,7 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
         for i in range(ctypes.c_int.in_dll(lib, 'lift_ncells').value):
             nm_ = ctypes.string_at(cells[2 * i + 1]).decode().lstrip('_')
             strmap[ctypes.addressof(cells) + 16 * i] = ('SYM', nm_)
-            strmap[cells[2 * i]] = ('STR', DATASYM[nm_]) if nm_ in DATASYM else ('SYMVAL', nm_)
+            strmap[cells[2 * i]] = (0 if DATASYM[nm_] == '#0' else ('STR', DATASYM[nm_])) if nm_ in DATASYM else ('SYMVAL', nm_)
     fnaddrs = (ctypes.c_uint64 * 32).in_dll(lib, 'lift_fnaddrs'); fnnames = (ctypes.c_char_p * 16).in_dll(lib, 'lift_fnnames')
     descs = (ctypes.c_uint64 * 48).in_dll(lib, 'lift_descs')
     tr = Trace(); idx = [0]
@@ -436,6 +437,15 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
             ivmap[spec] = -1
     print('ivmap', ivmap)
     names = emu_names(ver, st, en)
+    for i_ in L.ins:       # the call targets named exactly like the lifter names them (jump islands, direct calls of Objective-C method implementations)
+        if i_.mnemonic in ('bl', 'b') and i_.op_str.startswith('#'):
+            tg_ = int(i_.op_str[1:], 16)
+            if st <= tg_ < en or tg_ in locs: continue
+            nm_ = L.ctx.stubname(tg_)
+            if nm_.startswith('j__'): nm_ = nm_[2:]
+            mm_ = re.match(r'^[-+]\[\w+(?: \(\w+\))? ([^\]]+)\]$', nm_)
+            if mm_: nm_ = 'msgSend:' + mm_.group(1)
+            if nm_ and not nm_.startswith('UNRESOLVED'): names[tg_] = nm_
     for a_, n_ in locs.items(): names[a_] = 'L:' + n_
     names[INDIRECT_STUB] = 'indirect'
     c = Case(ver, st, en, cname, sig, retk, cls, L.kinds_at, locs)
@@ -455,7 +465,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
         for pi_ in PTRARGS:
             if pi_ < len(args): args[pi_] = OBJ_EMU + 0x100 * (30 + pi_)      # out parameters: a pointer to writable modelled memory
         te, Ne = run_emu(c, names, seed, args, (selfw, objw))
-        for cell_ in re.findall(r'\b(\w+_bss\d+)\[64\]', lbody + head): ctypes.memset((ctypes.c_uint8 * 64).in_dll(lib, cell_), 0, 64)
+        for cell_, sz_ in set(re.findall(r'\b(lift_bss_\w+)\[(\d+)\]', lbody + head)): ctypes.memset((ctypes.c_uint8 * int(sz_)).in_dll(lib, cell_), 0, int(sz_))
         tl, Nl = run_lifted(c, lib, L.kinds_at, seed, args, (selfw, objw), ivmap)
         ncalls += len(te.calls)
         if os.environ.get('TCDUMP') and seed == 0:

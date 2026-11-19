@@ -220,6 +220,21 @@ const char *y42_sceneview_preflight(void) {
 uint64_t y42_fsal_init(uint64_t self, uint64_t cmd, uint64_t handle, double w, double h, uint64_t containerOrientation) { return fsalinit(self, cmd, handle, w, h, containerOrientation); }
 const char *y42_fullscreen_preflight(void) { return fsalinit_preflight(); }
 '''),
+ 'u2': dict(file='Y42U2Lift.c',
+  head='''// Y42U2Lift.c : the two UIKitCore default scene handlers of iPadOS 16.2 (20C65), recompiled from the 16.2 machine code by tools/a2c/a2c.py:
+//   __UIApplicationSceneConnectionHandler_block_invoke      0x1893148b4 (16.0 0x1891de700): migrates the windows of EVERY _UIPlaceholderWindowScene to the connecting scene and drops the auto invalidation assertion of the default scene
+//   __UIApplicationSceneDisconnectionHandler_block_invoke_3 0x1895f2db8 (16.0 0x1894ba73c): takes [placeholderScene _preventAutoInvalidationForReason:@"default scene disconnected"] into a static
+// Both are bodies of GLOBAL blocks (___block_literal_global / .8 in UIKitCore's __AUTH_CONST.__const): UIKU2b.m replaces their signed invoke pointers.  The static they share (__MergedGlobals of UIKitCore) is ONE zero
+// initialised cell of this file.  Plain C, no ARC.  Verified with tools/a2c/tests/tracecmp.py.  NOT device tested.
+''',
+  tcargs=['--safemem', '--datasyms', 'UIApp=#0'],
+  bodies=[('162', 0x1893148b4, 0x189314e5c, 'u2conn', 'x,x,x', 'v', None, '', {}),
+          ('162', 0x1895f2db8, 0x1895f3218, 'u2disc', 'x,x', 'v', None, '', {})],
+  tail='''
+void y42_u2_conn(uint64_t block, uint64_t scene, uint64_t fbsScene) { u2conn(block, scene, fbsScene); }
+void y42_u2_disc(uint64_t block, uint64_t scene) { u2disc(block, scene); }
+const char *y42_u2_preflight(void) { const char *m = u2conn_preflight(); return m ? m : u2disc_preflight(); }
+'''),
 }
 
 def gen(name):

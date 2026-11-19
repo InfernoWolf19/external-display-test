@@ -29,7 +29,7 @@ static const char *const sbsinit_ivs[] = { "SBSceneView._sceneHandle", "SBSceneV
 static const char *const sbsinit_fns[] = { "_objc_msgSendSuper2", "_objc_alloc" };
 static const char *const sbsinit_strs[] = { "SBApplicationSceneView", "%@:%p-SBApplicationSceneView:%p-%llu", "%@-%p-%llu", "sceneHandle", "SBSceneView.m", "Invalid parameter not satisfying: %@" };
 static const char *sbsinit_preflight(void) { return LIFT_PREFLIGHT(sbsinit_fns, sbsinit_cls, sbsinit_ivs); }
-LIFT_BSS uint8_t sbsinit_bss0[64] __attribute__((aligned(8))); /* mutable static _initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester:.__RequesterCounter of the 16.2 image */
+LIFT_BSS uint8_t lift_bss__initWithSceneHandle_referenceSize_contentOrientation_containerOrientation_hostRequester____RequesterCounter_212be0000[624] __attribute__((aligned(16))); /* mutable static _initWithSceneHandle:referenceSize:contentOrientation:containerOrientation:hostRequester:.__RequesterCounter_212be0000 of the 16.2 image: ONE cell per symbol, shared by every body of the file */
 static uint64_t sbsinit(uint64_t a0, uint64_t a1, uint64_t a2, double a3, double a4, uint64_t a5, uint64_t a6, uint64_t a7) {
     uint64_t X[32]; uint64_t VR[32][2]; int N = 0, Z = 0, C = 0, V = 0; uint64_t RES = 0; (void)RES;
     uint8_t stk_[0x1000] __attribute__((aligned(16)));
@@ -293,11 +293,11 @@ L1f2cca8a8:
     /* 1f2cca8f0: adrp x9, #0x212be0000 */
     X[9] = 0x212be0000ull;
     /* 1f2cca8f4: ldr x8, [x9, #0x230] */
-    X[8] = (uint64_t)(LD64((uint64_t)(uintptr_t)sbsinit_bss0));
+    X[8] = (uint64_t)(LD64(((uint64_t)(uintptr_t)lift_bss__initWithSceneHandle_referenceSize_contentOrientation_containerOrientation_hostRequester____RequesterCounter_212be0000 + 560)));
     /* 1f2cca8f8: add x8, x8, #1 */
     X[8] = (uint64_t)((X[8]) + (0x1ull));
     /* 1f2cca8fc: str x8, [x9, #0x230] */
-    ST64((uint64_t)(uintptr_t)sbsinit_bss0, X[8]);
+    ST64(((uint64_t)(uintptr_t)lift_bss__initWithSceneHandle_referenceSize_contentOrientation_containerOrientation_hostRequester____RequesterCounter_212be0000 + 560), X[8]);
     /* 1f2cca900: cbz x20, #0x1f2cca918 */
     if (X[20] == 0) goto L1f2cca918;
     /* 1f2cca904: stp x21, x8, [sp, #0x10] */

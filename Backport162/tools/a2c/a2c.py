@@ -22,6 +22,36 @@ def save_memo(): json.dump(memo, open(MEMO_F, 'w'))
 
 def run(a): return subprocess.run(a, capture_output=True, text=True).stdout
 
+
+_SYMS = {}
+def sym_start(ver, addr):
+    """start address of the (data / bss) symbol that contains addr, from the symbol dumps of the images (SpringBoard, SpringBoardUI, UIKitCore); None when unknown"""
+    import bisect
+    if ver not in _SYMS:
+        ents = []
+        for fn in (['sb_syms.txt', 'sbui160_syms.txt', 'uik160_syms.txt'] if ver == '160' else ['sb162_syms.txt', 'sbui162_syms.txt', 'uik162_syms.txt']):
+            if not os.path.exists(S + fn): continue
+            for l in open(S + fn, errors='replace'):
+                m = re.match(r'(0x[0-9a-f]+):\s+\(__DATA[^)]*\)\s+\S+\s+(\S.*?)\s*$', l)
+                if m: ents.append((int(m.group(1), 16), m.group(2)))
+        ents.sort(); _SYMS[ver] = ([e[0] for e in ents], ents)
+    ks, ents = _SYMS[ver]
+    i = bisect.bisect_right(ks, addr) - 1
+    return ents[i] if i >= 0 else None
+
+_EXTD = {}
+def ext_data(ver, name):
+    """True when `name` is an EXPORTED data symbol (a global like _UIApp) of one of the dumped images: the lifted code takes its address with dlsym and loads from it at run time"""
+    if ver not in _EXTD:
+        st = set()
+        for fn in (['sb_syms.txt', 'sbui160_syms.txt', 'uik160_syms.txt'] if ver == '160' else ['sb162_syms.txt', 'sbui162_syms.txt', 'uik162_syms.txt']):
+            if not os.path.exists(S + fn): continue
+            for l in open(S + fn, errors='replace'):
+                m = re.match(r'0x[0-9a-f]+:\s+\(__DATA[^)]*\)\s+external\s+(\S+)', l)
+                if m: st.add(m.group(1))
+        _EXTD[ver] = st
+    return name in _EXTD[ver]
+
 class Ctx:
     def __init__(s, ver):
         s.ver = ver; s.cache = DSC[ver]
@@ -29,7 +59,7 @@ class Ctx:
         k = 'a2sx%s:%x' % (s.ver, addr)
         if k in memo: return memo[k]
         o = subprocess.run([S + 'bin/ipsw', 'dsc', 'a2s', s.cache, hex(addr)], capture_output=True, text=True); o = o.stdout + o.stderr
-        m = re.search(r'0x[0-9a-f]+: (\S+)', o); sym = m.group(1) if m else ''
+        m = re.search(r'0x[0-9a-f]+: ([-+]\[[^\]]*\]|\S+)', o); sym = m.group(1) if m else ''
         m2 = re.search(r'section=(\S+)', o); sec = m2.group(1) if m2 else ''
         memo[k] = [sym, sec]; return memo[k]
     def a2s(s, addr):
@@ -142,7 +172,7 @@ FN_KINDS = {'BSRectWithSize': 'rect', 'BSSizeSwap': 'size', 'BSSizeRoundForScale
             'SBClassicUtilitiesScaleFactorForPhoneAppZoomedIn': 'd', 'SBFAngleForRotationFromInterfaceOrientationToInterfaceOrientation': 'd', 'SBScreenDisplayCornerRadius': 'd',
             'SBClassicUtilitiesInsetAndTranslateLayerForPresentationWithHomeAffordance': 'v'}
 # C functions whose result is an integer / pointer / BOOL / void (x register or nothing): anything else must be listed above or given with --kinds fn:NAME=kind
-X_FNS = {'SBFInterfaceOrientationDescription', 'SBApplicationMightHaveTransparentBackground', 'SBTraitsSceneParticipantDelegateOrientationChangeInspector.cold.1', 'BSRunLoopPerformRelativeToCACommit', 'BSRunLoopPerformAfterCACommit', 'assert_rtn', 'SBEqualObjects', 'SBTraitsArbiterOrientationActuationEnabledForRole', 'BSFloatEqualToFloat', 'BSDispatchQueueAssertMain', 'NSStringFromClass', 'Block_object_dispose', 'Block_object_assign', 'SBAppendSwitcherModifierResponse', 'SBAppLayoutConfigurationFromMainDisplayLayoutStateSpaceConfiguration', 'os_log_impl', 'SBLogShelfLiveContent', 'os_log_error_impl', 'os_log_fault_impl', 'os_log_info_impl', 'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
+X_FNS = {'class_getName', 'UILogGetCategoryCachedImpl', 'SBFInterfaceOrientationDescription', 'SBApplicationMightHaveTransparentBackground', 'SBTraitsSceneParticipantDelegateOrientationChangeInspector.cold.1', 'BSRunLoopPerformRelativeToCACommit', 'BSRunLoopPerformAfterCACommit', 'assert_rtn', 'SBEqualObjects', 'SBTraitsArbiterOrientationActuationEnabledForRole', 'BSFloatEqualToFloat', 'BSDispatchQueueAssertMain', 'NSStringFromClass', 'Block_object_dispose', 'Block_object_assign', 'SBAppendSwitcherModifierResponse', 'SBAppLayoutConfigurationFromMainDisplayLayoutStateSpaceConfiguration', 'os_log_impl', 'SBLogShelfLiveContent', 'os_log_error_impl', 'os_log_fault_impl', 'os_log_info_impl', 'objc_opt_respondsToSelector', 'objc_opt_self', 'objc_retainBlock', 'objc_autoreleasePoolPush', 'objc_autoreleasePoolPop', 'object_getClass', 'objc_getClass', 'sel_registerName', 'dispatch_once', 'dispatch_sync', 'dispatch_after', 'dispatch_get_main_queue', 'NSStringFromSelector', 'NSLog', 'objc_getProperty', 'objc_setProperty_atomic', 'objc_setProperty_nonatomic', 'objc_setProperty_atomic_copy', 'objc_setProperty_nonatomic_copy', 'objc_alloc_init', 'BSSizeEqualToSize', 'BSSizeGreaterThanOrEqualToSize', 'BSSizeLessThanSize', 'SBHScreenTypeForCurrentDevice', 'BSFloatApproximatelyEqualToFloat', 'CGRectEqualToRect', 'CGRectIsEmpty', 'CGRectIsNull', 'CGRectContainsPoint', 'SBFEffectiveHomeButtonType', 'SBFEffectiveDeviceClass', 'SBSafeCast',
          'sb__runningInSpringBoard', 'MGCopyAnswer', 'SBFIsChamoisWindowingUIAvailable', 'os_log_type_enabled', 'os_log_debug_impl', 'SBLogCommon', 'objc_alloc', 'objc_opt_class',
          'objc_opt_isKindOfClass', 'objc_opt_new', 'objc_initWeak', 'objc_copyWeak', 'objc_destroyWeak', 'objc_loadWeakRetained', 'objc_storeWeak', 'objc_msgSendSuper2', 'Unwind_Resume',
          'j__objc_storeStrong', 'dispatch_async', 'SBFLoggingMethodProem', 'CGRectGetNull'}
@@ -167,7 +197,7 @@ class Lift:
         s.globals = {}   # addr -> description
         s.stats = {'warn': []}
         s.callseq = 0
-        s.bss = {}; s.sels = {}; s.cls = {}; s.ivs = {}; s.dbls = {}; s.strs = {}
+        s.bss = {}; s.bssmax = {}; s.sels = {}; s.cls = {}; s.ivs = {}; s.dbls = {}; s.strs = {}
         s.fns = {}
     # ---------------- operand helpers
     def reg(s, r, i):  # register name via capstone
@@ -398,6 +428,10 @@ class Lift:
                 if dk is not None:
                     E('X[%d] = (uint64_t)(uintptr_t)LIFT_DESC(%s_desc%d_get(), %s, 0x%xull); /* block descriptor */' % (int(d[1:]), s.cname, dk, json.dumps(s.descs[dk]['sig']), s.descs[dk]['w1'])); return
                 sym_, sec_ = s.ctx.a2s2(cvalres)
+                if '__bss' in sec_ and sym_ and sym_ not in ('?',) and not sym_.startswith('_ptr.') and not ext_data(s.ver, sym_):
+                    E('X[%d] = %s; /* address inside the cell of the mutable static %s */' % (int(d[1:]), s.bss_ea(cvalres, sym_), sym_)); return
+                if sym_ and ext_data(s.ver, sym_) and 'objc' not in sec_ and 'cfstring' not in sec_ and 'selrefs' not in sec_ and '__const' not in sec_:
+                    E('X[%d] = (uint64_t)GSYM(%s_fns, %d); /* address of the exported data symbol %s */' % (int(d[1:]), s.cname, s.intern(s.fns, sym_), sym_)); s.kill(d); return
                 if not sec_ and sym_ in ('?', ''):
                     lit0 = s.ctx.cstring(cvalres)
                     if lit0 and all(32 <= ord(ch) < 127 for ch in lit0):
@@ -581,9 +615,9 @@ class Lift:
         if const_addr is not None and not post and not pair:
             sym_b, sec_b = s.ctx.a2s2(const_addr)
             if '__bss' in sec_b and sym_b and sym_b not in ('?',):
-                # a mutable static of the 16.2 image (e.g. a request counter): the lifted code has a zero initialised cell of its own (what .bss holds before the first use)
-                k_b = s.intern(s.bss, sym_b)
-                ea = '(uint64_t)(uintptr_t)%s_bss%d' % (s.cname, k_b)
+                # a mutable static of the 16.2 image (a request counter, the merged statics of a framework): the lifted code has a zero initialised cell of its own per SYMBOL (shared by all bodies of the file),
+                # addressed with the offset of the access inside the symbol (what .bss holds before the first use)
+                ea = s.bss_ea(const_addr, sym_b)
         if selfcls:
             ivs = s.ivmap(selfcls, disp, sz)
             if ivs:
@@ -714,6 +748,13 @@ class Lift:
                 if o <= off < o + max(sz, 1): return ('%s.%s' % (c, name), off - o)
             c = tab[c]['super']; seen += 1
         return None
+    def bss_ea(s, const_addr, sym_b):
+        """C expression of the address inside the zero initialised cell that stands for the mutable static / merged globals page of the access"""
+        pg_b = const_addr & ~0xfff; off_b = const_addr & 0xfff
+        key_b = '%s_%x' % (sym_b, pg_b)
+        s.intern(s.bss, key_b)
+        s.bssmax[key_b] = max(s.bssmax.get(key_b, 64), off_b + 64)
+        return '((uint64_t)(uintptr_t)lift_bss_%s + %d)' % (re.sub(r'\W', '_', key_b), off_b)
     def decode_ptr(s, v):
         """chained cache pointer -> (target, key, addrdiv, diversity or None)"""
         if v >> 63: return (0x180000000 + (v & 0xffffffff), (v >> 49) & 3, (v >> 48) & 1, (v >> 32) & 0xffff)
@@ -935,6 +976,8 @@ class Lift:
         E = s.emit
         nm = '' if t in s.locals else s.ctx.stubname(t)
         if nm.startswith('j__'): nm = nm[2:]          # jump island of the shared cache (j__objc_storeStrong)
+        mm = re.match(r'^[-+]\[\w+(?: \(\w+\))? ([^\]]+)\]$', nm)
+        if mm and t not in s.locals: nm = 'msgSend:' + mm.group(1)       # a direct call of an Objective-C method implementation (devirtualised by the compiler): recompiled as the message send
         if not nm and t not in s.locals: s.stats['warn'].append('unresolved call %x -> %x' % (i.address, t)); nm = 'UNRESOLVED_%x' % t
         # registers clobbered
         x1tag = s.cval.get('x1')
@@ -1016,7 +1059,7 @@ class Lift:
                 dbody.append('    d_[2] = (uint64_t)(uintptr_t)%s;' % json.dumps(dd['sig']))
             dbody.append('    return d_;'); dbody.append('}')
             dtext.append('\n'.join(dbody))
-        for sym_b, k_b in sorted(s.bss.items(), key=lambda kv: kv[1]): dtext.append('LIFT_BSS uint8_t %s_bss%d[64] __attribute__((aligned(8))); /* mutable static %s of the 16.2 image */' % (s.cname, k_b, sym_b))
+        for sym_b, k_b in sorted(s.bss.items(), key=lambda kv: kv[1]): dtext.append('LIFT_BSS uint8_t lift_bss_%s[%d] __attribute__((aligned(16))); /* mutable static %s of the 16.2 image: ONE cell per symbol, shared by every body of the file */' % (re.sub(r'\W', '_', sym_b), max(s.bssmax.get(sym_b, 64), 4096 + 64 if '__MergedGlobals' in sym_b else 64), sym_b))
         head = '\n'.join(h + tabs + dtext)
         fn = []
         fn.append('static %s %s(%s) {' % (rt, s.cname, ', '.join(params) or 'void'))
