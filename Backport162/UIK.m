@@ -1489,8 +1489,10 @@ static double uik_verticalOverlapK6_body(id self, SEL _cmd, id view, id info) {
     if (UIK_SEND(BOOL (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "placement"), "isFloatingAssistantView")) return 0;
     if (UIK_SEND(BOOL (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "placement"), "isFloating")) return 0;
     if (!UIK_SEND(id (*)(id, SEL), view, "_window")) return 0;
-    if (UIK_SEND(BOOL (*)(id, SEL, id), view, "isDescendantOfView:", UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputView"))) return 0;
-    if (UIK_SEND(BOOL (*)(id, SEL, id), view, "isDescendantOfView:", UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputAccessoryView"))) return 0;
+    id ivNow = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputView");
+    if (UIK_SEND(BOOL (*)(id, SEL, id), view, "isDescendantOfView:", ivNow)) return 0;
+    id accNow = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputAccessoryView");
+    if (UIK_SEND(BOOL (*)(id, SEL, id), view, "isDescendantOfView:", accNow)) return 0;
     CGRect r;
     id scene = UIK_SEND(id (*)(id, SEL), self, "scene");
     id sceneSpace = UIK_SEND(id (*)(id, SEL), scene, "coordinateSpace");
@@ -1504,7 +1506,7 @@ static double uik_verticalOverlapK6_body(id self, SEL _cmd, id view, id info) {
         if (CGRectGetMinY(r) == 0) { UIK_Problem("k6-top", "K6 verticalOverlapForView:usingKeyboardInfo: without info: the container's visibleFrame is on top of the screen %s (16.2 faults 'Keyboard frame should not be on top of the screen'; build 20A8372): answered 0", NSStringFromCGRect(r).UTF8String); return 0; }
     }
     r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), sceneSpace, "convertRect:fromCoordinateSpace:", r, screenSpace);
-    r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), UIK_SEND(id (*)(id, SEL), self, "scene") ? UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "scene"), "coordinateSpace") : nil, "convertRect:toCoordinateSpace:", r, view);
+    r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), sceneSpace, "convertRect:toCoordinateSpace:", r, view);
     if (K6_Rect(r)) return 0;
     CGRect bounds = UIK_SEND(CGRect (*)(id, SEL), view, "bounds");
     double o = CGRectGetMaxY(bounds) - CGRectGetMinY(r);
