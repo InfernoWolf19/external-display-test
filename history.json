@@ -1,12 +1,4 @@
 {
- "0.7.9+333.eeae302": {
-  "date": "2026-11-01T09:10:21Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+333.eeae302_iphoneos-arm64.deb",
-  "run": 333,
-  "sha": "eeae30267740b45042ab00e3fe691d01707794b8",
-  "subject": "BP_LogLine: a fresh Backport162.log (rotation / removal) starts with a recap of the ANOMALY lines this process already wrote, so one log file always carries them",
-  "version": "0.7.9+333.eeae302"
- },
  "0.7.9+334.2363e6c": {
   "date": "2026-11-01T09:19:12Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+334.2363e6c_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "a3c0fdd337bddb45c68f8ba683e83339cdfbf5f7",
   "subject": "P1 L2: 16.2 transitionEventForContext invalidates the current layout state's cached app layouts (switch p1_stateinval); ANOMALY p1-restore at a layout transition that ends with an error; caller scan of _setLayoutAttributes / invalidate in DELTA-SWEEP",
   "version": "0.7.9+407.a3c0fdd"
+ },
+ "0.7.9+408.4888192": {
+  "date": "2026-11-20T23:52:37Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+408.4888192_iphoneos-arm64.deb",
+  "run": 408,
+  "sha": "488819211c82bcb38c66da671d044dd33218ec48",
+  "subject": "P1: p1_restoresync (documented deviation, user approved): the state restored after a layout transition that ends with an error takes the target's attribute sets; ANOMALY p1-restore shows before / carried / now",
+  "version": "0.7.9+408.4888192"
  }
 }
