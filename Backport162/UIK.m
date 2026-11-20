@@ -23,6 +23,7 @@
 #import <sys/stat.h>
 #import <mach-o/dyld.h>
 #import <dlfcn.h>
+#import <os/lock.h>
 #import <fcntl.h>
 #import <stdarg.h>
 #import <stdio.h>
@@ -127,6 +128,15 @@ static void UIK_Problem(const char *key, const char *fmt, ...) {
     static int n;
     for (int i = 0; i < n; i++) if (strncmp(seen[i], key, 63) == 0) return;
     if (n < kMax) snprintf(seen[n++], 64, "%s", key);
+    va_list ap;
+    va_start(ap, fmt);
+    UIK_Vlog(fmt, ap);
+    va_end(ap);
+}
+
+// Line without the once-per-key dedupe (the K4RING dump needs every line).
+static void UIK_Problem_NoDedupe(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void UIK_Problem_NoDedupe(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     UIK_Vlog(fmt, ap);
@@ -1165,6 +1175,40 @@ static void UIK_InstallK2(void) {
     UIK_Log("K2 installed");
 }
 
+// ---- always-on ring of the last 30 keyboard notification frames (K3 conversions and K4 answers, every one, NOT deduped by rounded values), written when a hide ends
+// Entry: time, kind (K4 = notificationsFrame answer at a notification site, K3 = convertRect to screen space), the UIKit code range index of the caller (K4), the 16.0 answer (old) / the input rect (K3), the
+// result, the keyboard view frame (placeheldView.superview.frame, screen coordinates), hostView.frame, the host window frame, the container frame, placement visible, windowing mode.  A hide that ends
+// (didEndTransition with an invisible placement or an empty frame) flushes the ring as "K4RING" lines (at most once per 2 s): the whole sequence of show, bar-only and hide of the phase.
+typedef struct { double t; int kind; int site; CGRect a, b, kb, host, win, cont; int vis; int wm; } UIKRingE;
+static UIKRingE gUIKRing[30];
+static int gUIKRingN;
+static os_unfair_lock gUIKRingLock = OS_UNFAIR_LOCK_INIT;
+static double UIK_Now(void) { struct timespec ts; clock_gettime(CLOCK_REALTIME, &ts); return (double)ts.tv_sec + ts.tv_nsec / 1e9; }
+static void UIK_RingAdd(UIKRingE e) {
+    os_unfair_lock_lock(&gUIKRingLock);
+    gUIKRing[gUIKRingN % 30] = e; gUIKRingN++;
+    os_unfair_lock_unlock(&gUIKRingLock);
+}
+static void UIK_RingFlush(const char *why) {
+    static double last;
+    double now = UIK_Now();
+    if (now - last < 2.0) return;
+    last = now;
+    UIKRingE copy[30]; int n;
+    os_unfair_lock_lock(&gUIKRingLock);
+    n = gUIKRingN < 30 ? gUIKRingN : 30;
+    for (int i = 0; i < n; i++) copy[i] = gUIKRing[(gUIKRingN - n + i) % 30];
+    os_unfair_lock_unlock(&gUIKRingLock);
+    UIK_Problem_NoDedupe("K4RING begin (%s): last %d keyboard frames, oldest first (build 20A8372)", why, n);
+    for (int i = 0; i < n; i++) {
+        UIKRingE *e = &copy[i];
+        UIK_Problem_NoDedupe("K4RING %d %+.3fs %s site %d | %s %s -> %s | keyboard view (screen) %s | hostView %s | window %s | container %s | placement visible %d windowing %d",
+            i, e->t - now, e->kind ? "K3" : "K4", e->site, e->kind ? "in" : "16.0 answer", NSStringFromCGRect(e->a).UTF8String, NSStringFromCGRect(e->b).UTF8String,
+            NSStringFromCGRect(e->kb).UTF8String, NSStringFromCGRect(e->host).UTF8String, NSStringFromCGRect(e->win).UTF8String, NSStringFromCGRect(e->cont).UTF8String, e->vis, e->wm);
+    }
+    UIK_Problem_NoDedupe("K4RING end");
+}
+
 // ---------------------------------------------------------------- K3: keyboard frame of a Stage Manager WINDOW in real UIScreen coordinates (16.2 -[UIInputWindowController convertRectFromContainerCoordinateSpaceToScreenSpace:])
 //
 // Source of every UIKeyboard*UserInfoKey frame (generateNotificationsForStart: / the post*Notifications paths).  16.0 0x189131f50: r = [view convertRect:r toView:nil]; r = [_window convertRect:r toWindow:nil]; then,
@@ -1197,6 +1241,13 @@ static CGRect uik_convertRectK3_body(id self, SEL _cmd, CGRect r) {
         id tp = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), win, "screen"), "coordinateSpace");
         r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), sp, "convertRect:toCoordinateSpace:", r, tp);
     }
+    @try {
+        UIKRingE e3; memset(&e3, 0, sizeof e3);
+        e3.t = UIK_Now(); e3.kind = 1; e3.site = viaWindow ? 1 : 0; e3.a = in; e3.b = r;
+        e3.win = win ? UIK_SEND(CGRect (*)(id, SEL), win, "frame") : CGRectZero;
+        e3.vis = -1; e3.wm = -1;
+        UIK_RingAdd(e3);
+    } @catch (NSException *e_) { uik_exc("K3Ring", e_); }
     static int n;
     if (n < 3 && !CGRectEqualToRect(r, in) && !viaWindow) {
         n++;
@@ -1314,6 +1365,23 @@ static CGRect uik_notificationsFrameK4(id self, SEL _cmd) {
     @catch (NSException *e_) { uik_exc("uik_notificationsFrameK4", e_); return CGRectZero; }
 }
 
+static UIKRingE K4_RingEntry(id self, int site, CGRect old, CGRect nf) {
+    UIKRingE e; memset(&e, 0, sizeof e);
+    e.t = UIK_Now(); e.kind = 0; e.site = site; e.a = old; e.b = nf;
+    id host = K4_O(self, "hostView");
+    id ph = K4_O(K4_O(K4_O(self, "inputViewSet"), "inputView"), "placeheldView");
+    id sv = K4_O(ph, "superview");
+    e.kb = sv ? K4_R(sv, "frame") : CGRectZero;
+    e.host = K4_R(host, "frame");
+    e.win = K4_R(K4_O(host, "window"), "frame");
+    e.cont = K4_R(K4_O(self, "containerView"), "frame");
+    id p = K4_O(self, "placement");
+    e.vis = p ? K4_B(p, "isVisible") : -1;
+    id d = UIK_SEND(id (*)(id, SEL), (id)objc_getClass("UIKeyboardSceneDelegate"), "activeKeyboardSceneDelegate");
+    id vm = d ? K4_O(d, "visualModeManager") : nil;
+    e.wm = vm ? K4_B(vm, "windowingModeEnabled") : -1;
+    return e;
+}
 static void K4_Diag(id self, CGRect old, CGRect nf) {
     id host = K4_O(self, "hostView");
     id win = K4_O(host, "window");
@@ -1339,11 +1407,16 @@ static void K4_Diag(id self, CGRect old, CGRect nf) {
 static CGRect uik_visibleFrameK4_body(id self, SEL _cmd) {
     if (!gK4Ok || !UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
     uintptr_t ra = (uintptr_t)__builtin_return_address(0) & 0x7fffffffffULL;
-    BOOL hit = NO;
-    for (size_t i = 0; i < sizeof kK4R / sizeof *kK4R; i++) if (ra >= kK4R[i][0] + gK4Slide && ra < kK4R[i][1] + gK4Slide) { hit = YES; break; }
+    BOOL hit = NO; int hitIdx = -1;
+    for (size_t i = 0; i < sizeof kK4R / sizeof *kK4R; i++) if (ra >= kK4R[i][0] + gK4Slide && ra < kK4R[i][1] + gK4Slide) { hit = YES; hitIdx = (int)i; break; }
     CGRect old = ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
     if (!hit) return old;
     CGRect nf = uik_notificationsFrameK4(self, _cmd);
+    @try {
+        UIKRingE re_ = K4_RingEntry(self, hitIdx, old, nf);
+        UIK_RingAdd(re_);
+        if (hitIdx == 2 && (re_.vis == 0 || nf.size.height == 0 || re_.host.size.height == 0)) UIK_RingFlush("a hide ended: didEndTransitionWithController: with an invisible placement / empty frame");      // site 2 = -[UIInputWindowController didEndTransitionWithController:]
+    } @catch (NSException *e_) { uik_exc("K4Ring", e_); }
     static int nd; if (nd < 40) { nd++; K4_Diag(self, old, nf); }
     static int n;
     if (n < 6 && !CGRectEqualToRect(old, nf)) {
