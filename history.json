@@ -1,12 +1,4 @@
 {
- "0.7.9+331.6a9d71e": {
-  "date": "2026-11-01T08:46:56Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+331.6a9d71e_iphoneos-arm64.deb",
-  "run": 331,
-  "sha": "6a9d71e011987751b1b45b59b1bec3fe2f9a5933",
-  "subject": "Y33HomeDiag: debug only log of what the switcher content controller delegate applies to the home screen (alpha, scale, backdrop blur type / progress, dimming, wallpaper scale, with mode) to find why the icons stay hidden ~0.7 s after a settled dismiss; no behaviour change",
-  "version": "0.7.9+331.6a9d71e"
- },
  "0.7.9+332.3c57645": {
   "date": "2026-11-01T09:02:25Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+332.3c57645_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "6fad1a67d042eba35831d6a7c75cb0f5eb9819b9",
   "subject": "P1 attrguard: the ivar of SBAppLayout is _itemsToLayoutAttributesMap (offset 0x50, 16.0 and 16.2 headers); the device log of build 20:40 says 'not guarded' for every prevented overwrite because the old name did not exist",
   "version": "0.7.9+404.6fad1a6"
+ },
+ "0.7.9+406.cdd1d46": {
+  "date": "2026-11-20T02:35:31Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+406.cdd1d46_iphoneos-arm64.deb",
+  "run": 406,
+  "sha": "cdd1d46e682bb5958efe3edf9b8b9807fcbf7555",
+  "subject": "UIK K6: no UIK_SEND inside the variadic arguments of another one (##__VA_ARGS__ operands are not macro expanded; fixes build 405)",
+  "version": "0.7.9+406.cdd1d46"
  }
 }
