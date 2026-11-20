@@ -37,8 +37,8 @@
 
 // ---------------------------------------------------------------- switches
 
-enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_COUNT };
-static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap" };
+enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_HIDEFIX, UIK_SW_COUNT };
+static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap", "Backport162.off.uik_hidefix" };
 static const char kUIKTmp[] = "/var/jb/tmp";
 static const char *const kUIKDirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile", "/var/mobile/Library/Caches", "/var/mobile" };
 #define UIK_DIR_COUNT ((int)(sizeof kUIKDirs / sizeof kUIKDirs[0]))
@@ -1404,6 +1404,61 @@ static void K4_Diag(id self, CGRect old, CGRect nf) {
         NSStringFromCGRect(hostF).UTF8String, NSStringFromCGRect(old).UTF8String, NSStringFromCGRect(nf).UTF8String, NSStringFromCGRect(svf).UTF8String, NSStringFromCGRect(svwin).UTF8String, NSStringFromCGRect(screenB).UTF8String,
         NSStringFromCGRect(conv).UTF8String, NSStringFromCGRect(winF).UTF8String, NSStringFromCGRect(sceneB).UTF8String, NSStringFromCGRect(cont).UTF8String);
 }
+
+// ---- K4 hide fix (documented deviation, switch uik_hidefix, default ON): the stuck shift after a keyboard hide / minimise
+// The app moves its UI by the overlap of the LAST keyboard end frame it received.  When the keyboard hides (or shrinks to the assistant bar) and the last end frame it was told still overlaps the app window,
+// the UI stays shifted by that overlap (device: Telegram in a window, chat ~50-58 pt too high, the assistant bar height).  The hide transition ends in -[UIInputWindowController didEndTransitionWithController:]
+// (K4 site 2): when the placement is then invisible (or the frame empty) and the last end frame posted by UIKit (observed: UIKeyboardWillShow / WillChangeFrame / WillHide / DidShow / DidChangeFrame / DidHide,
+// the userInfo END frame, screen coordinates) intersects the host window in screen coordinates, ONE correcting UIKeyboardWillHideNotification + DidHideNotification is posted: begin = the last end frame, end = a
+// zero height rect at the screen bottom edge, same userInfo shape as the stock hide (frames, centers, duration 0.25, curve 7, local), same object as the stock posts.  Never when the last end frame had no
+// overlap (the normal case), never twice for one hide (the correction itself becomes the last end frame).
+static CGRect gHFLastEnd;
+static id gHFLastObj;
+static BOOL gHFHave;
+static BOOL gHFPosting;
+static void UIK_HideFixObserve(NSNotification *n) {
+    if (gHFPosting) return;
+    NSValue *v = n.userInfo[@"UIKeyboardFrameEndUserInfoKey"];
+    if (![v isKindOfClass:[NSValue class]]) return;
+    gHFLastEnd = [v CGRectValue]; gHFLastObj = n.object; gHFHave = YES;
+}
+static void UIK_HideFixInstall(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSArray *names = @[@"UIKeyboardWillShowNotification", @"UIKeyboardDidShowNotification", @"UIKeyboardWillHideNotification", @"UIKeyboardDidHideNotification", @"UIKeyboardWillChangeFrameNotification", @"UIKeyboardDidChangeFrameNotification"];
+        for (NSString *nm in names) [[NSNotificationCenter defaultCenter] addObserverForName:nm object:nil queue:nil usingBlock:^(NSNotification *n) { @try { UIK_HideFixObserve(n); } @catch (NSException *e_) { uik_exc("K4HideFixObserve", e_); } }];
+    });
+}
+static void UIK_HideFix(id item) {
+    if (!UIK_On(UIK_SW_HIDEFIX) || !gHFHave) return;
+    id host = K4_O(item, "hostView");
+    id win = K4_O(host, "window");
+    id scene = K4_O(win, "windowScene");
+    id sp = K4_O(scene, "coordinateSpace");
+    id screen = K4_O(win, "screen");
+    id tp = K4_O(screen, "coordinateSpace");
+    if (!win || !sp || !tp) return;
+    CGRect wb = K4_R(win, "bounds");
+    CGRect winScreen = K4_Can(sp, "convertRect:toCoordinateSpace:") ? UIK_SEND(CGRect (*)(id, SEL, CGRect, id), sp, "convertRect:toCoordinateSpace:", wb, tp) : wb;
+    CGRect sb = K4_Can(tp, "bounds") ? UIK_SEND(CGRect (*)(id, SEL), tp, "bounds") : CGRectZero;
+    CGRect last = gHFLastEnd;
+    CGRect ov = CGRectIntersection(last, winScreen);
+    if (CGRectIsNull(ov) || ov.size.height < 0.5 || ov.size.width < 0.5 || last.size.height < 0.5 || sb.size.height < 1) return;     // the last end frame did not cover the window: nothing is stuck
+    CGRect end = CGRectMake(last.origin.x, CGRectGetMaxY(sb), last.size.width, 0);
+    NSValue *bf = [NSValue valueWithCGRect:last], *ef = [NSValue valueWithCGRect:end];
+    NSValue *bc = [NSValue valueWithCGPoint:CGPointMake(CGRectGetMidX(last), CGRectGetMidY(last))], *ec = [NSValue valueWithCGPoint:CGPointMake(CGRectGetMidX(end), CGRectGetMidY(end))];
+    NSDictionary *info = @{ @"UIKeyboardFrameBeginUserInfoKey": bf, @"UIKeyboardFrameEndUserInfoKey": ef, @"UIKeyboardCenterBeginUserInfoKey": bc, @"UIKeyboardCenterEndUserInfoKey": ec,
+        @"UIKeyboardAnimationDurationUserInfoKey": @0.25, @"UIKeyboardAnimationCurveUserInfoKey": @7, @"UIKeyboardIsLocalUserInfoKey": @YES };
+    UIK_Problem("k4-hidefix", "K4 hide fix (documented deviation, kill file uik_hidefix): the keyboard hid but the last end frame the app received %s still covered its window %s (overlap %s): posted a correcting UIKeyboardWillHide / DidHide with end frame %s (bundle %s, build 20A8372)",
+        NSStringFromCGRect(last).UTF8String, NSStringFromCGRect(winScreen).UTF8String, NSStringFromCGRect(ov).UTF8String, NSStringFromCGRect(end).UTF8String, [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+    id obj = gHFLastObj;
+    gHFPosting = YES;
+    @try {
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKeyboardWillHideNotification" object:obj userInfo:info];
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"UIKeyboardDidHideNotification" object:obj userInfo:info];
+    } @finally { gHFPosting = NO; }
+    gHFLastEnd = end; gHFLastObj = obj;
+}
 static CGRect uik_visibleFrameK4_body(id self, SEL _cmd) {
     if (!gK4Ok || !UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
     uintptr_t ra = (uintptr_t)__builtin_return_address(0) & 0x7fffffffffULL;
@@ -1415,7 +1470,7 @@ static CGRect uik_visibleFrameK4_body(id self, SEL _cmd) {
     @try {
         UIKRingE re_ = K4_RingEntry(self, hitIdx, old, nf);
         UIK_RingAdd(re_);
-        if (hitIdx == 2 && (re_.vis == 0 || nf.size.height == 0 || re_.host.size.height == 0)) UIK_RingFlush("a hide ended: didEndTransitionWithController: with an invisible placement / empty frame");      // site 2 = -[UIInputWindowController didEndTransitionWithController:]
+        if (hitIdx == 2 && (re_.vis == 0 || nf.size.height == 0 || re_.host.size.height == 0)) { UIK_HideFix(self); UIK_RingFlush("a hide ended: didEndTransitionWithController: with an invisible placement / empty frame"); }      // site 2 = -[UIInputWindowController didEndTransitionWithController:]
     } @catch (NSException *e_) { uik_exc("K4Ring", e_); }
     static int nd; if (nd < 40) { nd++; K4_Diag(self, old, nf); }
     static int n;
@@ -1451,6 +1506,7 @@ static void UIK_InstallK4(void) {
     class_addMethod(item, sel_registerName("fullScreenFrame"), (IMP)uik_fullScreenFrameK4, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8");
     class_addMethod(item, sel_registerName("notificationsFrame"), (IMP)uik_notificationsFrameK4, "{CGRect={CGPoint=dd}{CGSize=dd}}16@0:8");
     if (!UIK_Hook("UIInputWindowControllerHostingItem", "visibleFrame", NULL, (IMP)uik_visibleFrameK4, &orig_vfK4)) return;
+    UIK_HideFixInstall();
     gK4Ok = YES;
     UIK_Log("K4 installed (slide %#lx)", (unsigned long)slide);
 }
