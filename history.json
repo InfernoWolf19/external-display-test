@@ -1,12 +1,4 @@
 {
- "0.7.9+332.3c57645": {
-  "date": "2026-11-01T09:02:25Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+332.3c57645_iphoneos-arm64.deb",
-  "run": 332,
-  "sha": "3c5764517c4e287f04bfe783e24ecdda292325b9",
-  "subject": "G2B: every fallback of _layoutAppLayout:roleMask:completion: to the 16.0 body is announced once per reason (ANOMALY g2b-layout, always on): in the last device log the 16.2 container configuration (card debug line) never ran",
-  "version": "0.7.9+332.3c57645"
- },
  "0.7.9+333.eeae302": {
   "date": "2026-11-01T09:10:21Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+333.eeae302_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "cdd1d46e682bb5958efe3edf9b8b9807fcbf7555",
   "subject": "UIK K6: no UIK_SEND inside the variadic arguments of another one (##__VA_ARGS__ operands are not macro expanded; fixes build 405)",
   "version": "0.7.9+406.cdd1d46"
+ },
+ "0.7.9+407.a3c0fdd": {
+  "date": "2026-11-20T03:41:46Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+407.a3c0fdd_iphoneos-arm64.deb",
+  "run": 407,
+  "sha": "a3c0fdd337bddb45c68f8ba683e83339cdfbf5f7",
+  "subject": "P1 L2: 16.2 transitionEventForContext invalidates the current layout state's cached app layouts (switch p1_stateinval); ANOMALY p1-restore at a layout transition that ends with an error; caller scan of _setLayoutAttributes / invalidate in DELTA-SWEEP",
+  "version": "0.7.9+407.a3c0fdd"
  }
 }
