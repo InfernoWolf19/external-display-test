@@ -36,8 +36,8 @@
 
 // ---------------------------------------------------------------- switches
 
-enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_COUNT };
-static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace" };
+enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_COUNT };
+static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap" };
 static const char kUIKTmp[] = "/var/jb/tmp";
 static const char *const kUIKDirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile", "/var/mobile/Library/Caches", "/var/mobile" };
 #define UIK_DIR_COUNT ((int)(sizeof kUIKDirs / sizeof kUIKDirs[0]))
@@ -122,7 +122,7 @@ static void UIK_Log(const char *fmt, ...) {
 // Problem line (always, once per `key`: a missing class / selector / ivar / encoding that made a part of the port skip).
 static void UIK_Problem(const char *key, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 static void UIK_Problem(const char *key, const char *fmt, ...) {
-    enum { kMax = 48 };
+    enum { kMax = 240 };
     static char seen[kMax][64];
     static int n;
     for (int i = 0; i < n; i++) if (strncmp(seen[i], key, 63) == 0) return;
@@ -1465,6 +1465,124 @@ static void UIK_InstallK5(void) {
     if (UIK_On(UIK_SW_KBPLACE)) UIK_Problem("k5-active", "K5 active (build 20A8372): the assistant bar sub placement exists only with an accessory view, accessory constraint as 16.2 (bundle %s)", [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
 }
 
+// ---------------------------------------------------------------- K6: UIKit's own keyboard overlap (16.2 UIKeyboardSceneDelegate verticalOverlapForView:usingKeyboardInfo: / visibleFrameInView:)
+//
+// What UIKit itself uses to move scroll views / text views / layout guides for the keyboard (apart from the notification frame of K4).
+// -verticalOverlapForView:usingKeyboardInfo:  16.0 0x189012aa4 -> 16.2 0x189148ce8.  Both: 0 unless _UIKeyboardAutomaticIsOnScreen(), the container root controller is docked, the input views are not split.
+//   16.2 adds: 0 when [[inputViews] inputView] is nil; 0 when the container's placement isFloatingAssistantView; 0 when it isFloating; 0 when the view has no _window; (16.0 and 16.2) 0 when the view is a descendant of the
+//   input view or the accessory view.  With a notification info: the end frame is converted from the scene's SCREEN coordinate space into the scene coordinate space and then into the view (16.0 and 16.2).  Without info: 16.2
+//   takes [containerRootController visibleFrame]; its MinY == 0 means "keyboard frame on top of the screen": 0 (and a fault log, here ANOMALY k6-top, never an exception); else the frame is converted the same way.  Then:
+//   empty -> 0, else max(0, MaxY(view.bounds) - MinY(frame)).
+// -visibleFrameInView:  16.0 0x1896fa154 -> 16.2 0x189834be0: zero when the container is undocked or the arbiter client says the remote keyboard is undocked; else [container visibleFrame].  16.0 converts it with
+//   [view.window convertRect:fromView:nil]; 16.2 (view without window: unconverted) converts it from [[[container _window] screen] coordinateSpace] to [[view.window windowScene] coordinateSpace].
+// Switch uik_kboverlap.  ANOMALY k6-overlap / k6-visible (always on, deduped by rounded values): notification end frame, result, frames, per app.
+static IMP orig_voK6, orig_vfK6;
+static BOOL K6_Rect(CGRect r) { return CGRectIsEmpty(r) || CGRectIsNull(r); }
+static double uik_verticalOverlapK6_body(id self, SEL _cmd, id view, id info) {
+    BOOL (*onScreen)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "UIKeyboardAutomaticIsOnScreen");
+    if (!onScreen || !onScreen()) return 0;
+    id container = UIK_SEND(id (*)(id, SEL), self, "containerRootController");
+    if (UIK_SEND(BOOL (*)(id, SEL), container, "isUndocked")) return 0;
+    if (UIK_SEND(BOOL (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "_inputViewIsSplit")) return 0;
+    id iv = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputView");
+    if (!iv) return 0;
+    if (UIK_SEND(BOOL (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "placement"), "isFloatingAssistantView")) return 0;
+    if (UIK_SEND(BOOL (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "placement"), "isFloating")) return 0;
+    if (!UIK_SEND(id (*)(id, SEL), view, "_window")) return 0;
+    if (UIK_SEND(BOOL (*)(id, SEL, id), view, "isDescendantOfView:", UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputView"))) return 0;
+    if (UIK_SEND(BOOL (*)(id, SEL, id), view, "isDescendantOfView:", UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "inputViews"), "inputAccessoryView"))) return 0;
+    CGRect r;
+    id scene = UIK_SEND(id (*)(id, SEL), self, "scene");
+    id sceneSpace = UIK_SEND(id (*)(id, SEL), scene, "coordinateSpace");
+    id screenSpace = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), scene, "screen"), "coordinateSpace");
+    BOOL haveInfo = info != nil;
+    if (haveInfo) {
+        id fv = [info objectForKey:UIKeyboardFrameEndUserInfoKey];
+        r = [fv respondsToSelector:@selector(CGRectValue)] ? [fv CGRectValue] : CGRectZero;
+    } else {
+        r = UIK_SEND(CGRect (*)(id, SEL), container, "visibleFrame");
+        if (CGRectGetMinY(r) == 0) { UIK_Problem("k6-top", "K6 verticalOverlapForView:usingKeyboardInfo: without info: the container's visibleFrame is on top of the screen %s (16.2 faults 'Keyboard frame should not be on top of the screen'; build 20A8372): answered 0", NSStringFromCGRect(r).UTF8String); return 0; }
+    }
+    r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), sceneSpace, "convertRect:fromCoordinateSpace:", r, screenSpace);
+    r = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), UIK_SEND(id (*)(id, SEL), self, "scene") ? UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "scene"), "coordinateSpace") : nil, "convertRect:toCoordinateSpace:", r, view);
+    if (K6_Rect(r)) return 0;
+    CGRect bounds = UIK_SEND(CGRect (*)(id, SEL), view, "bounds");
+    double o = CGRectGetMaxY(bounds) - CGRectGetMinY(r);
+    return o > 0 ? o : 0;
+}
+static double uik_verticalOverlapK6(id self, SEL _cmd, id view, id info) {
+    double res = 0;
+    BOOL ok = NO;
+    if (UIK_On(UIK_SW_KBOVERLAP)) {
+        @try { res = uik_verticalOverlapK6_body(self, _cmd, view, info); ok = YES; }
+        @catch (NSException *e_) { uik_exc("uik_verticalOverlapK6", e_); }
+    }
+    if (!ok) return orig_voK6 ? ((double (*)(id, SEL, id, id))(uik_fn)orig_voK6)(self, _cmd, view, info) : 0;
+    @try {
+        id fv = [info isKindOfClass:[NSDictionary class]] ? info[UIKeyboardFrameEndUserInfoKey] : nil;
+        CGRect end = [fv respondsToSelector:@selector(CGRectValue)] ? [fv CGRectValue] : CGRectZero;
+        CGRect vb = UIK_SEND(CGRect (*)(id, SEL), view, "bounds");
+        char key[96]; snprintf(key, sizeof key, "k6o_%ld_%ld_%ld_%ld", (long)(end.origin.y / 8), (long)(end.size.height / 8), (long)(res / 8), (long)(CGRectGetMaxY(vb) / 8));
+        UIK_Problem(key, "K6 overlap (build 20A8372): notification end frame %s, verticalOverlap %.1f for a view with bounds %s (bundle %s)", NSStringFromCGRect(end).UTF8String, res, NSStringFromCGRect(vb).UTF8String, [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+    } @catch (NSException *e_) { }
+    return res;
+}
+static CGRect uik_visibleFrameInViewK6_body(id self, SEL _cmd, id view) {
+    id container = UIK_SEND(id (*)(id, SEL), self, "containerRootController");
+    if (UIK_SEND(BOOL (*)(id, SEL), container, "isUndocked")) return CGRectZero;
+    Class ksd = objc_getClass("UIKeyboardSceneDelegate");
+    id client = UIK_SEND(id (*)(id, SEL), (id)ksd, "automaticKeyboardArbiterClient");
+    id active = UIK_SEND(id (*)(id, SEL), (id)ksd, "activeKeyboardSceneDelegate");
+    if (UIK_SEND(BOOL (*)(id, SEL, BOOL), client, "remoteKeyboardUndocked:", active != self)) return CGRectZero;
+    CGRect vf = UIK_SEND(CGRect (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "visibleFrame");
+    id win = UIK_SEND(id (*)(id, SEL), view, "window");
+    if (!win) return vf;
+    id space1 = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "_window"), "screen"), "coordinateSpace");
+    id space2 = UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), UIK_SEND(id (*)(id, SEL), view, "window"), "windowScene"), "coordinateSpace");
+    return UIK_SEND(CGRect (*)(id, SEL, CGRect, id), space1, "convertRect:toCoordinateSpace:", vf, space2);
+}
+static CGRect uik_visibleFrameInViewK6(id self, SEL _cmd, id view) {
+    CGRect res = CGRectZero;
+    BOOL ok = NO;
+    if (UIK_On(UIK_SW_KBOVERLAP)) {
+        @try { res = uik_visibleFrameInViewK6_body(self, _cmd, view); ok = YES; }
+        @catch (NSException *e_) { uik_exc("uik_visibleFrameInViewK6", e_); }
+    }
+    if (!ok) return orig_vfK6 ? ((CGRect (*)(id, SEL, id))(uik_fn)orig_vfK6)(self, _cmd, view) : CGRectZero;
+    @try {
+        CGRect raw = UIK_SEND(CGRect (*)(id, SEL), UIK_SEND(id (*)(id, SEL), self, "containerRootController"), "visibleFrame");
+        char key[96]; snprintf(key, sizeof key, "k6v_%ld_%ld_%ld_%ld", (long)(res.origin.y / 8), (long)(res.size.height / 8), (long)(raw.origin.y / 8), (long)(raw.size.height / 8));
+        UIK_Problem(key, "K6 visibleFrameInView (build 20A8372): container visibleFrame %s -> %s (16.0 convertRect:fromView:nil would give the window relative frame; bundle %s)", NSStringFromCGRect(raw).UTF8String, NSStringFromCGRect(res).UTF8String, [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+    } @catch (NSException *e_) { }
+    return res;
+}
+static void UIK_InstallK6(void) {
+    Class ksd = objc_getClass("UIKeyboardSceneDelegate");
+    NSMutableArray *missing = [NSMutableArray array];
+    if (!ksd) [missing addObject:@"class UIKeyboardSceneDelegate"];
+    else {
+        const char *n[] = { "verticalOverlapForView:usingKeyboardInfo:", "visibleFrameInView:", "containerRootController", "inputViews", "scene" };
+        for (size_t i = 0; i < sizeof n / sizeof *n; i++) if (!class_getInstanceMethod(ksd, sel_registerName(n[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIKeyboardSceneDelegate %s]", n[i]]];
+        const char *c[] = { "automaticKeyboardArbiterClient", "activeKeyboardSceneDelegate" };
+        for (size_t i = 0; i < sizeof c / sizeof *c; i++) if (!class_getClassMethod(ksd, sel_registerName(c[i]))) [missing addObject:[NSString stringWithFormat:@"+[UIKeyboardSceneDelegate %s]", c[i]]];
+    }
+    if (!dlsym(RTLD_DEFAULT, "UIKeyboardAutomaticIsOnScreen")) [missing addObject:@"_UIKeyboardAutomaticIsOnScreen"];
+    Class iwc = objc_getClass("UIInputWindowController");
+    const char *ic[] = { "isUndocked", "placement", "visibleFrame", "_window" };
+    for (size_t i = 0; i < sizeof ic / sizeof *ic; i++) if (!iwc || !class_getInstanceMethod(iwc, sel_registerName(ic[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIInputWindowController %s]", ic[i]]];
+    Class pl = objc_getClass("UIInputViewSetPlacement");
+    const char *pc[] = { "isFloatingAssistantView", "isFloating" };
+    for (size_t i = 0; i < sizeof pc / sizeof *pc; i++) if (!pl || !class_getInstanceMethod(pl, sel_registerName(pc[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIInputViewSetPlacement %s]", pc[i]]];
+    Class vs = objc_getClass("UIInputViewSet");
+    const char *vc[] = { "_inputViewIsSplit", "inputView", "inputAccessoryView" };
+    for (size_t i = 0; i < sizeof vc / sizeof *vc; i++) if (!vs || !class_getInstanceMethod(vs, sel_registerName(vc[i]))) [missing addObject:[NSString stringWithFormat:@"-[UIInputViewSet %s]", vc[i]]];
+    if ([missing count]) { UIK_Problem("k6-install", "K6 NOT installed (build 20A8372), needs: %s", [[missing componentsJoinedByString:@", "] UTF8String]); return; }
+    BOOL a = UIK_Hook("UIKeyboardSceneDelegate", "verticalOverlapForView:usingKeyboardInfo:", NULL, (IMP)uik_verticalOverlapK6, &orig_voK6);
+    BOOL b = UIK_Hook("UIKeyboardSceneDelegate", "visibleFrameInView:", NULL, (IMP)uik_visibleFrameInViewK6, &orig_vfK6);
+    UIK_Log("K6 installed (verticalOverlap %d, visibleFrameInView %d)", (int)a, (int)b);
+    if (UIK_On(UIK_SW_KBOVERLAP)) UIK_Problem("k6-active", "K6 active (build 20A8372): UIKeyboardSceneDelegate verticalOverlapForView:usingKeyboardInfo: and visibleFrameInView: as 16.2 (bundle %s)", [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
+}
+
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
@@ -1476,4 +1594,5 @@ __attribute__((constructor)) static void UIK_Init(void) {
     UIK_InstallK3();
     UIK_InstallK4();
     UIK_InstallK5();
+    UIK_InstallK6();
 }
