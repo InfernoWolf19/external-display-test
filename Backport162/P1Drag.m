@@ -1159,6 +1159,39 @@ static id L1_StateForCtx(id self, SEL _cmd, id ctx) {
     return st;
 }
 
+// ------------------------------------------------------------------------------------------------ L2: transition event rebuilds the current state's app layout (16.2) + restore diagnostic
+// 16.2 -[SBMainSwitcherControllerCoordinator transitionEventForContext:identifier:phase:animated:] 0x1c76d3e1c (16.0 0x1c624073c): after reading [previousLayoutState appLayout / floatingAppLayout] it sends
+// -invalidateAppLayout / -invalidateFloatingAppLayout to the CURRENT layout state ([context layoutState], SBSafeCast to SBMainDisplayLayoutState) before reading [state appLayout] (0x1c76d3f98..0x1c76d3fa4): the app layout
+// the event carries is rebuilt from the state's own element dictionary (which carries the write back of L1), and the interned layout shared by the from / to layouts takes the TO attributes (16.0 read the cached
+// app layout of the current state, built earlier from whatever dictionary the state had).  Order: invalidating BEFORE the original body is equivalent, the body reads the previous state first (its own cache) and the current
+// state second.  Switch p1_stateinval.
+// Diagnostic (always on): transitionDidEnd of a layout transition that ended with an ERROR (interrupted): the state the coordinator restored (16.0 and 16.2: fromLayoutState) against the target of the
+// transition; ANOMALY p1-restore with both app layouts (sizes / lastInteractionTime).
+static IMP sOrigTransEvent, sOrigCoordDidEnd;
+static id L2_TransEvent(id self, SEL _cmd, id context, id identifier, unsigned long long phase, BOOL animated) {
+    if (BP_OnName("p1_stateinval")) {
+        Class sc = NSClassFromString(@"SBMainDisplayLayoutState");
+        id st = P1_S0(context, "layoutState");
+        if (sc && st && [st isKindOfClass:sc]) {
+            ((void (*)(id, SEL))objc_msgSend)(st, sel_registerName("invalidateAppLayout"));
+            ((void (*)(id, SEL))objc_msgSend)(st, sel_registerName("invalidateFloatingAppLayout"));
+        }
+    }
+    return ((id (*)(id, SEL, id, id, unsigned long long, BOOL))sOrigTransEvent)(self, _cmd, context, identifier, phase, animated);
+}
+static void L2_CoordDidEnd(id self, SEL _cmd, id coordinator, id context) {
+    ((void (*)(id, SEL, id, id))sOrigCoordDidEnd)(self, _cmd, coordinator, context);
+    @try {
+        if (P1_S0(context, "error")) {
+            id scene = P1_S0(coordinator, "windowScene");
+            id provider = P1_S0(P1_S0(scene, "switcherController"), "layoutStateProvider");
+            id restored = P1_S0(provider, "layoutState");
+            id to = P1_S0(context, "toLayoutState");
+            BP_Anomaly("p1-restore", @"p1: a layout transition ENDED WITH AN ERROR (interrupted; build 20A8372): the restored layout state carries %@ ; the target of the transition was %@ ; %@", P1_Short(P1_S0(restored, "appLayout")), P1_Short(P1_S0(to, "appLayout")), restored == P1_S0(context, "fromLayoutState") ? @"restored = fromLayoutState (16.0 and 16.2)" : @"restored is not the fromLayoutState");
+        }
+    } @catch (NSException *e) { }
+}
+
 // ------------------------------------------------------------------------------------------------ installation
 static IMP P1_Replace(const char *cls, const char *sel, IMP imp, IMP *orig) {
     Class c = NSClassFromString([NSString stringWithUTF8String:cls]);
@@ -1191,6 +1224,8 @@ void P1Drag_Setup(void) {
         }
         P1_Replace("SBMainDisplayLayoutStateManager", "_layoutStateForApplicationTransitionContext:", (IMP)L1_StateForCtx, &sOrigStateForCtx);
     }
+    P1_Replace("SBMainSwitcherControllerCoordinator", "transitionEventForContext:identifier:phase:animated:", (IMP)L2_TransEvent, &sOrigTransEvent);
+    P1_Replace("SBMainSwitcherControllerCoordinator", "layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:", (IMP)L2_CoordDidEnd, &sOrigCoordDidEnd);
     P1_Replace("SBAppLayout", "initWithItems:centerItem:floatingItem:configuration:itemsToLayoutAttributes:centerConfiguration:environment:hidden:preferredDisplayOrdinal:", (IMP)P1_AppLayoutInit, &sOrigAppLayoutInit);
     P1_Replace(T, "initWithTransitionRequest:fluidSwitcherViewController:delegate:", (IMP)P1_Init, &sOrigInit);
     P1_Replace(T, "_beginWithGesture:", (IMP)P1_Begin, &sOrigBegin);
