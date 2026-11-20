@@ -1090,7 +1090,7 @@ static __attribute__((ns_returns_retained)) id P1_AppLayoutInit(__attribute__((n
         if (old && [old[0] doubleValue] > newest && ![old[1] isEqualToString:now]) {
             BOOL guarded = NO;
             if (BP_OnName("p1_attrguard") && old.count > 3) {                // DEVIATION (user approved): an older attribute set must not replace a newer one of the interned layout
-                Ivar iv = class_getInstanceVariable(object_getClass(r), "_itemsToLayoutAttributes");
+                Ivar iv = class_getInstanceVariable(object_getClass(r), "_itemsToLayoutAttributesMap");
                 if (iv) { object_setIvar(r, iv, old[3]); guarded = YES; }
             }
             void *fr[10]; int n = backtrace(fr, 10);
