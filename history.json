@@ -1,12 +1,4 @@
 {
- "0.7.9+334.2363e6c": {
-  "date": "2026-11-01T09:19:12Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+334.2363e6c_iphoneos-arm64.deb",
-  "run": 334,
-  "sha": "2363e6cec5cb3a5a689d26acbf3c019bebf1d91b",
-  "subject": "Y29Blur: y24_blurroot is opt-in again: its early out completes the layout update group before the 16.0 body would (after the animation duration), cards were reconfigured mid animation (tiny / zoomed cards flipping ~0.4 s after the grid settled, a905444 vs c8bf6ae)",
-  "version": "0.7.9+334.2363e6c"
- },
  "0.7.9+335.f0c3898": {
   "date": "2026-11-01T14:37:27Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+335.f0c3898_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "488819211c82bcb38c66da671d044dd33218ec48",
   "subject": "P1: p1_restoresync (documented deviation, user approved): the state restored after a layout transition that ends with an error takes the target's attribute sets; ANOMALY p1-restore shows before / carried / now",
   "version": "0.7.9+408.4888192"
+ },
+ "0.7.9+409.406f55d": {
+  "date": "2026-11-20T23:55:30Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+409.406f55d_iphoneos-arm64.deb",
+  "run": 409,
+  "sha": "406f55da0f54734a5fbaad253f3a9135a5b2f44c",
+  "subject": "UIK K4/K3: always-on ring of the last 30 keyboard notification frames (K4 answers with the keyboard view frame, hostView, window, container, placement visibility; K3 conversions), dumped as K4RING lines when a hide ends",
+  "version": "0.7.9+409.406f55d"
  }
 }
