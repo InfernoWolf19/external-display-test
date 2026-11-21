@@ -1,12 +1,4 @@
 {
- "0.7.9+337.f1f0472": {
-  "date": "2026-11-01T14:58:12Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+337.f1f0472_iphoneos-arm64.deb",
-  "run": 337,
-  "sha": "f1f04725181df5980a6a7b10496ac8446aac2f17",
-  "subject": "Y34ClassicTypes: port the 16.2 supported type calculation of classic apps (-_calculateSupportedTypesLazilyIfNecessary recompiled from the 16.2 machine code by the new tools/a2c, -_calculateSupportedTypesForSplashBoard without the isBeta gate), proven against the Unicorn emulation of the original code",
-  "version": "0.7.9+337.f1f0472"
- },
  "0.7.9+338.e615a33": {
   "date": "2026-11-01T15:05:24Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+338.e615a33_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "29b17fffe3bd66d0d3ca7886c783baa37e7fe625",
   "subject": "P1 restoresync: sync the fromLayoutState with the target BEFORE the coordinator's didEnd body (it adds the restored state's app layout to the recents before the second error test); the provider is [[coordinator windowScene] layoutStateProvider] (decoded; the old chain returned nil: 'restored carried nil' in the device log)",
   "version": "0.7.9+411.29b17ff"
+ },
+ "0.7.9+412.c3b3adc": {
+  "date": "2026-11-21T13:46:41Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+412.c3b3adc_iphoneos-arm64.deb",
+  "run": 412,
+  "sha": "c3b3adc32b1636a34442f00b4c7eb54117e479f7",
+  "subject": "Fix SpringBoard crash (build 406, objc_release in Y34_WvDealloc): ARC released the by-value self parameter of the dealloc replacements after the super dealloc had freed the object; receivers of Y34_WvDealloc, Y34_SvDealloc, Y40_Dealloc are now __unsafe_unretained; tools/lint_dealloc.sh (CI step) rejects any other. NOT device tested",
+  "version": "0.7.9+412.c3b3adc"
  }
 }
