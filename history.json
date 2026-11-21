@@ -1,12 +1,4 @@
 {
- "0.7.9+339.5889d17": {
-  "date": "2026-11-01T15:11:40Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+339.5889d17_iphoneos-arm64.deb",
-  "run": 339,
-  "sha": "5889d17ae8fbdb4baac7b2d9e1112e0f283978a8",
-  "subject": "Y36Preflight: port the 16.2 privacy preflight gate (PrivacyDisclosureCore re-implemented: PDCPreflightManager / ConsentStore / RequestHandle / AlertPresenter; SBPrivacyPreflightController + SBApplicationPrivacyPreflightController; SBApplicationSceneUpdateTransaction preflight, delegate and _isReadyToLaunch; SBToAppsWorkspaceTransaction -_willBegin prelaunch skip 0x1c729b83c; contingency plan removal leg; FrontBoard FBApplicationUpdateScenesTransaction launch scheduling 0x1a3665490; native consent alert instead of the absent PDUIApp)",
-  "version": "0.7.9+339.5889d17"
- },
  "0.7.9+340.020d89a": {
   "date": "2026-11-01T19:48:32Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+340.020d89a_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "43a491018a289244152bf269a68dd8410e564561",
   "subject": "UIK K4 accessory case (documented deviation, switch uik_k4acc): with an input accessory view answer the union of the accessory frame and the real keyboard rectangle while the keyboard is really on screen (placement visible, AutomaticIsOnScreen, not minimised, hosted view/window not hidden); the bar alone otherwise; ANOMALY k4-accessory once per app. NOT device tested",
   "version": "0.7.9+413.43a4910"
+ },
+ "0.7.9+414.aeb7807": {
+  "date": "2026-11-21T14:59:27Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+414.aeb7807_iphoneos-arm64.deb",
+  "run": 414,
+  "sha": "aeb78074483baf8c64e70b6593bde5931a202078",
+  "subject": "UIK K4: the caller range check reads the return address in the hook entry, not in the body (the body is no longer inlined into the @try wrapper since the ring log / hide fix: no K4 range matched, K4 answered the 16.0 frame: Telegram under-shift, no K4 input lines in the device log of Nov 21 13:46)",
+  "version": "0.7.9+414.aeb7807"
  }
 }
