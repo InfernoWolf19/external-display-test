@@ -1,12 +1,4 @@
 {
- "0.7.9+338.e615a33": {
-  "date": "2026-11-01T15:05:24Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+338.e615a33_iphoneos-arm64.deb",
-  "run": 338,
-  "sha": "e615a33a1812e89dbdad1d344502f8a95a84e4cf",
-  "subject": "Chain answerers of the 16.2 card body: removal transitions pin / anchor / perspective / accessory overrides (Y11, 16.2 0x1c74145ec.. / 0x1c760c070..), FullScreenToStrip shouldAllowGroupOpacityForAppLayout: (G1B, new switch g1b_groupopacity)",
-  "version": "0.7.9+338.e615a33"
- },
  "0.7.9+339.5889d17": {
   "date": "2026-11-01T15:11:40Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+339.5889d17_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "c3b3adc32b1636a34442f00b4c7eb54117e479f7",
   "subject": "Fix SpringBoard crash (build 406, objc_release in Y34_WvDealloc): ARC released the by-value self parameter of the dealloc replacements after the super dealloc had freed the object; receivers of Y34_WvDealloc, Y34_SvDealloc, Y40_Dealloc are now __unsafe_unretained; tools/lint_dealloc.sh (CI step) rejects any other. NOT device tested",
   "version": "0.7.9+412.c3b3adc"
+ },
+ "0.7.9+413.43a4910": {
+  "date": "2026-11-21T13:47:32Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+413.43a4910_iphoneos-arm64.deb",
+  "run": 413,
+  "sha": "43a491018a289244152bf269a68dd8410e564561",
+  "subject": "UIK K4 accessory case (documented deviation, switch uik_k4acc): with an input accessory view answer the union of the accessory frame and the real keyboard rectangle while the keyboard is really on screen (placement visible, AutomaticIsOnScreen, not minimised, hosted view/window not hidden); the bar alone otherwise; ANOMALY k4-accessory once per app. NOT device tested",
+  "version": "0.7.9+413.43a4910"
  }
 }
