@@ -1,12 +1,4 @@
 {
- "0.7.9+336.6bd01b8": {
-  "date": "2026-11-01T14:43:40Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+336.6bd01b8_iphoneos-arm64.deb",
-  "run": 336,
-  "sha": "6bd01b88735592a152b435a96612327d0beb3d77",
-  "subject": "Y29Blur: y24_blurroot is default ON again (kill file Backport162.off.y24_blurroot); the tiny / zoomed card report persisted with it off, the cause was the card configuration",
-  "version": "0.7.9+336.6bd01b8"
- },
  "0.7.9+337.f1f0472": {
   "date": "2026-11-01T14:58:12Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+337.f1f0472_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "1b3a3147f8f066b81b562878c89dce4f04dc6ae4",
   "subject": "UIK K4 hide fix (documented deviation, switch uik_hidefix): one correcting UIKeyboardWillHide / DidHide when a hide ended but the last end frame still covers the app window (Telegram stuck shift)",
   "version": "0.7.9+410.1b3a314"
+ },
+ "0.7.9+411.29b17ff": {
+  "date": "2026-11-21T13:42:19Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+411.29b17ff_iphoneos-arm64.deb",
+  "run": 411,
+  "sha": "29b17fffe3bd66d0d3ca7886c783baa37e7fe625",
+  "subject": "P1 restoresync: sync the fromLayoutState with the target BEFORE the coordinator's didEnd body (it adds the restored state's app layout to the recents before the second error test); the provider is [[coordinator windowScene] layoutStateProvider] (decoded; the old chain returned nil: 'restored carried nil' in the device log)",
+  "version": "0.7.9+411.29b17ff"
  }
 }
