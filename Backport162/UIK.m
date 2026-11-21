@@ -37,8 +37,8 @@
 
 // ---------------------------------------------------------------- switches
 
-enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_HIDEFIX, UIK_SW_COUNT };
-static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap", "Backport162.off.uik_hidefix" };
+enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_HIDEFIX, UIK_SW_K4ACC, UIK_SW_COUNT };
+static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap", "Backport162.off.uik_hidefix", "Backport162.off.uik_k4acc" };
 static const char kUIKTmp[] = "/var/jb/tmp";
 static const char *const kUIKDirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile", "/var/mobile/Library/Caches", "/var/mobile" };
 #define UIK_DIR_COUNT ((int)(sizeof kUIKDirs / sizeof kUIKDirs[0]))
@@ -1310,6 +1310,40 @@ static BOOL K4_Can(id o, const char *s) {
 static id K4_O(id o, const char *s) { return K4_Can(o, s) ? ((id (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : nil; }
 static BOOL K4_B(id o, const char *s) { return K4_Can(o, s) ? ((BOOL (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : NO; }
 static CGRect K4_R(id o, const char *s) { return K4_Can(o, s) ? ((CGRect (*)(id, SEL))objc_msgSend)(o, sel_registerName(s)) : CGRectZero; }
+// ---- K4 accessory case (documented deviation, switch uik_k4acc, default ON): an input accessory view (Telegram's input bar) AND the keyboard
+// 16.2 answers hostView.frame here: in 16.2 the keyboard lives inside the host view, so that frame IS the whole input area.  In 16.0 the keyboard stays in a separate hosted window and hostView.frame is only the accessory
+// (device Telegram: {0,779,786,80.5} while the keyboard covers {0,698.5,786,340} in the window: the app shifted by ~80 instead of ~161).  The union of the accessory frame and the REAL keyboard rectangle (the hosted keyboard
+// view's frame, converted into the host window's scene exactly like the placeholder branch) is answered while the keyboard is really on screen; the accessory alone when it is hidden, minimised, or only the bar is shown.
+// "Really on screen": placement visible (checked by the caller), _UIKeyboardAutomaticIsOnScreen(), [UIKeyboardImpl activeInstance] not minimised, the hosted keyboard view and its window not hidden / transparent with a non empty frame.
+static BOOL K4_KeyboardShown(id sv) {
+    if (!sv) return NO;
+    BOOL (*onScreen)(void) = (BOOL (*)(void))dlsym(RTLD_DEFAULT, "UIKeyboardAutomaticIsOnScreen");
+    if (onScreen && !onScreen()) return NO;
+    id ki = UIK_ClsId(gKImpl, sActiveInstance);
+    if (ki && UIK_B(ki, sIsMinimized)) return NO;
+    id w = K4_O(sv, "window");
+    if (!w || K4_B(w, "isHidden") || K4_B(sv, "isHidden")) return NO;
+    if (K4_Can(w, "alpha") && UIK_SEND(double (*)(id, SEL), w, "alpha") < 0.01) return NO;
+    if (K4_Can(sv, "alpha") && UIK_SEND(double (*)(id, SEL), sv, "alpha") < 0.01) return NO;
+    CGRect f = K4_R(sv, "frame");
+    return f.size.height > 0 && f.size.width > 0;
+}
+static CGRect K4_AccessoryFrame(id self, id host) {
+    CGRect acc = K4_R(host, "frame");
+    if (!UIK_On(UIK_SW_K4ACC)) return acc;
+    id ph = K4_O(K4_O(K4_O(self, "inputViewSet"), "inputView"), "placeheldView");
+    id sv = K4_O(ph, "superview");
+    if (!K4_KeyboardShown(sv)) return acc;
+    id space = K4_O(K4_O(K4_O(host, "window"), "windowScene"), "coordinateSpace");
+    id sspace = K4_O(K4_O(K4_O(sv, "window"), "screen"), "coordinateSpace");
+    if (!K4_Can(space, "convertRect:fromCoordinateSpace:") || !sspace) return acc;
+    CGRect kb = UIK_SEND(CGRect (*)(id, SEL, CGRect, id), space, "convertRect:fromCoordinateSpace:", K4_R(sv, "frame"), sspace);
+    if (CGRectIsEmpty(kb) || CGRectIsNull(kb)) return acc;
+    CGRect u = CGRectUnion(acc, kb);
+    UIK_Problem("k4-accessory", "K4 accessory case: input accessory frame %s, keyboard %s (hosted keyboard view converted into the host scene) -> answered the union %s (16.2 puts the keyboard into the host view frame; 16.0 keeps it in a separate window) (build 20A8372)",
+        NSStringFromCGRect(acc).UTF8String, NSStringFromCGRect(kb).UTF8String, NSStringFromCGRect(u).UTF8String);
+    return u;
+}
 static CGRect uik_fullScreenFrameK4_body(id self, SEL _cmd) {                                      // 0x189ac7ba0
     id p = K4_O(self, "placement");
     if (p && !K4_B(p, "isVisible")) return CGRectZero;
@@ -1319,7 +1353,8 @@ static CGRect uik_fullScreenFrameK4_body(id self, SEL _cmd) {                   
     if (popover) return K4_R(K4_O(self, "applicator"), "popoverFrame");
     id host = K4_O(self, "hostView");
     id ivs = K4_O(self, "inputViewSet");
-    if (!K4_B(ivs, "isInputViewPlaceholder") || K4_O(K4_O(self, "inputViewSet"), "inputAccessoryView")) return K4_R(host, "frame");
+    if (!K4_B(ivs, "isInputViewPlaceholder")) return K4_R(host, "frame");
+    if (K4_O(K4_O(self, "inputViewSet"), "inputAccessoryView")) return K4_AccessoryFrame(self, host);
     id ph = K4_O(K4_O(K4_O(self, "inputViewSet"), "inputView"), "placeheldView");
     id sv = K4_O(ph, "superview");
     if (!sv) return K4_R(host, "frame");
