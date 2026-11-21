@@ -56,7 +56,7 @@ static id Y34_SvTransition(id self, SEL _cmd) { return (__bridge id)y34_sv_trans
 static void Y34_SvLayout(id self, SEL _cmd, id host) { y34_sv_layout(Y34_S(self), (void *)_cmd, Y34_S(host)); }
 static void Y34_SvWms(id self, SEL _cmd, id note) { y34_sv_wms(Y34_S(self), (void *)_cmd, Y34_S(note)); }
 static void Y34_SvMove(id self, SEL _cmd) { y34_sv_move(Y34_S(self), (void *)_cmd); }
-static void Y34_SvDealloc(id self, SEL _cmd) { y34_sv_dealloc(Y34_S(self), (void *)_cmd); }
+static void Y34_SvDealloc(__unsafe_unretained id self, SEL _cmd) { y34_sv_dealloc(Y34_S(self), (void *)_cmd); }
 static void Y34_SvDestruct(id self, SEL _cmd) {
     void **w = Y34_IvarSlot(self, gIvCurrentHost);
     y34_storeWeak(w, NULL);                           // objc_destroyWeak: unregisters the weak slot

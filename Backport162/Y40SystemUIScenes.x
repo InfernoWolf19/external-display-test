@@ -118,7 +118,7 @@ static Y40_NEWRET id Y40_BaseInit(Y40_CONSUMED id self, SEL _cmd, id wsid, id id
     return me;
 }
 // -dealloc 0x1c796614c: the observers go first, then the 16.0 body (invalidates the state capture and the workspace controller, super dealloc)
-static void Y40_Dealloc(id self, SEL _cmd) {
+static void Y40_Dealloc(__unsafe_unretained id self, SEL _cmd) {
     if (Y40_Flag(self)) {
         BPX_SetObj1(Y40_PM(), "removeObserver:", self);
         id proc = Y40_GET(self, kY40Process);

@@ -13,6 +13,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Lint dealloc replacements (receiver must be __unsafe_unretained)
+        run: Backport162/tools/lint_dealloc.sh Backport162
+
       - name: Install Theos and ldid
         run: |
           brew install ldid dpkg

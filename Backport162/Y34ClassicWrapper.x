@@ -62,7 +62,7 @@ static BOOL Y34_WvShouldRasterize(id self, SEL _cmd) {                 // 0x1c78
     return !gFloatIsOne((m11 + m22) * 0.5);
 }
 
-static void Y34_WvDealloc(id self, SEL _cmd) {                         // 0x1c78cff4c
+static void Y34_WvDealloc(__unsafe_unretained id self, SEL _cmd) {                         // 0x1c78cff4c
     BPY_SEND(void, (), Y34_ObjGet(self, gIvObserver), "invalidate");
     BPY_SEND(void, (id), Y34_ObjGet(self, gIvSettings), "removeKeyObserver:", self);
     struct objc_super sup = { self, gWvBase };
