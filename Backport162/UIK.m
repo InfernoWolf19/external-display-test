@@ -1494,9 +1494,12 @@ static void UIK_HideFix(id item) {
     } @finally { gHFPosting = NO; }
     gHFLastEnd = end; gHFLastObj = obj;
 }
-static CGRect uik_visibleFrameK4_body(id self, SEL _cmd) {
+// the CALLER of the hooked method is identified by its return address: it must be read in the hook entry (the wrapper below), NOT in this body: once the compiler stops inlining the body into the
+// @try wrapper (the body grew with the ring log / hide fix) __builtin_return_address(0) of the body is an address of the wrapper, no K4 range ever matched and K4 silently answered the 16.0 frame
+// (device log of the build compiled Nov 21 13:46: no K4 input lines at all in Telegram).
+__attribute__((noinline)) static CGRect uik_visibleFrameK4_body(id self, SEL _cmd, uintptr_t rawRa) {
     if (!gK4Ok || !UIK_On(UIK_SW_KBFRAME)) return ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
-    uintptr_t ra = (uintptr_t)__builtin_return_address(0) & 0x7fffffffffULL;
+    uintptr_t ra = rawRa & 0x7fffffffffULL;
     BOOL hit = NO; int hitIdx = -1;
     for (size_t i = 0; i < sizeof kK4R / sizeof *kK4R; i++) if (ra >= kK4R[i][0] + gK4Slide && ra < kK4R[i][1] + gK4Slide) { hit = YES; hitIdx = (int)i; break; }
     CGRect old = ((CGRect (*)(id, SEL))orig_vfK4)(self, _cmd);
@@ -1516,7 +1519,8 @@ static CGRect uik_visibleFrameK4_body(id self, SEL _cmd) {
     return nf;
 }
 static CGRect uik_visibleFrameK4(id self, SEL _cmd) {
-    @try { return uik_visibleFrameK4_body(self, _cmd); }
+    uintptr_t rawRa = (uintptr_t)__builtin_return_address(0);
+    @try { return uik_visibleFrameK4_body(self, _cmd, rawRa); }
     @catch (NSException *e_) { uik_exc("uik_visibleFrameK4", e_); if (orig_vfK4) { return ((CGRect (*)(id, SEL))(uik_fn)orig_vfK4)(self, _cmd); } return CGRectZero; }
 }
 
