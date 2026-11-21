@@ -1180,27 +1180,34 @@ static id L2_TransEvent(id self, SEL _cmd, id context, id identifier, unsigned l
     return ((id (*)(id, SEL, id, id, unsigned long long, BOOL))sOrigTransEvent)(self, _cmd, context, identifier, phase, animated);
 }
 static void L2_CoordDidEnd(id self, SEL _cmd, id coordinator, id context) {
-    ((void (*)(id, SEL, id, id))sOrigCoordDidEnd)(self, _cmd, coordinator, context);
+    // 16.0 and 16.2 (0x1c6237d6c / 0x1c76cb178): with an error the coordinator sets the provider (of the WINDOW SCENE: [coordinator windowScene] layoutStateProvider) to the transition's fromLayoutState and then
+    // adds [state appLayout] to the recents (_addAppLayoutToFront:, before the second error test): the recents, and the next launch from the home screen, take the attributes of that state.
+    // DEVIATION p1_restoresync (user approved): before the body runs the fromLayoutState takes the attribute sets of the target for the same element ids.
+    id fromSt = P1_S0(context, "fromLayoutState"), toSt = P1_S0(context, "toLayoutState");
+    int carried = 0;
+    NSString *before = nil;
     @try {
-        if (P1_S0(context, "error")) {
-            id scene = P1_S0(coordinator, "windowScene");
-            id provider = P1_S0(P1_S0(scene, "switcherController"), "layoutStateProvider");
-            id restored = P1_S0(provider, "layoutState");
-            id to = P1_S0(context, "toLayoutState");
-            NSString *before = P1_Short(P1_S0(restored, "appLayout"));
-            int carried = 0;
+        if (P1_S0(context, "error") && BP_OnName("p1_restoresync")) {
             Class sc = NSClassFromString(@"SBMainDisplayLayoutState");
-            if (BP_OnName("p1_restoresync") && sc && restored && to && [restored isKindOfClass:sc] && [to isKindOfClass:sc]) {      // DEVIATION (user approved): the restored state carries the committed attribute sets of the target
-                NSDictionary *td = P1_S0(to, "elementIdentifiersToLayoutAttributes"), *rd = P1_S0(restored, "elementIdentifiersToLayoutAttributes");
+            if (sc && fromSt && toSt && [fromSt isKindOfClass:sc] && [toSt isKindOfClass:sc]) {
+                before = P1_Short(P1_S0(fromSt, "appLayout"));
+                NSDictionary *td = P1_S0(toSt, "elementIdentifiersToLayoutAttributes"), *rd = P1_S0(fromSt, "elementIdentifiersToLayoutAttributes");
                 for (id key in td) {
                     id attrs = td[key], cur = rd[key];
-                    id elem = ((id (*)(id, SEL, id))objc_msgSend)(restored, sel_registerName("elementWithIdentifier:"), key);
+                    id elem = ((id (*)(id, SEL, id))objc_msgSend)(fromSt, sel_registerName("elementWithIdentifier:"), key);
                     if (!cur || !elem || attrs == cur || [attrs isEqual:cur]) continue;
-                    ((void (*)(id, SEL, id, id))objc_msgSend)(restored, sel_registerName("_setLayoutAttributes:forLayoutElement:"), attrs, elem);
+                    ((void (*)(id, SEL, id, id))objc_msgSend)(fromSt, sel_registerName("_setLayoutAttributes:forLayoutElement:"), attrs, elem);
                     carried++;
                 }
             }
-            BP_Anomaly("p1-restore", @"p1: a layout transition ENDED WITH AN ERROR (interrupted; build 20A8372): the restored layout state carried %@ before the sync; %d attribute set(s) taken from the target; now %@ ; target %@ ; %@", before, carried, P1_Short(P1_S0(restored, "appLayout")), P1_Short(P1_S0(to, "appLayout")), restored == P1_S0(context, "fromLayoutState") ? @"restored = fromLayoutState (16.0 and 16.2)" : @"restored is not the fromLayoutState");
+        }
+    } @catch (NSException *e) { }
+    ((void (*)(id, SEL, id, id))sOrigCoordDidEnd)(self, _cmd, coordinator, context);
+    @try {
+        if (P1_S0(context, "error")) {
+            id restored = P1_S0(P1_S0(coordinator, "windowScene"), "layoutStateProvider");
+            restored = P1_S0(restored, "layoutState");
+            BP_Anomaly("p1-restore", @"p1: a layout transition ENDED WITH AN ERROR (interrupted; build 20A8372): fromLayoutState carried %@ before the sync; %d attribute set(s) taken from the target; restored state now %@ ; target %@ ; %@", before ?: @"(no sync)", carried, P1_Short(P1_S0(restored, "appLayout")), P1_Short(P1_S0(toSt, "appLayout")), restored && restored == fromSt ? @"restored = fromLayoutState (16.0 and 16.2)" : @"restored is not the fromLayoutState");
         }
     } @catch (NSException *e) { }
 }
