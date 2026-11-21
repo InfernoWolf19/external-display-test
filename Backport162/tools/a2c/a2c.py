@@ -61,6 +61,11 @@ class Ctx:
         o = subprocess.run([S + 'bin/ipsw', 'dsc', 'a2s', s.cache, hex(addr)], capture_output=True, text=True); o = o.stdout + o.stderr
         m = re.search(r'0x[0-9a-f]+: ([-+]\[[^\]]*\]|\S+)', o); sym = m.group(1) if m else ''
         m2 = re.search(r'section=(\S+)', o); sec = m2.group(1) if m2 else ''
+        if sec.endswith('__bss') and sym in ('', '?') and (addr & 0xfff) > 0:
+            # a statics block (__MergedGlobals) is ONE symbol: an address inside it without a name of its own belongs to the closest named symbol below it on the same page
+            for back in range(8, min(0x100, addr & 0xfff) + 1, 8):
+                s2, sc2 = s.a2s2(addr - back)
+                if s2 and s2 != '?' and sc2.endswith('__bss'): sym = s2; break
         memo[k] = [sym, sec]; return memo[k]
     def a2s(s, addr):
         k = 'a2s%s:%x' % (s.ver, addr)

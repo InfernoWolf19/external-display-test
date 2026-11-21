@@ -52,8 +52,10 @@ Backport162SPK_LDFLAGS = -lobjc
 Backport162SPK_FRAMEWORKS = CoreFoundation CydiaSubstrate
 
 # in-app UIKit half (UIK.m; filter: com.apple.UIKit, Backport162UIK.plist; runs inside apps only, build 20A8372 only; no addresses, plain ObjC runtime hooks, so both arm64 and arm64e; specs/UIKIT-APP-0.7.9.md; switches uik, uik_screenbounds, uik_keyboard, uik_screenlife). Relaunch an app after installing.
-Backport162UIK_FILES = UIK.m
+Backport162UIK_FILES = UIK.m UIKU2b.m Y42U2Lift.c Y34LiftRT.c
 Backport162UIK_CFLAGS = -fobjc-arc -Wall -Werror -Wno-deprecated-declarations
+Y42U2Lift.c_CFLAGS = -w
+Y34LiftRT.c_CFLAGS = -w
 Backport162UIK_FRAMEWORKS = Foundation UIKit
 
 # BP_ONLY_PREFS=1 (CI only) skips the tweak dylibs and builds just the Settings pane; BP_SKIP_PREFS=1 skips the pane.

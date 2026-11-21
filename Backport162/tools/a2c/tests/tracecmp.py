@@ -190,7 +190,10 @@ def run_emu(c, names, seed, args, case_mem):
             tr.calls.append(('E:' + OWN[n.lstrip('_')], (N(x[0]),), (), ())); return
         if n.lstrip('_') == 'objc_storeStrong':
             tr.calls.append(('E:storeStrong', (N(x[0]), N(x[1])), (), ()))
-            uc.mem_write(x[0], struct.pack('<Q', x[1])); return
+            try: uc.mem_write(x[0], struct.pack('<Q', x[1]))
+            except UcError:
+                unm(uc, 0, x[0], 8, 0, None); uc.mem_write(x[0], struct.pack('<Q', x[1]))      # the slot is a mutable static of an image page not touched yet
+            return
         if n.lstrip('_') == 'objc_enumerationMutation':
             tr.calls.append((norm_name(n), tuple(N(v) for v in x[:2]), (), ())); return
         d = [uc.reg_read(UC_ARM64_REG_D0 + i) for i in range(8)]
@@ -319,6 +322,10 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
         for i_ in range(ctypes.c_int.in_dll(lib, 'lift_ndesc').value):
             if descs[3 * i_] == v: return ('DESC', ctypes.string_at(descs[3 * i_ + 1]).decode(), descs[3 * i_ + 2])
         if v in strmap: return strmap[v]
+        for nm_b, pg_b, sz_b in BSSCELLS:       # an address inside the cell of a mutable static: the emulation holds the 16.2 address of it
+            try: ad_b = ctypes.addressof(ctypes.c_uint8.in_dll(lib, nm_b))
+            except ValueError: continue
+            if ad_b <= v < ad_b + sz_b: return pg_b + (v - ad_b)
         if selfb <= v < selfb + SELF_SZ: return ('S', v - selfb)
         if objb <= v < objb + OBJ_SZ: return ('O', v - objb)
         if sp0.value - 0x4000 <= v < sp0.value + 0x100: return ('K', v - sp0.value)
@@ -383,6 +390,7 @@ def run_lifted(c, lib, kinds_at, seed, args, case_mem, ivmap):
     tr.err = None
     return tr, N
 
+BSSCELLS = []
 def main():
     ver, st, en, cname, sig, retk, cls, nseeds = sys.argv[1], int(sys.argv[2], 16), int(sys.argv[3], 16), sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7], int(sys.argv[8])
     cls = None if cls == '-' else cls
@@ -419,6 +427,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
     src = open(W + cname + '.tc.c').read().replace('void run(uint64_t a0', 'uint64_t run(uint64_t a0')
     src = src.replace('    ' + build_call(cname, sig, retk), '    ' + build_call(cname, sig, retk, ret=True))
     open(W + cname + '.tc.c', 'w').write(src)
+    for m_ in re.finditer(r'\b(lift_bss_\w+?_([0-9a-f]+))\[(\d+)\]', lbody + head): BSSCELLS.append((m_.group(1), int(m_.group(2), 16), int(m_.group(3))))
     so = W + cname + '.tc.so'
     subprocess.check_call(['gcc', '-g', '-O0', '-shared', '-fPIC', '-w', '-I', T, W + cname + '.tc.c', '-o', so, '-lm'])
     lib = ctypes.CDLL(so)
@@ -464,6 +473,7 @@ void run(uint64_t a0, uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64
         args[0:1] = [SELF_EMU] if c.sig and c.sig[0] == 'x' else args[0:1]
         for pi_ in PTRARGS:
             if pi_ < len(args): args[pi_] = OBJ_EMU + 0x100 * (30 + pi_)      # out parameters: a pointer to writable modelled memory
+        if os.environ.get('TCSEEDS'): print('seed', seed, [hex(a) for a in args], flush=True)
         te, Ne = run_emu(c, names, seed, args, (selfw, objw))
         for cell_, sz_ in set(re.findall(r'\b(lift_bss_\w+)\[(\d+)\]', lbody + head)): ctypes.memset((ctypes.c_uint8 * int(sz_)).in_dll(lib, cell_), 0, int(sz_))
         tl, Nl = run_lifted(c, lib, L.kinds_at, seed, args, (selfw, objw), ivmap)

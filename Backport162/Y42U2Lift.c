@@ -311,7 +311,7 @@ L189314a5c:
     /* 189314a7c: adrp x1, #0x1dd0a4000 */
     X[1] = 0x1dd0a4000ull;
     /* 189314a80: add x1, x1, #0xc18 */
-    X[1] = (uint64_t)((X[1]) + (0xc18ull));
+    X[1] = ((uint64_t)(uintptr_t)lift_bss___MergedGlobals_1dd0a4000 + 3096); /* address inside the cell of the mutable static __MergedGlobals */
     /* 189314a84: bl #0x189ee60bc */
     CALLFN(u2conn_fns, 3, x);
     /* 189314a88: ldr x22, [x0, #8] */
@@ -560,7 +560,7 @@ L189314be0:
     /* 189314c4c: adrp x8, #0x1dd0a4000 */
     X[8] = 0x1dd0a4000ull;
     /* 189314c50: ldr x20, [x8, #0xc20] */
-    X[20] = (uint64_t)(LD64((X[8]) + (3104)));
+    X[20] = (uint64_t)(LD64(((uint64_t)(uintptr_t)lift_bss___MergedGlobals_1dd0a4000 + 3104)));
     /* 189314c54: bl #0x18c894050 */
     X[0] = (uint64_t)RT_RETAIN((void *)X[27]);
     /* 189314c58: mov x26, x0 */
@@ -599,7 +599,7 @@ L189314c90:
     /* 189314c94: adrp x0, #0x1dd0a4000 */
     X[0] = 0x1dd0a4000ull;
     /* 189314c98: add x0, x0, #0xc20 */
-    X[0] = (uint64_t)((X[0]) + (0xc20ull));
+    X[0] = ((uint64_t)(uintptr_t)lift_bss___MergedGlobals_1dd0a4000 + 3104); /* address inside the cell of the mutable static __MergedGlobals */
     /* 189314c9c: bl #0x18a03464c */
     CALLFN(u2conn_fns, 9, x);
     /* 189314ca0: b #0x189314c64 */
@@ -710,7 +710,7 @@ L189314d04:
     /* 189314d5c: adrp x1, #0x1dd0a4000 */
     X[1] = 0x1dd0a4000ull;
     /* 189314d60: add x1, x1, #0xc28 */
-    X[1] = (uint64_t)((X[1]) + (0xc28ull));
+    X[1] = ((uint64_t)(uintptr_t)lift_bss___MergedGlobals_1dd0a4000 + 3112); /* address inside the cell of the mutable static __MergedGlobals */
     /* 189314d64: bl #0x189ee60bc */
     CALLFN(u2conn_fns, 3, x);
     /* 189314d68: ldr x20, [x0, #8] */
@@ -853,7 +853,7 @@ L189314e14:
 L189314e58:
     /* 189314e58: bl #0x18c892e70 */
     STACKFAIL();
-Lret:
+Lret: ;
     return;
 }
 
@@ -1089,7 +1089,7 @@ L1895f2ef0:
     /* 1895f2f1c: bl #0x18a03536c */
     RT_STORESTRONG((void **)X[0], (void *)X[1]);
     /* 1895f2f20: add x1, x25, #0x20 */
-    X[1] = (uint64_t)((X[25]) + (0x20ull));
+    X[1] = ((uint64_t)(uintptr_t)lift_bss___MergedGlobals_1dd0a4000 + 3120); /* address inside the cell of the mutable static __MergedGlobals */
     /* 1895f2f24: adrp x0, #0x18a182000 */
     X[0] = 0x18a182000ull;
     /* 1895f2f28: add x0, x0, #0x202 */
@@ -1323,7 +1323,7 @@ L1895f3090:
     /* 1895f30d0: adrp x1, #0x1dd0a4000 */
     X[1] = 0x1dd0a4000ull;
     /* 1895f30d4: add x1, x1, #0xc38 */
-    X[1] = (uint64_t)((X[1]) + (0xc38ull));
+    X[1] = ((uint64_t)(uintptr_t)lift_bss___MergedGlobals_1dd0a4000 + 3128); /* address inside the cell of the mutable static __MergedGlobals */
     /* 1895f30d8: bl #0x189ee60bc */
     CALLFN(u2disc_fns, 4, x);
     /* 1895f30dc: ldr x26, [x0, #8] */
@@ -1502,7 +1502,7 @@ L1895f31b4:
 L1895f3214:
     /* 1895f3214: bl #0x18c892e70 */
     STACKFAIL();
-Lret:
+Lret: ;
     return;
 }
 

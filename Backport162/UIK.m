@@ -37,8 +37,8 @@
 
 // ---------------------------------------------------------------- switches
 
-enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_HIDEFIX, UIK_SW_K4ACC, UIK_SW_COUNT };
-static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap", "Backport162.off.uik_hidefix", "Backport162.off.uik_k4acc" };
+enum { UIK_SW_ALL = 0, UIK_SW_UIK, UIK_SW_SCREENBOUNDS, UIK_SW_KEYBOARD, UIK_SW_SCREENLIFE, UIK_SW_KBFRAME, UIK_SW_KBPLACE, UIK_SW_KBOVERLAP, UIK_SW_HIDEFIX, UIK_SW_K4ACC, UIK_SW_DEFSCENE, UIK_SW_COUNT };
+static const char *const kUIKSwitchNames[UIK_SW_COUNT] = { "Backport162.off", "Backport162.off.uik", "Backport162.off.uik_screenbounds", "Backport162.off.uik_keyboard", "Backport162.off.uik_screenlife", "Backport162.off.uik_kbframe", "Backport162.off.uik_kbplace", "Backport162.off.uik_kboverlap", "Backport162.off.uik_hidefix", "Backport162.off.uik_k4acc", "Backport162.off.uik_defscene" };
 static const char kUIKTmp[] = "/var/jb/tmp";
 static const char *const kUIKDirs[] = { "/var/jb/var/mobile/Library/Caches", "/var/jb/var/mobile", "/var/mobile/Library/Caches", "/var/mobile" };
 #define UIK_DIR_COUNT ((int)(sizeof kUIKDirs / sizeof kUIKDirs[0]))
@@ -1753,6 +1753,10 @@ static void UIK_InstallK6(void) {
     if (UIK_On(UIK_SW_KBOVERLAP)) UIK_Problem("k6-active", "K6 active (build 20A8372): UIKeyboardSceneDelegate verticalOverlapForView:usingKeyboardInfo: and visibleFrameInView: as 16.2 (bundle %s)", [[[NSBundle mainBundle] bundleIdentifier] UTF8String] ?: "?");
 }
 
+// UIKU2b.m: the two default scene handlers of UIApplication (recompiled 16.2 bodies, Y42U2Lift.c)
+extern void UIK_InstallU2b(void);
+void UIK_U2b_Problem(const char *key, const char *text) { UIK_Problem(key, "%s", text); }
+BOOL UIK_U2b_On(void) { return UIK_On(UIK_SW_DEFSCENE); }
 __attribute__((constructor)) static void UIK_Init(void) {
     if (!UIK_BuildMatches() || !UIK_IsApp()) return;
     Dl_info di;
@@ -1760,6 +1764,7 @@ __attribute__((constructor)) static void UIK_Init(void) {
     UIK_InstallU1();
     UIK_InstallK1();
     UIK_InstallU2();
+    if (UIK_On(UIK_SW_DEFSCENE)) UIK_InstallU2b();
     UIK_InstallK2();
     UIK_InstallK3();
     UIK_InstallK4();
