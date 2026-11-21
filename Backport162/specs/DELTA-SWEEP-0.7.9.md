@@ -1775,3 +1775,442 @@ Callers in the 16.2 SpringBoard image (text scan, selector stubs and direct bran
 Interruption: `canInterruptForTransitionRequest:`, `_canBeInterrupted` of SBFluidSwitcherGestureWorkspaceTransaction / SBToAppsWorkspaceTransaction / SBSceneLayoutWorkspaceTransaction / SBAppToAppWorkspaceTransaction, `SBUISwitcherAnimationController isInterruptible`, `SBMainWorkspace _executeTransitionRequest:options:validator:` and `canInterruptActiveTransition` are INSTRUCTION identical in 16.0 and 16.2 (registers / class refs masked).  A layout transition that ends with an error restores the provider to the transition's fromLayoutState in both versions (16.2 also sets previousLayoutState); no 16.2 code mutates that state.
 | SBMainSwitcherControllerCoordinator | `-transitionEventForContext:identifier:phase:animated:` current state app layout invalidation | 0x1c624073c | 0x1c76d3e1c | PORTED NOW (pass 7c, not device tested): P1Drag.m L2_TransEvent (switch p1_stateinval) |
 | SBMainSwitcherControllerCoordinator | `-layoutStateTransitionCoordinator:transitionDidEndWithTransitionContext:` error path: restored state = fromLayoutState | 0x1c6237d6c | 0x1c76cb178 | DEVIATION (user approved): P1Drag.m L2_CoordDidEnd syncs the restored state with the target's attributes (switch p1_restoresync) |
+
+## Pass 9: methods only in 16.2 (SpringBoard, Stage Manager / windowing / external display / keyboard relevant)
+Method: 2239 methods exist in the 16.2 SpringBoard image and not in 16.0 (class | selector, from the Objective-C dumps); 1577 of them belong to classes of the relevant families (switcher modifiers, fluid switcher, chamois, layout state, scene / window scene / display managers, traits, keyboard, gestures, dock, overlays); the rest (system aperture, activities, lock screen, Siri, CarPlay, widgets, ...) is skipped.
+Verdicts: PORTED = the selector name appears in the tweak sources as a quoted string, @selector or a Logos method (name level match, class aware only for classes that do not exist in 16.0; NOT instruction verified); NEEDED = a 16.2 caller (found by a scan of all selector stubs of the SpringBoard text) is itself ported by the tweak, so the tweak runs code that sends it; CHAIN = every 16.2 caller is itself a 16.2-only method that is not ported (the chain has to be ported together); UNREACHED = callers exist but only inside methods that run their 16.0 body (the 16.0 code never sends the selector); NOCALLER = no direct caller (protocol / delegate / event entry or accessor; decided by name).
+Counts (relevant 1577): PORTED 1250, NEEDED 118, CHAIN 59, UNREACHED 61, NOCALLER 89.
+
+### Per class (verdict counts; only classes with at least one non PORTED method)
+
+| class | counts |
+|---|---|
+| SBAppSwitcherContinuousExposeSwitcherModifier | CHAIN 1, NEEDED 11, NOCALLER 1, PORTED 65, UNREACHED 30 |
+| SBSwitcherTraitsAssistant | CHAIN 12, NEEDED 4, NOCALLER 3, PORTED 6 |
+| SBSwitcherController | CHAIN 7, NEEDED 7, PORTED 14, UNREACHED 2 |
+| SBChamoisOverlappingController | CHAIN 13, NOCALLER 1, PORTED 6 |
+| SBFluidSwitcherGestureManager | CHAIN 2, NEEDED 5, NOCALLER 6, PORTED 11 |
+| SBIndirectPanGestureRecognizer | CHAIN 4, NEEDED 2, NOCALLER 7, PORTED 8 |
+| SBIconController | CHAIN 2, NEEDED 4, NOCALLER 3, PORTED 2, UNREACHED 1 |
+| SBMultiDisplayUserInteractionCoordinator | NEEDED 4, NOCALLER 6, PORTED 16 |
+| SBFluidSwitcherGestureWorkspaceTransaction | NEEDED 1, NOCALLER 8, PORTED 8 |
+| SBFluidSwitcherViewController | CHAIN 2, NEEDED 6, PORTED 35, UNREACHED 1 |
+| SBMainSwitcherControllerCoordinator | CHAIN 1, NEEDED 6, NOCALLER 1, PORTED 16 |
+| SBSwitcherChamoisSettings | CHAIN 1, NEEDED 4, NOCALLER 1, PORTED 10 |
+| SBSystemGestureManager | CHAIN 3, NEEDED 1, NOCALLER 1, PORTED 3 |
+| SBTransientOverlayScenePresenter | CHAIN 2, NEEDED 3 |
+| SBContinuousExposeToHomeSwitcherModifier | NEEDED 2, NOCALLER 2, PORTED 8 |
+| SBDeviceApplicationSceneOverlayBasicWrapperView | NEEDED 2, PORTED 3, UNREACHED 2 |
+| SBDisplayManager | NEEDED 4, PORTED 2 |
+| SBFullScreenSwitcherSceneLiveContentOverlay | CHAIN 2, NEEDED 1, NOCALLER 1 |
+| SBMainDisplayLayoutState | NEEDED 2, NOCALLER 2, PORTED 5 |
+| SBMainDisplayLayoutStateManager | CHAIN 1, NEEDED 3 |
+| SBStatusBarStateAggregator | NOCALLER 1, UNREACHED 3 |
+| SBStripContinuousExposeSwitcherModifier | NEEDED 1, NOCALLER 3, PORTED 42 |
+| SBSystemShellExtendedDisplayControllerPolicy | NEEDED 4, PORTED 5 |
+| _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord | CHAIN 1, NEEDED 2, PORTED 12, UNREACHED 1 |
+| SBDisplayItemLayoutAttributes | NOCALLER 3, PORTED 8 |
+| SBFloatingDockRootViewController | NEEDED 2, NOCALLER 1 |
+| SBFluidSwitcherPortaledSceneLiveContentOverlay | NOCALLER 1, PORTED 47, UNREACHED 2 |
+| SBFullScreenToHomePIPSwitcherModifier | NEEDED 1, NOCALLER 2, PORTED 8 |
+| SBMutableChamoisOverlappingModel | NOCALLER 3, PORTED 1 |
+| SBWindowSceneManager | NEEDED 2, NOCALLER 1, PORTED 5 |
+| _SBDeviceApplicationSceneHandleSnapshottingAssertion | NEEDED 3 |
+| _SBDisplayIdentityRecord | CHAIN 2, NEEDED 1, PORTED 6 |
+| SBContinuousExposeFullScreenToStripTransitionSwitcherModifier | NEEDED 1, NOCALLER 1, PORTED 14 |
+| SBEntityRemovalCrossblurSwitcherModifier | NOCALLER 2, PORTED 6 |
+| SBEntityRemovalSlideOffscreenSwitcherModifier | NOCALLER 2, PORTED 7 |
+| SBFloatingDockController | NEEDED 1, UNREACHED 1 |
+| SBFluidSwitcherItemContainer | NOCALLER 1, PORTED 6, UNREACHED 1 |
+| SBFluidSwitcherItemContainerFooterView | CHAIN 1, NOCALLER 1 |
+| SBFluidSwitcherSpaceOverlayAccessoryView | NOCALLER 1, UNREACHED 1 |
+| SBFullScreenToHomeCenterZoomDownSwitcherModifier | NOCALLER 2, PORTED 6 |
+| SBFullScreenToHomeIconZoomSwitcherModifier | NOCALLER 2, PORTED 12 |
+| SBFullScreenToHomeSlideOverSwitcherModifier | NOCALLER 2, PORTED 6 |
+| SBLayoutStateSceneIdentityProvider | NEEDED 2 |
+| SBNonInteractiveDisplayControllerPolicy | NEEDED 2, PORTED 2 |
+| SBPIPRestoreToFullScreenSwitcherModifier | NOCALLER 2, PORTED 15 |
+| SBSceneManager | NEEDED 2, PORTED 7 |
+| SBSwitcherLayoutCalculationsCacheValidityToken | NOCALLER 2, PORTED 1 |
+| SBTransientOverlayPresentationManager | NOCALLER 1, PORTED 1, UNREACHED 1 |
+| SBWindowSceneContext | NEEDED 2, PORTED 5 |
+| FBSMutableSceneSettings | NEEDED 2 |
+| SBAppResizeGrabberView | NOCALLER 1 |
+| SBAppSwitcherPageView | NOCALLER 1, PORTED 2 |
+| SBAppSwitcherReusableSnapshotView | NEEDED 1, PORTED 1 |
+| SBAssistantGestureManager | UNREACHED 1 |
+| SBContinuousExposeFullScreenToStripCrossblurTransitionSwitcherModifier | NEEDED 1, PORTED 14 |
+| SBContinuousExposeIdentifierSlideModifier | NEEDED 1, PORTED 7 |
+| SBContinuousExposeStripRevealGestureWorkspaceTransaction | NOCALLER 1, PORTED 2 |
+| SBDeviceApplicationRemoteTransientOverlayContainerViewController | NOCALLER 1 |
+| SBDeviceApplicationSceneHandle | NOCALLER 1, PORTED 17 |
+| SBDeviceApplicationSceneView | PORTED 2, UNREACHED 1 |
+| SBDeviceApplicationSceneViewController | PORTED 1, UNREACHED 1 |
+| SBDisplayArrangementItem | NEEDED 1, PORTED 9 |
+| SBDisplayAssertionCoordinator | NEEDED 1, PORTED 1 |
+| SBDisplayItem | NEEDED 1 |
+| SBDisplayItemLayoutAttributesCalculator | PORTED 1, UNREACHED 1 |
+| SBExternalDisplayService | PORTED 2, UNREACHED 1 |
+| SBFluidSwitcherSpaceUnderlayAccessoryView | NOCALLER 1 |
+| SBForceTouchAppIconInfoProvider | NOCALLER 1 |
+| SBGrabberTongue | NEEDED 1, PORTED 3 |
+| SBHomeGestureToSwitcherSwitcherModifier | NEEDED 1 |
+| SBHomeGrabberView | NOCALLER 1 |
+| SBHomeScreenService | NOCALLER 1 |
+| SBInCallTransientOverlayViewController | PORTED 1, UNREACHED 1 |
+| SBInlineAppExposeContinuousExposeSwitcherModifier | NEEDED 1, PORTED 18 |
+| SBKeyboardClientSettingObserverContext | NOCALLER 1 |
+| SBLoginAppSceneHoster | UNREACHED 1 |
+| SBMainDisplaySceneManager | NEEDED 1 |
+| SBMainWorkspace | NEEDED 1, PORTED 1 |
+| SBMedusaDecoratedDeviceApplicationSceneViewController | CHAIN 1, PORTED 3 |
+| SBMedusaHostedKeyboardWindowController | NEEDED 1, PORTED 16 |
+| SBMinimumViableSwitcherTableViewController | CHAIN 1, PORTED 4 |
+| SBNonInteractiveDisplayControllerPolicyFactory | UNREACHED 1 |
+| SBNonInteractiveDisplayModeResolverFactory | UNREACHED 1 |
+| SBPictureInPictureWindow | NOCALLER 1, PORTED 1 |
+| SBSceneHostingDisplayController | UNREACHED 1 |
+| SBSceneIdentityProvider | NEEDED 1 |
+| SBSceneLayoutStateProvider | NEEDED 1, PORTED 1 |
+| SBScreenWakeAnimationController | UNREACHED 1 |
+| SBSwitcherModifier | NOCALLER 1, PORTED 3 |
+| SBSystemPointerInteractionManager | NEEDED 1, PORTED 5 |
+| SBSystemShellEmbeddedDisplayController | UNREACHED 1 |
+| SBSystemShellExtendedDisplayControllerPolicyFactory | UNREACHED 1 |
+| SBSystemShellExtendedDisplayResolverFactory | UNREACHED 1 |
+| SBSystemShellExternalDisplaySceneManager | NEEDED 1, PORTED 1 |
+| SBTransientOverlayViewController | PORTED 1, UNREACHED 1 |
+| SBTransitionSwitcherModifierEvent | NEEDED 1, PORTED 9 |
+| FBSSceneSettings | NEEDED 1 |
+
+### Methods that are not PORTED (class | selector | 16.2 address | verdict | first callers)
+
+| class | selector | 16.2 | verdict | callers |
+|---|---|---|---|---|
+| FBSMutableSceneSettings | `-sb_displayConfigurationForSceneManagers` | 0x1c7572fac | NEEDED | FBSMutableSceneSettings -sb_displayIdentityForSceneManagers; FBSSceneSettings -sb_displayIdentityForSceneManagers; SBWorkspaceKeyboardFocusController -bufferEventsForSpringBoardScene:re |
+| FBSMutableSceneSettings | `-sb_setDisplayConfigurationForSceneManagers:` | 0x1c7573074 | NEEDED | SBDeviceApplicationSceneHandle -_modifyApplicationSceneSettings:fromRe |
+| FBSSceneSettings | `-sb_displayConfigurationForSceneManagers` | 0x1c7572ee4 | NEEDED | FBSMutableSceneSettings -sb_displayIdentityForSceneManagers; FBSSceneSettings -sb_displayIdentityForSceneManagers; SBWorkspaceKeyboardFocusController -bufferEventsForSpringBoardScene:re |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_boundingFrameForPileAtIndex:withScrollOffsetApplied:` | 0x1c781376c | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -_visiblePileIdentifiers; SBAppSwitcherContinuousExposeSwitcherModifier -_visiblePileRange; SBAppSwitcherContinuousExposeSwitcherModifier -distanceToLeadingEdgeOf |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_boundingFrameForPileWithIdentifier:withScrollOffsetApplied:` | 0x1c7813800 | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -_boundingFrameForPileAt; SBAppSwitcherContinuousExposeSwitcherModifier -_indexOfLeadingAppLayou |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_compactedBoundingBoxSizesByAppLayout` | 0x1c7812914 | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -_frameForIndex:withScal; SBAppSwitcherContinuousExposeSwitcherModifier -buildLayoutCalculations |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_frameForIndex:withScaleApplied:scrollOffsetApplied:` | 0x1c78135dc | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -contentOffsetForIndex:a; SBAppSwitcherContinuousExposeSwitcherModifier -frameForIndex: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_visiblePileIdentifiers` | 0x1c781345c | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -topMostLayoutElements; SBAppSwitcherContinuousExposeSwitcherModifier -visibleAppLayouts |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_visiblePileRange` | 0x1c7810c9c | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -appLayoutsToCacheSnapsh; SBAppSwitcherContinuousExposeSwitcherModifier -distanceToLeadingEdgeOf |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_visibleSwitcherBoundsIncludingShadow` | 0x1c78133f4 | NEEDED | SBAppSwitcherContinuousExposeSwitcherModifier -_indexOfLeadingAppLayou; SBAppSwitcherContinuousExposeSwitcherModifier -_visiblePileIdentifiers; SBAppSwitcherContinuousExposeSwitcherModifier -_visiblePileRange |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-neighboringAppLayoutsForFocusedAppLayout:` | 0x1c78108e8 | NEEDED | SBFocusedAppLayoutSwitcherModifier -visibleAppLayouts; SBRoutingSwitcherModifier -neighboringAppLayoutsForFocusedAppLayout: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shouldAcceleratedHomeButtonPressBegin` | 0x1c78114a8 | NEEDED | SBFluidSwitcherViewController -shouldAcceleratedHomeButtonPressBegin; SBHomeHardwareButton -_acceleratedSinglePressRecognizerShouldBegin; SBMainSwitcherControllerCoordinator -shouldAcceleratedHomeButtonPressB |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shouldUseBrightMaterialForIndex:` | 0x1c7810854 | NEEDED | SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet; SBFluidSwitcherViewController -_applyStyleToLiveContentOverlay:forItem; SBHistorianSwitcherModifier -_querySnapshotFromModifier: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-visibleShelves` | 0x1c7812834 | NEEDED | SBFluidSwitcherViewController -_layoutVisibleShelvesWithCompletion:; SBFluidSwitcherViewController -_updateVisibleShelves; SBFluidSwitcherViewController -descriptionBuilderWithMultilinePrefix: |
+| SBAppSwitcherReusableSnapshotView | `-_doNonUniformScalingForApplication:` | 0x1c7921848 | NEEDED | SBAppSwitcherReusableSnapshotView -_snapshotImageFrameForCacheEntry:; SBAppSwitcherReusableSnapshotView -_updateSceneHandleForRole: |
+| SBContinuousExposeFullScreenToStripCrossblurTransitionSwitcherModifier | `-_updateLayoutWithAnimationUpdateMode:appendResponse:` | 0x1c788fdc0 | NEEDED | SBContinuousExposeFullScreenToStripCrossblurTransitionSwitcherModifier |
+| SBContinuousExposeFullScreenToStripTransitionSwitcherModifier | `-_overlappingModelForAppLayout:` | 0x1c758b490 | NEEDED | SBContinuousExposeFullScreenToStripTransitionSwitcherModifier -frameFo; SBContinuousExposeFullScreenToStripTransitionSwitcherModifier -frameFo |
+| SBContinuousExposeIdentifierSlideModifier | `-_performBlockWithIdentifiersInSwitcher:identifiersInStrip:block:` | 0x1c787134c | NEEDED | SBContinuousExposeIdentifierSlideModifier -adjustedSpaceAccessoryViewF; SBContinuousExposeIdentifierSlideModifier -anchorPointForIndex:; SBContinuousExposeIdentifierSlideModifier -frameForIndex: |
+| SBContinuousExposeToHomeSwitcherModifier | `-_isEffectivelyHome` | 0x1c7413420 | NEEDED | SBAppExposeToHomeSwitcherModifier -plusButtonAlpha; SBContinuousExposeToHomeSwitcherModifier -adjustedSpaceAccessoryViewAn; SBContinuousExposeToHomeSwitcherModifier -adjustedSpaceAccessoryViewFr |
+| SBContinuousExposeToHomeSwitcherModifier | `-_newContinuousExposeModifier` | 0x1c7413410 | NEEDED | SBContinuousExposeToHomeSwitcherModifier -initWithTransitionID:directi |
+| SBDeviceApplicationSceneOverlayBasicWrapperView | `-setHostOrientation:` | 0x1c7951838 | NEEDED | SBDeviceApplicationSceneView -layoutSubviews |
+| SBDeviceApplicationSceneOverlayBasicWrapperView | `-setShouldLayoutOverlayImmediatelyForContainerGeometryChange:` | 0x1c7951858 | NEEDED | SBDeviceApplicationSceneView -addOverlayView:withPriority:; SBDeviceApplicationSceneView -layoutSubviews |
+| SBDisplayArrangementItem | `-appendDescriptionToFormatter:` | 0x1c7715d3c | NEEDED | SBUniversalControlServer -description |
+| SBDisplayAssertionCoordinator | `-assertionStack:updatedAssertionPreferences:oldPreferences:` | 0x1c77deb20 | NEEDED | _SBDisplayAssertionStack -_evalAndApplyOldPreferences:newPreferences: |
+| SBDisplayItem | `+displayItemForLayoutElement:` | 0x1c742ec60 | NEEDED | SBDisplayAppInteractionEventSource -_notifyTransition:beginning:; SBLayoutState -appLayout; SBMainDisplayLayoutState -appLayout |
+| SBDisplayManager | `-_connectToIdentity:withConfiguration:forDisplayManagerInit:` | 0x1c7990164 | NEEDED | SBDisplayManager -_beginMonitoringForConnectingDisplays; SBDisplayManager -displayMonitor:didConnectIdentity:withConfiguration:; SBDisplayManager -initWithDisplayManager:sceneManagerCoordinator:asser |
+| SBDisplayManager | `-_setDisableIdleSleepReason:forDisplay:` | 0x1c7991bd4 | NEEDED | SBDisplayManager -assertionCoordinator:updatedAssertionPreferences:old |
+| SBDisplayManager | `-_setDisplayArrangementItem:forDisplay:` | 0x1c7991278 | NEEDED | SBDisplayManager -assertionCoordinator:updatedAssertionPreferences:old |
+| SBDisplayManager | `-_setPowerLogEntry:forDisplay:` | 0x1c799167c | NEEDED | SBDisplayManager -assertionCoordinator:updatedAssertionPreferences:old |
+| SBFloatingDockController | `-floatingDockHeightForFrame:` | 0x1c76e9d70 | NEEDED | SBDisplayItemLayoutAttributesCalculator -frameForLayoutRole:inAppLayou |
+| SBFloatingDockRootViewController | `-_layoutFloatingDockPresentationProgress:` | 0x1c77da724 | NEEDED | SBFloatingDockRootViewController -viewDidLayoutSubviews |
+| SBFloatingDockRootViewController | `-floatingDockHeightForFrame:` | 0x1c77d9848 | NEEDED | SBDisplayItemLayoutAttributesCalculator -frameForLayoutRole:inAppLayou; SBFloatingDockController -floatingDockHeightForFrame: |
+| SBFluidSwitcherGestureManager | `-_shouldBeginContinuousExposeStripOverflowGesture:` | 0x1c78f9738 | NEEDED | SBFluidSwitcherGestureManager -_shouldBeginContinuousExposeStripOverfl; SBFluidSwitcherGestureManager -gestureRecognizerShouldBegin: |
+| SBFluidSwitcherGestureManager | `-_shouldBeginContinuousExposeStripOverflowPanGesture:` | 0x1c78f98b0 | NEEDED | SBFluidSwitcherGestureManager -gestureRecognizerShouldBegin: |
+| SBFluidSwitcherGestureManager | `-_shouldBeginContinuousExposeStripRevealGesture:` | 0x1c78f95c4 | NEEDED | SBFluidSwitcherGestureManager -grabberTongueOrPullEnabled:forGestureRe |
+| SBFluidSwitcherGestureManager | `-_shouldContinuousExposeStripOverflowPanGesture:receiveTouch:` | 0x1c78f5ef0 | NEEDED | SBFluidSwitcherGestureManager -gestureRecognizer:shouldReceiveTouch: |
+| SBFluidSwitcherGestureManager | `-_shouldProtectEdgeLocation:edge:` | 0x1c78f9a5c | NEEDED | SBFluidSwitcherGestureManager -grabberTongue:shouldAllowSecondSwipeWit; SBFluidSwitcherGestureManager -grabberTongue:shouldReceiveTouch:; SBFluidSwitcherGestureManager -grabberTongue:shouldShowTongueOnFirstSw |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-layoutTransaction` | 0x1c74b217c | NEEDED | SBCoverSheetToAppsWorkspaceTransaction -initWithTransitionRequest:; SBDragAndDropWorkspaceTransaction -_runFinalLayoutStateTransaction; SBTransientOverlayDismissAllToAppsWorkspaceTransaction -initWithTransi |
+| SBFluidSwitcherViewController | `-_createChamoisWindowingUIObserver` | 0x1c7435484 | NEEDED | SBFluidSwitcherViewController -initWithSwitcherController:rootModifier |
+| SBFluidSwitcherViewController | `-_performInvalidateContinuousExposeIdentifiersResponse:` | 0x1c745ec0c | NEEDED | SBFluidSwitcherViewController -_performEventResponse: |
+| SBFluidSwitcherViewController | `-_performPresentContinuousExposeStripEdgeProtectGrabberResponse:` | 0x1c745ed48 | NEEDED | SBFluidSwitcherViewController -_performEventResponse: |
+| SBFluidSwitcherViewController | `-_performSetInterfaceOrientationFromUserResizingResponse:` | 0x1c745ec9c | NEEDED | SBFluidSwitcherViewController -_performEventResponse: |
+| SBFluidSwitcherViewController | `-_setupPIPMorphingIfNeededForTransitionContext:response:` | 0x1c745a944 | NEEDED | SBFluidSwitcherViewController -_performEventResponse: |
+| SBFluidSwitcherViewController | `-_updateImplicitModifierStackInvalidatables` | 0x1c745b0e8 | NEEDED | SBFluidSwitcherViewController -_dispatchEventAndHandleAction:; SBFluidSwitcherViewController -viewDidLoad |
+| SBFullScreenSwitcherSceneLiveContentOverlay | `-_updateTouchBehaviorForScene:` | 0x1c74d0748 | NEEDED | SBFullScreenSwitcherSceneLiveContentOverlay -sceneHandle:didCreateScen; SBFullScreenSwitcherSceneLiveContentOverlay -sceneLayerManagerDidUpdat; SBFullScreenSwitcherSceneLiveContentOverlay -setTouchBehavior: |
+| SBFullScreenToHomePIPSwitcherModifier | `-_shouldApplyMorphToPIPToIndex:` | 0x1c77dfed0 | NEEDED | SBFullScreenToHomePIPSwitcherModifier -cornerRadiiForIndex:; SBFullScreenToHomePIPSwitcherModifier -frameForIndex:; SBFullScreenToHomePIPSwitcherModifier -opacityForLayoutRole:inAppLayou |
+| SBGrabberTongue | `-_updateCancelsTouchesWithRecognizerIfNeeded:` | 0x1c784cb54 | NEEDED | SBGrabberTongue -gestureRecognizerShouldBegin: |
+| SBHomeGestureToSwitcherSwitcherModifier | `-_appLayoutAlignmentToScrollToDuringTransition` | 0x1c79505a0 | NEEDED | SBHomeGestureToSwitcherSwitcherModifier -transitionWillBegin |
+| SBIconController | `-coverSheetPresentationManager` | 0x1c7490f98 | NEEDED | SBAbstractWindowSceneDelegate -coverSheetPresentationManager; SBAssistantContext +contextForWindowScene:; SBAssistantSession -_updateDockViewFrame: |
+| SBIconController | `-initWithMainDisplayWindowScene:` | 0x1c748f3ec | NEEDED | SBUIController -init; SpringBoard -_completeStartupAfterMainSceneConnect: |
+| SBIconController | `-lockScreenManager` | 0x1c7490fe4 | NEEDED | SBAbstractWindowSceneDelegate -lockScreenManager; SBAssistantContext +contextForWindowScene:; SBAssistantSession -_restoreOrientation |
+| SBIconController | `-setRootViewController:` | 0x1c74acfd0 | NEEDED | SBAccessoryController -_showWindowedAccessoryWindow:forWindowScene:; SBAlertItemWindow -initWithWindowScene:role:debugName:alertLayoutPrese; SBBannerManager -_bannerWindowForWindowScene:creatingIfNecessary: |
+| SBIndirectPanGestureRecognizer | `-_resetWatchdogIfNecessary` | 0x1c7843778 | NEEDED | SBIndirectPanGestureRecognizer -reset; SBIndirectPanGestureRecognizer -setState:; SBPressSequenceRecognizer -_handlePressDownWithTimestamp: |
+| SBIndirectPanGestureRecognizer | `-_setUpIdleTimersIfNeededForEvent:` | 0x1c7842dec | NEEDED | SBIndirectPanGestureRecognizer -_hoverEntered:withEvent:; SBIndirectPanGestureRecognizer -_hoverMoved:withEvent: |
+| SBInlineAppExposeContinuousExposeSwitcherModifier | `-_responseToUpdateReopenClosedWindowsButtonPresenceIfNeeded` | 0x1c7688f84 | NEEDED | SBInlineAppExposeContinuousExposeSwitcherModifier -handleInsertionEven; SBInlineAppExposeContinuousExposeSwitcherModifier -handleTransitionEve |
+| SBLayoutStateSceneIdentityProvider | `-_sceneIdentityForApplication:uniqueIdentifier:targetContentIdentifier:allowCanMatches:preferNewScene:allowSceneCreation:visibleIdentifiers:excludingIdentifiers:sceneSessionRole:preferredDisplay:` | 0x1c74b294c | NEEDED | SBLayoutStateSceneIdentityProvider -sceneIdentityForApplication:; SBLayoutStateSceneIdentityProvider -sceneIdentityForApplication:exclud; SBLayoutStateSceneIdentityProvider -sceneIdentityForApplication:target |
+| SBLayoutStateSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:allowCanMatches:preferNewScene:allowSceneCreation:visibleIdentifiers:preferredDisplay:` | 0x1c74b247c | NEEDED | SBMainWorkspace -_targetWindowSceneForApplication:preferringDisplay:re; SBSceneManager -sceneIdentityForApplication:targetContentIdentifier:al |
+| SBMainDisplayLayoutState | `-_initWithLayoutElements:interfaceOrientation:interfaceOrientationByLayoutElement:spaceConfiguration:elementIdentifiersToLayoutAttributes:floatingConfiguration:unlockedEnvironmentMode:floatingSwitcherVisible:centerConfiguration:centerEntityModal:peekConfiguration:bundleIDShowingAppExpose:windowPickerRole:displayOrdinal:isDisplayExternal:` | 0x1c7720d8c | NEEDED | SBMainDisplayLayoutState -_initWithLayoutElements:interfaceOrientation; SBMainDisplayLayoutState -_initWithLayoutElements:interfaceOrientation; SBMainDisplayLayoutState -_initWithLayoutElements:spaceConfiguration:e |
+| SBMainDisplayLayoutState | `-_initWithLayoutElements:spaceConfiguration:elementIdentifiersToLayoutAttributes:floatingConfiguration:unlockedEnvironmentMode:floatingSwitcherVisible:centerConfiguration:centerEntityModal:peekConfiguration:bundleIDShowingAppExpose:windowPickerRole:displayOrdinal:isDisplayExternal:` | 0x1c7720f20 | NEEDED | SBMainDisplayLayoutStateManager -_layoutStateForApplicationTransitionC |
+| SBMainDisplayLayoutStateManager | `+_initialLayoutStateWithDisplayOrdinal:isDisplayExternal:` | 0x1c76f093c | NEEDED | SBAbstractWindowSceneDelegate -_configureForConnectingWindowScene:wind |
+| SBMainDisplayLayoutStateManager | `-_mostRecentAppLayoutForBundleIdentifier:ignoringUniqueIdentifiers:chamoisWindowingUIEnabled:` | 0x1c76f2118 | NEEDED | SBMainDisplayLayoutStateManager -_layoutStateForApplicationTransitionC |
+| SBMainDisplayLayoutStateManager | `-_mostRecentAppLayoutMatchingAnyUniqueIdentifier:chamoisWindowingUIEnabled:` | 0x1c76f1c40 | NEEDED | SBMainDisplayLayoutStateManager -_layoutStateForApplicationTransitionC |
+| SBMainDisplaySceneManager | `-_appSceneClientSettingsDiffInspector` | 0x1c7880f10 | NEEDED | SBSceneManager -_scene:didUpdateClientSettingsWithDiff:oldClientSettin |
+| SBMainSwitcherControllerCoordinator | `+_shim_activeSwitcherController` | 0x1c76c7bd4 | NEEDED | NCNotificationRequest -sb_shouldSuppressAlert; SBAppSwitcherServiceManager -.cxx_destruct; SBDeveloperBuildExpirationTrigger -_coverSheetDidDismiss: |
+| SBMainSwitcherControllerCoordinator | `-_activateBetaLaunchHandlesIfNeededWithAppInfo:processHandle:` | 0x1c76ca6b0 | NEEDED | SBMainSwitcherControllerCoordinator -switcherContentController:layoutS |
+| SBMainSwitcherControllerCoordinator | `-_chamoisWindowingUIEverEnabledDefaultChangeHandler` | 0x1c76d9ce0 | NEEDED | SBMainSwitcherControllerCoordinator -_init |
+| SBMainSwitcherControllerCoordinator | `-_presentStoreKitSheetIfNeededWithAppInfo:processHandle:` | 0x1c76ca7b8 | NEEDED | SBMainSwitcherControllerCoordinator -switcherContentController:layoutS |
+| SBMainSwitcherControllerCoordinator | `-_requestAutomaticUpdateAuthorizationIfNecessaryWithAppInfo:processHandle:` | 0x1c76ca910 | NEEDED | SBMainSwitcherControllerCoordinator -switcherContentController:layoutS |
+| SBMainSwitcherControllerCoordinator | `-_switcherControllerForDisplayItem:` | 0x1c76e3130 | NEEDED | SBMainSwitcherControllerCoordinator -_cancelPIPForDisplayItem:; SBMainSwitcherControllerCoordinator -_shouldPrioritizeSortOrderForAppL; SBMainSwitcherControllerCoordinator -windowSceneDidDisconnect: |
+| SBMainWorkspace | `-inCallPresentationManager:interfaceOrientationForBannerPresentationInWindowScene:` | 0x1c7373010 | NEEDED | SBInCallPresentationManager -inCallClientPresentationSessionInterfaceO |
+| SBMedusaHostedKeyboardWindowController | `-_keyboardLayersClientSettingsDiffInspector` | 0x1c7626d30 | NEEDED | SBMedusaHostedKeyboardWindowController -scene:didUpdateClientSettingsW |
+| SBMultiDisplayUserInteractionCoordinator | `-eventSnifferHandledPointerInteractionQualifyingEvent:` | 0x1c795e838 | NEEDED | _SBPointerInteractionEventSniffer -handleEvent: |
+| SBMultiDisplayUserInteractionCoordinator | `-eventSnifferHandledPointerTouchDown:` | 0x1c795e598 | NEEDED | _SBPointerTouchDownEventSniffer -handleEvent: |
+| SBMultiDisplayUserInteractionCoordinator | `-eventSnifferHandledPointerTouchUp:` | 0x1c795e6f0 | NEEDED | _SBPointerTouchDownEventSniffer -handleEvent: |
+| SBMultiDisplayUserInteractionCoordinator | `-eventSnifferHandledTouchInteractionQualifyingEvent:` | 0x1c795e7d0 | NEEDED | _SBTouchInteractionEventSniffer -handleEvent: |
+| SBNonInteractiveDisplayControllerPolicy | `-assertionPreferencesForDisplay:displayConfiguration:` | 0x1c78e96f0 | NEEDED | SBSceneHostingDisplayController -_createDisplayAssertionPreferences |
+| SBNonInteractiveDisplayControllerPolicy | `-displayControllerWillDisconnect:sceneManager:` | 0x1c78e8438 | NEEDED | SBSceneHostingDisplayController -displayIdentityDidDisconnect: |
+| SBSceneIdentityProvider | `-sceneIdentityForApplication:targetContentIdentifier:allowCanMatches:preferNewScene:allowSceneCreation:visibleIdentifiers:preferredDisplay:` | 0x1c732d514 | NEEDED | SBMainWorkspace -_targetWindowSceneForApplication:preferringDisplay:re; SBSceneManager -sceneIdentityForApplication:targetContentIdentifier:al |
+| SBSceneLayoutStateProvider | `-setPreviousLayoutState:` | 0x1c75e6ca4 | NEEDED | SBMainSwitcherControllerCoordinator -layoutStateTransitionCoordinator:; SBMainSwitcherControllerCoordinator -layoutStateTransitionCoordinator: |
+| SBSceneManager | `-_appSceneClientSettingsDiffInspector` | 0x1c73eb928 | NEEDED | SBSceneManager -_scene:didUpdateClientSettingsWithDiff:oldClientSettin |
+| SBSceneManager | `-sceneIdentityForApplication:targetContentIdentifier:allowCanMatches:preferNewScene:allowSceneCreation:visibleIdentifiers:preferredDisplay:` | 0x1c73ec434 | NEEDED | SBMainWorkspace -_targetWindowSceneForApplication:preferringDisplay:re |
+| SBStripContinuousExposeSwitcherModifier | `-_orderedVisibleAppLayoutsIgnoringProgress:` | 0x1c75dec4c | NEEDED | SBStripContinuousExposeSwitcherModifier -inactiveAppLayoutsReachableBy; SBStripContinuousExposeSwitcherModifier -topMostLayoutElements; SBStripContinuousExposeSwitcherModifier -visibleAppLayouts |
+| SBSwitcherChamoisSettings | `-_gridHeightsForSafeHeight:minimumHeight:stageInterItemSpacing:` | 0x1c78c1b54 | NEEDED | SBSwitcherChamoisSettings -layoutAttributesForContainerBounds: |
+| SBSwitcherChamoisSettings | `-_gridWidthsForSafeWidth:minimumWidth:stageInterItemSpacing:` | 0x1c78c18fc | NEEDED | SBSwitcherChamoisSettings -layoutAttributesForContainerBounds: |
+| SBSwitcherChamoisSettings | `-_observeAppSwitcherDefaults` | 0x1c78c23a0 | NEEDED | SBSwitcherChamoisSettings -initWithDefaultValues |
+| SBSwitcherChamoisSettings | `-setRasterizeScaledApps:` | 0x1c78c309c | NEEDED | SBSwitcherChamoisSettings -setDefaultValues |
+| SBSwitcherController | `-_areLayoutStateElements:matchedWithAssociatedParticipants:` | 0x1c7602e20 | NEEDED | SBSwitcherController -_orientationsForLayoutStateElements:withAssociat; SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSwitcherController | `-_noteLayoutStateEvaluationBegan` | 0x1c76011fc | NEEDED | SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSwitcherController | `-_noteLayoutStateEvaluationEndedWithParticipantsByElementIdentifiers:delegatesByParticipant:primaryDelegate:` | 0x1c7601214 | NEEDED | SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSwitcherController | `-_orientationsForLayoutStateElements:withAssociatedParticipants:` | 0x1c7602ba0 | NEEDED | SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSwitcherController | `-_presentMedusaBanner:fireInterval:dismissInterval:` | 0x1c7605b58 | NEEDED | SBFullScreenSwitcherLiveContentOverlayCoordinator -_presentTransientEr; SBSwitcherController -_presentMedusaEducationBanner |
+| SBSwitcherController | `-_updateAppTransitionContext:withOrientationContext:accountForSceneState:primaryDelegate:` | 0x1c7602720 | NEEDED | SBSwitcherController -_updateAppTransitionContext:withOrientationActua; SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSwitcherController | `-stateCaptureTitlePreamble` | 0x1c7601754 | NEEDED | SBSwitcherController -initWithWindowScene:switcherCoordinator:; SBSwitcherTraitsAssistant -_setupStateCapture |
+| SBSwitcherTraitsAssistant | `-_setupStateCapture` | 0x1c74d656c | NEEDED | SBHUDController -init; SBPIPInteractionController -initWithInteractionTargetView:preferredCon; SBSwitcherTraitsAssistant -initWithTraitsArbiter:switcherParticipant:d |
+| SBSwitcherTraitsAssistant | `-createTraitsParticipantsForLayoutElements:outParticipantsByElementIdentifier:outDelegatesByParticipant:outPrimaryDelegate:` | 0x1c74d6844 | NEEDED | SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSwitcherTraitsAssistant | `-initWithTraitsArbiter:switcherParticipant:delegate:` | 0x1c74d6314 | NEEDED | SBSwitcherController -_setupSwitcherTraitsParticipantAndPolicySpecifie |
+| SBSwitcherTraitsAssistant | `-updateAllParticipants:withPrimaryDelegate:nonPrimaryPolicy:primaryPolicy:ownPolicy:` | 0x1c74d6c8c | NEEDED | SBSwitcherController -switcherOrientation:elementsOrientations:forTran |
+| SBSystemGestureManager | `-setSystemGestureManager:` | 0x1c77b9664 | NEEDED | SBAssistantContext +contextForWindowScene:; SBEmbeddedDisplayWindowSceneDelegate -_configureForConnectingWindowSce; SBExternalDisplayWindowSceneDelegate -_configureForConnectingWindowSce |
+| SBSystemPointerInteractionManager | `-initWithMultiDisplayUserInteractionCoordinator:` | 0x1c73e8600 | NEEDED | SBEmbeddedDisplayWindowSceneDelegate -_configureForConnectingWindowSce; SBExternalDisplayWindowSceneDelegate -_configureForConnectingWindowSce |
+| SBSystemShellExtendedDisplayControllerPolicy | `-_fetchOrCreateSceneWithDisplayConfiguration:deactivationReasons:sceneManager:` | 0x1c77ddadc | NEEDED | SBSystemShellExtendedDisplayControllerPolicy -displayController:didBeg |
+| SBSystemShellExtendedDisplayControllerPolicy | `-_wantsControlOfDisplay` | 0x1c77dd1f8 | NEEDED | SBSystemShellExtendedDisplayControllerPolicy -assertionPreferencesForD; SBSystemShellExtendedDisplayControllerPolicy -displayController:didBeg |
+| SBSystemShellExtendedDisplayControllerPolicy | `-assertionPreferencesForDisplay:displayConfiguration:` | 0x1c77dd0e8 | NEEDED | SBSceneHostingDisplayController -_createDisplayAssertionPreferences |
+| SBSystemShellExtendedDisplayControllerPolicy | `-displayControllerWillDisconnect:sceneManager:` | 0x1c77dc440 | NEEDED | SBSceneHostingDisplayController -displayIdentityDidDisconnect: |
+| SBSystemShellExternalDisplaySceneManager | `-_appSceneClientSettingsDiffInspector` | 0x1c7858e94 | NEEDED | SBSceneManager -_scene:didUpdateClientSettingsWithDiff:oldClientSettin |
+| SBTransientOverlayScenePresenter | `-inCallPresentationManager` | 0x1c794dfa4 | NEEDED | SBInCallTestRecipe -handleVolumeDecrease; SBLockHardwareButtonActions -disallowsDoublePressForReason:; SBLockScreenManager -_shouldWakeToInCallForUnlockSource:wakingTheDispl |
+| SBTransientOverlayScenePresenter | `-performDismissalRequest:outerCompletionHandler:` | 0x1c7947804 | NEEDED | SBTransientOverlayPresentationManager -performDismissalRequest:; SBTransientOverlayPresentationManager -windowSceneDidDisconnect: |
+| SBTransientOverlayScenePresenter | `-setInCallPresentationManager:` | 0x1c7946774 | NEEDED | SBTransientOverlayPresentationManager -windowSceneDidConnect: |
+| SBTransitionSwitcherModifierEvent | `-setKeyboardShortcutInitiated:` | 0x1c7432e7c | NEEDED | SBMainSwitcherControllerCoordinator -transitionEventForContext:identif |
+| SBWindowSceneContext | `-setLockedPointerManager:` | 0x1c79bdd00 | NEEDED | SBAbstractWindowSceneDelegate -_configureForConnectingWindowScene:wind |
+| SBWindowSceneContext | `-setTransientUIInteractionManager:` | 0x1c79bdde8 | NEEDED | SBEmbeddedDisplayWindowSceneDelegate -_configureForConnectingWindowSce; SBExternalDisplayWindowSceneDelegate -_configureForConnectingWindowSce |
+| SBWindowSceneManager | `-_validateSuggestedActiveWindowScene:usingMethodology:` | 0x1c74bf960 | NEEDED | SBWindowSceneManager -activeDisplayWindowSceneFollowingKeyboard; SBWindowSceneManager -activeDisplayWindowSceneFollowingUserInteraction |
+| SBWindowSceneManager | `-initWithUserInteractionCoordinator:` | 0x1c74bf0f4 | NEEDED | SpringBoard -applicationDidFinishLaunching: |
+| _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord | `-_appendToDescriptionBuilder:` | 0x1c7789e0c | NEEDED | SBAppLayoutOverlappingModelCacheKey -descriptionBuilderWithMultilinePr; _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord -descriptionBuil |
+| _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord | `-_appendToHashBuilder:` | 0x1c7789d3c | NEEDED | SBAppLayoutOverlappingModelCacheKey -hash; _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord -hash |
+| _SBDeviceApplicationSceneHandleSnapshottingAssertion | `-contextId` | 0x1c76b8c48 | NEEDED | SBDeviceApplicationSceneHandle -_updateSceneHostingInfoForSnapshotting; SBInteractiveScreenshotGestureRootViewController -flashViewLayerContex; SBSnapshotTestRecipe -_sendRequestWithType: |
+| _SBDeviceApplicationSceneHandleSnapshottingAssertion | `-initWithIdentifier:forReason:contextId:renderId:invalidationBlock:` | 0x1c76b8be0 | NEEDED | SBDeviceApplicationSceneHandle -_sceneHostingInfoForSnapshottingAssert |
+| _SBDeviceApplicationSceneHandleSnapshottingAssertion | `-renderId` | 0x1c76b8c58 | NEEDED | SBDeviceApplicationSceneHandle -_updateSceneHostingInfoForSnapshotting |
+| _SBDisplayIdentityRecord | `-appendDescriptionToFormatter:` | 0x1c7992b9c | NEEDED | SBUniversalControlServer -description |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-isScrollEnabled` | 0x1c7810bac | CHAIN | SBAppSwitcherContinuousExposeSwitcherModifier -shouldScrollViewBlockTo; SBDeckFloatingSwitcherModifier -shouldScrollViewBlockTouches; SBDeckSwitcherModifier -shouldScrollViewBlockTouches |
+| SBChamoisOverlappingController | `-_columnsOfItemsSortedByXInModel:withItemsSortedByX:modelBeforeDragging:chamoisLayoutAttributes:draggingItem:` | 0x1c73cc2fc | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c; SBChamoisOverlappingController -_widthThresholdToHideContinuousExposeS |
+| SBChamoisOverlappingController | `-_compactSpacingHorizontallyForModel:withColumns:chamoisLayoutAttributes:` | 0x1c73cd17c | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_compactSpacingVerticallyForModel:withColumns:chamoisLayoutAttributes:` | 0x1c73cd068 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_constrainModelHorizontally:toStageArea:` | 0x1c73cc00c | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_constrainModelVertically:toStageArea:` | 0x1c73cc184 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_dodgeFullyOccludedWindowsToNearestVisibleEdgeInModel:chamoisLayoutAttributes:draggingItem:bounds:` | 0x1c73ce890 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_expandSpacingHorizontallyForModel:withColumns:modelBeforeDragging:chamoisLayoutAttributes:draggingItem:stageArea:` | 0x1c73cd714 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_expandSpacingVerticallyForModel:withColumns:chamoisLayoutAttributes:stageArea:` | 0x1c73ce0e8 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_flagItemsCoveredByFullyOccludedPeekingItemsInModel:chamoisLayoutAttributes:` | 0x1c73cf21c | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_horizontallyCenterModel:stageArea:` | 0x1c73ce72c | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_isColumnOfItems:equalToColumnOfItems:` | 0x1c73cf628 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_verticallyCenterModel:withColumns:stageArea:` | 0x1c73ce3f0 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBChamoisOverlappingController | `-_widthThresholdToHideContinuousExposeStripForModel:chamoisLayoutAttributes:bounds:` | 0x1c73caf94 | CHAIN | SBChamoisOverlappingController -_modelByPerformingAutoLayoutForModel:c |
+| SBFluidSwitcherGestureManager | `-_areContinuousExposeStripsAvailableWithReason:` | 0x1c78fba84 | CHAIN | SBFluidSwitcherGestureManager -_shouldBeginContinuousExposeStripOverfl; SBFluidSwitcherGestureManager -_shouldBeginContinuousExposeStripReveal |
+| SBFluidSwitcherGestureManager | `-_areContinuousExposeStripsOccludedOrHiddenWithOutReason:` | 0x1c78fbc38 | CHAIN | SBFluidSwitcherGestureManager -_shouldBeginContinuousExposeStripOverfl; SBFluidSwitcherGestureManager -_shouldBeginContinuousExposeStripReveal |
+| SBFluidSwitcherItemContainerFooterView | `-setIconHitTestOutset:` | 0x1c7586388 | CHAIN | SBFluidSwitcherSpaceOverlayAccessoryView -setIconHitTestOutset:; SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet |
+| SBFluidSwitcherViewController | `-_chamoisWindowingUIEnabledDefaultChangeHandler` | 0x1c745fb78 | CHAIN | SBFluidSwitcherViewController -_createChamoisWindowingUIObserver |
+| SBFluidSwitcherViewController | `-contentAspectRatio` | 0x1c7439b4c | CHAIN | SBSwitcherController -contentContainerAspectRatio |
+| SBFullScreenSwitcherSceneLiveContentOverlay | `-applicationSceneViewControllerIsInNonrotatingWindow:` | 0x1c74cfcb8 | CHAIN | SBDeviceApplicationSceneViewController -overlayViewProviderIsHostedInN |
+| SBFullScreenSwitcherSceneLiveContentOverlay | `-medusaDecoratedDeviceApplicationSceneViewControllerIsInNonrotatingWindow:` | 0x1c74cfbec | CHAIN | SBMedusaDecoratedDeviceApplicationSceneViewController -applicationScen |
+| SBIconController | `-initWithMainDisplayWindowScene:alertItemsController:analyticsClient:applicationController:applicationPlaceholderController:assistantController:coverSheetPresentationManager:lockScreenManager:mainDisplaySceneManager:policyAggregator:userInterfaceController:widgetMetricsServer:` | 0x1c748f42c | CHAIN | SBIconController -initWithMainDisplayWindowScene: |
+| SBIconController | `-willBeginModifyingPresentationProgressForState:animated:needsInitialLayout:` | 0x1c74a03b4 | CHAIN | SBCoverSheetSpotlightViewController -willBeginModifyingPresentationPro; SBSearchPresenter -_noteWillBeginModifyingPresentationProgressForState |
+| SBIndirectPanGestureRecognizer | `-_startWatchdogTimerIfNecessary` | 0x1c7843448 | CHAIN | SBIndirectPanGestureRecognizer -_shouldReceiveTouch:withEvent: |
+| SBIndirectPanGestureRecognizer | `-_wantsWatchdogEnabled` | 0x1c7843a6c | CHAIN | SBIndirectPanGestureRecognizer -_startWatchdogTimerIfNecessary |
+| SBIndirectPanGestureRecognizer | `-_watchdogFired` | 0x1c7843800 | CHAIN | SBIndirectPanGestureRecognizer -_startWatchdogTimerIfNecessary |
+| SBIndirectPanGestureRecognizer | `-_watchdogTimeoutInSeconds` | 0x1c7843ae4 | CHAIN | SBIndirectPanGestureRecognizer -_startWatchdogTimerIfNecessary |
+| SBMainDisplayLayoutStateManager | `-defaultSceneIdentifierForBundleIdentifier:targetContentIdentifier:allowCanMatches:preferNewScene:visibleSceneIdentifiers:excludingSceneIdentifiers:sceneSessionRole:preferredDisplay:` | 0x1c76f09f4 | CHAIN | SBLayoutStateSceneIdentityProvider -_sceneIdentityForApplication:uniqu; SBMainDisplayLayoutStateManager -defaultSceneIdentifierForBundleIdenti |
+| SBMainSwitcherControllerCoordinator | `-_asyncOnStoreAppLaunchUIActivationQueue:` | 0x1c76caacc | CHAIN | SBMainSwitcherControllerCoordinator -_activateBetaLaunchHandlesIfNeede; SBMainSwitcherControllerCoordinator -_presentStoreKitSheetIfNeededWith; SBMainSwitcherControllerCoordinator -_requestAutomaticUpdateAuthorizat |
+| SBMedusaDecoratedDeviceApplicationSceneViewController | `-applicationSceneViewControllerIsInNonrotatingWindow:` | 0x1c77cff68 | CHAIN | SBDeviceApplicationSceneViewController -overlayViewProviderIsHostedInN |
+| SBMinimumViableSwitcherTableViewController | `-contentAspectRatio` | 0x1c74ef19c | CHAIN | SBSwitcherController -contentContainerAspectRatio |
+| SBSwitcherChamoisSettings | `-_updateCachedAppSwitcherDefaults` | 0x1c78c260c | CHAIN | SBSwitcherChamoisSettings -_observeAppSwitcherDefaults |
+| SBSwitcherController | `-_elementsOrientationsForParticipantsByElementIdentifier:` | 0x1c7602c8c | CHAIN | SBSwitcherController -_orientationStateDescription; SBSwitcherController -_orientationsForLayoutStateElements:withAssociat |
+| SBSwitcherController | `-contentContainerAspectRatio` | 0x1c7601870 | CHAIN | SBSwitcherTraitsAssistant -_isContentContainerAspectRatioPortrait |
+| SBSwitcherController | `-currentElementsParticipants` | 0x1c76018b0 | CHAIN | SBSwitcherTraitsAssistant -_handleUpdateRequest: |
+| SBSwitcherController | `-isChamoisUIEnabled` | 0x1c7601834 | CHAIN | SBSwitcherTraitsAssistant -_setupGuidingRelationshipIfNeededForPartici |
+| SBSwitcherController | `-isOnExternalDisplay` | 0x1c7601838 | CHAIN | SBSwitcherTraitsAssistant -_setupGuidingRelationshipIfNeededForPartici |
+| SBSwitcherController | `-sceneHandleForLayoutElement:` | 0x1c76018b8 | CHAIN | SBSwitcherTraitsAssistant -createTraitsParticipantsForLayoutElements:o |
+| SBSwitcherController | `-sceneHandleForTraitsParticipant:` | 0x1c76018bc | CHAIN | SBSwitcherTraitsAssistant -_handleUpdateRequest: |
+| SBSwitcherTraitsAssistant | `-_addGuidingParticpantsIdentifiersToArray:` | 0x1c74d78c4 | CHAIN | SBSwitcherTraitsAssistant -_updateArbitrationForElementsParticipants:s |
+| SBSwitcherTraitsAssistant | `-_addGuidingSpecifierIfNeeded` | 0x1c74d73ec | CHAIN | SBSwitcherTraitsAssistant -_updateArbitrationForElementsParticipants:s |
+| SBSwitcherTraitsAssistant | `-_evaluateIfGuidingSpecifierIsSillNeeded` | 0x1c74d7560 | CHAIN | SBSwitcherTraitsAssistant -_updateArbitrationForElementsParticipants:s |
+| SBSwitcherTraitsAssistant | `-_guidingLandscapeOnlyLiveOverlay` | 0x1c74d76ec | CHAIN | SBSwitcherTraitsAssistant -_setupGuidingRelationshipIfNeededForPartici |
+| SBSwitcherTraitsAssistant | `-_guidingPortraitOnlyLiveOverlay` | 0x1c74d775c | CHAIN | SBSwitcherTraitsAssistant -_setupGuidingRelationshipIfNeededForPartici |
+| SBSwitcherTraitsAssistant | `-_guidingSceneOrientationRequestParticipantWithMask:` | 0x1c74d77cc | CHAIN | SBSwitcherTraitsAssistant -_setupGuidingRelationshipIfNeededForPartici |
+| SBSwitcherTraitsAssistant | `-_isContentContainerAspectRatioPortrait` | 0x1c74d76ac | CHAIN | SBSwitcherTraitsAssistant -_setupGuidingRelationshipIfNeededForPartici |
+| SBSwitcherTraitsAssistant | `-_setupGuidingRelationshipIfNeededForParticipant:withSceneHandle:` | 0x1c74d71ac | CHAIN | SBSwitcherTraitsAssistant -_updateGuidingSpecifiersIfNeededForParticip |
+| SBSwitcherTraitsAssistant | `-_stateCaptureDescription` | 0x1c74d66fc | CHAIN | SBIdleTimerGlobalCoordinator -_addStateCaptureHandlers; SBIdleTimerGlobalStateMonitor -_addStateCaptureHandlers; SBIdleTimerService -_addStateCaptureHandlers |
+| SBSwitcherTraitsAssistant | `-_updateAcquiredParticipantsPolicies:` | 0x1c74d80d0 | CHAIN | SBSwitcherTraitsAssistant -_addGuidingSpecifierIfNeeded; SBSwitcherTraitsAssistant -_setupPolicySpecifierIfNeeded |
+| SBSwitcherTraitsAssistant | `-_updateArbitrationForElementsParticipants:sceneHandleProviderBlock:forceResolution:reason:` | 0x1c74d7afc | CHAIN | SBSwitcherTraitsAssistant -_handleUpdateRequest:; SBSwitcherTraitsAssistant -updateAllParticipants:withPrimaryDelegate:n |
+| SBSwitcherTraitsAssistant | `-_updateGuidingSpecifiersIfNeededForParticipants:sceneHandleProviderBlock:` | 0x1c74d7dec | CHAIN | SBSwitcherTraitsAssistant -_updateArbitrationForElementsParticipants:s |
+| SBSystemGestureManager | `+_isDeviceHardwareButtonGestureType:` | 0x1c77b95f8 | CHAIN | SBSystemGestureManager +deviceHardwareButtonGestureTypes |
+| SBSystemGestureManager | `+deviceHardwareButtonGestureTypes` | 0x1c77b94a0 | CHAIN | SBSystemApertureProximityBacklightPolicy -_startCancelingTouches |
+| SBSystemGestureManager | `-isSystemGestureRecognizer:` | 0x1c77b73cc | CHAIN | SBCoverSheetSlidingViewController -_addSystemGestureRecognizerIfUntrac; SBSystemApertureViewController -_isSystemGesture:; SBSystemApertureViewController -_promote:gestureRecognizer:toSystemGes |
+| SBTransientOverlayScenePresenter | `-hasActivePresentationFromBundleIdentifier:` | 0x1c7947384 | CHAIN | SBTransientOverlayPresentationManager -hasActivePresentationFromBundle |
+| SBTransientOverlayScenePresenter | `-hasActiveSpotlightPresentation` | 0x1c7947498 | CHAIN | SBTransientOverlayPresentationManager -hasActiveSpotlightPresentation; SBWorkspaceKeyboardFocusController -_setKeyboardFocusPolicy: |
+| _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord | `-_initWithRecordForLayoutAttributes:containerBounds:` | 0x1c7789acc | CHAIN | _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord +itemRecordForLa |
+| _SBDisplayIdentityRecord | `-didConnectAtInit` | 0x1c7992cb4 | CHAIN | SBDisplayManager -_connectToIdentity:withConfiguration:forDisplayManag |
+| _SBDisplayIdentityRecord | `-initWithIdentity:connectedAtInit:` | 0x1c7992a2c | CHAIN | SBDisplayManager -_connectToIdentity:withConfiguration:forDisplayManag |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-activityModeForAppLayout:` | 0x1c781282c | UNREACHED | SBFluidSwitcherViewController -activityModeForAppLayout:; SBMainSwitcherControllerCoordinator -activityModeForScene:; SBRoutingSwitcherModifier -activityModeForAppLayout: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-appLayoutForReceivingHardwareButtonEvents` | 0x1c7811878 | UNREACHED | SBFluidSwitcherViewController -_liveContentOverlayForHandlingHardwareB; SBRoutingSwitcherModifier -appLayoutForReceivingHardwareButtonEvents |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-appLayoutToAttachSlideOverTongue` | 0x1c7812810 | UNREACHED | SBFluidSwitcherViewController -_layoutSlideoverTonguesWithCompletion:; SBRoutingSwitcherModifier -appLayoutToAttachSlideOverTongue |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-appLayoutToScrollToBeforeReopeningClosedWindows` | 0x1c78114a0 | UNREACHED | SBFluidSwitcherViewController -handleReopenClosedWindowsButtonTapped:; SBRoutingSwitcherModifier -appLayoutToScrollToBeforeReopeningClosedWin |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-appLayoutToScrollToBeforeTransitioning` | 0x1c7811498 | UNREACHED | SBFluidSwitcherViewController -_makeAppLayoutVisibleForTransitionWithC; SBRoutingSwitcherModifier -appLayoutToScrollToBeforeTransitioning |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-containerLeafAppLayoutForShelf:` | 0x1c7812854 | UNREACHED | SBFluidSwitcherViewController -_updateVisibleShelves; SBRoutingSwitcherModifier -containerLeafAppLayoutForShelf: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-containerStatusBarAnimationDuration` | 0x1c7810bc0 | UNREACHED | SBFluidSwitcherViewController -_updateSpringBoardStatusBarVisibility; SBHistorianSwitcherModifier -_querySnapshotFromModifier:; SBRoutingSwitcherModifier -containerStatusBarAnimationDuration |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-foregroundAppLayouts` | 0x1c7812818 | UNREACHED | SBFluidSwitcherViewController -_updateForegroundAppLayoutsList; SBRoutingSwitcherModifier -foregroundAppLayouts; SBSwitcherController -_sceneEntitiesToForeground |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-frameForShelf:` | 0x1c7812840 | UNREACHED | SBFluidSwitcherViewController -_layoutVisibleShelvesWithCompletion:; SBRoutingSwitcherModifier -frameForShelf: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-isIndexRubberbandableForSwipeToKill:` | 0x1c78117ac | UNREACHED | SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet; SBHistorianSwitcherModifier -_querySnapshotFromModifier:; SBRoutingSwitcherModifier -isIndexRubberbandableForSwipeToKill: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-isLayoutRoleKillable:inAppLayout:atIndex:` | 0x1c7811788 | UNREACHED | SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet; SBRoutingSwitcherModifier -isLayoutRoleKillable:inAppLayout:atIndex: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-jetsamModeForAppLayout:` | 0x1c7812824 | UNREACHED | SBFluidSwitcherViewController -jetsamModeForAppLayout:; SBMainSwitcherControllerCoordinator -jetsamModeForScene:; SBRoutingSwitcherModifier -jetsamModeForAppLayout: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-preferredSnapshotOrientationForAppLayout:` | 0x1c7811490 | UNREACHED | SBFluidSwitcherViewController -orientationForSnapshotOfAppLayout:inIma; SBHistorianSwitcherModifier -_querySnapshotFromModifier:; SBRoutingSwitcherModifier -preferredSnapshotOrientationForAppLayout: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shelfBackgroundBlurFrame` | 0x1c7812864 | UNREACHED | SBFluidSwitcherViewController -_updateStyleWithCompletion:; SBHistorianSwitcherModifier -_querySnapshotFromModifier:; SBRoutingSwitcherModifier -shelfBackgroundBlurFrame |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shelfBackgroundBlurOpacity` | 0x1c781285c | UNREACHED | SBFluidSwitcherViewController -_updateStyleWithCompletion:; SBHistorianSwitcherModifier -_querySnapshotFromModifier:; SBRoutingSwitcherModifier -shelfBackgroundBlurOpacity |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shouldFireTransitionCompletionInDefaultRunLoopMode` | 0x1c7811518 | UNREACHED | SBFluidSwitcherViewController -canInterruptActiveTransition; SBRoutingSwitcherModifier -shouldFireTransitionCompletionInDefaultRunL |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shouldRubberbandFullScreenHomeGrabberView` | 0x1c78114b0 | UNREACHED | SBFluidSwitcherGestureManager -_handleSwitcherPanGestureChanged:; SBFluidSwitcherViewController -shouldRubberbandFullScreenHomeGrabberVi; SBRoutingSwitcherModifier -shouldRubberbandFullScreenHomeGrabberView |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shouldScrollViewBlockTouches` | 0x1c7810bb4 | UNREACHED | SBFluidSwitcherViewController -_updateContentViewPassesTouchesThrough; SBRoutingSwitcherModifier -shouldScrollViewBlockTouches |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-shouldUseBackgroundWallpaperTreatmentForIndex:` | 0x1c7810b8c | UNREACHED | SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet; SBRoutingSwitcherModifier -shouldUseBackgroundWallpaperTreatmentForInd |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-slideOverTongueDirection` | 0x1c7812808 | UNREACHED | SBFluidSwitcherViewController -_layoutSlideoverTonguesWithCompletion:; SBRoutingSwitcherModifier -slideOverTongueDirection |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-slideOverTongueState` | 0x1c7812800 | UNREACHED | SBFluidSwitcherViewController -_layoutSlideoverTonguesWithCompletion:; SBRoutingSwitcherModifier -slideOverTongueState |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-switcherBackdropBlurProgress` | 0x1c7810834 | UNREACHED | SBFluidSwitcherViewController -_updateStyleWithCompletion:; SBRoutingSwitcherModifier -switcherBackdropBlurProgress |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-switcherBackdropBlurType` | 0x1c781082c | UNREACHED | SBFluidSwitcherViewController -_updateSwitcherBackdropType; SBRoutingSwitcherModifier -switcherBackdropBlurType |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-switcherDimmingAlpha` | 0x1c7810844 | UNREACHED | SBFluidSwitcherViewController -_updateStyleWithCompletion:; SBRoutingSwitcherModifier -switcherDimmingAlpha |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-switcherDimmingViewBlocksTouches` | 0x1c781084c | UNREACHED | SBFluidSwitcherViewController -_updateContentViewPassesTouchesThrough; SBRoutingSwitcherModifier -switcherDimmingViewBlocksTouches |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-tintStyleForLayoutRole:inAppLayout:` | 0x1c7810734 | UNREACHED | SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet; SBRoutingSwitcherModifier -tintStyleForLayoutRole:inAppLayout: |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-wantsAsynchronousSurfaceRetentionAssertion` | 0x1c7811858 | UNREACHED | SBFluidSwitcherViewController -_updateAsynchronousSurfaceRetentionAsse; SBRoutingSwitcherModifier -wantsAsynchronousSurfaceRetentionAssertion |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-wantsSlideOverTongue` | 0x1c78127f8 | UNREACHED | SBFluidSwitcherViewController -_updateSlideOverTonguePresence; SBRoutingSwitcherModifier -wantsSlideOverTongue |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-wantsSwitcherBackdropBlur` | 0x1c7810824 | UNREACHED | SBFluidSwitcherViewController -_updateSwitcherBackdropViewPresence; SBRoutingSwitcherModifier -switcherBackdropBlurProgress; SBRoutingSwitcherModifier -switcherBackdropBlurType |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-wantsSwitcherDimmingView` | 0x1c781083c | UNREACHED | SBFluidSwitcherViewController -_updateContentViewPassesTouchesThrough; SBFluidSwitcherViewController -_updateSwitcherDimmingViewPresence; SBRoutingSwitcherModifier -switcherDimmingAlpha |
+| SBAssistantGestureManager | `-_createTapToDismissSiriGestureRecognizer` | 0x1c771ba44 | UNREACHED | SBAssistantGestureManager -_setupSystemDismissalGestures |
+| SBDeviceApplicationSceneOverlayBasicWrapperView | `-hostOrientation` | 0x1c7951828 | UNREACHED | SBIsolatedSceneOrientationFollowingWrapperViewController -_boundsForOv; SBIsolatedSceneOrientationFollowingWrapperViewController -_hostOrienta |
+| SBDeviceApplicationSceneOverlayBasicWrapperView | `-shouldLayoutOverlayImmediatelyForContainerGeometryChange` | 0x1c7951848 | UNREACHED | SBIsolatedSceneOrientationFollowingWrapperViewController -_containerVi |
+| SBDeviceApplicationSceneView | `-_anyOverlayViewNeedsCounterRotation` | 0x1c773e1b8 | UNREACHED | SBDeviceApplicationSceneView -_createHostCounterRotationViewIfNecessar; SBDeviceApplicationSceneView -_maybeStartTrackingRotationForOverlayFro; SBDeviceApplicationSceneView -_tearDownHostCounterRotationViewIfNecess |
+| SBDeviceApplicationSceneViewController | `-overlayViewProviderIsHostedInNonrotatingWindow:` | 0x1c75bb090 | UNREACHED | SBDeviceApplicationSceneOverlayViewProvider -_activateIfPossible |
+| SBDisplayItemLayoutAttributesCalculator | `-sizingPolicyForDisplayItem:contentOrientation:containerOrientation:proposedSizingPolicy:windowScene:` | 0x1c75a475c | UNREACHED | SBSwitcherController -layoutElementSizingPoliciesForLayoutState: |
+| SBExternalDisplayService | `-initWithDisplayManager:configureConnectionListener:` | 0x1c77d52ac | UNREACHED | SBExternalDisplayService -initWithDisplayManager: |
+| SBFloatingDockController | `-_isActiveAssertionInDesiredLevel` | 0x1c76ea858 | UNREACHED | SBFloatingDockController -_updateFocusAssertion |
+| SBFluidSwitcherItemContainer | `-setPointerInteractionHitTestPadding:` | 0x1c75e230c | UNREACHED | SBFluidSwitcherItemContainer -_addPageView; SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet |
+| SBFluidSwitcherPortaledSceneLiveContentOverlay | `-resizesHostedContext` | 0x1c78a6838 | UNREACHED | SBDeviceApplicationSceneViewController -sceneResizesHostedContext |
+| SBFluidSwitcherPortaledSceneLiveContentOverlay | `-sceneView` | 0x1c78a6878 | UNREACHED | SBSystemApertureSceneElement -_layoutSceneViewInContainerView:; SBSystemApertureSceneElement -_proposeTransitionParametersForTransitio |
+| SBFluidSwitcherSpaceOverlayAccessoryView | `-setIconHitTestOutset:` | 0x1c758c860 | UNREACHED | SBFluidSwitcherViewController -_applyStyleToAppLayout:roleMask:complet |
+| SBFluidSwitcherViewController | `-eventSource:userTouchedApplication:` | 0x1c745f8b0 | UNREACHED | SBAppInteractionEventSourceManager -eventSource:userTouchedApplication; SBDisplayAppInteractionEventSource -_noteTouchForProcess:context: |
+| SBIconController | `-analyticsClient` | 0x1c7490e68 | UNREACHED | SBIconController -_registerAnalytics |
+| SBInCallTransientOverlayViewController | `-preventsSystemApertureSuppressionFromBelow` | 0x1c75d95ac | UNREACHED | SBTransientOverlayScenePresenter -zStackParticipant:updatePreferences: |
+| SBLoginAppSceneHoster | `-launchLoginAppWithInitialOrientation:completion:` | 0x1c7334a04 | UNREACHED | SBLoginAppContainerViewController -_setupLoginScene |
+| SBNonInteractiveDisplayControllerPolicyFactory | `-transformDisplayConfiguration:forControllersWithBuilder:` | 0x1c7941ee4 | UNREACHED | SBSceneHostingDisplayControllerProvider -transformDisplayConfiguration |
+| SBNonInteractiveDisplayModeResolverFactory | `-resolverForPhysicalDisplay:` | 0x1c777f87c | UNREACHED | SBSceneHostingDisplayControllerProvider -displayManager:didConnectIden |
+| SBSceneHostingDisplayController | `-isConnected` | 0x1c73bb840 | UNREACHED | SBBluetoothAccessoryBatteryMonitor -_popLowPowerAlertForAccessoryIfNec |
+| SBScreenWakeAnimationController | `-_updateWakeEffectsForWake:animated:completion:` | 0x1c76e7a98 | UNREACHED | SBScreenWakeAnimationController -_startWakeAnimationsForWaking:animati; SBScreenWakeAnimationController -prepareToWakeForSource:timeAlpha:stat |
+| SBStatusBarStateAggregator | `-_removeStewieStatusBarStyleOverrideAssertion` | 0x1c7938428 | UNREACHED | SBStatusBarStateAggregator -_updateStatusBarStyleOverrideAssertionsFor |
+| SBStatusBarStateAggregator | `-_updateStewieItem` | 0x1c79363a4 | UNREACHED | SBStatusBarStateAggregator -updateStatusBarItem: |
+| SBStatusBarStateAggregator | `-stewieDomain` | 0x1c793a62c | UNREACHED | SBStatusBarStateAggregator -_registerForNotifications |
+| SBSwitcherController | `-fluidSwitcherGestureManagerSupportsFloatingApplication:` | 0x1c760724c | UNREACHED | SBFluidSwitcherGestureManager -_setUpGestureRecognizers |
+| SBSwitcherController | `-traitsPipelineManager` | 0x1c76017e8 | UNREACHED | SBAbstractWindowSceneDelegate -traitsPipelineManager; SBAssistantSession -_newTraitsOrientationPolicySpecifier; SBInputUISceneController -_traitsPipelineManagerForScene: |
+| SBSystemShellEmbeddedDisplayController | `-_updateSceneSettings` | 0x1c75ad1c0 | UNREACHED | SBSystemShellEmbeddedDisplayController -initWithAppSwitcherDefaults:sc |
+| SBSystemShellExtendedDisplayControllerPolicyFactory | `-transformDisplayConfiguration:forControllersWithBuilder:` | 0x1c74e0548 | UNREACHED | SBSceneHostingDisplayControllerProvider -transformDisplayConfiguration |
+| SBSystemShellExtendedDisplayResolverFactory | `-resolverForPhysicalDisplay:` | 0x1c740cea0 | UNREACHED | SBSceneHostingDisplayControllerProvider -displayManager:didConnectIden |
+| SBTransientOverlayPresentationManager | `-hasActiveSpotlightPresentation` | 0x1c75f50f4 | UNREACHED | SBWorkspaceKeyboardFocusController -_setKeyboardFocusPolicy: |
+| SBTransientOverlayViewController | `-preventsSystemApertureSuppressionFromBelow` | 0x1c798ec44 | UNREACHED | SBTransientOverlayScenePresenter -zStackParticipant:updatePreferences: |
+| _SBAppLayoutOverlappingModelCacheKeyDisplayItemRecord | `+itemRecordForLayoutAttributes:containerBounds:` | 0x1c7789a48 | UNREACHED | SBAppLayoutOverlappingModelCacheKey -_initWithAppLayout:containerBound |
+| SBAppResizeGrabberView | `-pointerInteraction:regionForRequest:defaultRegion:` | 0x1c7427338 | NOCALLER | - |
+| SBAppSwitcherContinuousExposeSwitcherModifier | `-_appLayoutsToCacheSnapshotsWithVisiblePileRange:` | 0x1c7810e7c | NOCALLER | - |
+| SBAppSwitcherPageView | `-shouldBeginPointerInteractionRequest:atLocation:` | 0x1c738fcc8 | NOCALLER | - |
+| SBChamoisOverlappingController | `-_modelByPerformingAutoLayoutForModel:chamoisLayoutAttributes:draggingItem:modelBeforeDragging:floatingDockHeight:bounds:` | 0x1c73c9b6c | NOCALLER | - |
+| SBContinuousExposeFullScreenToStripTransitionSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c758ad20 | NOCALLER | - |
+| SBContinuousExposeStripRevealGestureWorkspaceTransaction | `-_canBeInterrupted` | 0x1c7420d7c | NOCALLER | - |
+| SBContinuousExposeToHomeSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c7413378 | NOCALLER | - |
+| SBContinuousExposeToHomeSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c74132c8 | NOCALLER | - |
+| SBDeviceApplicationRemoteTransientOverlayContainerViewController | `-_canShowWhileLocked` | 0x1c78b0c94 | NOCALLER | - |
+| SBDeviceApplicationSceneHandle | `-_preferredSizingPolicyForContentOrientation:containerOrientation:` | 0x1c76b8464 | NOCALLER | - |
+| SBDisplayItemLayoutAttributes | `-_sizeForAttributedSize:` | 0x1c75d0a3c | NOCALLER | - |
+| SBDisplayItemLayoutAttributes | `-initWithContentOrientation:lastInteractionTime:sizingPolicy:attributedSize:` | 0x1c75cf15c | NOCALLER | - |
+| SBDisplayItemLayoutAttributes | `-userSizeBeforeOverlappingInBounds:` | 0x1c75cf6b8 | NOCALLER | - |
+| SBEntityRemovalCrossblurSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c760c360 | NOCALLER | - |
+| SBEntityRemovalCrossblurSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c760c254 | NOCALLER | - |
+| SBEntityRemovalSlideOffscreenSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c74148dc | NOCALLER | - |
+| SBEntityRemovalSlideOffscreenSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c74147d0 | NOCALLER | - |
+| SBFloatingDockRootViewController | `-getRotationContentSettings:` | 0x1c77d96b0 | NOCALLER | - |
+| SBFluidSwitcherGestureManager | `-dragContinuousExposeStripOverflowGestureRecognizer` | 0x1c78fc5c0 | NOCALLER | - |
+| SBFluidSwitcherGestureManager | `-indirectContinuousExposeStripOverflowGestureRecognizer` | 0x1c78fc5ac | NOCALLER | - |
+| SBFluidSwitcherGestureManager | `-presentedSceneBackedBanners` | 0x1c78fc480 | NOCALLER | - |
+| SBFluidSwitcherGestureManager | `-setDragContinuousExposeStripOverflowGestureRecognizer:` | 0x1c78fc5c8 | NOCALLER | - |
+| SBFluidSwitcherGestureManager | `-setIndirectContinuousExposeStripOverflowGestureRecognizer:` | 0x1c78fc5b4 | NOCALLER | - |
+| SBFluidSwitcherGestureManager | `-setPresentedSceneBackedBanners:` | 0x1c78fc488 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-activeLayoutStatesBySwitcherController` | 0x1c74b2158 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-layoutTransitionCompletions` | 0x1c74b21c4 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-originalLayoutStatesBySwitcherController` | 0x1c74b2134 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-setActiveLayoutStatesBySwitcherController:` | 0x1c74b2168 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-setAncillaryLayoutTransactions:` | 0x1c74b21b0 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-setLayoutTransaction:` | 0x1c74b218c | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-setLayoutTransitionCompletions:` | 0x1c74b21d4 | NOCALLER | - |
+| SBFluidSwitcherGestureWorkspaceTransaction | `-setOriginalLayoutStatesBySwitcherController:` | 0x1c74b2144 | NOCALLER | - |
+| SBFluidSwitcherItemContainer | `-pointerInteractionHitTestPadding` | 0x1c75e4848 | NOCALLER | - |
+| SBFluidSwitcherItemContainerFooterView | `-iconHitTestOutset` | 0x1c7588640 | NOCALLER | - |
+| SBFluidSwitcherPortaledSceneLiveContentOverlay | `-livePortalView` | 0x1c78a6868 | NOCALLER | - |
+| SBFluidSwitcherSpaceOverlayAccessoryView | `-iconHitTestOutset` | 0x1c758d62c | NOCALLER | - |
+| SBFluidSwitcherSpaceUnderlayAccessoryView | `-shouldBeginPointerInteractionRequest:atLocation:` | 0x1c78567a4 | NOCALLER | - |
+| SBForceTouchAppIconInfoProvider | `-continuityItem` | 0x1c74adbf0 | NOCALLER | - |
+| SBFullScreenSwitcherSceneLiveContentOverlay | `-sceneLayerManagerDidUpdateLayers:` | 0x1c74d0354 | NOCALLER | - |
+| SBFullScreenToHomeCenterZoomDownSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c7834920 | NOCALLER | - |
+| SBFullScreenToHomeCenterZoomDownSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c7834810 | NOCALLER | - |
+| SBFullScreenToHomeIconZoomSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c75b3088 | NOCALLER | - |
+| SBFullScreenToHomeIconZoomSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c75b2f78 | NOCALLER | - |
+| SBFullScreenToHomePIPSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c77dfb90 | NOCALLER | - |
+| SBFullScreenToHomePIPSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c77dfa80 | NOCALLER | - |
+| SBFullScreenToHomeSlideOverSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c7837088 | NOCALLER | - |
+| SBFullScreenToHomeSlideOverSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c7836f78 | NOCALLER | - |
+| SBHomeGrabberView | `-shouldBeginPointerInteractionRequest:atLocation:` | 0x1c7613df8 | NOCALLER | - |
+| SBHomeScreenService | `-debugContinuityWithBadgeType:deviceTypeIdentifier:` | 0x1c7561b28 | NOCALLER | - |
+| SBIconController | `-_handleSearchAffordanceTap` | 0x1c74a02f0 | NOCALLER | - |
+| SBIconController | `-addWidgetSheetKeyboardFocusAssertion` | 0x1c74ad3b8 | NOCALLER | - |
+| SBIconController | `-setAddWidgetSheetKeyboardFocusAssertion:` | 0x1c74ad3c8 | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-_shouldReceiveTouch:withEvent:` | 0x1c7842204 | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-auditHistory` | 0x1c784521c | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-logCaptureHandle` | 0x1c7845240 | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-setAuditHistory:` | 0x1c784522c | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-setLogCaptureHandle:` | 0x1c7845250 | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-setWatchdogTimer:` | 0x1c7845208 | NOCALLER | - |
+| SBIndirectPanGestureRecognizer | `-watchdogTimer` | 0x1c78451f8 | NOCALLER | - |
+| SBKeyboardClientSettingObserverContext | `-.cxx_destruct` | 0x1c7628488 | NOCALLER | - |
+| SBMainDisplayLayoutState | `-_initWithLayoutElements:interfaceOrientation:interfaceOrientationByLayoutElement:spaceConfiguration:floatingConfiguration:unlockedEnvironmentMode:floatingSwitcherVisible:centerConfiguration:centerEntityModal:peekConfiguration:bundleIDShowingAppExpose:windowPickerRole:displayOrdinal:isDisplayExternal:` | 0x1c7721084 | NOCALLER | - |
+| SBMainDisplayLayoutState | `-_initWithLayoutElements:spaceConfiguration:floatingConfiguration:unlockedEnvironmentMode:floatingSwitcherVisible:centerConfiguration:centerEntityModal:peekConfiguration:bundleIDShowingAppExpose:windowPickerRole:displayOrdinal:isDisplayExternal:` | 0x1c7720f8c | NOCALLER | - |
+| SBMainSwitcherControllerCoordinator | `-liveContentOverlayUpdatesSuspended` | 0x1c76e2cf8 | NOCALLER | - |
+| SBMultiDisplayUserInteractionCoordinator | `-activeWindowSceneObservers` | 0x1c795eabc | NOCALLER | - |
+| SBMultiDisplayUserInteractionCoordinator | `-pointerInteractionObservers` | 0x1c795ead0 | NOCALLER | - |
+| SBMultiDisplayUserInteractionCoordinator | `-sceneToEventSniffers` | 0x1c795eaa8 | NOCALLER | - |
+| SBMultiDisplayUserInteractionCoordinator | `-setActiveWindowSceneObservers:` | 0x1c795eac4 | NOCALLER | - |
+| SBMultiDisplayUserInteractionCoordinator | `-setPointerInteractionObservers:` | 0x1c795ead8 | NOCALLER | - |
+| SBMultiDisplayUserInteractionCoordinator | `-setSceneToEventSniffers:` | 0x1c795eab0 | NOCALLER | - |
+| SBMutableChamoisOverlappingModel | `-setCompactedCenter:` | 0x1c797b658 | NOCALLER | - |
+| SBMutableChamoisOverlappingModel | `-setOverlappingScaleAnchorCenter:` | 0x1c797b410 | NOCALLER | - |
+| SBMutableChamoisOverlappingModel | `-setUnoccludedPeekingCenterForItem:` | 0x1c797b378 | NOCALLER | - |
+| SBPIPRestoreToFullScreenSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c764e004 | NOCALLER | - |
+| SBPIPRestoreToFullScreenSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c764defc | NOCALLER | - |
+| SBPictureInPictureWindow | `-_allowsOcclusionDetectionOverride` | 0x1c7926680 | NOCALLER | - |
+| SBStatusBarStateAggregator | `-setStewieDomain:` | 0x1c793a634 | NOCALLER | - |
+| SBStripContinuousExposeSwitcherModifier | `-_positionForPositionIn3DContainerSpace:` | 0x1c75e0174 | NOCALLER | - |
+| SBStripContinuousExposeSwitcherModifier | `-adjustedSpaceAccessoryViewAnchorPoint:` | 0x1c75deb90 | NOCALLER | - |
+| SBStripContinuousExposeSwitcherModifier | `-adjustedSpaceAccessoryViewFrame:` | 0x1c75dead4 | NOCALLER | - |
+| SBSwitcherChamoisSettings | `-_nearestGridSizeForSize:` | 0x1c78c1c24 | NOCALLER | - |
+| SBSwitcherLayoutCalculationsCacheValidityToken | `-continuousExposeIdentifiersGenCount` | 0x1c779f2f8 | NOCALLER | - |
+| SBSwitcherLayoutCalculationsCacheValidityToken | `-setContinuousExposeIdentifiersGenCount:` | 0x1c779f300 | NOCALLER | - |
+| SBSwitcherModifier | `-frameForContinuousExposePeekingDisplayItem:inAppLayout:bounds:` | 0x1c76530f8 | NOCALLER | - |
+| SBSwitcherTraitsAssistant | `-_handleUpdateRequest:` | 0x1c74d7a2c | NOCALLER | - |
+| SBSwitcherTraitsAssistant | `-_setupPolicySpecifierIfNeeded` | 0x1c74d7f5c | NOCALLER | - |
+| SBSwitcherTraitsAssistant | `-switcherParticipant` | 0x1c74d8250 | NOCALLER | - |
+| SBSystemGestureManager | `-acquireSystemGestureDisableAssertionForReason:forSystemGestureTypes:` | 0x1c77b9048 | NOCALLER | - |
+| SBTransientOverlayPresentationManager | `-hasActivePresentationFromBundleIdentifier:` | 0x1c75f4fa8 | NOCALLER | - |
+| SBWindowSceneManager | `-setUserInteractionCoordinator:` | 0x1c74bfb40 | NOCALLER | - |
