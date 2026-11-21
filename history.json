@@ -1,12 +1,4 @@
 {
- "0.7.9+340.020d89a": {
-  "date": "2026-11-01T19:48:32Z",
-  "file": "debs/com.infernowolf19.backport162_0.7.9+340.020d89a_iphoneos-arm64.deb",
-  "run": 340,
-  "sha": "020d89aa88499aaf1c7c42040da51b014f72bd91",
-  "subject": "tools/a2c: stack argument image, class ivar remap (self immediates -> IVOFF), direct selectors / C strings, CFString and class pointers through the GOT, trace comparison harness (tracecmp.py: Unicorn vs lifted C on the same modelled environment) and method diff tool (mdiff.py)",
-  "version": "0.7.9+340.020d89a"
- },
  "0.7.9+341.0f88075": {
   "date": "2026-11-01T20:04:02Z",
   "file": "debs/com.infernowolf19.backport162_0.7.9+341.0f88075_iphoneos-arm64.deb",
@@ -478,5 +470,13 @@
   "sha": "aeb78074483baf8c64e70b6593bde5931a202078",
   "subject": "UIK K4: the caller range check reads the return address in the hook entry, not in the body (the body is no longer inlined into the @try wrapper since the ring log / hide fix: no K4 range matched, K4 answered the 16.0 frame: Telegram under-shift, no K4 input lines in the device log of Nov 21 13:46)",
   "version": "0.7.9+414.aeb7807"
+ },
+ "0.7.9+415.85c4342": {
+  "date": "2026-11-21T15:10:06Z",
+  "file": "debs/com.infernowolf19.backport162_0.7.9+415.85c4342_iphoneos-arm64.deb",
+  "run": 415,
+  "sha": "85c434289459410297314524b1101f0dcb0d779e",
+  "subject": "DELTA-SWEEP Pass 9: the 2239 SpringBoard methods that exist only in 16.2 (1577 relevant): verdicts PORTED / NEEDED / CHAIN / UNREACHED / NOCALLER with the caller scan",
+  "version": "0.7.9+415.85c4342"
  }
 }
