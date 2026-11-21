@@ -43,7 +43,7 @@ static const U2bSpec kU2b[2] = {
     { 0x1df142c40ull, 0x1894ba73cull, { 0xd503237f, 0xd10583ff, 0xa9106ffc, 0xa91167fa, 0xa9125ff8, 0xa91357f6, 0xa9144ff4, 0xa9157bfd }, "__UIApplicationSceneDisconnectionHandler_block_invoke_3" },
 };
 static void *gU2bOrig[2];          // the 16.0 invoke (signed as a plain function pointer)
-static BOOL gU2bFlag[2];
+__attribute__((unused)) static BOOL gU2bFlag[2];
 
 static void U2b_Exc(int which, NSException *e) {
     char key[48], text[480];
@@ -54,14 +54,14 @@ static void U2b_Exc(int which, NSException *e) {
 
 typedef void (*U2bConnFn)(void *, void *, void *);
 typedef void (*U2bDiscFn)(void *, void *);
-static void U2b_Conn(void *block, void *scene, void *fbs) {
+__attribute__((unused)) static void U2b_Conn(void *block, void *scene, void *fbs) {
     if (UIK_U2b_On()) {
         @try { y42_u2_conn((uint64_t)(uintptr_t)block, (uint64_t)(uintptr_t)scene, (uint64_t)(uintptr_t)fbs); return; }
         @catch (NSException *e) { U2b_Exc(0, e); }
     }
     ((U2bConnFn)gU2bOrig[0])(block, scene, fbs);
 }
-static void U2b_Disc(void *block, void *scene) {
+__attribute__((unused)) static void U2b_Disc(void *block, void *scene) {
     if (UIK_U2b_On()) {
         @try { y42_u2_disc((uint64_t)(uintptr_t)block, (uint64_t)(uintptr_t)scene); return; }
         @catch (NSException *e) { U2b_Exc(1, e); }
