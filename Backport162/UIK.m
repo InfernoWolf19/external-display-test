@@ -1508,7 +1508,8 @@ __attribute__((noinline)) static CGRect uik_visibleFrameK4_body(id self, SEL _cm
     @try {
         UIKRingE re_ = K4_RingEntry(self, hitIdx, old, nf);
         UIK_RingAdd(re_);
-        if (hitIdx == 2 && (re_.vis == 0 || nf.size.height == 0 || re_.host.size.height == 0)) { UIK_HideFix(self); UIK_RingFlush("a hide ended: didEndTransitionWithController: with an invisible placement / empty frame"); }      // site 2 = -[UIInputWindowController didEndTransitionWithController:]
+        // any K4 site (device log Nov 21 15:13: the Telegram hide never reached site 2, so neither the hide fix nor the ring ever ran): an invisible placement / an empty frame at ANY site
+        if (re_.vis == 0 || nf.size.height == 0 || re_.host.size.height == 0) { UIK_HideFix(self); UIK_RingFlush("a hide state reached K4 (site index in the ring lines): invisible placement / empty frame"); }
     } @catch (NSException *e_) { uik_exc("K4Ring", e_); }
     static int nd; if (nd < 40) { nd++; K4_Diag(self, old, nf); }
     static int n;
